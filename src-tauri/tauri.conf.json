@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "dynamic-island",
+  "version": "0.1.0",
+  "identifier": "com.tauri-app.dynamic-island",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "trayIcon": {
+      "iconPath": "icons/icon.ico",
+      "iconAsTemplate": true
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "Dynamic Island",
+        "width": 620,
+        "height": 220,
+        "x": 0,
+        "y": 0,
+        "resizable": false,
+        "decorations": false,
+        "shadow": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": true,
+        "focus": true,
+        "center": false
+      }
+    ],
+    "security": {
+      "csp": "default-src *; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src * data:; connect-src 'self' http://localhost:*"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
