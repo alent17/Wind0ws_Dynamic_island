@@ -22,16 +22,22 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Windows API 绑定 - 用于访问 Windows 原生功能
 windows = { version = "0.52", features = [
-    "Media_Control",
-    "Storage_Streams",
-    "Graphics_Imaging",
-    "Foundation",
-    "Foundation_Collections"
+    "Media_Control",        # 全局系统媒体控制（GSMTC）- 获取音乐播放信息
+    "Storage_Streams",      # 存储流 - 读取专辑封面图片数据
+    "Graphics_Imaging",     # 图形成像 - 图像处理（提取封面主色）
+    "Foundation",           # Windows 基础类型（时间戳、GUID 等）
+    "Foundation_Collections" # Windows 集合类型
 ] }
+
+# 异步运行时 - 用于后台任务和网络请求
 tokio = { version = "1", features = ["full"] }
+
+# Base64 编码解码 - 用于处理图片数据
 base64 = "0.21"
+
+# 日期时间处理 - 用于时间戳计算和进度校准
 chrono = "0.4"
-reqwest = { version = "0.11", features = ["json"] }
-urlencoding = "2.1"
 

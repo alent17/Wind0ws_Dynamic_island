@@ -7,11 +7,6 @@ use windows::Media::Control::{
 };
 use windows::Storage::Streams::DataReader;
 use std::time::Duration;
-use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
-
-// 用 Mutex 存储子进程句柄，方便后续关闭
-pub struct ApiProcess(pub Mutex<Option<Child>>);
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MediaState {
@@ -21,96 +16,9 @@ pub struct MediaState {
     pub is_playing: bool,
     pub position_ms: u64,
     pub duration_ms: u64,
-    pub api_duration_ms: u64, // 从网易云 API 获取的精准时长
     pub last_updated_timestamp: u64, // 快照产生的 Unix 毫秒时间戳
-    pub api_cover_url: String, // API 返回的高清封面
-    pub song_alias: String, // 歌曲别名
     pub source: String, // 播放器来源：netease, spotify, bilibili, generic
     pub source_display: String, // 原始 AppUserModelId
-}
-
-// 网易云 API 配置
-// 优先从环境变量读取，如果没有设置则使用默认值
-fn get_netease_api_base() -> String {
-    std::env::var("NETEASE_API_BASE")
-        .unwrap_or_else(|_| "http://localhost:3000".to_string())
-}
-
-// 网易云 API 搜索结果结构（使用 /cloudsearch 接口）
-#[derive(Debug, Deserialize)]
-struct CloudSearchResult {
-    result: Option<CloudSearchData>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CloudSearchData {
-    songs: Option<Vec<CloudSearchSong>>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct CloudSearchSong {
-    id: u64,
-    name: String,
-    dt: u64, // 时长（毫秒）
-    ar: Option<Vec<CloudSearchArtist>>,
-    al: Option<CloudSearchAlbum>,
-    alia: Option<Vec<String>>, // 别名
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct CloudSearchArtist {
-    name: String,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct CloudSearchAlbum {
-    picUrl: String, // 高清封面 URL
-    name: String,
-}
-
-// 通过网易云 API 搜索歌曲并获取详细信息
-async fn fetch_song_info_from_api(title: &str, artist: &str) -> Option<(u64, String, String)> {
-    let client = reqwest::Client::new();
-    
-    // 构建搜索关键词
-    let keywords = format!("{} {}", title, artist);
-    
-    // 调用网易云 API /cloudsearch 接口
-    let api_base = get_netease_api_base();
-    let url = format!("{}/cloudsearch?keywords={}&type=1", api_base, urlencoding::encode(&keywords));
-    
-    match client.get(&url).send().await {
-        Ok(response) => {
-            match response.json::<CloudSearchResult>().await {
-                Ok(data) => {
-                    if let Some(result) = data.result {
-                        if let Some(songs) = result.songs {
-                            if let Some(first_song) = songs.first() {
-                                // 返回：(时长，高清封面，别名)
-                                let duration = first_song.dt;
-                                let cover_url = first_song.al.as_ref()
-                                    .map(|al| al.picUrl.clone())
-                                    .unwrap_or_default();
-                                let alias = first_song.alia.as_ref()
-                                    .and_then(|alia| alia.first())
-                                    .cloned()
-                                    .unwrap_or_default();
-                                return Some((duration, cover_url, alias));
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("网易云 API JSON 解析失败：{:?}", e);
-                }
-            }
-        }
-        Err(e) => {
-            eprintln!("网易云 API 请求失败：{:?}", e);
-        }
-    }
-    
-    None
 }
 
 // 内部异步函数获取媒体信息
@@ -248,24 +156,10 @@ async fn get_media_info_internal() -> Result<MediaState, String> {
         "generic"
     };
 
-    // 【核心：通过网易云 API 获取精准时长、高清封面、别名】
-    // 仅在识别为网易云音乐时才请求 API
-    let (api_duration_ms, api_cover_url, song_alias) = if source_type == "netease" && !title.is_empty() && is_playing {
-        // 异步调用 API（不会阻塞主线程）
-        match fetch_song_info_from_api(&title, &artist).await {
-            Some((duration, cover, alias)) => (duration, cover, alias),
-            None => (0, String::new(), String::new()),
-        }
-    } else {
-        (0, String::new(), String::new())
-    };
-
     Ok(MediaState {
         title: title.clone(),
         artist: artist.clone(),
-        album_art: if !api_cover_url.is_empty() {
-            api_cover_url.clone() // 优先使用 API 的高清封面
-        } else if thumbnail_base64.is_empty() {
+        album_art: if thumbnail_base64.is_empty() {
             "https://picsum.photos/400/400?random=1".to_string()
         } else {
             thumbnail_base64
@@ -273,10 +167,7 @@ async fn get_media_info_internal() -> Result<MediaState, String> {
         is_playing,
         position_ms,
         duration_ms,
-        api_duration_ms,
         last_updated_timestamp,
-        api_cover_url,
-        song_alias,
         source: source_type.to_string(),
         source_display: raw_id,
     })
@@ -326,61 +217,18 @@ fn start_media_listener(handle: AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![control_media])
-        .manage(ApiProcess(Mutex::new(None))) // 注入 API 进程管理状态
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
             window.set_focus().unwrap();
-
-            // --- 启动网易云 API ---
-            // 尝试在项目根目录的 bin/api-enhanced-main 中查找 API
-            let api_path = std::env::current_dir()
-                .unwrap_or_default()
-                .join("bin")
-                .join("api-enhanced-main");
-            
-            // 检查 API 目录是否存在
-            if api_path.exists() {
-                let child = Command::new("node")
-                    .arg("app.js")
-                    .current_dir(&api_path)
-                    .stdout(Stdio::null()) // 静默运行，不污染控制台
-                    .stderr(Stdio::null())
-                    .spawn();
-
-                if let Ok(c) = child {
-                    let state = app.state::<ApiProcess>();
-                    *state.0.lock().unwrap() = Some(c);
-                    println!("✅ 网易云 API 已随程序自动启动 (Port: 3000)");
-                    println!("   路径：{}", api_path.display());
-                } else {
-                    eprintln!("⚠️  无法启动网易云 API，请确保 bin/api-enhanced-main/app.js 存在");
-                }
-            } else {
-                eprintln!("⚠️  未找到网易云 API 目录：{}", api_path.display());
-                eprintln!("   请将 NeteaseCloudMusicApi 放置在项目根目录的 bin/api-enhanced-main 文件夹中");
-            }
 
             // 启动后台监听线程
             start_media_listener(app.handle().clone());
 
             Ok(())
         });
-
-    // 添加窗口事件处理器
-    builder = builder.on_window_event(|window, event| {
-        // --- 关闭程序时杀掉 API 进程 ---
-        if let tauri::WindowEvent::Destroyed = event {
-            let state = window.state::<ApiProcess>();
-            let mut locked = state.0.lock().unwrap();
-            if let Some(mut child) = locked.take() {
-                let _ = child.kill(); // 强行结束 Node 进程
-                println!("✅ 网易云 API 已关闭");
-            }
-        }
-    });
 
     builder
         .run(tauri::generate_context!())

@@ -19,9 +19,6 @@
     Cast,
   } from "lucide-svelte";
 
-  // 网易云 API 配置
-  const NETEASE_API_BASE = "http://localhost:3000";
-
   // 播放器图标映射（使用本地图片资源）
   const platformIcons = {
     netease: "/src/assets/icons/netease.png",
@@ -119,10 +116,8 @@
   let isPlaying = $state<boolean>(false);
   let currentTimeMs = $state<number>(0);
   let durationMs = $state<number>(0);
-  let manualDuration = $state<number>(0); // 存储从 API 获取的 dt（时长缓存）
   let currentTrackId = $state<string>(""); // 用来判断是否换歌了
   let lastSyncTimestamp = $state<number>(Date.now()); // 系统给位置的时间戳
-  let isApiReady = $state<boolean>(false); // API 是否就绪
   let currentSource = $state<string>("generic"); // 播放器来源
   let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -316,25 +311,6 @@
     }
   }
 
-  // --- 检测 API 是否就绪 ---
-  async function checkApiStatus() {
-    for (let i = 0; i < 10; i++) {
-      // 最多尝试 10 次
-      try {
-        const res = await fetch(`${NETEASE_API_BASE}/banner?type=0`);
-        if (res.ok) {
-          isApiReady = true;
-          console.log("✅ 网易云 API 连接成功");
-          return;
-        }
-      } catch (e) {
-        console.log(`⏳ 正在等待 API 启动... (${i + 1}/10)`);
-      }
-      await new Promise((r) => setTimeout(r, 1000)); // 每秒检测一次
-    }
-    console.warn("⚠️  网易云 API 启动超时，部分功能可能不可用");
-  }
-
   async function handleMediaAction(action: string, e: MouseEvent) {
     e.stopPropagation();
     try {
@@ -368,9 +344,6 @@
 
   // 监听媒体变化（事件推送方式 - 不阻塞主线程）
   onMount(async () => {
-    // 检测 API 是否就绪
-    checkApiStatus();
-
     const unlisten = await listen("media-update", (event: any) => {
       const data = event.payload;
 
@@ -385,10 +358,8 @@
         artistName = data.artist || "";
         currentSource = data.source || "generic";
 
-        // 使用 API 返回的高清封面（如果有）
-        if (data.api_cover_url && !data.api_cover_url.isEmpty()) {
-          artworkUrl = data.api_cover_url;
-        } else if (data.thumbnail) {
+        // 使用系统返回的封面（如果有）
+        if (data.thumbnail) {
           artworkUrl = data.thumbnail;
         }
 
@@ -396,11 +367,6 @@
         currentTimeMs = data.position_ms || 0;
         lastSyncTimestamp = data.last_updated_timestamp || Date.now();
         durationMs = data.duration_ms || 0;
-
-        // 重置时长缓存
-        if (data.api_duration_ms > 0) {
-          manualDuration = data.api_duration_ms;
-        }
 
         progressSpring.set(0, { soft: true });
       }
@@ -411,15 +377,9 @@
       currentTimeMs = data.position_ms || 0;
       durationMs = data.duration_ms || 0;
 
-      // 时长缓存：优先使用 API 返回的精准时长
-      if (data.api_duration_ms > 0) {
-        manualDuration = data.api_duration_ms;
-      }
-
-      // 更新 Spring（使用精准时长优先）
-      const totalDuration = manualDuration > 0 ? manualDuration : durationMs;
-      if (totalDuration > 0 && data.position_ms > 0) {
-        let percent = (data.position_ms / totalDuration) * 100;
+      // 更新 Spring（使用系统时长）
+      if (durationMs > 0 && data.position_ms > 0) {
+        let percent = (data.position_ms / durationMs) * 100;
         progressSpring.set(percent);
       } else if (durationMs === 0) {
         // 直播模式
