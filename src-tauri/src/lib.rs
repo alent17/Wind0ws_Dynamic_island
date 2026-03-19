@@ -1,12 +1,16 @@
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, tray::{TrayIconBuilder, TrayIconEvent, MouseButtonState}, menu::{Menu, MenuItem, PredefinedMenuItem}};
 use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSessionManager,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus,
 };
 use windows::Storage::Streams::DataReader;
 use std::time::Duration;
+
+// 菜单项 ID
+const SHOW_MENU_ID: &str = "show";
+const QUIT_MENU_ID: &str = "quit";
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MediaState {
@@ -215,6 +219,16 @@ fn start_media_listener(handle: AppHandle) {
     });
 }
 
+// 显示主窗口
+#[tauri::command]
+fn show_main_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -226,6 +240,49 @@ pub fn run() {
 
             // 启动后台监听线程
             start_media_listener(app.handle().clone());
+
+            // 创建托盘菜单
+            let menu = Menu::with_items(app, &[
+                &MenuItem::with_id(app, SHOW_MENU_ID, "显示主窗口", true, None::<&str>)?,
+                &PredefinedMenuItem::separator(app)?,
+                &MenuItem::with_id(app, QUIT_MENU_ID, "退出", true, None::<&str>)?,
+            ])?;
+
+            // 创建系统托盘图标（完全在代码中控制）
+            let _ = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    SHOW_MENU_ID => {
+                        let _ = show_main_window(app.clone());
+                    }
+                    QUIT_MENU_ID => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // 只在左键点击时显示主窗口（右键点击会显示菜单，不应触发此事件）
+                    if let TrayIconEvent::Click { 
+                        button: tauri::tray::MouseButton::Left,
+                        button_state: MouseButtonState::Up, 
+                        .. 
+                    } = event {
+                        let app = tray.app_handle();
+                        // 检查主窗口是否可见，如果可见则不处理，让右键菜单正常显示
+                        if let Some(window) = app.get_webview_window("main") {
+                            if let Ok(is_visible) = window.is_visible() {
+                                // 只有窗口不可见时才显示
+                                if !is_visible {
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                }
+                            }
+                        }
+                    }
+                })
+                .build(app)?;
 
             Ok(())
         });

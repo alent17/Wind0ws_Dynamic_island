@@ -11,10 +11,6 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "trayIcon": {
-      "iconPath": "icons/icon.ico",
-      "iconAsTemplate": true
-    },
     "windows": [
       {
         "label": "main",
@@ -32,10 +28,25 @@
         "visible": true,
         "focus": true,
         "center": false
+      },
+      {
+        "label": "settings",
+        "title": "设置",
+        "width": 500,
+        "height": 400,
+        "resizable": true,
+        "decorations": true,
+        "shadow": true,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "visible": false,
+        "focus": false,
+        "center": true
       }
     ],
     "security": {
-      "csp": "default-src *; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; img-src * data:; connect-src 'self' http://localhost:*"
+      "csp": "default-src 'self'; img-src 'self' https://asset.localhost asset: https://* http://* data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; style-src 'self' 'unsafe-inline' http://localhost:*; connect-src 'self' http://localhost:*"
     }
   },
   "bundle": {

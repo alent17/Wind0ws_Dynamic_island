@@ -89,6 +89,19 @@
     },
   };
 
+  let expanded = $state(false);
+  let hovering = $state(false);
+  let accentColor = $state<string>("#fe2c55");
+  let artworkUrl = $state<string>("");
+  let trackTitle = $state<string>("");
+  let artistName = $state<string>("");
+  let isPlaying = $state<boolean>(false);
+  let currentTimeMs = $state<number>(0);
+  let durationMs = $state<number>(0);
+  let currentSource = $state<string>("generic");
+  let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
+  let currentTheme = $state("original"); // 当前主题：original 或 ios26
+
   // 当前显示的图标路径（根据 source 动态计算）
   const currentIcon = $derived(
     platformIcons[currentSource as keyof typeof platformIcons] ||
@@ -107,20 +120,6 @@
       playerConfigs.generic,
   );
 
-  let expanded = $state(false);
-  let hovering = $state(false);
-  let accentColor = $state<string>("#fe2c55");
-  let artworkUrl = $state<string>("https://picsum.photos/400/400?random=1");
-  let trackTitle = $state<string>("");
-  let artistName = $state<string>("");
-  let isPlaying = $state<boolean>(false);
-  let currentTimeMs = $state<number>(0);
-  let durationMs = $state<number>(0);
-  let currentTrackId = $state<string>(""); // 用来判断是否换歌了
-  let lastSyncTimestamp = $state<number>(Date.now()); // 系统给位置的时间戳
-  let currentSource = $state<string>("generic"); // 播放器来源
-  let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
-
   // 判定直播逻辑 (只要时长的 0 就是直播)
   let isLive = $derived(durationMs === 0);
 
@@ -135,38 +134,21 @@
   });
 
   const progressPercent = $derived(
-    manualDuration > 0
-      ? (precisePosition() / manualDuration) * 100
-      : durationMs > 0
-        ? (precisePosition() / durationMs) * 100
-        : $progressSpring,
+    durationMs > 0
+      ? (precisePosition() / durationMs) * 100
+      : $progressSpring,
   );
 
   // --- 核心：手动计时器 (100ms 高频更新) ---
   // 已取消：现在进度完全由系统 GSMTC 控制
-  // $effect(() => {
-  //   let interval: ReturnType<typeof setInterval>;
-  //
-  //   if (isPlaying) {
-  //     interval = setInterval(() => {
-  //       // 每 100ms 自己加 100，提供流畅的进度感
-  //       currentTimeMs += 100;
-  //
-  //       // 如果超过了 API 时长，停止自增
-  //       const limit = manualDuration > 0 ? manualDuration : durationMs;
-  //       if (limit > 0 && currentTimeMs >= limit) {
-  //         currentTimeMs = limit;
-  //       }
-  //     }, 100);
-  //   }
-  //
-  //   return () => clearInterval(interval);
-  // });
 
-  // iOS 26 液态金属感 - 刚度略高保证响应速度，阻尼较低产生细微回弹
-  const widthSpring = spring(160, { stiffness: 0.08, damping: 0.32 });
-  const heightSpring = spring(37, { stiffness: 0.08, damping: 0.32 });
-  const contentOpacity = spring(0, { stiffness: 0.15, damping: 0.9 });
+  // --- iOS 26 液态物理参数 ---
+  // stiffness 低、damping 高 = 丝滑绸缎感
+  const widthSpring = spring(160, { stiffness: 0.05, damping: 0.4 });
+  const heightSpring = spring(37, { stiffness: 0.05, damping: 0.4 });
+  
+  // 内容透明度：收缩时必须极快消失 (stiffness 高)
+  const contentOpacity = spring(0, { stiffness: 0.2, damping: 1 });
 
   const win = getCurrentWindow();
 
@@ -174,20 +156,47 @@
   let lastW = 0;
   let lastH = 0;
 
-  // 自动收起逻辑
-  function startAutoCloseTimer() {
-    stopAutoCloseTimer();
-    if (expanded) {
+  /**
+   * 核心逻辑：自动收起管理
+   */
+  function startAutoClose() {
+    stopAutoClose(); // 先清理旧的
+    // 只有在【已展开】且【鼠标不在界面上】时才启动计时
+    if (expanded && !hovering) {
       autoCloseTimer = setTimeout(() => {
         expanded = false;
       }, 5000);
     }
   }
 
-  function stopAutoCloseTimer() {
+  function stopAutoClose() {
     if (autoCloseTimer) {
       clearTimeout(autoCloseTimer);
       autoCloseTimer = null;
+    }
+  }
+
+  // 监听展开状态变化：当点击展开时，尝试启动倒计时
+  $effect(() => {
+    if (expanded) {
+      startAutoClose();
+    } else {
+      stopAutoClose();
+    }
+  });
+
+  /**
+   * 鼠标交互处理
+   */
+  function handleMouseEnter() {
+    hovering = true;
+    stopAutoClose(); // 鼠标进来，立刻停止收起计时
+  }
+
+  function handleMouseLeave() {
+    hovering = false;
+    if (expanded) {
+      startAutoClose(); // 鼠标离开，如果是展开状态，重新开始 5s 计时
     }
   }
 
@@ -200,89 +209,76 @@
       const monitor = await currentMonitor();
       if (!monitor) return;
 
-      // 关键：强制向下取整，确保内容容器永远完全覆盖窗口物理像素
-      const physW = Math.floor(w * dpr);
-      const physH = Math.floor(h * dpr);
+      // 使用 Math.round 替代 Math.floor，减少亚像素渲染导致的边缘闪烁
+      const physW = Math.round(w * dpr);
+      const physH = Math.round(h * dpr);
 
-      // 计算居中 X
       const screenWidth = monitor.size.width;
-      const centerX = Math.floor((screenWidth - physW) / 2);
+      const centerX = Math.round((screenWidth - physW) / 2);
+      const targetY = Math.round(12 * dpr);
 
-      // iOS 26 风格：药丸距离顶部稍微远一点点，显得更有悬浮感
-      const targetY = Math.floor(12 * dpr);
-
-      // 原子化操作：先改大小，再定位，防止窗口在收缩时因坐标超出范围而"消失"
+      // 执行同步
       await win.setSize(new PhysicalSize(physW, physH));
       await win.setPosition(new PhysicalPosition(centerX, targetY));
     } catch (e) {
-      console.error("同步失败", e);
+      // 忽略同步中的微小冲突错误
     }
   }
 
   async function extractDominantColor(imgSrc: string) {
+    if (!imgSrc || (imgSrc.startsWith('http') === false && imgSrc.startsWith('data:') === false)) return;
     try {
       const img = new Image();
       img.crossOrigin = "Anonymous";
       img.src = imgSrc;
-
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject();
+      await new Promise((resolve) => {
+        img.onload = resolve;
+        img.onerror = resolve; // 即使失败也释放，防止堵塞
       });
-
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d")!;
-      canvas.width = 10;
-      canvas.height = 10;
+      canvas.width = 10; canvas.height = 10;
       ctx.drawImage(img, 0, 0, 10, 10);
       const data = ctx.getImageData(0, 0, 10, 10).data;
-      let r = 0,
-        g = 0,
-        b = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        r += data[i];
-        g += data[i + 1];
-        b += data[i + 2];
-      }
+      let r = 0, g = 0, b = 0;
+      for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
       accentColor = `rgb(${Math.max(Math.floor(r / 25), 100)},${Math.max(Math.floor(g / 25), 100)},${Math.max(Math.floor(b / 25), 100)})`;
-    } catch (e) {
-      console.error("提取颜色失败:", e);
-    }
+    } catch (e) { console.warn("取色失败"); }
   }
 
-  // 关键：监听状态变化，同步窗口和 Spring
+  // 关键：监听状态变化，设置 Spring 目标值
   $effect(() => {
-    // 监听这三个核心状态
     const isExp = expanded;
     const isHov = hovering;
 
-    if (artworkUrl) {
-      extractDominantColor(artworkUrl);
-    }
-
-    const targetW = isExp ? 400 : isHov ? 172 : 160;
-    const targetH = isExp ? 210 : isHov ? 40 : 37;
-
-    // 关键：内容透明度的响应速度要快于形变
-    if (!isExp) {
-      // 收起逻辑：内容先行消失
-      contentOpacity.set(0);
-      // 内容完全消失后再触发大幅度形变，会显得非常丝滑
-      widthSpring.set(targetW);
-      heightSpring.set(targetH);
+    // 1. 仅设置目标值，让 Spring 自动跑动画
+    if (isExp) {
+      widthSpring.set(400);
+      heightSpring.set(210);
+      contentOpacity.set(1);
     } else {
-      // 展开逻辑：先拉伸形状，再浮现内容
-      widthSpring.set(targetW);
-      heightSpring.set(targetH);
-      // 形状拉伸到一半左右时再开始浮现内容，效果最好
-      setTimeout(() => contentOpacity.set(1), 100);
+      // 收起状态：内容消失速度快，形状收缩慢（iOS 26 质感）
+      widthSpring.set(isHov ? 172 : 160);
+      heightSpring.set(isHov ? 40 : 37);
+      contentOpacity.set(0);
     }
+    
+    // 注意：这里不再调用 syncPhysicalDimensions
+  });
 
-    // 只有尺寸真正变化时才同步窗口（防止卡顿）
-    if (targetW !== lastW || targetH !== lastH) {
-      syncPhysicalDimensions(targetW, targetH);
-      lastW = targetW;
-      lastH = targetH;
+  // --- 核心修复：实时监听 Spring 动画值并同步窗口 ---
+  $effect(() => {
+    // 关键：这里引用 $widthSpring 和 $heightSpring
+    // 每当 Spring 动画数值变动（每一帧），都会触发此处的同步
+    const currentW = $widthSpring;
+    const currentH = $heightSpring;
+
+    // 只有当尺寸发生显著变化时（减少微小浮点数计算导致的频繁调用）再同步
+    if (Math.abs(currentW - lastW) > 0.1 || Math.abs(currentH - lastH) > 0.1) {
+      syncPhysicalDimensions(currentW, currentH).then(() => {
+        lastW = currentW;
+        lastH = currentH;
+      });
     }
   });
 
@@ -301,14 +297,7 @@
       return;
     }
 
-    toggle(); // 触发展开
-  }
-
-  function toggle() {
-    expanded = !expanded;
-    if (expanded) {
-      startAutoCloseTimer(); // 点击展开后开启计时
-    }
+    expanded = !expanded; // 触发展开
   }
 
   async function handleMediaAction(action: string, e: MouseEvent) {
@@ -323,16 +312,6 @@
     }
   }
 
-  function handleMouseEnter() {
-    hovering = true;
-    stopAutoCloseTimer(); // 鼠标进入，停止倒计时
-  }
-
-  function handleMouseLeave() {
-    hovering = false;
-    if (expanded) startAutoCloseTimer(); // 鼠标离开且是展开态，开始倒计时
-  }
-
   // 格式化时间为 MM:SS（毫秒输入）
   function formatTime(ms: number): string {
     if (ms <= 0) return "00:00";
@@ -344,56 +323,71 @@
 
   // 监听媒体变化（事件推送方式 - 不阻塞主线程）
   onMount(async () => {
-    const unlisten = await listen("media-update", (event: any) => {
+    // 监听主题变化
+    const unlistenTheme = await listen("theme-changed", (event: any) => {
+      const { islandTheme } = event.payload;
+      currentTheme = islandTheme || "original";
+      console.log("[主题切换] 切换到:", currentTheme);
+    });
+
+    // 加载保存的主题
+    const savedSettings = localStorage.getItem("dynamic-island-settings");
+    if (savedSettings) {
+      const settings = JSON.parse(savedSettings);
+      currentTheme = settings.islandTheme || "original";
+    }
+
+    // 监听 SMTC 推送 (去掉了所有网易云 API 耦合)
+    let cleanup: (() => void) | undefined;
+
+    listen("media-update", (event: any) => {
       const data = event.payload;
 
-      // 更新播放器来源
-      if (data.source) {
-        currentSource = data.source;
-      }
-
-      // 1. 处理切歌逻辑
-      if (trackTitle !== data.title) {
-        trackTitle = data.title || "未在播放";
-        artistName = data.artist || "";
-        currentSource = data.source || "generic";
-
-        // 使用系统返回的封面（如果有）
-        if (data.thumbnail) {
-          artworkUrl = data.thumbnail;
-        }
-
-        // 重置进度和时长
-        currentTimeMs = data.position_ms || 0;
-        lastSyncTimestamp = data.last_updated_timestamp || Date.now();
-        durationMs = data.duration_ms || 0;
-
-        progressSpring.set(0, { soft: true });
-      }
-
+      // 更新基础信息
+      if (data.source) currentSource = data.source;
       isPlaying = data.is_playing || false;
-
-      // 2. 进度同步策略（统一使用系统数据）
       currentTimeMs = data.position_ms || 0;
       durationMs = data.duration_ms || 0;
 
-      // 更新 Spring（使用系统时长）
-      if (durationMs > 0 && data.position_ms > 0) {
-        let percent = (data.position_ms / durationMs) * 100;
-        progressSpring.set(percent);
-      } else if (durationMs === 0) {
-        // 直播模式
-        progressSpring.set(0);
+      // 封面处理：尝试所有可能的字段
+      if (trackTitle !== data.title) {
+        trackTitle = data.title || "未知曲目";
+        artistName = data.artist || "未知艺术家";
+        
+        // 尝试获取缩略图 (按优先级尝试所有可能的字段)
+        // 注意：后端发送的是 album_art 字段！
+        const newCover = data.album_art || data.thumbnail || data.cover_url || data.api_cover_url || data.image || "";
+        
+        if (newCover && newCover !== artworkUrl) {
+          // 验证封面格式
+          if (newCover.startsWith("data:image") || newCover.startsWith("http://") || newCover.startsWith("https://") || newCover.startsWith("file://")) {
+            artworkUrl = newCover;
+          } else if (newCover.includes(":\\") || newCover.includes(":/")) {
+            // Windows 路径转换为 file:// 协议
+            const fileUrl = "file:///" + newCover.replace(/\\/g, "/").replace(/^\/+/, "");
+            artworkUrl = fileUrl;
+          } else {
+            artworkUrl = "";
+          }
+        } else if (!newCover) {
+          artworkUrl = "";
+        }
+        
+        progressSpring.set(0, { soft: true });
       }
 
-      // 提取封面主色（仅当封面是 Base64 时）
-      if (artworkUrl && artworkUrl.startsWith("data:")) {
-        extractDominantColor(artworkUrl);
+      // 更新进度
+      if (durationMs > 0) {
+        progressSpring.set((currentTimeMs / durationMs) * 100);
       }
+    }).then((unlisten) => {
+      cleanup = unlisten;
     });
 
     return () => {
-      unlisten(); // 组件销毁时取消监听
+      if (cleanup) cleanup();
+      stopAutoClose();
+      unlistenTheme();
     };
   });
 </script>
@@ -403,29 +397,43 @@
   style="background: transparent;"
 >
   <div
-    class="pointer-events-auto relative shadow-2xl"
+    class="pointer-events-auto relative"
+    class:shadow-2xl={currentTheme === 'original'}
     style="
       width: {$widthSpring}px;
       height: {$heightSpring}px;
-      background-color: #000000;
-      border-radius: {expanded ? '54px' : '22px'};
+      background: {currentTheme === 'ios26' ? 'rgba(15, 15, 15, 0.6)' : '#000000'};
+      backdrop-filter: {currentTheme === 'ios26' ? 'blur(30px) saturate(200%) brightness(80%)' : 'none'};
+      -webkit-backdrop-filter: {currentTheme === 'ios26' ? 'blur(30px) saturate(200%) brightness(80%)' : 'none'};
+      border: {currentTheme === 'ios26' ? '0.5px solid rgba(255, 255, 255, 0.2)' : 'none'};
+      box-shadow: {currentTheme === 'ios26' 
+        ? '0 20px 40px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 2px rgba(255, 255, 255, 0.2)' 
+        : '0 20px 50px rgba(0,0,0,0.6)'};
+      border-radius: {expanded ? '42px' : '22px'};
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
       transform: scale({isPressed ? 0.96 : 1});
       transition: 
         border-radius 0.8s cubic-bezier(0.32, 0.72, 0, 1),
-        transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+        background 0.5s ease,
+        backdrop-filter 0.5s ease,
+        border 0.5s ease;
     "
     onmouseenter={handleMouseEnter}
     onmouseleave={handleMouseLeave}
     onmousedown={() => (isPressed = true)}
     onmouseup={handleRelease}
-    onkeydown={(e) => e.key === "Enter" && toggle()}
+    onkeydown={(e) => e.key === "Enter" && (expanded = !expanded)}
     role="button"
     tabindex="0"
+    aria-label="Dynamic Island - Click to toggle"
   >
+    {#if currentTheme === 'ios26'}
+      <!-- 液态玻璃光泽层 -->
+      <div class="glass-reflection"></div>
+    {/if}
     <!-- 拖拽区域：只覆盖背景，不遮挡按钮 -->
     <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
 
@@ -433,19 +441,29 @@
     <div class="w-full h-full relative z-10">
       {#if !expanded}
         <div
-          class="h-full w-full flex items-center justify-between"
+          class="h-full w-full flex items-center justify-between select-none"
           style="opacity: {1 - $contentOpacity}; transition: opacity 0.3s;"
         >
-          <div
-            class="w-6 h-6 rounded-md overflow-hidden flex-shrink-0 ml-[14px]!"
-          >
-            <img src={artworkUrl} alt="" class="w-full h-full object-cover" />
+          <div class="w-6 h-6 rounded-md overflow-hidden flex-shrink-0 ml-[14px]! bg-white/10 select-none">
+            {#if artworkUrl}
+              <img 
+                src={artworkUrl} 
+                alt="" 
+                class="w-full h-full object-cover" 
+                onload={() => console.log("[图片加载] 成功加载封面")}
+                onerror={(e) => {
+                  console.error("[图片加载] 封面加载失败:", artworkUrl);
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            {/if}
           </div>
 
           <div class="flex gap-[3px] items-center h-4 mr-[14px]!">
             {#each [0.6, 1.2, 0.9, 1.5, 0.7] as h, i}
               <div
-                class="w-[2px] rounded-full animate-island-wave"
+                class="w-[2px] rounded-full"
+                class:animate-island-wave={isPlaying}
                 style="
                   background-color: {accentColor}; 
                   height: {h * 8}px; 
@@ -458,13 +476,11 @@
         </div>
       {:else}
         <div
-          class="flex flex-col h-full text-white select-none"
+          class="expanded-content"
           style="
             padding: 24px 28px 45px 28px;
-            box-sizing: border-box;
             opacity: {$contentOpacity};
-            transform: translateY({(1 - $contentOpacity) * -15}px) scale({0.95 +
-            $contentOpacity * 0.05});
+            transform: translateY({($contentOpacity - 1) * 20}px);
           "
         >
           {#if expanded}
@@ -474,26 +490,33 @@
           <div style="margin-bottom: 20px;">
             <div class="flex items-center" style="gap: 16px;">
               <div
-                class="w-[68px] h-[68px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer"
+                class="w-[68px] h-[68px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none"
                 data-stop-toggle
               >
-                <img
-                  src={artworkUrl}
-                  alt="cover"
-                  class="w-full h-full object-cover pointer-events-none"
-                />
+                {#if artworkUrl}
+                  <img
+                    src={artworkUrl}
+                    alt="cover"
+                    class="w-full h-full object-cover pointer-events-none"
+                    onload={() => console.log("[图片加载] 成功加载封面 (展开状态)")}
+                    onerror={(e) => {
+                      console.error("[图片加载] 封面加载失败 (展开状态):", artworkUrl);
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                {/if}
               </div>
 
               <div class="flex-1 min-w-0">
-                <h2
-                  class="font-bold text-[19px] truncate text-white tracking-tight"
-                >
-                  {trackTitle}
-                </h2>
-                <p class="text-[14px] text-white/50 truncate font-medium">
-                  {artistName}
-                </p>
-              </div>
+            <h2
+              class="font-bold text-[19px] truncate text-white tracking-tight select-none"
+            >
+              {trackTitle}
+            </h2>
+            <p class="text-[14px] text-white/50 truncate font-medium select-none">
+              {artistName}
+            </p>
+          </div>
 
               <button
                 class="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 relative z-50"
@@ -556,16 +579,23 @@
               />
             </div>
 
-            <div
-              class="w-6 h-6 flex items-center justify-center rounded-md border border-white/10 text-[9px] font-bold text-white/30 relative z-50 cursor-pointer"
+            <button
+              class="w-6 h-6 flex items-center justify-center rounded-md border border-white/10 text-[9px] font-bold text-white/30 relative z-50 cursor-pointer bg-transparent hover:bg-white/5 transition-colors"
               data-stop-toggle
+              aria-label="Toggle lyrics"
               onclick={(e) => {
                 e.stopPropagation();
                 console.log("点击了歌词按钮");
               }}
+              onkeydown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  console.log("点击了歌词按钮");
+                }
+              }}
             >
               词
-            </div>
+            </button>
           </div>
 
           <div class="mt-auto" style="margin-bottom: 5px;">
@@ -627,6 +657,34 @@
 
   .animate-island-wave {
     animation: island-wave 0.6s ease-in-out infinite;
+  }
+
+  /* iOS 26 液态玻璃光泽层 */
+  .glass-reflection {
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* 内容切换动画容器 */
+  .expanded-content {
+    transition: transform 0.6s cubic-bezier(0.32, 0.72, 0, 1);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .pill-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+    padding: 0 14px;
   }
 
   /* 呼吸横线动画 */
