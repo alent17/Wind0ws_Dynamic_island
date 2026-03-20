@@ -1,16 +1,38 @@
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, tray::{TrayIconBuilder, TrayIconEvent, MouseButtonState}, menu::{Menu, MenuItem, PredefinedMenuItem}};
+use std::sync::Mutex;
+use std::time::Duration;
+use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::{MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager,
+};
 use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSessionManager,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus,
 };
 use windows::Storage::Streams::DataReader;
-use std::time::Duration;
 
 // 菜单项 ID
 const SHOW_MENU_ID: &str = "show";
+const SETTINGS_MENU_ID: &str = "settings";
 const QUIT_MENU_ID: &str = "quit";
+
+// 设置结构体
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct AppSettings {
+    pub island_theme: String,
+    pub auto_hide: bool,
+    pub show_spectrum: bool,
+    pub enable_animations: bool,
+    pub window_opacity: u8,
+    pub always_on_top: bool,
+}
+
+// 全局设置存储
+struct AppState {
+    settings: Mutex<AppSettings>,
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct MediaState {
@@ -21,8 +43,8 @@ pub struct MediaState {
     pub position_ms: u64,
     pub duration_ms: u64,
     pub last_updated_timestamp: u64, // 快照产生的 Unix 毫秒时间戳
-    pub source: String, // 播放器来源：netease, spotify, bilibili, generic
-    pub source_display: String, // 原始 AppUserModelId
+    pub source: String,              // 播放器来源：netease, spotify, bilibili, generic
+    pub source_display: String,      // 原始 AppUserModelId
 }
 
 // 内部异步函数获取媒体信息
@@ -87,13 +109,13 @@ async fn get_media_info_internal() -> Result<MediaState, String> {
     // 获取进度（转换为毫秒）
     // 1. 获取总时长 (Ticks -> ms)
     let mut dur_ms = (timeline.EndTime().unwrap_or_default().Duration / 10000) as u64;
-    
+
     // 2. 获取快照位置
     let snapshot_pos_ms = (timeline.Position().unwrap_or_default().Duration / 10000) as u64;
-    
+
     // 3. 获取快照产生时的系统时间 (关键！)
     let last_updated_filetime = timeline.LastUpdatedTime().unwrap_or_default().UniversalTime;
-    
+
     // 4. 转换为 Unix 毫秒时间戳 (从 1970-01-01 开始)
     // Windows UniversalTime 是从 1601-01-01 开始的 100ns 间隔
     let last_updated_timestamp = if last_updated_filetime > 0 {
@@ -101,9 +123,10 @@ async fn get_media_info_internal() -> Result<MediaState, String> {
     } else {
         0
     };
-    
+
     // 5. 计算从"快照产生"到"现在"过了多久
-    let now_filetime = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0) / 100 + 116444736000000000;
+    let now_filetime =
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0) / 100 + 116444736000000000;
     let diff_ms = if now_filetime > last_updated_filetime {
         ((now_filetime - last_updated_filetime) / 10000) as u64
     } else {
@@ -116,7 +139,7 @@ async fn get_media_info_internal() -> Result<MediaState, String> {
     } else {
         snapshot_pos_ms
     };
-    
+
     // 【重要：网易云修正逻辑】
     // 如果获取到的是 0，但状态是 Playing，说明是网易云的"懒加载"
     if dur_ms == 0 && is_playing {
@@ -140,11 +163,14 @@ async fn get_media_info_internal() -> Result<MediaState, String> {
 
     // 【核心：智能识别播放器来源】
     // 获取 Windows AppUserModelId 来识别是哪个播放器
-    let raw_id = session.SourceAppUserModelId().unwrap_or_default().to_string();
-    
+    let raw_id = session
+        .SourceAppUserModelId()
+        .unwrap_or_default()
+        .to_string();
+
     // 转换为小写进行匹配，确保识别准确
     let app_id_lower = raw_id.to_lowercase();
-    
+
     // 根据 AppUserModelId 识别播放器类型
     let source_type = if app_id_lower.contains("cloudmusic") {
         "netease"
@@ -191,14 +217,20 @@ async fn control_media(action: String) -> Result<(), String> {
 
     match action.as_str() {
         "play_pause" => {
-            let _ = session.TryTogglePlayPauseAsync().map_err(|e| format!("TogglePlayPause failed: {:?}", e))?;
-        },
+            let _ = session
+                .TryTogglePlayPauseAsync()
+                .map_err(|e| format!("TogglePlayPause failed: {:?}", e))?;
+        }
         "next" => {
-            let _ = session.TrySkipNextAsync().map_err(|e| format!("SkipNext failed: {:?}", e))?;
-        },
+            let _ = session
+                .TrySkipNextAsync()
+                .map_err(|e| format!("SkipNext failed: {:?}", e))?;
+        }
         "prev" => {
-            let _ = session.TrySkipPreviousAsync().map_err(|e| format!("SkipPrevious failed: {:?}", e))?;
-        },
+            let _ = session
+                .TrySkipPreviousAsync()
+                .map_err(|e| format!("SkipPrevious failed: {:?}", e))?;
+        }
         _ => return Err(format!("Unknown action: {}", action)),
     }
     Ok(())
@@ -229,11 +261,68 @@ fn show_main_window(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// 显示设置窗口（简化版本：使用主窗口切换到设置页面）
+#[tauri::command]
+fn show_settings_window(app: AppHandle) -> Result<(), String> {
+    println!("[Rust] 收到打开设置窗口请求");
+    
+    // 获取主窗口
+    if let Some(window) = app.get_webview_window("main") {
+        println!("[Rust] 找到主窗口，准备发送事件");
+        let _ = window.show();
+        let _ = window.set_focus();
+        // 发送事件通知前端切换到设置页面
+        match window.emit("navigate-to-settings", ()) {
+            Ok(_) => println!("[Rust] 事件发送成功"),
+            Err(e) => println!("[Rust] 事件发送失败：{}", e),
+        }
+    } else {
+        println!("[Rust] 未找到主窗口");
+    }
+    Ok(())
+}
+
+// 获取设置
+#[tauri::command]
+fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
+    let state = app.state::<AppState>();
+    let settings = state
+        .settings
+        .lock()
+        .map_err(|_| "Failed to lock settings")?;
+    Ok(settings.clone())
+}
+
+// 保存设置
+#[tauri::command]
+fn save_settings(app: AppHandle, settings: AppSettings) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut state_settings = state
+        .settings
+        .lock()
+        .map_err(|_| "Failed to lock settings")?;
+    *state_settings = settings;
+
+    // 这里可以添加持久化到文件的逻辑
+    // 暂时只保存在内存中
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![control_media])
+        .manage(AppState {
+            settings: Mutex::new(AppSettings::default()),
+        })
+        .invoke_handler(tauri::generate_handler![
+            control_media,
+            show_main_window,
+            show_settings_window,
+            get_settings,
+            save_settings
+        ])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
             window.set_focus().unwrap();
@@ -242,11 +331,15 @@ pub fn run() {
             start_media_listener(app.handle().clone());
 
             // 创建托盘菜单
-            let menu = Menu::with_items(app, &[
-                &MenuItem::with_id(app, SHOW_MENU_ID, "显示主窗口", true, None::<&str>)?,
-                &PredefinedMenuItem::separator(app)?,
-                &MenuItem::with_id(app, QUIT_MENU_ID, "退出", true, None::<&str>)?,
-            ])?;
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &MenuItem::with_id(app, SHOW_MENU_ID, "显示主窗口", true, None::<&str>)?,
+                    &MenuItem::with_id(app, SETTINGS_MENU_ID, "设置", true, None::<&str>)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &MenuItem::with_id(app, QUIT_MENU_ID, "退出", true, None::<&str>)?,
+                ],
+            )?;
 
             // 创建系统托盘图标（完全在代码中控制）
             let _ = TrayIconBuilder::new()
@@ -257,6 +350,9 @@ pub fn run() {
                     SHOW_MENU_ID => {
                         let _ = show_main_window(app.clone());
                     }
+                    SETTINGS_MENU_ID => {
+                        let _ = show_settings_window(app.clone());
+                    }
                     QUIT_MENU_ID => {
                         app.exit(0);
                     }
@@ -264,11 +360,12 @@ pub fn run() {
                 })
                 .on_tray_icon_event(|tray, event| {
                     // 只在左键点击时显示主窗口（右键点击会显示菜单，不应触发此事件）
-                    if let TrayIconEvent::Click { 
+                    if let TrayIconEvent::Click {
                         button: tauri::tray::MouseButton::Left,
-                        button_state: MouseButtonState::Up, 
-                        .. 
-                    } = event {
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
                         let app = tray.app_handle();
                         // 检查主窗口是否可见，如果可见则不处理，让右键菜单正常显示
                         if let Some(window) = app.get_webview_window("main") {

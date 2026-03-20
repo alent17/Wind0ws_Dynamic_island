@@ -28,21 +28,6 @@
         "visible": true,
         "focus": true,
         "center": false
-      },
-      {
-        "label": "settings",
-        "title": "设置",
-        "width": 500,
-        "height": 400,
-        "resizable": true,
-        "decorations": true,
-        "shadow": true,
-        "transparent": false,
-        "alwaysOnTop": false,
-        "skipTaskbar": false,
-        "visible": false,
-        "focus": false,
-        "center": true
       }
     ],
     "security": {
