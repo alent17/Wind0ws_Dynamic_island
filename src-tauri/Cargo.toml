@@ -29,7 +29,12 @@ windows = { version = "0.52", features = [
     "Storage_Streams",      # 存储流 - 读取专辑封面图片数据
     "Graphics_Imaging",     # 图形成像 - 图像处理（提取封面主色）
     "Foundation",           # Windows 基础类型（时间戳、GUID 等）
-    "Foundation_Collections" # Windows 集合类型
+    "Foundation_Collections", # Windows 集合类型
+    "Win32_Foundation",     # Win32 基础类型（窗口句柄等）
+    "Win32_UI_WindowsAndMessaging",  # Win32 UI 窗口消息（窗口样式、位置等）
+    "Win32_Graphics_Gdi",    # Win32 GDI（获取屏幕分辨率）
+    "Win32_System",          # Win32 系统服务
+    "Win32_System_SystemServices"  # Win32 系统服务常量
 ] }
 
 # 异步运行时 - 用于后台任务和网络请求

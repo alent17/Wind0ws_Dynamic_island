@@ -8,6 +8,7 @@
     PhysicalSize,
     PhysicalPosition,
     currentMonitor,
+    availableMonitors,
   } from "@tauri-apps/api/window";
   import {
     Music,
@@ -16,7 +17,7 @@
     SkipBack,
     SkipForward,
     Heart,
-    Cast,
+    Monitor,
   } from "lucide-svelte";
 
   // 播放器图标映射（使用本地图片资源）
@@ -103,6 +104,17 @@
   let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
   let currentTheme = $state("original");
 
+  // 全屏检测和自动隐藏相关状态
+  let isFullscreenApp = $state(false);
+  let isMouseAtTop = $state(false);
+  let isHidden = $state(false);
+  let autoHideEnabled = $state(true);
+
+  // 显示器选择相关状态
+  let showMonitorMenu = $state(false);
+  let monitors: Array<{ name: string; index: number }> = $state([]);
+  let currentMonitorIndex = $state(0);
+
   // 当前显示的图标路径（根据 source 动态计算）
   const currentIcon = $derived(
     platformIcons[currentSource as keyof typeof platformIcons] ||
@@ -143,20 +155,26 @@
 
   // ========== 优化的 Spring 参数 ==========
   // 绸缎感动画：形状快速响应，内容优雅浮现
-  const widthSpring = spring(160, { stiffness: 0.15, damping: 0.65 });
-  const heightSpring = spring(37, { stiffness: 0.15, damping: 0.65 });
-  // 关键：contentOpacity 使用更果断的参数，产生"容器先开，内容后到"的层级感
-  const contentOpacity = spring(0, { stiffness: 0.1, damping: 0.8 });
+  // 优化：提高 stiffness 加快响应，降低 damping 减少回弹，使动画更流畅
+  const widthSpring = spring(160, { stiffness: 0.25, damping: 0.7 });
+  const heightSpring = spring(37, { stiffness: 0.25, damping: 0.7 });
+  // 关键：contentOpacity 使用更快的参数，减少等待感
+  const contentOpacity = spring(0, { stiffness: 0.2, damping: 0.75 });
 
   const win = getCurrentWindow();
 
   // ========== 窗口同步优化 ==========
   // 同步队列和缓存机制
   let cachedScreenWidth = 0;
+  let cachedScreenHeight = 0;
   let isSyncing = false;
   let pendingW = 0;
   let pendingH = 0;
   let hasPendingSync = false;
+
+  // 显示器锚点：记录用户选择的显示器位置
+  let monitorAnchorX = 0;
+  let monitorAnchorY = 0;
 
   // 处理同步队列：批量更新窗口尺寸和位置
   async function processSyncQueue() {
@@ -170,16 +188,23 @@
     const dpr = window.devicePixelRatio || 1;
 
     try {
-      // 兜底：如果没缓存到，才临时去查一次
+      // 使用缓存的显示器尺寸
       if (!cachedScreenWidth) {
         const monitor = await currentMonitor();
-        if (monitor) cachedScreenWidth = monitor.size.width;
+        if (monitor) {
+          cachedScreenWidth = monitor.size.width;
+          cachedScreenHeight = monitor.size.height;
+          // 初始化锚点
+          monitorAnchorX = monitor.position.x + monitor.size.width / 2;
+          monitorAnchorY = monitor.position.y;
+        }
       }
 
       const physW = Math.round(w * dpr);
       const physH = Math.round(h * dpr);
-      const centerX = Math.round((cachedScreenWidth - physW) / 2);
-      const targetY = Math.round(12 * dpr);
+      // 使用固定的显示器锚点计算居中位置
+      const centerX = Math.round(monitorAnchorX - physW / 2);
+      const targetY = Math.round(monitorAnchorY + 12 * dpr);
 
       // 并发执行窗口操作，减少 IPC 调用次数
       await Promise.all([
@@ -227,6 +252,8 @@
       startAutoClose();
     } else {
       stopAutoClose();
+      // 收起时关闭显示器选择菜单
+      showMonitorMenu = false;
     }
   });
 
@@ -363,9 +390,241 @@
     return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
   }
 
+  // ========== 全屏检测和自动隐藏 ==========
+  let fullscreenCheckInterval: ReturnType<typeof setInterval> | null = null;
+  let hideTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  async function checkFullscreenAndHide() {
+    if (!autoHideEnabled) return;
+
+    try {
+      const isFullscreen = await invoke<boolean>("check_fullscreen_app");
+
+      if (isFullscreen !== isFullscreenApp) {
+        isFullscreenApp = isFullscreen;
+        console.log(
+          "[全屏检测] 状态变化:",
+          isFullscreen ? "检测到全屏应用" : "全屏应用已关闭",
+        );
+
+        if (isFullscreen) {
+          // 检测到全屏应用，隐藏窗口到顶部
+          hideWindowToTop();
+        } else {
+          // 全屏应用关闭，显示窗口
+          showWindow();
+        }
+      }
+    } catch (error) {
+      console.error("[全屏检测] 失败:", error);
+    }
+  }
+
+  async function hideWindowToTop() {
+    try {
+      const appWindow = getCurrentWindow();
+      const currentSize = await appWindow.innerSize();
+
+      // 获取所有显示器
+      const allMonitors = await availableMonitors();
+
+      if (allMonitors.length > 0 && currentMonitorIndex < allMonitors.length) {
+        // 使用用户选择的显示器（或当前显示器）
+        const targetMonitor = allMonitors[currentMonitorIndex];
+
+        // 计算屏幕中心 X 坐标
+        const screenCenterX =
+          targetMonitor.position.x + targetMonitor.size.width / 2;
+        // 计算窗口中心 X 坐标（使窗口居中）
+        const windowCenterX = screenCenterX - currentSize.width / 2;
+
+        // 计算隐藏位置（窗口上边缘移到屏幕外，只留 2px 可见边）
+        const targetY = Math.round(-currentSize.height + 2);
+
+        await appWindow.setPosition(
+          new PhysicalPosition(Math.round(windowCenterX), targetY),
+        );
+        isHidden = true;
+        console.log("[自动隐藏] 窗口已隐藏到顶部中间，留 2px 可见边");
+        console.log(
+          "[自动隐藏] 显示器:",
+          targetMonitor.name,
+          "中心 X:",
+          windowCenterX,
+        );
+      } else {
+        // 兜底：使用默认居中（X=0）
+        const targetY = Math.round(-currentSize.height + 2);
+        await appWindow.setPosition(new PhysicalPosition(0, targetY));
+        isHidden = true;
+        console.log("[自动隐藏] 未找到显示器，使用默认位置");
+      }
+    } catch (error) {
+      console.error("[自动隐藏] 失败:", error);
+    }
+  }
+
+  async function showWindow() {
+    try {
+      const appWindow = getCurrentWindow();
+      const currentSize = await appWindow.innerSize();
+      const dpr = window.devicePixelRatio || 1;
+
+      // 获取所有显示器
+      const allMonitors = await availableMonitors();
+
+      if (allMonitors.length > 0 && currentMonitorIndex < allMonitors.length) {
+        // 使用用户选择的显示器
+        const targetMonitor = allMonitors[currentMonitorIndex];
+
+        // 计算屏幕中心 X 坐标
+        const screenCenterX =
+          targetMonitor.position.x + targetMonitor.size.width / 2;
+        // 计算窗口中心 X 坐标（使窗口居中）
+        const windowCenterX = screenCenterX - currentSize.width / 2;
+        // 恢复到正常位置（距离顶部 12px）
+        const targetY = Math.round(12 * dpr);
+
+        await appWindow.setPosition(
+          new PhysicalPosition(Math.round(windowCenterX), targetY),
+        );
+        isHidden = false;
+        console.log("[自动显示] 窗口已显示在顶部中间");
+        console.log(
+          "[自动显示] 显示器:",
+          targetMonitor.name,
+          "中心 X:",
+          windowCenterX,
+        );
+      } else {
+        // 兜底：使用默认居中
+        const targetY = Math.round(12 * dpr);
+        await appWindow.setPosition(new PhysicalPosition(0, targetY));
+        isHidden = false;
+        console.log("[自动显示] 未找到显示器，使用默认位置");
+      }
+    } catch (error) {
+      console.error("[自动显示] 失败:", error);
+    }
+  }
+
+  async function handleMouseMove(event: MouseEvent) {
+    if (!autoHideEnabled || !isFullscreenApp) return;
+
+    // 检测鼠标是否在屏幕顶部（y < 100）
+    const mouseY = event.clientY;
+    const wasMouseAtTop = isMouseAtTop;
+    isMouseAtTop = mouseY < 100;
+
+    if (isMouseAtTop !== wasMouseAtTop) {
+      console.log("[鼠标检测] 鼠标在顶部:", isMouseAtTop);
+
+      if (isMouseAtTop && isHidden) {
+        // 鼠标移动到顶部，显示窗口
+        showWindow();
+
+        // 设置自动隐藏定时器（5 秒后如果没有鼠标移动，再次隐藏）
+        if (hideTimeout) clearTimeout(hideTimeout);
+        hideTimeout = setTimeout(() => {
+          if (!isMouseAtTop) {
+            hideWindowToTop();
+          }
+        }, 5000);
+      } else if (!isMouseAtTop && !isHidden) {
+        // 鼠标离开顶部，延迟隐藏窗口
+        if (hideTimeout) clearTimeout(hideTimeout);
+        hideTimeout = setTimeout(() => {
+          if (!isMouseAtTop) {
+            hideWindowToTop();
+          }
+        }, 500);
+      }
+    }
+  }
+
+  // ========== 显示器选择功能 ==========
+  async function switchMonitor(index: number) {
+    try {
+      const allMonitors = await availableMonitors();
+      const targetMonitor = allMonitors[index];
+
+      if (!targetMonitor) {
+        console.error("[显示器] 未找到目标显示器");
+        return;
+      }
+
+      // 更新显示器锚点
+      monitorAnchorX = targetMonitor.position.x + targetMonitor.size.width / 2;
+      monitorAnchorY = targetMonitor.position.y;
+      cachedScreenWidth = targetMonitor.size.width;
+      cachedScreenHeight = targetMonitor.size.height;
+
+      const appWindow = getCurrentWindow();
+      const currentSize = await appWindow.innerSize();
+
+      // 设置窗口位置到目标显示器中心
+      const targetX = Math.round(monitorAnchorX - currentSize.width / 2);
+      const targetY = Math.round(monitorAnchorY + 12); // 距离顶部 12px
+
+      await appWindow.setPosition(new PhysicalPosition(targetX, targetY));
+      currentMonitorIndex = index;
+      showMonitorMenu = false;
+
+      console.log(
+        "[显示器] 已切换到:",
+        targetMonitor.name,
+        "锚点:",
+        monitorAnchorX,
+        monitorAnchorY,
+      );
+    } catch (error) {
+      console.error("[显示器] 切换失败:", error);
+    }
+  }
+
+  function toggleMonitorMenu() {
+    showMonitorMenu = !showMonitorMenu;
+  }
+
+  // 点击其他地方关闭菜单
+  function closeMonitorMenu() {
+    showMonitorMenu = false;
+  }
+
   // 监听媒体变化（事件推送方式 - 不阻塞主线程）
   onMount(async () => {
     console.log("[App.svelte] onMount 开始监听事件");
+
+    // 初始化显示器列表
+    try {
+      const allMonitors = await availableMonitors();
+      monitors = allMonitors.map((m, idx) => ({
+        name: m.name || `显示器 ${idx + 1}`,
+        index: idx,
+      }));
+
+      const activeMonitor = await currentMonitor();
+      currentMonitorIndex = activeMonitor
+        ? allMonitors.findIndex((m) => m.name === activeMonitor.name)
+        : 0;
+
+      // 初始化显示器锚点
+      if (activeMonitor) {
+        cachedScreenWidth = activeMonitor.size.width;
+        cachedScreenHeight = activeMonitor.size.height;
+        // 计算初始锚点（显示器中心）
+        monitorAnchorX =
+          activeMonitor.position.x + activeMonitor.size.width / 2;
+        monitorAnchorY = activeMonitor.position.y;
+      }
+
+      console.log(
+        "[显示器] 初始化完成，当前显示器:",
+        monitors[currentMonitorIndex]?.name,
+      );
+    } catch (error) {
+      console.error("[显示器] 初始化失败:", error);
+    }
 
     // 监听导航到设置页面的事件
     const unlistenNavigate = await listen("navigate-to-settings", async () => {
@@ -425,7 +684,7 @@
     // 监听 SMTC 推送 (去掉了所有网易云 API 耦合)
     let cleanup: (() => void) | undefined;
 
-    listen("media-update", (event: any) => {
+    const unlistenMediaUpdate = await listen("media-update", (event: any) => {
       const data = event.payload;
 
       // 更新基础信息
@@ -477,14 +736,53 @@
       if (durationMs > 0) {
         progressSpring.set((currentTimeMs / durationMs) * 100);
       }
-    }).then((unlisten) => {
-      cleanup = unlisten;
     });
+
+    cleanup = unlistenMediaUpdate;
 
     return () => {
       if (cleanup) cleanup();
       stopAutoClose();
       unlistenTheme();
+      unlistenNavigate();
+    };
+  });
+
+  // 全局点击事件：关闭显示器菜单
+  function handleGlobalClick(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (showMonitorMenu && !target.closest(".relative")) {
+      closeMonitorMenu();
+    }
+  }
+
+  // 注册全局点击事件
+  onMount(() => {
+    document.addEventListener("click", handleGlobalClick);
+    return () => {
+      document.removeEventListener("click", handleGlobalClick);
+    };
+  });
+
+  // 全屏检测和鼠标移动监听
+  onMount(async () => {
+    // 启动全屏检测定时器（每 2 秒检测一次）
+    fullscreenCheckInterval = setInterval(checkFullscreenAndHide, 2000);
+
+    // 立即检测一次
+    checkFullscreenAndHide();
+
+    // 监听全局鼠标移动
+    document.addEventListener("mousemove", handleMouseMove);
+
+    return () => {
+      if (fullscreenCheckInterval) {
+        clearInterval(fullscreenCheckInterval);
+      }
+      if (hideTimeout) {
+        clearTimeout(hideTimeout);
+      }
+      document.removeEventListener("mousemove", handleMouseMove);
     };
   });
 </script>
@@ -496,6 +794,9 @@
   <div
     class="pointer-events-auto relative"
     class:shadow-2xl={currentTheme === "original"}
+    class:island-hidden={isHidden && !isMouseAtTop}
+    class:island-drop-animation={isMouseAtTop && isHidden}
+    class:island-visible-edge={isHidden && isMouseAtTop}
     style="
       width: {$widthSpring}px;
       height: {$heightSpring}px;
@@ -513,7 +814,9 @@
       : 'none'};
       box-shadow: {currentTheme === 'ios26'
       ? '0 20px 40px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 2px rgba(255, 255, 255, 0.2)'
-      : '0 20px 50px rgba(0,0,0,0.6)'};
+      : isHidden
+        ? '0 2px 10px rgba(255, 255, 255, 0.1)'
+        : '0 20px 50px rgba(0,0,0,0.6)'};
       border-radius: {expanded ? '42px' : '22px'};
       overflow: hidden;
       display: flex;
@@ -524,7 +827,10 @@
         transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
         background 0.5s ease,
         backdrop-filter 0.5s ease,
-        border 0.5s ease;
+        border 0.5s ease,
+        box-shadow 0.3s ease,
+        opacity 0.4s ease,
+        filter 0.4s ease;
     "
     onmouseenter={handleMouseEnter}
     onmouseleave={handleMouseLeave}
@@ -553,10 +859,10 @@
         <div
           class="h-full w-full flex items-center justify-between select-none"
         >
-          <div
-            class="w-6 h-6 rounded-md overflow-hidden flex-shrink-0 ml-[4px]! bg-white/10 select-none"
-          >
-            {#if artworkUrl}
+          {#if artworkUrl}
+            <div
+              class="w-6 h-6 rounded-md overflow-hidden flex-shrink-0 ml-[4px]! select-none"
+            >
               <img
                 src={artworkUrl}
                 alt=""
@@ -567,8 +873,8 @@
                   (e.currentTarget as HTMLImageElement).style.display = "none";
                 }}
               />
-            {/if}
-          </div>
+            </div>
+          {/if}
 
           <div class="flex gap-[2px] items-center h-4 mr-[4px]!">
             {#each [0.6, 1.2, 0.9, 1.5, 0.7] as h, i}
@@ -594,11 +900,11 @@
       >
         <!-- 顶部区域：封面 + 标题 + Cast 按钮 -->
         <div class="flex items-center" style="gap: 14px; margin-bottom: 16px;">
-          <div
-            class="w-[56px] h-[56px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none"
-            data-stop-toggle
-          >
-            {#if artworkUrl}
+          {#if artworkUrl}
+            <div
+              class="w-[56px] h-[56px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none"
+              data-stop-toggle
+            >
               <img
                 src={artworkUrl}
                 alt="cover"
@@ -612,8 +918,8 @@
                   (e.currentTarget as HTMLImageElement).style.display = "none";
                 }}
               />
-            {/if}
-          </div>
+            </div>
+          {/if}
 
           <div class="flex-1 min-w-0">
             <h2
@@ -628,21 +934,143 @@
             </p>
           </div>
 
-          <button
-            class="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 relative z-50 media-button"
-            style="transform: translateZ(0); backface-visibility: hidden;"
-            data-stop-toggle
-            onclick={(e) => {
-              e.stopPropagation(); // 防止触发岛的 toggle
-              console.log("点击了 Cast 按钮");
-            }}
-          >
-            <Cast
-              size={16}
-              class="text-white/80"
+          <!-- 显示器选择按钮 -->
+          <div class="relative">
+            <button
+              class="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 relative z-50 media-button"
               style="transform: translateZ(0); backface-visibility: hidden;"
-            />
-          </button>
+              data-stop-toggle
+              onclick={(e) => {
+                e.stopPropagation();
+                toggleMonitorMenu();
+              }}
+            >
+              <Monitor
+                size={16}
+                class="text-white/80"
+                style="transform: translateZ(0); backface-visibility: hidden;"
+              />
+            </button>
+
+            <!-- 显示器选择菜单 -->
+            {#if showMonitorMenu}
+              <div
+                class="absolute right-0 top-full mt-3 w-64 bg-black/80 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/10 overflow-hidden z-[100] monitor-menu"
+                style="transform: translateZ(0);"
+              >
+                <div class="p-3">
+                  <!-- 标题 -->
+                  <div
+                    class="flex items-center justify-between px-2 py-1.5 mb-2"
+                  >
+                    <div class="flex items-center gap-2">
+                      <Monitor size={14} class="text-white/60" />
+                      <span
+                        class="text-xs font-semibold text-white/70 tracking-wide"
+                      >
+                        显示器
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <div
+                        class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"
+                      ></div>
+                      <span class="text-[10px] text-white/50 font-medium">
+                        {monitors.length} 个显示器
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- 分隔线 -->
+                  <div
+                    class="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-2"
+                  ></div>
+
+                  <!-- 显示器列表 -->
+                  <div class="space-y-1">
+                    {#each monitors as monitor, idx}
+                      <button
+                        class="w-full text-left px-3 py-2.5 rounded-2xl transition-all duration-200 flex items-center gap-3 group relative overflow-hidden"
+                        class:selected={currentMonitorIndex === idx}
+                        class:hoverable={currentMonitorIndex !== idx}
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          switchMonitor(idx);
+                        }}
+                      >
+                        <!-- 选中状态的背景光晕 -->
+                        {#if currentMonitorIndex === idx}
+                          <div
+                            class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent"
+                          ></div>
+                        {/if}
+
+                        <!-- 显示器图标 -->
+                        <div
+                          class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 relative transition-colors duration-200"
+                          style="background-color: {currentMonitorIndex === idx
+                            ? 'rgba(255, 255, 255, 0.10)'
+                            : 'rgba(255, 255, 255, 0.05)'};"
+                        >
+                          <Monitor
+                            size={18}
+                            class="relative z-10 transition-colors duration-200"
+                            style="color: {currentMonitorIndex === idx
+                              ? '#ffffff'
+                              : 'rgba(255, 255, 255, 0.60)'};"
+                          />
+                        </div>
+
+                        <!-- 显示器信息 -->
+                        <div class="flex-1 min-w-0 relative z-10">
+                          <div class="flex items-center gap-2">
+                            <span
+                              class="text-sm font-medium truncate block transition-colors duration-200"
+                              style="color: {currentMonitorIndex === idx
+                                ? '#ffffff'
+                                : 'rgba(255, 255, 255, 0.70)'};"
+                            >
+                              {monitor.name}
+                            </span>
+                          </div>
+                          {#if currentMonitorIndex === idx}
+                            <div class="text-[10px] text-white/40 mt-0.5">
+                              当前使用
+                            </div>
+                          {/if}
+                        </div>
+
+                        <!-- 选中指示器 -->
+                        {#if currentMonitorIndex === idx}
+                          <div class="flex items-center gap-1.5 relative z-10">
+                            <div
+                              class="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center"
+                            >
+                              <svg
+                                width="10"
+                                height="8"
+                                viewBox="0 0 10 8"
+                                fill="none"
+                                class="relative z-10"
+                              >
+                                <path
+                                  d="M1 4L3.5 6.5L9 1"
+                                  stroke="#4ade80"
+                                  stroke-width="1.5"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                />
+                              </svg>
+                            </div>
+                          </div>
+                        {/if}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              </div>
+            {/if}
+          </div>
         </div>
 
         <!-- 中部区域：播放控制按钮 -->
@@ -807,6 +1235,98 @@
     z-index: 0;
   }
 
+  /* 显示器选择菜单选中状态 */
+  button.selected {
+    background-color: rgba(255, 255, 255, 0.15);
+  }
+
+  /* 显示器选择菜单 hover 状态 */
+  button.hoverable:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* 显示器选择菜单动画 */
+  .monitor-menu {
+    animation: menu-slide-down 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94)
+      forwards;
+    transform-origin: top right;
+  }
+
+  @keyframes menu-slide-down {
+    from {
+      opacity: 0;
+      transform: translateY(-10px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* ========== 水滴状自动显示动画 ========== */
+  /* 当窗口从顶部滑下时，使用水滴状变形效果 */
+  .island-drop-animation {
+    animation: island-water-drop 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)
+      forwards;
+  }
+
+  @keyframes island-water-drop {
+    0% {
+      opacity: 0;
+      transform: translateY(-100%) scale(0.8, 0.6);
+      border-radius: 50% 50% 30% 30%;
+    }
+    40% {
+      transform: translateY(10%) scale(1.05, 0.95);
+      border-radius: 45% 45% 35% 35%;
+    }
+    70% {
+      transform: translateY(-5%) scale(0.98, 1.02);
+      border-radius: 42% 42% 38% 38%;
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1, 1);
+      border-radius: 42px;
+    }
+  }
+
+  /* 隐藏状态的窗口 */
+  .island-hidden {
+    transition:
+      transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      opacity 0.3s ease;
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* 隐藏时可见的顶部边缘 - 添加发光效果 */
+  .island-visible-edge {
+    box-shadow:
+      0 2px 15px rgba(255, 255, 255, 0.3),
+      0 0 20px rgba(255, 255, 255, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  /* 隐藏时顶部边缘的白色边框提示 */
+  .island-visible-edge::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 2px;
+    background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.8),
+      rgba(255, 255, 255, 0.3)
+    );
+    border-radius: 0 0 2px 2px;
+    pointer-events: none;
+  }
+
   /* ========== 绸缎感动画核心 ========== */
   /* 展开内容容器：使用 translateY 位移差产生"浮现"效果 */
   .expanded-content {
@@ -817,12 +1337,12 @@
     /* 优化：调整内边距以适应更小的尺寸 */
     padding: 20px 24px 36px 24px;
 
-    /* 关键：60fps 动画：所有时间设置为 600ms (36帧) 的倍数 */
+    /* 关键：优化动画曲线和时间，更流畅自然 */
     transform: translateY(30px) scale(0.92);
     transition:
-      transform 0.6s cubic-bezier(0.23, 1, 0.32, 1),
-      filter 0.5s ease,
-      opacity 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+      transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      filter 0.35s ease,
+      opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
     filter: blur(8px);
     opacity: 0;
@@ -849,10 +1369,10 @@
     justify-content: space-between;
     padding: 0 14px;
 
-    /* 关键：使用 iOS 曲线，向上淡出 */
+    /* 关键：使用更流畅的动画曲线 */
     transition:
-      transform 0.5s cubic-bezier(0.23, 1, 0.32, 1),
-      opacity 0.5s ease;
+      transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      opacity 0.35s ease;
 
     will-change: transform, opacity;
   }
@@ -865,24 +1385,16 @@
   }
 
   /* ========== 按钮入场动画 ========== */
-  /* 播放控制按钮容器：从上往下放大出现 (60fps 优化) */
+  /* 播放控制按钮容器：从上往下放大出现 (优化时长) */
   .expanded-content.is-visible .flex-1 {
-    animation: button-drop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    animation: button-drop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
     opacity: 0;
     transform: translateY(-30px) scale(0.85);
   }
 
-  /* 封面区域：先出现 (60fps 优化) */
-  .expanded-content.is-visible .flex.items-center[gap="14px"] {
-    animation: cover-fade-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s
-      forwards;
-    opacity: 0;
-    transform: translateY(-20px) scale(0.9);
-  }
-
-  /* 底部进度条：最后出现 (60fps 优化) */
+  /* 底部进度条：最后出现 (优化时长) */
   .expanded-content.is-visible .mt-auto {
-    animation: progress-fade-in 0.4s ease-out 0.2s forwards;
+    animation: progress-fade-in 0.3s ease-out 0.1s forwards;
     opacity: 0;
     transform: translateY(-15px);
   }
@@ -906,14 +1418,6 @@
       opacity: 1;
       transform: translateY(0);
     }
-  }
-
-  .pill-content {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 100%;
-    padding: 0 14px;
   }
 
   /* 呼吸横线动画 */

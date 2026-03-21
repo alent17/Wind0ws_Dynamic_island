@@ -265,7 +265,7 @@ fn show_main_window(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn show_settings_window(app: AppHandle) -> Result<(), String> {
     println!("[Rust] 收到打开设置窗口请求");
-    
+
     // 获取主窗口
     if let Some(window) = app.get_webview_window("main") {
         println!("[Rust] 找到主窗口，准备发送事件");
@@ -309,6 +309,71 @@ fn save_settings(app: AppHandle, settings: AppSettings) -> Result<(), String> {
     Ok(())
 }
 
+// 检测是否有全屏应用
+#[tauri::command]
+fn check_fullscreen_app() -> Result<bool, String> {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, GWL_STYLE,
+        SM_CXSCREEN, SM_CYSCREEN, WS_POPUP, WS_CAPTION, WS_THICKFRAME,
+    };
+
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0 == 0 {
+            return Ok(false);
+        }
+
+        // 获取窗口样式
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+
+        // 获取窗口位置信息
+        let mut rect = RECT::default();
+        if GetWindowRect(hwnd, &mut rect).is_ok() {
+            let width = rect.right - rect.left;
+            let height = rect.bottom - rect.top;
+
+            // 获取主显示器分辨率
+            let screen_width = GetSystemMetrics(SM_CXSCREEN);
+            let screen_height = GetSystemMetrics(SM_CYSCREEN);
+
+            // 检查窗口是否接近屏幕大小（允许 10 像素误差）
+            let is_near_fullscreen = 
+                width >= screen_width - 10 && height >= screen_height - 10;
+            
+            // 检查窗口是否没有标题栏和边框（传统全屏应用）
+            let has_no_border = 
+                (style & WS_POPUP.0 as isize) != 0 &&
+                (style & WS_CAPTION.0 as isize) == 0 &&
+                (style & WS_THICKFRAME.0 as isize) == 0;
+
+            // 检测浏览器全屏模式：
+            // 1. 窗口接近全屏
+            // 2. 窗口位置在 (0,0) 或接近 (0,0)
+            let is_at_origin = rect.left <= 0 && rect.top <= 0;
+            
+            // 如果是浏览器窗口且接近全屏，也认为是全屏状态
+            let is_browser_fullscreen = is_near_fullscreen && is_at_origin;
+
+            println!(
+                "[全屏检测] 窗口：{}x{}@({},{}) 屏幕：{}x{}, 无边框：{}, 近全屏：{}, 原点：{}",
+                width, height, rect.left, rect.top, 
+                screen_width, screen_height, 
+                has_no_border, is_near_fullscreen, is_at_origin
+            );
+
+            // 返回 true 如果：
+            // 1. 传统全屏应用（无边框 + 近全屏）
+            // 2. 浏览器全屏模式（近全屏 + 在原点）
+            let is_fullscreen = has_no_border || is_browser_fullscreen;
+            
+            return Ok(is_fullscreen);
+        }
+
+        Ok(false)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -321,7 +386,8 @@ pub fn run() {
             show_main_window,
             show_settings_window,
             get_settings,
-            save_settings
+            save_settings,
+            check_fullscreen_app
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
