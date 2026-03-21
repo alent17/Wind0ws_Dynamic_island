@@ -5,7 +5,7 @@ use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager,
+    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSessionManager,
@@ -282,6 +282,37 @@ fn show_settings_window(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// 打开悬浮窗
+#[tauri::command]
+async fn open_floating_window(app: tauri::AppHandle) -> Result<(), String> {
+    // 检查窗口是否已存在，存在则聚焦并显示
+    if let Some(window) = app.get_webview_window("floating_player") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    // 使用查询参数方式，复用 index.html
+    let _window = WebviewWindowBuilder::new(
+        &app,
+        "floating_player",
+        WebviewUrl::App("index.html?window=floating".into()),
+    )
+    .title("Mini Player")
+    // Spotify 悬浮窗典型比例 (宽度 300x 高度 380)
+    .inner_size(300.0, 380.0)
+    .min_inner_size(250.0, 316.0)
+    .max_inner_size(600.0, 760.0)
+    .resizable(true)
+    .decorations(false) // 无边框
+    .transparent(true) // 背景透明以支持圆角
+    .always_on_top(true) // 悬浮置顶
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 // 获取设置
 #[tauri::command]
 fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
@@ -385,6 +416,7 @@ pub fn run() {
             control_media,
             show_main_window,
             show_settings_window,
+            open_floating_window,
             get_settings,
             save_settings,
             check_fullscreen_app

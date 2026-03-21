@@ -18,6 +18,7 @@
     SkipForward,
     Heart,
     Monitor,
+    GalleryHorizontalEnd,
   } from "lucide-svelte";
 
   // 播放器图标映射（使用本地图片资源）
@@ -269,6 +270,15 @@
     hovering = false;
     if (expanded) {
       startAutoClose(); // 鼠标离开，如果是展开状态，重新开始 5s 计时
+    }
+  }
+
+  // 打开悬浮窗
+  async function openFloatingWindow() {
+    try {
+      await invoke("open_floating_window");
+    } catch (error) {
+      console.error("无法打开悬浮窗:", error);
     }
   }
 
@@ -823,14 +833,14 @@
       flex-direction: column;
       transform: scale({isPressed ? 0.96 : 1});
       transition: 
-        border-radius 0.8s cubic-bezier(0.32, 0.72, 0, 1),
-        transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
-        background 0.5s ease,
-        backdrop-filter 0.5s ease,
-        border 0.5s ease,
-        box-shadow 0.3s ease,
-        opacity 0.4s ease,
-        filter 0.4s ease;
+        border-radius 0.6s cubic-bezier(0.25, 0.1, 0.25, 1),
+        transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+        background 0.4s cubic-bezier(0.25, 0.1, 0.25, 1),
+        backdrop-filter 0.4s cubic-bezier(0.25, 0.1, 0.25, 1),
+        border 0.4s cubic-bezier(0.25, 0.1, 0.25, 1),
+        box-shadow 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
+        opacity 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
+        filter 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
     "
     onmouseenter={handleMouseEnter}
     onmouseleave={handleMouseLeave}
@@ -1139,22 +1149,22 @@
           </div>
 
           <button
-            class="w-6 h-6 flex items-center justify-center rounded-md border border-white/10 text-[9px] font-bold text-white/30 relative z-50 cursor-pointer bg-transparent hover:bg-white/5 transition-colors media-button"
+            class="w-6 h-6 flex items-center justify-center rounded-md border border-white/10 text-white/90 hover:scale-105 active:scale-90 transition-transform relative z-50 cursor-pointer media-button"
             style="transform: translateZ(0); backface-visibility: hidden;"
             data-stop-toggle
-            aria-label="Toggle lyrics"
+            aria-label="Open floating window"
             onclick={(e) => {
               e.stopPropagation();
-              console.log("点击了歌词按钮");
+              openFloatingWindow();
             }}
             onkeydown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
-                console.log("点击了歌词按钮");
+                openFloatingWindow();
               }
             }}
           >
-            词
+            <GalleryHorizontalEnd size={16} />
           </button>
         </div>
 
@@ -1216,7 +1226,7 @@
   }
 
   .animate-island-wave {
-    animation: island-wave 0.6s ease-in-out infinite;
+    animation: island-wave 0.4s ease-in-out infinite;
   }
 
   /* iOS 26 液态玻璃光泽层 */
@@ -1266,8 +1276,7 @@
   /* ========== 水滴状自动显示动画 ========== */
   /* 当窗口从顶部滑下时，使用水滴状变形效果 */
   .island-drop-animation {
-    animation: island-water-drop 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)
-      forwards;
+    animation: island-water-drop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   }
 
   @keyframes island-water-drop {
@@ -1294,8 +1303,8 @@
   /* 隐藏状态的窗口 */
   .island-hidden {
     transition:
-      transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-      opacity 0.3s ease;
+      transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
     transform: translateY(-100%);
     opacity: 0;
     pointer-events: none;
@@ -1340,9 +1349,9 @@
     /* 关键：优化动画曲线和时间，更流畅自然 */
     transform: translateY(30px) scale(0.92);
     transition:
-      transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-      filter 0.35s ease,
-      opacity 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+      filter 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
+      opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 
     filter: blur(8px);
     opacity: 0;
@@ -1371,8 +1380,8 @@
 
     /* 关键：使用更流畅的动画曲线 */
     transition:
-      transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-      opacity 0.35s ease;
+      transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
 
     will-change: transform, opacity;
   }
@@ -1387,14 +1396,15 @@
   /* ========== 按钮入场动画 ========== */
   /* 播放控制按钮容器：从上往下放大出现 (优化时长) */
   .expanded-content.is-visible .flex-1 {
-    animation: button-drop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    animation: button-drop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
     opacity: 0;
     transform: translateY(-30px) scale(0.85);
   }
 
   /* 底部进度条：最后出现 (优化时长) */
   .expanded-content.is-visible .mt-auto {
-    animation: progress-fade-in 0.3s ease-out 0.1s forwards;
+    animation: progress-fade-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s
+      forwards;
     opacity: 0;
     transform: translateY(-15px);
   }
@@ -1500,9 +1510,9 @@
     transition: transform 0.1s ease !important;
   }
 
-  /* 播放控制按钮：独立的下落动画 (60fps 优化) */
+  /* 播放控制按钮：独立的下落动画 (120Hz 优化) */
   .expanded-content.is-visible .media-button {
-    animation: button-icon-bounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)
+    animation: button-icon-bounce 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)
       forwards;
     opacity: 0;
     transform: translateY(-25px) scale(0.8);
@@ -1513,19 +1523,19 @@
 
   /* 逐个延迟，产生级联效果 */
   .expanded-content.is-visible .media-button:nth-child(1) {
-    animation-delay: 0.15s;
+    animation-delay: 0.08s;
   }
 
   .expanded-content.is-visible .media-button:nth-child(2) {
-    animation-delay: 0.2s;
+    animation-delay: 0.16s;
   }
 
   .expanded-content.is-visible .media-button:nth-child(3) {
-    animation-delay: 0.25s;
+    animation-delay: 0.24s;
   }
 
   .expanded-content.is-visible .media-button:nth-child(4) {
-    animation-delay: 0.3s;
+    animation-delay: 0.32s;
   }
 
   @keyframes button-icon-bounce {
