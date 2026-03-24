@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="qqmusicGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#31c27c;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#39d38a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="128" cy="128" r="120" fill="url(#qqmusicGrad)"/>
+  <circle cx="128" cy="128" r="95" fill="#1a1a1a"/>
+  <g fill="#31c27c">
+    <path d="M128 90 Q145 95 150 115 Q128 105 106 115 Q111 95 128 90Z"/>
+    <circle cx="100" cy="140" r="10" fill="#31c27c"/>
+    <circle cx="156" cy="140" r="10" fill="#31c27c"/>
+    <path d="M115 165 Q128 180 141 165" stroke="#31c27c" stroke-width="6" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

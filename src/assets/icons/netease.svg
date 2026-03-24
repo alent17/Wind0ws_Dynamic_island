@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="neteaseGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff2d55;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff6b8a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="128" cy="128" r="120" fill="url(#neteaseGrad)"/>
+  <circle cx="128" cy="128" r="95" fill="#1a1a1a"/>
+  <g fill="#ffffff">
+    <circle cx="95" cy="115" r="12"/>
+    <circle cx="161" cy="115" r="12"/>
+    <path d="M128 145 Q140 165 155 170 Q140 160 128 145 Q116 160 101 170 Q116 165 128 145Z"/>
+    <path d="M105 90 Q110 80 128 80 Q146 80 151 90 Q145 85 128 85 Q111 85 105 90Z"/>
+  </g>
+</svg>

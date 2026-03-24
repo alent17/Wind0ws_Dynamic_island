@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "Dynamic Island permissions",
-  "windows": ["main", "settings", "floating_player"],
+  "windows": ["main", "settings-window", "settings", "floating_player"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
@@ -13,9 +13,11 @@
     "core:window:allow-show",
     "core:window:allow-hide",
     "core:window:allow-set-focus",
+    "core:window:allow-minimize",
     "core:window:allow-close",
     "core:event:allow-listen",
     "core:event:allow-emit",
-    "global-shortcut:allow-register"
+    "global-shortcut:allow-register",
+    "core:window:allow-set-always-on-top"
   ]
 }

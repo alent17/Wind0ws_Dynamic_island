@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="appleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fa243c;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#fc3c44;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fc466b;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="128" cy="128" r="120" fill="url(#appleGrad)"/>
+  <circle cx="128" cy="128" r="95" fill="#1d1d1f"/>
+  <g fill="#fa243c">
+    <path d="M100 105 Q95 95 105 90 Q115 85 128 90 Q141 85 151 90 Q161 95 156 105 Q145 100 128 103 Q111 100 100 105Z"/>
+    <circle cx="95" cy="125" r="6" fill="#fa243c"/>
+    <circle cx="161" cy="125" r="6" fill="#fa243c"/>
+    <path d="M105 150 Q128 170 151 150 Q128 160 105 150Z"/>
+  </g>
+</svg>

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bilibiliGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fb7299;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff9ebb;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="128" cy="128" r="120" fill="url(#bilibiliGrad)"/>
+  <circle cx="128" cy="128" r="95" fill="#2b2b2b"/>
+  <g fill="#fb7299">
+    <path d="M85 105 Q95 115 105 105" stroke="#fb7299" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <path d="M151 105 Q161 115 171 105" stroke="#fb7299" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <rect x="95" y="130" width="66" height="25" rx="5" fill="#fb7299"/>
+    <circle cx="85" cy="155" r="6" fill="#fb7299"/>
+    <circle cx="171" cy="155" r="6" fill="#fb7299"/>
+  </g>
+</svg>

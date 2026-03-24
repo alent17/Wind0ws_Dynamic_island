@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="spotifyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1db954;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1ed760;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="128" cy="128" r="120" fill="url(#spotifyGrad)"/>
+  <circle cx="128" cy="128" r="95" fill="#191414"/>
+  <g fill="#1db954">
+    <circle cx="75" cy="110" r="8" fill="#1db954"/>
+    <circle cx="105" cy="100" r="10" fill="#1db954"/>
+    <circle cx="140" cy="100" r="10" fill="#1db954"/>
+    <circle cx="170" cy="110" r="8" fill="#1db954"/>
+    <circle cx="85" cy="145" r="6" fill="#1db954"/>
+    <circle cx="115" cy="140" r="7" fill="#1db954"/>
+    <circle cx="145" cy="140" r="7" fill="#1db954"/>
+    <circle cx="175" cy="145" r="6" fill="#1db954"/>
+  </g>
+</svg>
