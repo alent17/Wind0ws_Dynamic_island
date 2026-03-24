@@ -42,6 +42,7 @@
   let isHovered = $state(false);
   let isFlipping = $state(false);
   let flipKey = $state(0);
+  let slideDirection = $state<"left" | "right" | "">("");
   let bgColor = $state("rgb(40, 50, 60)");
   let bgGradient = $state(
     "radial-gradient(circle at 50% 50%, rgb(40, 50, 60), rgb(30, 40, 50))",
@@ -525,8 +526,11 @@
           <img
             src={displayCover}
             alt="专辑封面"
-            class="album-art flip-enter"
+            class="album-art slide-{slideDirection || 'enter'}"
             draggable="false"
+            onanimationend={() => {
+              slideDirection = "";
+            }}
           />
         </div>
       {/key}
@@ -570,6 +574,7 @@
         class="ctrl-btn"
         onclick={(e) => {
           e.stopPropagation();
+          slideDirection = "right";
           invoke("control_media", { action: "prev" });
         }}
         aria-label="上一首"
@@ -593,6 +598,7 @@
         class="ctrl-btn"
         onclick={(e) => {
           e.stopPropagation();
+          slideDirection = "left";
           invoke("control_media", { action: "next" });
         }}
         aria-label="下一首"
@@ -863,6 +869,27 @@
   /* 翻转进入动画 */
   .album-art.flip-enter {
     animation: flip-enter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center;
+    will-change: transform, opacity;
+  }
+
+  /* 滑动动画 - 下一首（向左滑出） */
+  .album-art.slide-left {
+    animation: slide-left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center;
+    will-change: transform, opacity;
+  }
+
+  /* 滑动动画 - 上一首（向右滑出） */
+  .album-art.slide-right {
+    animation: slide-right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center;
+    will-change: transform, opacity;
+  }
+
+  /* 默认进入动画 */
+  .album-art.slide-enter {
+    animation: slide-enter 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     transform-origin: center;
     will-change: transform, opacity;
   }
@@ -1203,6 +1230,42 @@
     }
     100% {
       transform: perspective(1000px) rotateY(0deg) scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* 下一首 - 向左滑出渐入 */
+  @keyframes slide-left {
+    0% {
+      transform: translateX(0) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(-100%) scale(0.8);
+      opacity: 0;
+    }
+  }
+
+  /* 上一首 - 向右滑出渐入 */
+  @keyframes slide-right {
+    0% {
+      transform: translateX(0) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(100%) scale(0.8);
+      opacity: 0;
+    }
+  }
+
+  /* 默认进入 - 渐入 */
+  @keyframes slide-enter {
+    0% {
+      transform: translateX(0) scale(0.9);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0) scale(1);
       opacity: 1;
     }
   }
