@@ -40,6 +40,7 @@
     show_debug_info: boolean;
     log_level: string;
     player_weights: Record<string, number>;
+    enable_mv_playback: boolean; // MV 播放功能
   }
 
   let settings = $state<AppSettings>({
@@ -61,6 +62,7 @@
       apple: 50,
       generic: 10,
     },
+    enable_mv_playback: false, // 默认关闭 MV 播放
   });
 
   const appWindow = getCurrentWindow();
@@ -582,6 +584,45 @@
                 <p class="item-desc">降低动画效果，提升响应速度</p>
               </div>
               <div class="toggle" class:on={settings.reduce_animations}>
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+
+            <!-- MV 播放 -->
+            <div
+              class="setting-item"
+              onclick={async () => {
+                const newValue = !settings.enable_mv_playback;
+                await saveSettings({
+                  enable_mv_playback: newValue,
+                });
+                // 刷新悬浮窗，让设置立即生效
+                try {
+                  await invoke("emit_event", {
+                    event: "mv-playback-changed",
+                    payload: { enable: newValue },
+                  });
+                  console.log("[设置] MV 播放已切换:", newValue ? "开启" : "关闭");
+                } catch (e) {
+                  console.error("[设置] 发送事件失败:", e);
+                }
+              }}
+            >
+              <div class="item-icon" class:active={settings.enable_mv_playback}>
+                <MonitorOff size={18} />
+              </div>
+              <div class="item-content">
+                <div class="item-header">
+                  <h3 class="item-title">MV 播放</h3>
+                  <span class="item-value"
+                    >{settings.enable_mv_playback ? "开启" : "关闭"}</span
+                  >
+                </div>
+                <p class="item-desc">
+                  在专辑封面处播放 Apple Music MV（需网络）
+                </p>
+              </div>
+              <div class="toggle" class:on={settings.enable_mv_playback}>
                 <div class="toggle-knob"></div>
               </div>
             </div>

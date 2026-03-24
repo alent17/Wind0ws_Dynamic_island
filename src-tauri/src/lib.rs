@@ -41,6 +41,8 @@ pub struct AppSettings {
     pub floating_window_y: Option<i32>,
     pub floating_window_width: Option<u32>,
     pub floating_window_height: Option<u32>,
+    // ===== MV 播放 =====
+    pub enable_mv_playback: bool,
 }
 
 impl Default for AppSettings {
@@ -71,6 +73,7 @@ impl Default for AppSettings {
             floating_window_y: None,
             floating_window_width: None,
             floating_window_height: None,
+            enable_mv_playback: false, // 默认关闭 MV 播放
         }
     }
 }
@@ -388,6 +391,15 @@ async fn control_media(app: AppHandle, action: String) -> Result<(), String> {
             let _ = session
                 .TryTogglePlayPauseAsync()
                 .map_err(|e| format!("TogglePlayPause failed: {:?}", e))?;
+            
+            // 延迟 100ms 后主动获取一次媒体状态，确保播放状态更新
+            let app_clone = app.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                if let Ok(info) = get_media_info_internal(&app_clone).await {
+                    let _ = app_clone.emit("media-update", info);
+                }
+            });
         }
         "next" => {
             let _ = session

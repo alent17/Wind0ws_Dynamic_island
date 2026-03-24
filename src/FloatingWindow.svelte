@@ -38,16 +38,18 @@
   let currentTrackKey = "";
   let displayCover = $state("");
   let previousCover = $state("");
-  let nextCover = $state("");
   let isHovered = $state(false);
-  let isFlipping = $state(false);
-  let flipKey = $state(0);
   let slideDirection = $state<"left" | "right" | "">("");
   let bgColor = $state("rgb(40, 50, 60)");
   let bgGradient = $state(
     "radial-gradient(circle at 50% 50%, rgb(40, 50, 60), rgb(30, 40, 50))",
   );
   let windowSize = $state<WindowSize>({ width: 0, height: 0 });
+
+  // MV 播放相关
+  let isMVPlaybackEnabled = $state(false); // MV 播放功能是否启用
+  let mvUrl = $state(""); // MV 视频链接
+  let isPlayingMV = $state(false); // 是否正在播放 MV
 
   let unlisten: () => void;
   let unlistenResize: () => void;
@@ -97,7 +99,8 @@
       fetch: () => Promise<string | null>;
     }
 
-    const sources: CoverSource[] = [
+    // 先尝试获取专辑封面
+    const albumSources: CoverSource[] = [
       {
         name: "iTunes",
         fetch: async () => {
@@ -107,6 +110,7 @@
           );
           const data = await res.json();
           if (data.results?.length > 0) {
+            // 将 iTunes 图片改为 600x600
             return data.results[0].artworkUrl100.replace(
               "100x100bb.jpg",
               "600x600bb.jpg",
@@ -124,11 +128,14 @@
           );
           const html = await res.text();
           const imgMatch = html.match(/"images":\[{"url":"([^"]+)"}/);
-          if (imgMatch?.[1]) return imgMatch[1];
+          if (imgMatch?.[1]) {
+            // Spotify 图片已经是高清，尝试获取更高清版本
+            return imgMatch[1].replace("640x640", "600x600");
+          }
           const ogMatch = html.match(
             /<meta property="og:image" content="([^"]+)"/,
           );
-          return ogMatch?.[1] || null;
+          return ogMatch?.[1]?.replace("640x640", "600x600") || null;
         },
       },
       {
@@ -140,6 +147,7 @@
           );
           const html = await res.text();
           const match = html.match(/"artworkUrl100":"([^"]+)"/);
+          // 将 Apple Music 图片改为 600x600
           return match?.[1]?.replace("100x100bb.jpg", "600x600bb.jpg") || null;
         },
       },
@@ -152,14 +160,18 @@
             `https://www.last.fm/music/${artistQuery}/_/${trackQuery}`,
           );
           const html = await res.text();
-          const match = html.match(/<meta property="og:image" content="([^"]+)"/);
+          const match = html.match(
+            /<meta property="og:image" content="([^"]+)"/,
+          );
           return match?.[1] || null;
         },
       },
       {
         name: "MusicBrainz",
         fetch: async () => {
-          const query = encodeURIComponent(`artist:${artist} recording:${title}`);
+          const query = encodeURIComponent(
+            `artist:${artist} recording:${title}`,
+          );
           const res = await fetchWithTimeout(
             `https://musicbrainz.org/ws/2/recording/?query=${query}&fmt=json&limit=1`,
           );
@@ -170,6 +182,7 @@
             if (releases?.length > 0) {
               const release = releases[0];
               if (release["cover-art-archive"]?.count > 0) {
+                // MusicBrainz 使用 Cover Art Archive，获取高清版本
                 return `https://coverartarchive.org/release/${release.id}/front`;
               }
             }
@@ -179,11 +192,82 @@
       },
     ];
 
-    for (const source of sources) {
+    // 如果专辑封面失败，尝试获取歌手图片
+    const artistSources: CoverSource[] = [
+      {
+        name: "iTunes Artist",
+        fetch: async () => {
+          const query = encodeURIComponent(artist);
+          const res = await fetchWithTimeout(
+            `https://itunes.apple.com/search?term=${query}&limit=1&entity=musicArtist`,
+          );
+          const data = await res.json();
+          if (data.results?.length > 0) {
+            // 获取歌手图片并转为 600x600
+            return (
+              data.results[0].artistArtworkUrl100?.replace(
+                "100x100bb.jpg",
+                "600x600bb.jpg",
+              ) || null
+            );
+          }
+          return null;
+        },
+      },
+      {
+        name: "Spotify Artist",
+        fetch: async () => {
+          const query = encodeURIComponent(artist);
+          const res = await fetchWithTimeout(
+            `https://open.spotify.com/search/${query}`,
+          );
+          const html = await res.text();
+          // 尝试获取歌手图片
+          const imgMatch = html.match(/"images":\[{"url":"([^"]+)"}/);
+          if (imgMatch?.[1]) {
+            return imgMatch[1].replace("640x640", "600x600");
+          }
+          return null;
+        },
+      },
+      {
+        name: "Last.fm Artist",
+        fetch: async () => {
+          const query = encodeURIComponent(artist);
+          const res = await fetchWithTimeout(
+            `https://www.last.fm/search/artists?q=${query}`,
+          );
+          const html = await res.text();
+          const match = html.match(/<img class="avatar" src="([^"]+)"/);
+          return match?.[1] || null;
+        },
+      },
+    ];
+
+    // 先尝试获取专辑封面
+    for (const source of albumSources) {
       try {
         const result = await source.fetch();
         if (result) {
           console.log(`✅ 高清图获取成功，来源：${source.name}`);
+          return result;
+        }
+      } catch (error: any) {
+        if (error.name === "AbortError") {
+          console.warn(`⏱️ ${source.name} 超时`);
+        } else {
+          console.warn(`❌ ${source.name} 失败:`, error.message);
+        }
+      }
+    }
+
+    // 专辑封面失败，尝试获取歌手图片
+    console.log("⚠️ 专辑封面获取失败，尝试获取歌手图片...");
+    for (const source of artistSources) {
+      try {
+        const result = await source.fetch();
+        if (result) {
+          console.log(`✅ 歌手图获取成功，来源：${source.name}`);
           return result;
         }
       } catch (error: any) {
@@ -266,26 +350,9 @@
           const gg2 = Math.max(best.g - 20, 0);
           const bb2 = Math.max(best.b - 20, 0);
 
-          const newGradient = `radial-gradient(circle at 50% 50%, rgb(${rr}, ${gg}, ${bb}), rgb(${rr2}, ${gg2}, ${rr2}))`;
-
-          // 使用颜色插值实现平滑过渡
-          const steps = 10;
-          let currentStep = 0;
-          const interval = setInterval(() => {
-            currentStep++;
-            const t = currentStep / steps;
-            const easeT = t * t * (3 - 2 * t); // smoothstep
-            const currentR = Math.round(40 + (rr - 40) * easeT);
-            const currentG = Math.round(50 + (gg - 50) * easeT);
-            const currentB = Math.round(60 + (bb - 60) * easeT);
-            const currentR2 = Math.round(30 + (rr2 - 30) * easeT);
-            const currentG2 = Math.round(40 + (gg2 - 40) * easeT);
-            const currentB2 = Math.round(50 + (bb2 - 50) * easeT);
-            bgGradient = `radial-gradient(circle at 50% 50%, rgb(${currentR}, ${currentG}, ${currentB}), rgb(${currentR2}, ${currentG2}, ${currentB2}))`;
-            if (currentStep >= steps) {
-              clearInterval(interval);
-            }
-          }, 80);
+          // 直接设置最终颜色，不使用 interval 动画
+          bgColor = `rgb(${rr}, ${gg}, ${bb})`;
+          bgGradient = `radial-gradient(circle at 50% 50%, rgb(${rr}, ${gg}, ${bb}), rgb(${rr2}, ${gg2}, ${bb2}))`;
         } else {
           bgColor = "rgb(40, 50, 60)";
           bgGradient =
@@ -300,7 +367,127 @@
     img.src = imgSrc;
   }
 
+  // 检测 MV 文件大小
+  async function getMVFileSize(url: string): Promise<number> {
+    try {
+      const res = await fetch(url, { method: "HEAD" });
+      const contentLength = res.headers.get("content-length");
+      if (contentLength) {
+        return parseInt(contentLength, 10);
+      }
+      return 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  // 检测 MV 分辨率
+  function getMVResolution(
+    url: string,
+  ): Promise<{ width: number; height: number } | null> {
+    return new Promise((resolve) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.muted = true;
+
+      video.onloadedmetadata = () => {
+        const resolution = {
+          width: video.videoWidth,
+          height: video.videoHeight,
+        };
+        resolve(resolution);
+      };
+
+      video.onerror = () => {
+        resolve(null);
+      };
+
+      video.src = url;
+    });
+  }
+
+  // 从 Apple Music 获取 MV 链接（优先流畅度）
+  async function fetchMVFromAppleMusic(title: string, artist: string) {
+    if (!isMVPlaybackEnabled) return null; // 功能未启用，直接返回
+
+    try {
+      const query = encodeURIComponent(`${title} ${artist}`);
+      const res = await fetch(
+        `https://itunes.apple.com/search?term=${query}&limit=1&media=musicVideo`,
+        {
+          headers: {
+            Referer: "https://music.apple.com",
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          },
+        },
+      );
+      const data = await res.json();
+
+      if (data.results?.length > 0) {
+        const mvData = data.results[0];
+        let previewUrl = mvData.previewUrl; // Apple Music 提供的 MV 预览链接
+
+        // 检测文件大小
+        const fileSize = await getMVFileSize(previewUrl);
+        const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+
+        // 检测分辨率
+        const resolution = await getMVResolution(previewUrl);
+
+        console.log("[MV] 找到 MV:", mvData.trackName);
+        console.log("[MV] URL:", previewUrl);
+        console.log("[MV] 文件大小:", fileSizeMB, "MB");
+        if (resolution) {
+          console.log(
+            "[MV] 分辨率:",
+            `${resolution.width}x${resolution.height}`,
+          );
+        }
+
+        return previewUrl;
+      }
+      return null;
+    } catch (error) {
+      console.error("[MV] 获取失败:", error);
+      return null;
+    }
+  }
+
   onMount(async () => {
+    // 读取 MV 播放设置
+    try {
+      const settings = await invoke<any>("get_settings");
+      isMVPlaybackEnabled = settings.enable_mv_playback ?? false;
+      console.log(
+        "[MV 播放] 功能状态:",
+        isMVPlaybackEnabled ? "已启用" : "已禁用",
+      );
+    } catch (error) {
+      console.error("[MV 播放] 读取设置失败:", error);
+      isMVPlaybackEnabled = false;
+    }
+
+    // 监听 MV 播放设置变化事件
+    const unlistenMVChange = await listen(
+      "mv-playback-changed",
+      (event: any) => {
+        isMVPlaybackEnabled = event.payload.enable;
+        console.log(
+          "[MV 播放] 设置已更新:",
+          isMVPlaybackEnabled ? "已启用" : "已禁用",
+        );
+        // 如果关闭了 MV 播放，停止当前播放
+        if (!isMVPlaybackEnabled) {
+          isPlayingMV = false;
+          mvUrl = "";
+          console.log("[MV 播放] 已停止");
+        }
+      },
+    );
+    // 保存监听器以便清理
+    (window as any).__unlistenMVChange = unlistenMVChange;
+
     const appWindow = getCurrentWindow();
     const size = await appWindow.innerSize();
     windowSize = { width: size.width, height: size.height };
@@ -377,10 +564,18 @@
     // 保存移动监听器引用
     (window as any).__unlistenMoved = unlistenMoved;
 
+    // 监听媒体更新事件（带防抖）
+    let mediaUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
     unlisten = await listen("media-update", (event: any) => {
-      if (event.payload) {
+      // 防抖处理，避免频繁更新
+      if (mediaUpdateTimeout) {
+        clearTimeout(mediaUpdateTimeout);
+      }
+
+      mediaUpdateTimeout = setTimeout(() => {
         const payload = event.payload;
         const newTrackKey = `${payload.title}-${payload.artist}`;
+
         if (newTrackKey !== currentTrackKey) {
           currentTrackKey = newTrackKey;
 
@@ -388,54 +583,168 @@
           const smtcCover =
             payload.album_art || payload.thumbnail || payload.cover_url || "";
 
-          console.log("📻 SMTC 传递的图片:", {
-            album_art: payload.album_art,
-            thumbnail: payload.thumbnail,
-            cover_url: payload.cover_url,
-            using: smtcCover ? smtcCover.substring(0, 80) + "..." : "无",
-          });
-
           mediaState = { ...mediaState, ...payload, album_art: smtcCover };
 
-          // 始终尝试获取 iTunes 高清图
-          fetchHighResCover(payload.title, payload.artist, smtcCover).then(
-            (hdCover) => {
-              const img = new Image();
-              if (hdCover.startsWith("http")) img.crossOrigin = "Anonymous";
-              img.onload = () => {
+          // 判断是否是音乐播放器
+          const isMusicPlayer =
+            payload.source &&
+            (payload.source === "netease" ||
+              payload.source === "qqmusic" ||
+              payload.source === "spotify" ||
+              payload.source === "apple_music" ||
+              payload.source === "local");
+
+          // 网页播放时只获取歌手图片，音乐播放器获取专辑封面
+          if (isMusicPlayer) {
+            // 停止当前播放的 MV
+            isPlayingMV = false;
+            mvUrl = "";
+
+            // 获取专辑封面高清图
+            fetchHighResCover(payload.title, payload.artist, smtcCover)
+              .then((hdCover) => {
+                const img = new Image();
+                if (hdCover.startsWith("http")) img.crossOrigin = "Anonymous";
+                img.onload = () => {
+                  if (currentTrackKey === newTrackKey) {
+                    // 上一首歌从中间往左侧离开，下一首歌从右侧往中间移动
+                    previousCover = displayCover; // 保存旧图
+                    slideDirection = "left"; // 旧图向左滑出，新图从右滑入
+                    displayCover = hdCover;
+                    extractColors(hdCover);
+                    // 动画结束后清除旧图
+                    setTimeout(() => {
+                      slideDirection = "";
+                      previousCover = "";
+                    }, 400);
+                  }
+                };
+                img.onerror = () => {
+                  if (currentTrackKey === newTrackKey) {
+                    // 高清图加载失败，使用 SMTC 图片
+                    previousCover = displayCover;
+                    slideDirection = "left";
+                    displayCover = smtcCover;
+                    if (smtcCover) extractColors(smtcCover);
+                    setTimeout(() => {
+                      slideDirection = "";
+                      previousCover = "";
+                    }, 400);
+                  }
+                };
+                img.src = hdCover;
+              })
+              .catch(() => {
+                // 获取失败，使用 SMTC 图片
                 if (currentTrackKey === newTrackKey) {
-                  displayCover = hdCover;
-                  flipKey += 1; // 触发 key 更新，带动画
-                  extractColors(hdCover);
-                }
-              };
-              img.onerror = () => {
-                if (currentTrackKey === newTrackKey) {
-                  // 高清图加载失败，使用 SMTC 图片
+                  previousCover = displayCover;
+                  slideDirection = "left";
                   displayCover = smtcCover;
-                  flipKey += 1;
                   if (smtcCover) extractColors(smtcCover);
+                  setTimeout(() => {
+                    slideDirection = "";
+                    previousCover = "";
+                  }, 400);
                 }
-              };
-              img.src = hdCover;
-            },
-          );
+              });
+
+            // 如果启用了 MV 播放，尝试获取 MV（在专辑封面加载完成后）
+            if (isMVPlaybackEnabled) {
+              // 先停止旧 MV，然后获取新 MV
+              fetchMVFromAppleMusic(payload.title, payload.artist).then(
+                (mvLink) => {
+                  if (mvLink && currentTrackKey === newTrackKey) {
+                    // 确保在切换歌曲时更新 MV
+                    mvUrl = mvLink;
+                    isPlayingMV = true;
+                    console.log("[MV] 切换到新 MV:", mvLink);
+                  }
+                },
+              );
+            }
+          } else {
+            // 网页或其他来源，直接使用 SMTC 图片
+            if (currentTrackKey === newTrackKey) {
+              previousCover = displayCover;
+              slideDirection = "left";
+              displayCover = smtcCover;
+              if (smtcCover) extractColors(smtcCover);
+              setTimeout(() => {
+                slideDirection = "";
+                previousCover = "";
+              }, 400);
+            }
+          }
         } else {
-          mediaState.is_playing = payload.is_playing;
+          // 播放状态变化
+          const wasPlaying = mediaState.is_playing;
+          const isPlaying = payload.is_playing;
+
+          console.log(
+            "[播放状态] 变化:",
+            wasPlaying ? "播放中" : "已暂停",
+            "→",
+            isPlaying ? "播放中" : "已暂停",
+          );
+
+          mediaState.is_playing = isPlaying;
           mediaState.position_ms = payload.position_ms;
           mediaState.duration_ms = payload.duration_ms;
+
+          // 根据播放状态控制 MV
+          if (isPlayingMV && mvUrl) {
+            const videoElement = document.querySelector(
+              ".mv-player",
+            ) as HTMLVideoElement;
+            if (videoElement) {
+              if (!isPlaying && wasPlaying) {
+                // 歌曲暂停，MV 也暂停
+                videoElement.pause();
+                console.log(
+                  "[MV] 暂停 (时间：" +
+                    videoElement.currentTime.toFixed(2) +
+                    "s, paused=" +
+                    videoElement.paused +
+                    ")",
+                );
+              } else if (isPlaying && !wasPlaying) {
+                // 歌曲从暂停恢复播放，MV 也恢复播放
+                videoElement.play().catch((err) => {
+                  console.error("[MV] 恢复播放失败:", err);
+                });
+                console.log(
+                  "[MV] 恢复播放 (时间：" +
+                    videoElement.currentTime.toFixed(2) +
+                    "s, paused=" +
+                    videoElement.paused +
+                    ")",
+                );
+              }
+            } else {
+              console.warn("[MV] 未找到视频元素");
+            }
+          }
         }
-      }
+      }, 50); // 50ms 防抖
     });
-    progressInterval = setInterval(() => {
+
+    // 进度更新使用 requestAnimationFrame 代替 setInterval
+    let lastPosition = 0;
+    const updateProgress = () => {
       if (
         mediaState.is_playing &&
         mediaState.duration_ms > 0 &&
         mediaState.position_ms < mediaState.duration_ms
       ) {
-        mediaState.position_ms += 1000;
+        const now = Date.now();
+        if (now - lastPosition >= 1000) {
+          mediaState.position_ms += 1000;
+          lastPosition = now;
+        }
       }
-    }, 1000);
+      requestAnimationFrame(updateProgress);
+    };
+    requestAnimationFrame(updateProgress);
   });
 
   onDestroy(() => {
@@ -451,6 +760,11 @@
         (window as any).__handleMouseMove,
       );
       delete (window as any).__handleMouseMove;
+    }
+    // 清理 MV 播放设置变化监听
+    if ((window as any).__unlistenMVChange) {
+      (window as any).__unlistenMVChange();
+      delete (window as any).__unlistenMVChange;
     }
     clearTimeout(savePositionTimeout);
     clearInterval(progressInterval);
@@ -485,6 +799,15 @@
     getCurrentWindow().close();
   }
 
+  // 用于拖拽的标题栏区域 - 排除关闭按钮
+  function handleDragBarMousedown(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (target.closest(".close-btn-topbar")) {
+      return;
+    }
+    getCurrentWindow().startDragging();
+  }
+
   // 用于拖拽的标题栏区域
   function handleTitlebarMousedown() {
     getCurrentWindow().startDragging();
@@ -501,14 +824,9 @@
   <div class="bg-solid"></div>
 
   <!-- 可拖拽的顶部栏 - 鼠标悬停时滑下 -->
-  <div class="drag-bar" onmousedown={handleTitlebarMousedown}>
+  <div class="drag-bar" onmousedown={handleDragBarMousedown}>
     <div class="drag-handle">
       <div class="drag-dots">
-        <div class="drag-dot"></div>
-        <div class="drag-dot"></div>
-        <div class="drag-dot"></div>
-        <div class="drag-dot"></div>
-        <div class="drag-dot"></div>
         <div class="drag-dot"></div>
         <div class="drag-dot"></div>
         <div class="drag-dot"></div>
@@ -521,19 +839,54 @@
 
   <div class="album-stage">
     {#if displayCover}
-      {#key flipKey}
-        <div class="album-wrapper">
-          <img
-            src={displayCover}
-            alt="专辑封面"
-            class="album-art slide-{slideDirection || 'enter'}"
-            draggable="false"
-            onanimationend={() => {
-              slideDirection = "";
+      <div class="album-wrapper">
+        <!-- MV 视频播放 -->
+        {#if isPlayingMV && mvUrl}
+          <video
+            class="mv-player"
+            src={mvUrl}
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="auto"
+            disablepictureinpicture
+            poster=""
+            onloadeddata={(e) => {
+              const video = e.target as HTMLVideoElement;
+              // 确保视频已缓冲足够再播放
+              video.play().catch(console.error);
             }}
+            onwaiting={() => {
+              console.log("[MV] 缓冲中...");
+            }}
+            onplaying={() => {
+              console.log("[MV] 播放中...");
+            }}
+            onstalled={() => {
+              console.log("[MV] 网络卡顿");
+            }}
+          ></video>
+        {/if}
+        <!-- 旧图（如果有） -->
+        {#if previousCover}
+          <img
+            src={previousCover}
+            alt="专辑封面"
+            class="album-art album-art-old"
+            class:slide-out={slideDirection}
+            draggable="false"
           />
-        </div>
-      {/key}
+        {/if}
+        <!-- 新图 -->
+        <img
+          src={displayCover}
+          alt="专辑封面"
+          class="album-art album-art-new"
+          class:slide-in={slideDirection}
+          draggable="false"
+        />
+      </div>
     {:else}
       <div class="album-placeholder">
         <Play size={40} strokeWidth={1} color="rgba(255,255,255,0.15)" />
@@ -652,9 +1005,15 @@
     z-index: 1;
     background: var(--bg-gradient);
     border-radius: 10px;
-    transition: background 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      background 1.2s cubic-bezier(0.4, 0, 0.2, 1),
+      top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     /* 从上往下加深的阴影效果 */
-    box-shadow: inset 0 -20px 80px rgba(0, 0, 0, 0.4);
+    box-shadow: inset 0 -20px 50px rgba(0, 0, 0, 0.4);
+  }
+
+  .player.hovered .bg-solid {
+    top: 25px; /* 顶部栏出现时，填充色向下移动 */
   }
 
   /* 可拖拽的顶部栏 - 鼠标悬停时滑下 */
@@ -668,61 +1027,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    opacity: 0;
     visibility: hidden; /* 完全隐藏 */
-    transform: translateY(-10px);
+    transform: translateY(-100%);
     transition:
-      opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       visibility 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     background: #000000; /* 纯黑色 */
     pointer-events: auto; /* 确保可以接收鼠标事件 */
   }
 
-  /* 使用伪元素创建内凹圆角缺口 */
-  .drag-bar::after {
-    content: "";
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 12px;
-    background-color: #000000;
-    /* 创建底部内凹圆角：使用两个圆形遮罩在底部切出缺口 */
-    -webkit-mask-image: radial-gradient(
-        circle at 12px 12px,
-        transparent 12px,
-        black 12px
-      ),
-      radial-gradient(
-        circle at calc(100% - 12px) 12px,
-        transparent 12px,
-        black 12px
-      );
-    mask-image: radial-gradient(
-        circle at 12px 12px,
-        transparent 12px,
-        black 12px
-      ),
-      radial-gradient(
-        circle at calc(100% - 12px) 12px,
-        transparent 12px,
-        black 12px
-      );
-    -webkit-mask-position:
-      left bottom,
-      right bottom;
-    mask-position:
-      left bottom,
-      right bottom;
-    -webkit-mask-size: 24px 24px;
-    mask-size: 24px 24px;
-    -webkit-mask-repeat: no-repeat;
-    mask-repeat: no-repeat;
-  }
-
   .player.hovered .drag-bar {
-    opacity: 1;
     visibility: visible;
     transform: translateY(0);
   }
@@ -731,23 +1045,25 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6px 16px;
+    padding: 1px 12px 7px 12px; /* 上内边距更小，让点更靠上 */
   }
 
   .drag-dots {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: repeat(2, 1fr);
-    gap: 1px;
-    width: 18px;
-    height: 8px;
+    display: flex;
+    gap: 3px;
+    padding: 0;
   }
 
   .drag-dot {
     width: 3px;
     height: 3px;
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.6);
     border-radius: 50%;
+    transition: background 0.2s ease;
+  }
+
+  .drag-bar:hover .drag-dot {
+    background: rgba(255, 255, 255, 0.8);
   }
 
   /* 顶部栏关闭按钮 */
@@ -770,7 +1086,7 @@
       color 0.15s ease,
       transform 0.15s ease,
       background 0.15s ease;
-    z-index: 10;
+    z-index: 1000; /* 最高层级，确保可点击 */
   }
 
   .close-btn-topbar:hover {
@@ -819,6 +1135,17 @@
     transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
+  /* MV 播放器 */
+  .mv-player {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 10;
+    border-radius: 5px;
+  }
+
   .album-wrapper.flipping {
     animation: pulse-glow 0.6s ease-out;
   }
@@ -864,34 +1191,26 @@
     object-fit: cover;
     display: block;
     border-radius: 5px;
+    pointer-events: none; /* 让鼠标事件穿透，不阻挡按钮点击 */
   }
 
-  /* 翻转进入动画 */
-  .album-art.flip-enter {
-    animation: flip-enter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-    transform-origin: center;
-    will-change: transform, opacity;
+  /* 旧图在上层，新图在下层 */
+  .album-art-old {
+    z-index: 2;
   }
 
-  /* 滑动动画 - 下一首（向左滑出） */
-  .album-art.slide-left {
-    animation: slide-left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    transform-origin: center;
-    will-change: transform, opacity;
+  .album-art-new {
+    z-index: 1;
   }
 
-  /* 滑动动画 - 上一首（向右滑出） */
-  .album-art.slide-right {
-    animation: slide-right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    transform-origin: center;
-    will-change: transform, opacity;
+  /* 旧图向左滑出动画 */
+  .album-art-old.slide-out {
+    animation: slide-out-left 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   }
 
-  /* 默认进入动画 */
-  .album-art.slide-enter {
-    animation: slide-enter 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    transform-origin: center;
-    will-change: transform, opacity;
+  /* 新图从右滑入动画 */
+  .album-art-new.slide-in {
+    animation: slide-in-from-right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .album-placeholder {
@@ -1019,7 +1338,11 @@
     left: 0;
     right: 0;
     bottom: 60px; /* 到歌曲信息层上方结束 */
-    background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.95));
+    background: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0),
+      rgba(0, 0, 0, 0.6)
+    );
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     display: flex;
@@ -1186,86 +1509,72 @@
     transform: scale(0.9);
   }
 
-  /* ==================== 3D 翻转动画关键帧 ==================== */
-  @keyframes flip-out-front {
+  /* 专辑图片淡入动画 */
+  @keyframes fade-enter {
     0% {
-      transform: rotateY(0deg);
-      opacity: 1;
-      filter: brightness(1);
-    }
-    50% {
-      transform: rotateY(-90deg);
-      opacity: 0.5;
-      filter: brightness(0.8);
-    }
-    100% {
-      transform: rotateY(-180deg);
-      opacity: 0;
-      filter: brightness(0.5);
-    }
-  }
-
-  @keyframes flip-in-back {
-    0% {
-      transform: rotateY(180deg);
-      opacity: 0;
-      filter: brightness(0.5);
-    }
-    50% {
-      transform: rotateY(90deg);
-      opacity: 0.5;
-      filter: brightness(0.8);
-    }
-    100% {
-      transform: rotateY(0deg);
-      opacity: 1;
-      filter: brightness(1);
-    }
-  }
-
-  @keyframes flip-enter {
-    0% {
-      transform: perspective(1000px) rotateY(-180deg) scale(0.75);
       opacity: 0;
     }
     100% {
-      transform: perspective(1000px) rotateY(0deg) scale(1);
       opacity: 1;
     }
   }
 
-  /* 下一首 - 向左滑出渐入 */
-  @keyframes slide-left {
+  /* 向左滑出（下一首） */
+  @keyframes slide-out-left {
     0% {
       transform: translateX(0) scale(1);
       opacity: 1;
     }
     100% {
-      transform: translateX(-100%) scale(0.8);
+      transform: translateX(-100%) scale(0.9);
       opacity: 0;
     }
   }
 
-  /* 上一首 - 向右滑出渐入 */
-  @keyframes slide-right {
+  /* 从右滑入（下一首） */
+  @keyframes slide-in-from-right {
+    0% {
+      transform: translateX(100%) scale(0.9);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0) scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* 向右滑出（上一首） */
+  @keyframes slide-out-right {
     0% {
       transform: translateX(0) scale(1);
       opacity: 1;
     }
     100% {
-      transform: translateX(100%) scale(0.8);
+      transform: translateX(100%) scale(0.9);
       opacity: 0;
     }
   }
 
-  /* 默认进入 - 渐入 */
+  /* 从左滑入（上一首） */
+  @keyframes slide-in-from-left {
+    0% {
+      transform: translateX(-100%) scale(0.9);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(0) scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* 默认进入动画 */
   @keyframes slide-enter {
     0% {
-      transform: translateX(0) scale(0.9);
+      transform: scale(0.95);
       opacity: 0;
     }
     100% {
-      transform: translateX(0) scale(1);
+      transform: scale(1);
       opacity: 1;
     }
   }

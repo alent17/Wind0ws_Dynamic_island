@@ -982,9 +982,22 @@
 
   // 全屏检测和鼠标移动监听
   onMount(async () => {
-    fullscreenCheckInterval = setInterval(checkFullscreenAndHide, 2000);
+    // 降低全屏检测频率，从 2000ms 改为 5000ms
+    fullscreenCheckInterval = setInterval(checkFullscreenAndHide, 5000);
     checkFullscreenAndHide();
-    document.addEventListener("mousemove", handleMouseMove);
+
+    // 使用节流优化鼠标移动监听
+    let mouseMoveTimeout: ReturnType<typeof setTimeout> | null = null;
+    const handleMouseMoveThrottled = (e: MouseEvent) => {
+      if (mouseMoveTimeout) {
+        clearTimeout(mouseMoveTimeout);
+      }
+      mouseMoveTimeout = setTimeout(() => {
+        handleMouseMove(e);
+      }, 100); // 100ms 节流
+    };
+
+    document.addEventListener("mousemove", handleMouseMoveThrottled);
 
     return () => {
       if (fullscreenCheckInterval) {
@@ -993,7 +1006,10 @@
       if (hideTimeout) {
         clearTimeout(hideTimeout);
       }
-      document.removeEventListener("mousemove", handleMouseMove);
+      if (mouseMoveTimeout) {
+        clearTimeout(mouseMoveTimeout);
+      }
+      document.removeEventListener("mousemove", handleMouseMoveThrottled);
     };
   });
 </script>
