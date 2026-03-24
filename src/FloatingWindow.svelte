@@ -6,9 +6,29 @@
   import { fade } from "svelte/transition";
   import { Play, Pause, SkipBack, SkipForward, X } from "lucide-svelte";
 
-  let mediaState = $state({
-    title: "等待播放...",
-    artist: "未知艺术家",
+  interface MediaState {
+    title: string;
+    artist: string;
+    album_art: string;
+    is_playing: boolean;
+    position_ms: number;
+    duration_ms: number;
+    source?: string;
+  }
+
+  interface WindowSize {
+    width: number;
+    height: number;
+  }
+
+  const PLACEHOLDER_TITLE = "等待播放...";
+  const PLACEHOLDER_ARTIST = "未知艺术家";
+  const FETCH_TIMEOUT = 8000;
+  const MIN_COVER_SIZE_KB = 50;
+
+  let mediaState = $state<MediaState>({
+    title: PLACEHOLDER_TITLE,
+    artist: PLACEHOLDER_ARTIST,
     album_art: "",
     is_playing: false,
     position_ms: 0,
@@ -26,7 +46,7 @@
   let bgGradient = $state(
     "radial-gradient(circle at 50% 50%, rgb(40, 50, 60), rgb(30, 40, 50))",
   );
-  let windowSize = $state({ width: 0, height: 0 });
+  let windowSize = $state<WindowSize>({ width: 0, height: 0 });
 
   let unlisten: () => void;
   let unlistenResize: () => void;
@@ -38,26 +58,22 @@
     artist: string,
     fallbackCover: string,
   ) {
-    if (!title || title === "等待播放...") return fallbackCover;
+    if (!title || title === PLACEHOLDER_TITLE) return fallbackCover;
 
-    // 如果是本地高清图（data:image 且较大），直接使用
     if (fallbackCover && fallbackCover.startsWith("data:image")) {
-      // 检查 data:image 的大小
       try {
         const sizeInBytes = Math.round((fallbackCover.length * 3) / 4);
-        if (sizeInBytes > 50000) {
-          // 大于 50KB 认为是高清图
+        if (sizeInBytes > MIN_COVER_SIZE_KB * 1024) {
           return fallbackCover;
         }
-      } catch (e) {
+      } catch {
         // 忽略错误，继续获取网络高清图
       }
     }
 
-    // 创建带超时的 fetch
     const fetchWithTimeout = async (
       url: string,
-      timeout = 5000,
+      timeout = FETCH_TIMEOUT,
       options: RequestInit = {},
     ) => {
       const controller = new AbortController();
@@ -75,134 +91,105 @@
       }
     };
 
-    // 尝试多个图片来源
-    const sources = [
-      // 1. iTunes (最可靠)
-      async () => {
-        const query = encodeURIComponent(`${title} ${artist}`);
-        const res = await fetchWithTimeout(
-          `https://itunes.apple.com/search?term=${query}&limit=1&media=music`,
-          8000,
-        );
-        const data = await res.json();
-        if (data.results && data.results.length > 0) {
-          return data.results[0].artworkUrl100.replace(
-            "100x100bb.jpg",
-            "600x600bb.jpg",
+    interface CoverSource {
+      name: string;
+      fetch: () => Promise<string | null>;
+    }
+
+    const sources: CoverSource[] = [
+      {
+        name: "iTunes",
+        fetch: async () => {
+          const query = encodeURIComponent(`${title} ${artist}`);
+          const res = await fetchWithTimeout(
+            `https://itunes.apple.com/search?term=${query}&limit=1&media=music`,
           );
-        }
-        return null;
+          const data = await res.json();
+          if (data.results?.length > 0) {
+            return data.results[0].artworkUrl100.replace(
+              "100x100bb.jpg",
+              "600x600bb.jpg",
+            );
+          }
+          return null;
+        },
       },
-      // 2. Spotify (通过 open.spotify.com)
-      async () => {
-        const query = encodeURIComponent(`${artist} ${title}`);
-        const res = await fetchWithTimeout(
-          `https://open.spotify.com/search/${query}`,
-          8000,
-        );
-        const html = await res.text();
-        // 尝试从 HTML 中提取 Spotify 图片
-        const match = html.match(/"images":\[{"url":"([^"]+)"}/);
-        if (match && match[1]) {
-          return match[1];
-        }
-        // 尝试 og:image
-        const ogMatch = html.match(
-          /<meta property="og:image" content="([^"]+)"/,
-        );
-        if (ogMatch && ogMatch[1]) {
-          return ogMatch[1];
-        }
-        return null;
+      {
+        name: "Spotify",
+        fetch: async () => {
+          const query = encodeURIComponent(`${artist} ${title}`);
+          const res = await fetchWithTimeout(
+            `https://open.spotify.com/search/${query}`,
+          );
+          const html = await res.text();
+          const imgMatch = html.match(/"images":\[{"url":"([^"]+)"}/);
+          if (imgMatch?.[1]) return imgMatch[1];
+          const ogMatch = html.match(
+            /<meta property="og:image" content="([^"]+)"/,
+          );
+          return ogMatch?.[1] || null;
+        },
       },
-      // 3. Apple Music (备用)
-      async () => {
-        const query = encodeURIComponent(`${title} ${artist}`);
-        const res = await fetchWithTimeout(
-          `https://music.apple.com/search?term=${query}`,
-          8000,
-        );
-        const html = await res.text();
-        // 尝试从 HTML 中提取图片 URL
-        const match = html.match(/"artworkUrl100":"([^"]+)"/);
-        if (match && match[1]) {
-          return match[1].replace("100x100bb.jpg", "600x600bb.jpg");
-        }
-        return null;
+      {
+        name: "Apple Music",
+        fetch: async () => {
+          const query = encodeURIComponent(`${title} ${artist}`);
+          const res = await fetchWithTimeout(
+            `https://music.apple.com/search?term=${query}`,
+          );
+          const html = await res.text();
+          const match = html.match(/"artworkUrl100":"([^"]+)"/);
+          return match?.[1]?.replace("100x100bb.jpg", "600x600bb.jpg") || null;
+        },
       },
-      // 3. Apple Music (备用)
-      async () => {
-        const query = encodeURIComponent(`${title} ${artist}`);
-        const res = await fetchWithTimeout(
-          `https://music.apple.com/search?term=${query}`,
-          8000,
-        );
-        const html = await res.text();
-        // 尝试从 HTML 中提取图片 URL
-        const match = html.match(/"artworkUrl100":"([^"]+)"/);
-        if (match && match[1]) {
-          return match[1].replace("100x100bb.jpg", "600x600bb.jpg");
-        }
-        return null;
+      {
+        name: "Last.fm",
+        fetch: async () => {
+          const artistQuery = encodeURIComponent(artist);
+          const trackQuery = encodeURIComponent(title);
+          const res = await fetchWithTimeout(
+            `https://www.last.fm/music/${artistQuery}/_/${trackQuery}`,
+          );
+          const html = await res.text();
+          const match = html.match(/<meta property="og:image" content="([^"]+)"/);
+          return match?.[1] || null;
+        },
       },
-      // 4. Last.fm (无需 API key 的备用方法)
-      async () => {
-        const artistQuery = encodeURIComponent(artist);
-        const trackQuery = encodeURIComponent(title);
-        const res = await fetchWithTimeout(
-          `https://www.last.fm/music/${artistQuery}/_/${trackQuery}`,
-          8000,
-        );
-        const html = await res.text();
-        // 尝试从页面提取专辑封面
-        const match = html.match(/<meta property="og:image" content="([^"]+)"/);
-        if (match && match[1]) {
-          return match[1];
-        }
-        return null;
-      },
-      // 5. MusicBrainz (开源音乐数据库)
-      async () => {
-        const query = encodeURIComponent(`artist:${artist} recording:${title}`);
-        const res = await fetchWithTimeout(
-          `https://musicbrainz.org/ws/2/recording/?query=${query}&fmt=json&limit=1`,
-          8000,
-        );
-        const data = await res.json();
-        if (data.recordings && data.recordings.length > 0) {
-          const recording = data.recordings[0];
-          if ((releases = recording.releases && releases.length > 0)) {
-            const release = releases[0];
-            if (
-              release["cover-art-archive"] &&
-              release["cover-art-archive"].count > 0
-            ) {
-              return `https://coverartarchive.org/release/${release.id}/front`;
+      {
+        name: "MusicBrainz",
+        fetch: async () => {
+          const query = encodeURIComponent(`artist:${artist} recording:${title}`);
+          const res = await fetchWithTimeout(
+            `https://musicbrainz.org/ws/2/recording/?query=${query}&fmt=json&limit=1`,
+          );
+          const data = await res.json();
+          if (data.recordings?.length > 0) {
+            const recording = data.recordings[0];
+            const releases = recording.releases;
+            if (releases?.length > 0) {
+              const release = releases[0];
+              if (release["cover-art-archive"]?.count > 0) {
+                return `https://coverartarchive.org/release/${release.id}/front`;
+              }
             }
           }
-        }
-        return null;
+          return null;
+        },
       },
     ];
 
-    // 依次尝试每个来源
     for (const source of sources) {
       try {
-        const result = await source();
+        const result = await source.fetch();
         if (result) {
-          console.log(
-            `✅ 高清图获取成功，来源：${sources.indexOf(source) + 1}`,
-          );
+          console.log(`✅ 高清图获取成功，来源：${source.name}`);
           return result;
         }
       } catch (error: any) {
         if (error.name === "AbortError") {
-          console.warn(`⏱️ 图片来源 ${sources.indexOf(source) + 1} 超时`);
+          console.warn(`⏱️ ${source.name} 超时`);
         } else {
-          console.warn(
-            `❌ 图片来源 ${sources.indexOf(source) + 1} 失败:`,
-            error.message,
-          );
+          console.warn(`❌ ${source.name} 失败:`, error.message);
         }
       }
     }
