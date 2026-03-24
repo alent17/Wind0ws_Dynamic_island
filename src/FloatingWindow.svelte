@@ -515,8 +515,20 @@
   <!-- 可拖拽的顶部栏 - 鼠标悬停时滑下 -->
   <div class="drag-bar" onmousedown={handleTitlebarMousedown}>
     <div class="drag-handle">
-      <div class="drag-dots"></div>
+      <div class="drag-dots">
+        <div class="drag-dot"></div>
+        <div class="drag-dot"></div>
+        <div class="drag-dot"></div>
+        <div class="drag-dot"></div>
+        <div class="drag-dot"></div>
+        <div class="drag-dot"></div>
+        <div class="drag-dot"></div>
+        <div class="drag-dot"></div>
+      </div>
     </div>
+    <button class="close-btn-topbar" onclick={closeWindow} aria-label="关闭">
+      <X size={16} strokeWidth={2} />
+    </button>
   </div>
 
   <div class="album-stage">
@@ -546,25 +558,26 @@
     <div class="track-artist" title={mediaState.artist}>
       {mediaState.artist}
     </div>
+    <!-- 右下角拖拽识别 -->
+    <div class="resize-handle"></div>
   </div>
 
-  <div class="progress-layer">
-    <div class="progress-container">
-      <div class="progress-row">
-        <span class="time">{formatTime(mediaState.position_ms)}</span>
-        <div class="progress-track">
-          <div class="progress-fill" style="width: {progressPercent}%"></div>
+  {#if mediaState.source !== "netease"}
+    <div class="progress-layer">
+      <div class="progress-container">
+        <div class="progress-row">
+          <span class="time">{formatTime(mediaState.position_ms)}</span>
+          <div class="progress-track">
+            <div class="progress-fill" style="width: {progressPercent}%"></div>
+          </div>
+          <span class="time">{formatTime(mediaState.duration_ms)}</span>
         </div>
-        <span class="time">{formatTime(mediaState.duration_ms)}</span>
       </div>
     </div>
-  </div>
+  {/if}
 
   <!-- 控制按钮遮罩层 -->
   <div class="controls-overlay" class:visible={showControls}>
-    <button class="close-btn-overlay" onclick={closeWindow} aria-label="关闭">
-      <X size={20} strokeWidth={2.5} />
-    </button>
     <div class="controls">
       <button
         class="ctrl-btn"
@@ -583,9 +596,9 @@
         aria-label={mediaState.is_playing ? "暂停" : "播放"}
       >
         {#if mediaState.is_playing}
-          <Pause size={20} fill="white" color="white" />
+          <Pause size={24} fill="black" color="black" />
         {:else}
-          <Play size={20} fill="white" color="white" style="margin-left:2px" />
+          <Play size={24} fill="black" color="black" style="margin-left:2px" />
         {/if}
       </button>
 
@@ -626,11 +639,11 @@
     width: 100vw;
     height: 100vh;
     overflow: hidden;
-    border-radius: 2px;
+    border-radius: 5px;
     background: #000;
     user-select: none;
     -webkit-user-select: none;
-    border: 3px solid #000;
+    border: 5px solid #000;
     box-sizing: border-box;
     box-shadow:
       0 12px 48px rgba(0, 0, 0, 0.5),
@@ -642,11 +655,13 @@
     top: 0;
     left: 0;
     right: 0;
-    bottom: 80px; /* 填充到歌曲信息层上方 */
+    bottom: 60px; /* 填充到歌曲信息层上方 */
     z-index: 1;
     background: var(--bg-gradient);
-    border-radius: 2px;
+    border-radius: 10px;
     transition: background 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    /* 从上往下加深的阴影效果 */
+    box-shadow: inset 0 -20px 80px rgba(0, 0, 0, 0.4);
   }
 
   /* 可拖拽的顶部栏 - 鼠标悬停时滑下 */
@@ -660,7 +675,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: grab;
     opacity: 0;
     visibility: hidden; /* 完全隐藏 */
     transform: translateY(-10px);
@@ -720,51 +734,68 @@
     transform: translateY(0);
   }
 
-  .drag-bar:active {
-    cursor: grabbing;
-  }
-
   .drag-handle {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 4px 16px; /* 调整内边距 */
+    padding: 6px 16px;
   }
 
   .drag-dots {
-    width: 24px; /* 调整宽度 */
-    height: 3px; /* 调整高度 */
-    background: rgba(255, 255, 255, 0.5);
-    border-radius: 2px;
-    position: relative;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 1px;
+    width: 18px;
+    height: 8px;
   }
 
-  .drag-dots::before,
-  .drag-dots::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 3px; /* 调整大小 */
-    height: 3px; /* 调整大小 */
+  .drag-dot {
+    width: 3px;
+    height: 3px;
     background: rgba(255, 255, 255, 0.5);
     border-radius: 50%;
   }
 
-  .drag-dots::before {
-    left: 6px; /* 调整位置 */
+  /* 顶部栏关闭按钮 */
+  .close-btn-topbar {
+    position: absolute;
+    right: 0px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    outline: none;
+    padding: 6px;
+    cursor: pointer;
+    color: #dfdfdf;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition:
+      color 0.15s ease,
+      transform 0.15s ease,
+      background 0.15s ease;
+    z-index: 10;
   }
 
-  .drag-dots::after {
-    left: calc(100% - 6px); /* 调整位置 */
+  .close-btn-topbar:hover {
+    color: #fff;
+    transform: translateY(-50%) scale(1.1);
+    background: transparent;
+  }
+
+  .close-btn-topbar:active {
+    transform: translateY(-50%) scale(0.9);
+    background: transparent;
   }
 
   /* ==================== 专辑封面 ==================== */
   .album-stage {
     position: absolute;
     top: 25px; /* 留出顶部栏的空间（20px） */
-    bottom: 80px; /* 与填充色底部对齐 */
+    bottom: 60px; /* 与填充色底部对齐 */
     left: 0;
     right: 0;
     z-index: 3;
@@ -772,7 +803,7 @@
     align-items: center;
     justify-content: center;
     padding: 12px; /* 减小内边距，让图片更大 */
-    border-radius: 2px;
+    border-radius: 5px;
     perspective: 1200px; /* 3D 透视效果 */
   }
 
@@ -784,9 +815,9 @@
     max-height: min(calc(100% - 24px), calc(100vh - 100px - 24px), 600px);
     position: relative;
     box-shadow:
-      0 4px 20px rgba(0, 0, 0, 0.35),
-      0 1px 6px rgba(0, 0, 0, 0.2);
-    border-radius: 2px;
+      0 8px 32px rgba(0, 0, 0, 0.5),
+      0 2px 12px rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
     overflow: hidden;
     min-width: 50px;
     min-height: 50px;
@@ -816,7 +847,7 @@
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
     overflow: hidden;
-    border-radius: 2px;
+    border-radius: 5px;
   }
 
   /* 前面（旧封面） */
@@ -839,7 +870,7 @@
     aspect-ratio: 1 / 1;
     object-fit: cover;
     display: block;
-    border-radius: 2px;
+    border-radius: 5px;
   }
 
   /* 翻转进入动画 */
@@ -858,27 +889,27 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 2px;
+    border-radius: 5px;
   }
 
   /* ==================== 歌曲信息层 ==================== */
   .track-info-layer {
     position: absolute;
-    bottom: 16px; /* 调整到底部 */
+    bottom: 8px; /* 往下移动，更靠近底部 */
     left: 0;
     right: 0;
     z-index: 5;
-    padding: 0 16px; /* 减小内边距 */
+    padding: 0 5px; /* 减小左右内边距，让文字更靠左 */
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
     text-align: left;
-    pointer-events: none;
+    pointer-events: auto;
   }
 
   .track-title {
     color: #dfdfdf; /* 调整字体颜色 */
-    font-size: 16px; /* 调整字体大小 */
+    font-size: 20px; /* 调整字体大小 */
     font-weight: 600;
     letter-spacing: 0.01em;
     line-height: 1.3;
@@ -912,7 +943,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 6;
+    z-index: 251;
     display: flex;
     flex-direction: column;
     opacity: 0;
@@ -931,7 +962,7 @@
     right: 0;
     padding: 0 16px; /* 与歌曲信息对齐 */
     box-sizing: border-box;
-    margin-bottom: 48px; /* 调整到歌曲信息上方 */
+    margin-bottom: 56px; /* 调整到歌曲信息上方 */
   }
 
   .progress-row {
@@ -953,28 +984,28 @@
 
   .progress-track {
     flex: 1;
-    height: 2px;
+    height: 4px;
     background: rgba(255, 255, 255, 0.15);
-    border-radius: 2px;
+    border-radius: 5px;
     overflow: hidden;
   }
 
   .progress-fill {
     height: 100%;
-    background: #4ade80;
-    border-radius: 2px;
+    background: #fff;
+    border-radius: 5px;
     transition: width 1s linear;
-    box-shadow: 0 0 6px rgba(74, 222, 128, 0.4);
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
   }
 
   /* 控制按钮遮罩层 */
   .controls-overlay {
     position: absolute;
-    top: 0;
+    top: 25px; /* 从顶部栏下方开始 */
     left: 0;
     right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
+    bottom: 60px; /* 到歌曲信息层上方结束 */
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.95));
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     display: flex;
@@ -994,32 +1025,6 @@
     visibility: visible;
   }
 
-  .close-btn-overlay {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    background: none;
-    border: none;
-    padding: 8px;
-    cursor: pointer;
-    color: rgba(255, 255, 255, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    transition:
-      color 0.15s ease,
-      transform 0.15s ease,
-      background 0.15s ease;
-    z-index: 201;
-  }
-
-  .close-btn-overlay:hover {
-    color: #fff;
-    transform: scale(1.1);
-    background: rgba(255, 255, 255, 0.15);
-  }
-
   .controls {
     display: flex;
     align-items: center;
@@ -1027,12 +1032,49 @@
     flex-shrink: 0;
   }
 
+  /* 右下角拖拽识别 */
+  .resize-handle {
+    position: absolute;
+    right: 2px;
+    bottom: -2px;
+    width: 12px;
+    height: 12px;
+    cursor: se-resize;
+    pointer-events: auto;
+  }
+
+  .resize-handle::before {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 6px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.35);
+    transform: rotate(-45deg);
+    transform-origin: right bottom;
+  }
+
+  .resize-handle::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 12px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.35);
+    transform: rotate(-45deg);
+    transform-origin: right bottom;
+    margin-right: 0px;
+    margin-bottom: 4px;
+  }
+
   .ctrl-btn {
     background: none;
     border: none;
     padding: 4px;
     cursor: pointer;
-    color: rgba(255, 255, 255, 0.8);
+    color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1078,28 +1120,29 @@
   }
 
   .play-btn {
-    width: 32px;
-    height: 32px;
+    width: 56px;
+    height: 56px;
     border: none;
     border-radius: 50%;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: #fff;
+    color: #000;
     transition:
       background 0.2s ease,
       transform 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
 
   .play-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: scale(1.08);
+    background: #f0f0f0;
+    transform: scale(1.05);
   }
 
   .play-btn:active {
-    transform: scale(0.92);
+    transform: scale(0.95);
   }
 
   .close-btn {
