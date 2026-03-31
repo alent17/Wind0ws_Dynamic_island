@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { spring } from "svelte/motion";
   import { listen } from "@tauri-apps/api/event";
-  import { invoke } from "@tauri-apps/api/core";
+  import { invoke, convertFileSrc } from "@tauri-apps/api/core";
   import {
     getCurrentWindow,
     PhysicalSize,
@@ -46,6 +46,38 @@
     qqmusic: "#31c27c",
     apple: "#fa243c",
     generic: "#ffffff",
+  };
+
+  // 生产环境禁用调试日志
+  const isDev = import.meta.env.DEV;
+
+  // 优化的日志系统
+  const logger = {
+    log: (...args: any[]) => isDev && console.log("[App]", ...args),
+    error: (...args: any[]) => console.error("[App]", ...args),
+    warn: (...args: any[]) => console.warn("[App]", ...args),
+    debug: (...args: any[]) => isDev && console.debug("[App]", ...args),
+  };
+
+  // 性能优化的节流函数
+  const throttle = (fn: Function, delay: number) => {
+    let lastCall = 0;
+    return (...args: any[]) => {
+      const now = Date.now();
+      if (now - lastCall >= delay) {
+        lastCall = now;
+        fn(...args);
+      }
+    };
+  };
+
+  // 防抖函数
+  const debounce = (fn: Function, delay: number) => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    return (...args: any[]) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => fn(...args), delay);
+    };
   };
 
   const playerConfigs = {
@@ -203,6 +235,9 @@
   let monitors: Array<{ name: string; index: number }> = $state([]);
   let currentMonitorIndex = $state(0);
 
+  // 悬浮窗状态
+  let isFloatingWindowOpen = $state(false);
+
   // 调试信息状态
   let fps = $state(0);
   let frameCount = 0;
@@ -290,7 +325,7 @@
         win.setPosition(new PhysicalPosition(centerX, targetY)),
       ]);
     } catch (err) {
-      console.error("窗口同步失败:", err);
+      error("窗口同步失败:", err);
     } finally {
       isSyncing = false;
       if (hasPendingSync) {
@@ -341,11 +376,19 @@
     }
   }
 
-  async function openFloatingWindow() {
+  async function toggleFloatingWindow() {
     try {
-      await invoke("open_floating_window");
+      if (isFloatingWindowOpen) {
+        // 关闭悬浮窗
+        await invoke("close_floating_window");
+        isFloatingWindowOpen = false;
+      } else {
+        // 打开悬浮窗
+        await invoke("open_floating_window");
+        isFloatingWindowOpen = true;
+      }
     } catch (error) {
-      console.error("无法打开悬浮窗:", error);
+      error("切换悬浮窗失败:", error);
     }
   }
 
@@ -471,9 +514,7 @@
     e.stopPropagation();
     try {
       await invoke("control_media", { action });
-      if (action === "play_pause") {
-        isPlaying = !isPlaying;
-      }
+      // 不手动更新状态，等待后端的 media-update 事件同步
     } catch (err) {
       console.error("媒体控制失败:", err);
     }
@@ -749,220 +790,240 @@
   });
 
   // ========== onMount ==========
-  onMount(async () => {
-    console.log("[App.svelte] onMount 开始监听事件");
+  onMount(() => {
+    (async () => {
+      console.log("[App.svelte] onMount 开始监听事件");
 
-    // 读取设置并应用置顶状态
-    try {
-      const savedSettings = await invoke<any>("get_settings");
-      const appWindow = getCurrentWindow();
-      await appWindow.setAlwaysOnTop(savedSettings.always_on_top ?? true);
-      console.log("[置顶设置] 已应用:", savedSettings.always_on_top);
-    } catch (error) {
-      console.error("[置顶设置] 读取失败:", error);
-    }
-
-    // ===== 加载应用设置 =====
-    try {
-      const loadedSettings = await invoke<any>("get_settings");
-      appSettings = {
-        auto_hide: loadedSettings.auto_hide ?? true,
-        show_spectrum: loadedSettings.show_spectrum ?? true,
-        enable_animations: loadedSettings.enable_animations ?? true,
-        reduce_animations: loadedSettings.reduce_animations ?? false,
-        show_debug_info: loadedSettings.show_debug_info ?? false,
-        window_opacity: loadedSettings.window_opacity ?? 255,
-      };
-      console.log("[设置] 已加载:", appSettings);
-    } catch (error) {
-      console.error("[设置] 读取失败:", error);
-    }
-
-    // ===== 监听设置变更事件 =====
-    const unlistenSettings = await listen("settings-updated", (event: any) => {
-      const s = event.payload;
-      if (s) {
-        appSettings = {
-          auto_hide: s.auto_hide ?? appSettings.auto_hide,
-          show_spectrum: s.show_spectrum ?? appSettings.show_spectrum,
-          enable_animations:
-            s.enable_animations ?? appSettings.enable_animations,
-          reduce_animations:
-            s.reduce_animations ?? appSettings.reduce_animations,
-          show_debug_info: s.show_debug_info ?? appSettings.show_debug_info,
-          window_opacity: s.window_opacity ?? appSettings.window_opacity,
-        };
-        console.log("[设置] 实时更新:", appSettings);
-
-        // auto_hide 关闭时立即显示窗口
-        if (!appSettings.auto_hide && isHidden) {
-          showWindow();
-        }
-      }
-    });
-
-    // 初始化显示器列表
-    try {
-      const allMonitors = await availableMonitors();
-      monitors = allMonitors.map((m, idx) => ({
-        name: m.name || `显示器 ${idx + 1}`,
-        index: idx,
-      }));
-
-      // 从设置中读取上次选择的显示器索引
-      const savedSettings = await invoke<any>("get_settings");
-      const savedMonitorIndex = savedSettings.monitor_index ?? 0;
-
-      // 验证索引是否有效，如果无效则使用当前显示器
-      if (savedMonitorIndex >= 0 && savedMonitorIndex < allMonitors.length) {
-        currentMonitorIndex = savedMonitorIndex;
-        const savedMonitor = allMonitors[savedMonitorIndex];
-        cachedScreenWidth = savedMonitor.size.width;
-        cachedScreenHeight = savedMonitor.size.height;
-        monitorAnchorX = savedMonitor.position.x + savedMonitor.size.width / 2;
-        monitorAnchorY = savedMonitor.position.y;
-        console.log(
-          "[显示器] 从设置恢复上次选择:",
-          monitors[currentMonitorIndex]?.name,
-        );
-      } else {
-        // 如果保存的索引无效，使用当前显示器
-        const activeMonitor = await currentMonitor();
-        currentMonitorIndex = activeMonitor
-          ? allMonitors.findIndex((m) => m.name === activeMonitor.name)
-          : 0;
-
-        if (activeMonitor) {
-          cachedScreenWidth = activeMonitor.size.width;
-          cachedScreenHeight = activeMonitor.size.height;
-          monitorAnchorX =
-            activeMonitor.position.x + activeMonitor.size.width / 2;
-          monitorAnchorY = activeMonitor.position.y;
-        }
-        console.log(
-          "[显示器] 使用当前显示器:",
-          monitors[currentMonitorIndex]?.name,
-        );
-      }
-    } catch (error) {
-      console.error("[显示器] 初始化失败:", error);
-    }
-
-    // 监听导航到设置页面的事件
-    const unlistenNavigate = await listen("navigate-to-settings", async () => {
-      console.log("[App.svelte] 收到 navigate-to-settings 事件");
-
+      // 读取设置并应用置顶状态
       try {
-        const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-        console.log("[App.svelte] 导入 WebviewWindow 成功");
-
-        console.log("[App.svelte] 创建设置窗口");
-        const webview = new WebviewWindow("settings-window", {
-          url: "/settings.html",
-          title: "设置",
-          width: 800,
-          height: 600,
-          minWidth: 600,
-          minHeight: 500,
-          resizable: true,
-          decorations: false,
-          transparent: true,
-          alwaysOnTop: false,
-          center: true,
-        });
-
-        webview.once("tauri://created", () => {
-          console.log("[设置窗口] 窗口创建成功");
-        });
-
-        webview.once("tauri://error", (e) => {
-          console.error("[设置窗口] 创建失败:", e);
-        });
+        const savedSettings = await invoke<any>("get_settings");
+        const appWindow = getCurrentWindow();
+        await appWindow.setAlwaysOnTop(savedSettings.always_on_top ?? true);
+        console.log("[置顶设置] 已应用:", savedSettings.always_on_top);
       } catch (error) {
-        console.error("[App.svelte] 打开设置窗口失败:", error);
+        console.error("[置顶设置] 读取失败:", error);
       }
-    });
 
-    console.log("[App.svelte] 事件监听器已注册");
+      // ===== 加载应用设置 =====
+      try {
+        const loadedSettings = await invoke<any>("get_settings");
+        appSettings = {
+          auto_hide: loadedSettings.auto_hide ?? true,
+          show_spectrum: loadedSettings.show_spectrum ?? true,
+          enable_animations: loadedSettings.enable_animations ?? true,
+          reduce_animations: loadedSettings.reduce_animations ?? false,
+          show_debug_info: loadedSettings.show_debug_info ?? false,
+          window_opacity: loadedSettings.window_opacity ?? 255,
+        };
+        console.log("[设置] 已加载:", appSettings);
+      } catch (error) {
+        console.error("[设置] 读取失败:", error);
+      }
 
-    // 监听主题变化
-    const unlistenTheme = await listen("theme-changed", (event: any) => {
-      const { islandTheme } = event.payload;
-      currentTheme = islandTheme || "original";
-      console.log("[主题切换] 切换到:", currentTheme);
-    });
+      // ===== 监听设置变更事件 =====
+      const unlistenSettings = await listen(
+        "settings-updated",
+        (event: any) => {
+          const s = event.payload;
+          if (s) {
+            appSettings = {
+              auto_hide: s.auto_hide ?? appSettings.auto_hide,
+              show_spectrum: s.show_spectrum ?? appSettings.show_spectrum,
+              enable_animations:
+                s.enable_animations ?? appSettings.enable_animations,
+              reduce_animations:
+                s.reduce_animations ?? appSettings.reduce_animations,
+              show_debug_info: s.show_debug_info ?? appSettings.show_debug_info,
+              window_opacity: s.window_opacity ?? appSettings.window_opacity,
+            };
+            console.log("[设置] 实时更新:", appSettings);
 
-    // 从设置中加载保存的主题
-    try {
-      const savedSettings = await invoke<any>("get_settings");
-      currentTheme = savedSettings.island_theme || "original";
-      console.log("[主题加载] 从设置加载主题:", currentTheme);
-    } catch (e) {
-      console.error("[主题加载] 失败:", e);
-    }
+            // auto_hide 关闭时立即显示窗口
+            if (!appSettings.auto_hide && isHidden) {
+              showWindow();
+            }
+          }
+        },
+      );
 
-    // 监听 SMTC 推送
-    let cleanup: (() => void) | undefined;
+      // 初始化显示器列表
+      try {
+        const allMonitors = await availableMonitors();
+        monitors = allMonitors.map((m, idx) => ({
+          name: m.name || `显示器 ${idx + 1}`,
+          index: idx,
+        }));
 
-    const unlistenMediaUpdate = await listen("media-update", (event: any) => {
-      const data = event.payload;
+        // 从设置中读取上次选择的显示器索引
+        const savedSettings = await invoke<any>("get_settings");
+        const savedMonitorIndex = savedSettings.monitor_index ?? 0;
 
-      if (data.source) currentSource = data.source;
-      isPlaying = data.is_playing || false;
-      currentTimeMs = data.position_ms || 0;
-      durationMs = data.duration_ms || 0;
+        // 验证索引是否有效，如果无效则使用当前显示器
+        if (savedMonitorIndex >= 0 && savedMonitorIndex < allMonitors.length) {
+          currentMonitorIndex = savedMonitorIndex;
+          const savedMonitor = allMonitors[savedMonitorIndex];
+          cachedScreenWidth = savedMonitor.size.width;
+          cachedScreenHeight = savedMonitor.size.height;
+          monitorAnchorX =
+            savedMonitor.position.x + savedMonitor.size.width / 2;
+          monitorAnchorY = savedMonitor.position.y;
+          console.log(
+            "[显示器] 从设置恢复上次选择:",
+            monitors[currentMonitorIndex]?.name,
+          );
+        } else {
+          // 如果保存的索引无效，使用当前显示器
+          const activeMonitor = await currentMonitor();
+          currentMonitorIndex = activeMonitor
+            ? allMonitors.findIndex((m) => m.name === activeMonitor.name)
+            : 0;
 
-      if (trackTitle !== data.title) {
-        trackTitle = data.title || "未知曲目";
-        artistName = data.artist || "未知艺术家";
+          if (activeMonitor) {
+            cachedScreenWidth = activeMonitor.size.width;
+            cachedScreenHeight = activeMonitor.size.height;
+            monitorAnchorX =
+              activeMonitor.position.x + activeMonitor.size.width / 2;
+            monitorAnchorY = activeMonitor.position.y;
+          }
+          console.log(
+            "[显示器] 使用当前显示器:",
+            monitors[currentMonitorIndex]?.name,
+          );
+        }
+      } catch (error) {
+        console.error("[显示器] 初始化失败:", error);
+      }
 
-        const newCover =
-          data.album_art ||
-          data.thumbnail ||
-          data.cover_url ||
-          data.api_cover_url ||
-          data.image ||
-          "";
+      // 监听悬浮窗关闭事件
+      const unlistenFloatingWindowClosed = await listen(
+        "floating-window-closed",
+        () => {
+          isFloatingWindowOpen = false;
+          console.log("[悬浮窗] 已关闭，更新状态");
+        },
+      );
 
-        if (newCover && newCover !== artworkUrl) {
-          if (
-            newCover.startsWith("data:image") ||
-            newCover.startsWith("http://") ||
-            newCover.startsWith("https://") ||
-            newCover.startsWith("file://")
-          ) {
-            flipKey += 1; // 触发翻转动画
-            artworkUrl = newCover;
-          } else if (newCover.includes(":\\") || newCover.includes(":/")) {
-            const fileUrl =
-              "file:///" + newCover.replace(/\\/g, "/").replace(/^\/+/, "");
-            flipKey += 1; // 触发翻转动画
-            artworkUrl = fileUrl;
-          } else {
+      // 监听导航到设置页面的事件
+      const unlistenNavigate = await listen(
+        "navigate-to-settings",
+        async () => {
+          console.log("[App.svelte] 收到 navigate-to-settings 事件");
+
+          try {
+            const { WebviewWindow } = await import(
+              "@tauri-apps/api/webviewWindow"
+            );
+            console.log("[App.svelte] 导入 WebviewWindow 成功");
+
+            console.log("[App.svelte] 创建设置窗口");
+            const webview = new WebviewWindow("settings-window", {
+              url: "/settings.html",
+              title: "设置",
+              width: 800,
+              height: 600,
+              minWidth: 600,
+              minHeight: 500,
+              resizable: true,
+              decorations: false,
+              transparent: true,
+              alwaysOnTop: false,
+              center: true,
+            });
+
+            webview.once("tauri://created", () => {
+              console.log("[设置窗口] 窗口创建成功");
+            });
+
+            webview.once("tauri://error", (e) => {
+              console.error("[设置窗口] 创建失败:", e);
+            });
+          } catch (error) {
+            console.error("[App.svelte] 打开设置窗口失败:", error);
+          }
+        },
+      );
+
+      console.log("[App.svelte] 事件监听器已注册");
+
+      // 监听主题变化
+      const unlistenTheme = await listen("theme-changed", (event: any) => {
+        const { islandTheme } = event.payload;
+        currentTheme = islandTheme || "original";
+        console.log("[主题切换] 切换到:", currentTheme);
+      });
+
+      // 从设置中加载保存的主题
+      try {
+        const savedSettings = await invoke<any>("get_settings");
+        currentTheme = savedSettings.island_theme || "original";
+        console.log("[主题加载] 从设置加载主题:", currentTheme);
+      } catch (e) {
+        console.error("[主题加载] 失败:", e);
+      }
+
+      // 监听 SMTC 推送
+      let cleanup: (() => void) | undefined;
+
+      const unlistenMediaUpdate = await listen("media-update", (event: any) => {
+        const data = event.payload;
+
+        if (data.source) currentSource = data.source;
+        isPlaying = data.is_playing || false;
+        currentTimeMs = data.position_ms || 0;
+        durationMs = data.duration_ms || 0;
+
+        if (trackTitle !== data.title) {
+          trackTitle = data.title || "未知曲目";
+          artistName = data.artist || "未知艺术家";
+
+          const newCover =
+            data.album_art ||
+            data.thumbnail ||
+            data.cover_url ||
+            data.api_cover_url ||
+            data.image ||
+            "";
+
+          if (newCover && newCover !== artworkUrl) {
+            if (
+              newCover.startsWith("data:image") ||
+              newCover.startsWith("http://") ||
+              newCover.startsWith("https://") ||
+              newCover.startsWith("file://")
+            ) {
+              flipKey += 1; // 触发翻转动画
+              artworkUrl = newCover;
+            } else if (newCover.includes(":\\") || newCover.includes(":/")) {
+              // 本地文件路径，使用 convertFileSrc 转换
+              artworkUrl = convertFileSrc(newCover);
+              flipKey += 1; // 触发翻转动画
+            } else {
+              artworkUrl = "";
+            }
+          } else if (!newCover) {
             artworkUrl = "";
           }
-        } else if (!newCover) {
-          artworkUrl = "";
+
+          progressSpring.set(0, { soft: true });
         }
 
-        progressSpring.set(0, { soft: true });
-      }
+        if (durationMs > 0) {
+          progressSpring.set((currentTimeMs / durationMs) * 100);
+        }
+      });
 
-      if (durationMs > 0) {
-        progressSpring.set((currentTimeMs / durationMs) * 100);
-      }
-    });
+      cleanup = unlistenMediaUpdate;
 
-    cleanup = unlistenMediaUpdate;
-
-    return () => {
-      if (cleanup) cleanup();
-      stopAutoClose();
-      unlistenTheme();
-      unlistenNavigate();
-      unlistenSettings();
-      stopDebugFps();
-    };
+      return () => {
+        if (cleanup) cleanup();
+        stopAutoClose();
+        unlistenTheme();
+        unlistenNavigate();
+        unlistenSettings();
+        unlistenFloatingWindowClosed();
+        stopDebugFps();
+      };
+    })();
   });
 
   // 全局点击事件：关闭显示器菜单
@@ -981,7 +1042,7 @@
   });
 
   // 全屏检测和鼠标移动监听
-  onMount(async () => {
+  onMount(() => {
     // 降低全屏检测频率，从 2000ms 改为 5000ms
     fullscreenCheckInterval = setInterval(checkFullscreenAndHide, 5000);
     checkFullscreenAndHide();
@@ -1024,13 +1085,6 @@
     class:island-hidden={isHidden && !isMouseAtTop}
     class:island-drop-animation={isMouseAtTop && isHidden}
     class:island-visible-edge={isHidden && isMouseAtTop}
-    class:island-theme-neon={currentTheme === "neon"}
-    class:island-theme-aurora={currentTheme === "aurora"}
-    class:island-theme-sunset={currentTheme === "sunset"}
-    class:island-theme-ios26={currentTheme === "ios26"}
-    class:island-theme-dark={currentTheme === "dark"}
-    class:island-theme-ocean={currentTheme === "ocean"}
-    class:island-theme-forest={currentTheme === "forest"}
     style="
       width: {$widthSpring}px;
       height: {$heightSpring}px;
@@ -1157,23 +1211,12 @@
         class:is-visible={expanded}
         style="opacity: {$contentOpacity};"
       >
-        <!-- 顶部区域：封面 + 标题 + Cast 按钮 -->
-        <div class="flex items-center" style="gap: 14px; margin-bottom: 16px;">
-          <!-- 播放器图标 -->
-          <div
-            class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 shadow-lg ring-1 ring-white/20"
-          >
-            <img
-              src={currentIcon}
-              alt={currentConfig.name}
-              class="w-full h-full object-cover"
-            />
-          </div>
-
+        <!-- 顶部区域：封面 + 标题 + 显示器按钮 -->
+        <div class="flex items-center" style="gap: 16px; margin-bottom: 20px;">
           {#if artworkUrl}
             {#key flipKey}
               <div
-                class="w-[56px] h-[56px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none"
+                class="w-[60px] h-[60px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
                 data-stop-toggle
               >
                 <img
@@ -1197,12 +1240,12 @@
 
           <div class="flex-1 min-w-0">
             <h2
-              class="font-bold text-[17px] truncate text-white tracking-tight select-none"
+              class="font-bold text-[18px] truncate text-white tracking-tight select-none leading-tight mb-1"
             >
               {trackTitle}
             </h2>
             <p
-              class="text-[13px] text-white/50 truncate font-medium select-none"
+              class="text-[14px] text-white/60 truncate font-medium select-none leading-tight"
             >
               {artistName}
             </p>
@@ -1211,7 +1254,7 @@
           <!-- 显示器选择按钮 -->
           <div class="relative">
             <button
-              class="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 relative z-50 media-button"
+              class="w-10 h-10 flex items-center justify-center rounded-2xl bg-white/10 hover:bg-white/20 relative z-50 media-button transition-all duration-300 hover:scale-110"
               style="transform: translateZ(0); backface-visibility: hidden;"
               data-stop-toggle
               onclick={(e) => {
@@ -1220,7 +1263,7 @@
               }}
             >
               <Monitor
-                size={16}
+                size={18}
                 class="text-white/80"
                 style="transform: translateZ(0); backface-visibility: hidden;"
               />
@@ -1229,7 +1272,8 @@
             <!-- 显示器选择菜单 -->
             {#if showMonitorMenu}
               <div
-                class="absolute right-0 top-full mt-3 w-64 bg-black/80 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/10 overflow-hidden z-[100] monitor-menu"
+                class="absolute right-0 top-full mt-3 w-64 bg-black/90 backdrop-blur-3xl rounded-2xl shadow-2xl border border-white/20 overflow-hidden z-[100] monitor-menu transition-all duration-300 scale-95 opacity-0"
+                class:menu-open={showMonitorMenu}
                 style="transform: translateZ(0);"
               >
                 <div class="p-3">
@@ -1237,33 +1281,48 @@
                     class="flex items-center justify-between px-2 py-1.5 mb-2"
                   >
                     <div class="flex items-center gap-2">
-                      <Monitor size={14} class="text-white/60" />
-                      <span
-                        class="text-xs font-semibold text-white/70 tracking-wide"
+                      <div
+                        class="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center"
                       >
-                        显示器
-                      </span>
+                        <Monitor size={14} class="text-white/80" />
+                      </div>
+                      <div>
+                        <span
+                          class="text-sm font-semibold text-white/95 tracking-wide subpixel-antialiased"
+                          style="font-smooth: always; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;"
+                        >
+                          显示器选择
+                        </span>
+                        <div
+                          class="text-xs text-white/60 mt-0.5 subpixel-antialiased"
+                          style="font-smooth: always; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;"
+                        >
+                          选择要显示的显示器
+                        </div>
+                      </div>
                     </div>
                     <div class="flex items-center gap-1.5">
                       <div
                         class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"
                       ></div>
-                      <span class="text-[10px] text-white/50 font-medium">
-                        {monitors.length} 个显示器
+                      <span
+                        class="text-xs text-white/70 font-medium subpixel-antialiased"
+                        style="font-smooth: always; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;"
+                      >
+                        {monitors.length} 个可用
                       </span>
                     </div>
                   </div>
 
                   <div
-                    class="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-2"
+                    class="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent mb-3"
                   ></div>
 
                   <div class="space-y-1">
                     {#each monitors as monitor, idx}
                       <button
-                        class="w-full text-left px-3 py-2.5 rounded-2xl transition-all duration-200 flex items-center gap-3 group relative overflow-hidden"
+                        class="w-full text-left px-3 py-2 rounded-xl transition-all duration-300 flex items-center gap-3 group relative overflow-hidden hover:bg-white/5 active:scale-95"
                         class:selected={currentMonitorIndex === idx}
-                        class:hoverable={currentMonitorIndex !== idx}
                         onclick={(e) => {
                           e.stopPropagation();
                           switchMonitor(idx);
@@ -1271,47 +1330,66 @@
                       >
                         {#if currentMonitorIndex === idx}
                           <div
-                            class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent"
+                            class="absolute inset-0 bg-gradient-to-br from-white/8 to-white/2"
+                          ></div>
+                          <div
+                            class="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-green-400 to-blue-400"
                           ></div>
                         {/if}
 
                         <div
-                          class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 relative transition-colors duration-200"
-                          style="background-color: {currentMonitorIndex === idx
-                            ? 'rgba(255, 255, 255, 0.10)'
-                            : 'rgba(255, 255, 255, 0.05)'};"
+                          class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 relative transition-all duration-300 group-hover:scale-105"
+                          style="background: {currentMonitorIndex === idx
+                            ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05))'
+                            : 'rgba(255, 255, 255, 0.08)'};"
                         >
                           <Monitor
-                            size={18}
-                            class="relative z-10 transition-colors duration-200"
+                            size={16}
+                            class="relative z-10 transition-all duration-300"
                             style="color: {currentMonitorIndex === idx
                               ? '#ffffff'
-                              : 'rgba(255, 255, 255, 0.60)'};"
+                              : 'rgba(255, 255, 255, 0.70)'};"
                           />
                         </div>
 
                         <div class="flex-1 min-w-0 relative z-10">
                           <div class="flex items-center gap-2">
                             <span
-                              class="text-sm font-medium truncate block transition-colors duration-200"
+                              class="text-sm font-semibold truncate block transition-all duration-300 subpixel-antialiased"
                               style="color: {currentMonitorIndex === idx
                                 ? '#ffffff'
-                                : 'rgba(255, 255, 255, 0.70)'};"
+                                : 'rgba(255, 255, 255, 0.95)'};
+                                font-smooth: always; 
+                                -webkit-font-smoothing: antialiased; 
+                                -moz-osx-font-smoothing: grayscale;"
                             >
                               {monitor.name}
                             </span>
                           </div>
                           {#if currentMonitorIndex === idx}
-                            <div class="text-[10px] text-white/40 mt-0.5">
-                              当前使用
+                            <div
+                              class="text-xs text-green-400/90 font-semibold mt-0.5 flex items-center gap-1 subpixel-antialiased"
+                              style="font-smooth: always; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;"
+                            >
+                              <div
+                                class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"
+                              ></div>
+                              当前使用中
+                            </div>
+                          {:else}
+                            <div
+                              class="text-xs text-white/60 mt-0.5 subpixel-antialiased"
+                              style="font-smooth: always; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;"
+                            >
+                              点击切换
                             </div>
                           {/if}
                         </div>
 
                         {#if currentMonitorIndex === idx}
-                          <div class="flex items-center gap-1.5 relative z-10">
+                          <div class="flex items-center gap-1 relative z-10">
                             <div
-                              class="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center"
+                              class="w-5 h-5 rounded-full bg-gradient-to-r from-green-400 to-blue-400 flex items-center justify-center shadow"
                             >
                               <svg
                                 width="10"
@@ -1322,7 +1400,7 @@
                               >
                                 <path
                                   d="M1 4L3.5 6.5L9 1"
-                                  stroke="#4ade80"
+                                  stroke="white"
                                   stroke-width="1.5"
                                   stroke-linecap="round"
                                   stroke-linejoin="round"
@@ -1343,11 +1421,11 @@
         <!-- 中部区域：播放控制按钮 -->
         <div
           class="flex-1 flex items-center justify-between"
-          style="margin-bottom: 20px;"
+          style="margin-bottom: 24px;"
         >
           <Heart
-            size={18}
-            class="text-white/30 hover:text-red-500 transition-colors relative z-50 cursor-pointer media-button"
+            size={20}
+            class="text-white/40 hover:text-red-500 transition-all duration-300 hover:scale-110 relative z-50 cursor-pointer media-button"
             style="transform: translateZ(0); backface-visibility: hidden;"
             data-stop-toggle
             onclick={(e) => {
@@ -1359,8 +1437,8 @@
           <div
             class="flex items-center justify-center"
             style="
-                width: 170px;
-                gap: 36px;
+                width: 180px;
+                gap: 40px;
                 will-change: auto;
                 transform: translate3d(0, 0, 0);
                 backface-visibility: hidden;
@@ -1369,75 +1447,77 @@
               "
           >
             <SkipBack
-              size={24}
+              size={26}
               fill="currentColor"
-              class="text-white/90 hover:scale-105 active:scale-90 transition-transform relative z-50 cursor-pointer media-button"
+              class="text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button"
               data-stop-toggle
               onclick={(e) => handleMediaAction("prev", e)}
             />
             {#if isPlaying}
               <Pause
-                size={36}
+                size={40}
                 fill="currentColor"
-                class="text-white hover:scale-105 active:scale-95 transition-transform relative z-50 cursor-pointer media-button"
+                class="text-white hover:scale-110 active:scale-95 transition-all duration-300 relative z-50 cursor-pointer media-button"
                 data-stop-toggle
                 onclick={(e) => handleMediaAction("play_pause", e)}
               />
             {:else}
               <Play
-                size={36}
+                size={40}
                 fill="currentColor"
-                class="text-white hover:scale-105 active:scale-95 transition-transform relative z-50 cursor-pointer media-button"
+                class="text-white hover:scale-110 active:scale-95 transition-all duration-300 relative z-50 cursor-pointer media-button"
                 data-stop-toggle
                 onclick={(e) => handleMediaAction("play_pause", e)}
               />
             {/if}
             <SkipForward
-              size={24}
+              size={26}
               fill="currentColor"
-              class="text-white/90 hover:scale-105 active:scale-90 transition-transform relative z-50 cursor-pointer media-button"
+              class="text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button"
               data-stop-toggle
               onclick={(e) => handleMediaAction("next", e)}
             />
           </div>
 
           <button
-            class="w-6 h-6 flex items-center justify-center rounded-md border border-white/10 text-white/90 hover:scale-105 active:scale-90 transition-transform relative z-50 cursor-pointer media-button"
+            class="w-8 h-8 flex items-center justify-center rounded-xl border border-white/10 text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button hover:border-white/20"
             style="transform: translateZ(0); backface-visibility: hidden;"
             data-stop-toggle
-            aria-label="Open floating window"
+            aria-label={isFloatingWindowOpen
+              ? "Close floating window"
+              : "Open floating window"}
             onclick={(e) => {
               e.stopPropagation();
-              openFloatingWindow();
+              toggleFloatingWindow();
             }}
             onkeydown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.stopPropagation();
-                openFloatingWindow();
+                toggleFloatingWindow();
               }
             }}
           >
-            <GalleryHorizontalEnd size={16} />
+            <GalleryHorizontalEnd size={18} />
           </button>
         </div>
 
         <!-- 底部区域：进度条 -->
-        <div class="mt-auto" style="margin-bottom: 4px;">
+        <div class="mt-auto" style="margin-bottom: 8px;">
           {#if currentConfig.useProgressBar && durationMs > 0}
             <div
-              class="relative w-full h-[3px] bg-white/10 rounded-full overflow-hidden"
+              class="relative w-full h-[4px] bg-white/10 rounded-full overflow-hidden"
             >
               <div
-                class="absolute left-0 top-0 h-full rounded-full transition-all duration-150"
+                class="absolute left-0 top-0 h-full rounded-full transition-all duration-300 ease-out"
                 style="width: {progressPercent}%; background-color: {currentColor};"
               ></div>
             </div>
 
             <div
-              class="flex justify-between text-[10px] font-bold mt-2 tracking-tighter"
+              class="flex justify-between text-[11px] font-semibold mt-3 tracking-tight"
             >
-              <span class="text-white/20">{formatTime(currentTimeMs)}</span>
-              <span class="text-white/20">{formatTime(durationMs)}</span>
+              <span class="text-white/30">{formatTime(currentTimeMs)}</span>
+              <span class="text-white/30">{formatTime(durationMs)}</span>
             </div>
           {:else}
             <div class="flex flex-col items-center gap-2">
@@ -1466,6 +1546,20 @@
 </div>
 
 <style>
+  /* 性能优化的 CSS 变量和基础样式 */
+  :global(*) {
+    box-sizing: border-box;
+  }
+
+  :global(html, body) {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* 优化的动画关键帧 - 使用 GPU 加速 */
   @keyframes island-wave {
     0%,
     100% {
@@ -1479,6 +1573,53 @@
   .animate-island-wave {
     animation: island-wave 0.35s cubic-bezier(0.32, 0.72, 0, 1) infinite;
     will-change: transform;
+    transform: translateZ(0); /* GPU 加速 */
+  }
+
+  /* 优化的显示器选择菜单动画 */
+  .monitor-menu.menu-open {
+    animation: menuSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    will-change: transform, opacity;
+    transform: translateZ(0); /* GPU 加速 */
+  }
+
+  @keyframes menuSlideIn {
+    0% {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.95);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* 优化的显示器选项悬停效果 */
+  .monitor-menu button:hover {
+    transform: translateX(4px) translateZ(0);
+    transition: transform 0.15s ease-out;
+  }
+
+  .monitor-menu button:active {
+    transform: scale(0.98) translateZ(0);
+    transition: transform 0.1s ease-out;
+  }
+
+  /* 优化的显示器选择菜单关闭动画 */
+  .monitor-menu:not(.menu-open) {
+    animation: menuSlideOut 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    will-change: transform, opacity;
+  }
+
+  @keyframes menuSlideOut {
+    0% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.95);
+    }
   }
 
   /* 星空背景 */
@@ -1583,57 +1724,6 @@
     100% {
       background-position: 400% 50%;
     }
-  }
-
-  /* iOS 26 主题流动效果 */
-  :global(.island-theme-ios26) {
-    animation: bg-flow 12s linear infinite;
-  }
-
-  /* 暗夜黑主题流动效果 */
-  :global(.island-theme-dark) {
-    animation: bg-flow 12s linear infinite;
-  }
-
-  /* 霓虹幻彩主题流动效果 */
-  :global(.island-theme-neon) {
-    animation: bg-flow 12s linear infinite;
-  }
-
-  /* 极光之境主题流动效果 */
-  :global(.island-theme-aurora) {
-    animation: bg-flow 12s linear infinite;
-  }
-
-  /* 深海秘境主题流动效果 */
-  :global(.island-theme-ocean) {
-    animation: bg-flow 12s linear infinite;
-  }
-
-  /* 落日余晖主题流动效果 */
-  :global(.island-theme-sunset) {
-    animation: bg-flow 12s linear infinite;
-  }
-
-  /* 翡翠森林主题流动效果 */
-  :global(.island-theme-forest) {
-    animation: bg-flow 12s linear infinite;
-  }
-
-  /* iOS 26 液态玻璃光泽层 */
-  .glass-reflection {
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(
-      circle at 50% 50%,
-      rgba(255, 255, 255, 0.03) 0%,
-      transparent 60%
-    );
-    pointer-events: none;
-    z-index: 0;
   }
 
   /* ===== 调试信息覆盖层 ===== */

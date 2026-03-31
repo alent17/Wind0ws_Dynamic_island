@@ -41,4 +41,6 @@ export default defineConfig(async () => ({
       }
     }
   },
+  // 添加字体文件作为静态资源
+  publicDir: 'public',
 }));

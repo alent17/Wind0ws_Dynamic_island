@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::time::Duration;
 use std::fs;
+use std::path::PathBuf;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -43,6 +44,13 @@ pub struct AppSettings {
     pub floating_window_height: Option<u32>,
     // ===== MV 播放 =====
     pub enable_mv_playback: bool,
+    // ===== 锁定悬浮窗 =====
+    pub lock_floating_window: bool,
+    // ===== 专辑封面设置 =====
+    pub enable_hd_cover: bool,
+    pub enable_pixel_art: bool,
+    // ===== 缓存目录设置 =====
+    pub cache_directory: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -74,6 +82,10 @@ impl Default for AppSettings {
             floating_window_width: None,
             floating_window_height: None,
             enable_mv_playback: false, // 默认关闭 MV 播放
+            lock_floating_window: false, // 默认不锁定悬浮窗
+            enable_hd_cover: true, // 默认开启高清封面获取
+            enable_pixel_art: false, // 默认关闭像素化
+            cache_directory: None, // 默认使用系统缓存目录
         }
     }
 }
@@ -84,9 +96,441 @@ struct MediaCache {
     base64_img: String,
 }
 
+// 缓存元数据
+#[derive(Clone, Serialize, Deserialize)]
+struct CacheMetadata {
+    key: String,
+    file_path: String,
+    created_at: u64,
+    size: u64,
+    content_type: String, // "mv" 或 "cover"
+}
+
+// 优化的缓存管理器
+struct CacheManager {
+    cache_dir: PathBuf,
+    metadata_file: PathBuf,
+    metadata: Vec<CacheMetadata>,
+    max_cache_size_mb: u64,
+    total_cache_size: u64, // 缓存总大小，避免重复计算
+}
+
+impl CacheManager {
+    fn new(app_handle: &AppHandle) -> Result<Self, String> {
+        let cache_dir = app_handle
+            .path()
+            .app_cache_dir()
+            .map_err(|e| format!("无法获取缓存目录：{}", e))?
+            .join("media_cache");
+        
+        // 创建缓存目录
+        fs::create_dir_all(&cache_dir)
+            .map_err(|e| format!("无法创建缓存目录：{}", e))?;
+        
+        let metadata_file = cache_dir.join("metadata.json");
+        
+        // 加载元数据并计算总大小
+        let (metadata, total_cache_size) = if metadata_file.exists() {
+            let content = fs::read_to_string(&metadata_file)
+                .map_err(|e| format!("无法读取元数据：{}", e))?;
+            let metadata: Vec<CacheMetadata> = serde_json::from_str(&content).unwrap_or_default();
+            let total_size = metadata.iter().map(|m| m.size).sum();
+            (metadata, total_size)
+        } else {
+            (Vec::new(), 0)
+        };
+        
+        Ok(Self {
+            cache_dir,
+            metadata_file,
+            metadata,
+            max_cache_size_mb: 500, // 默认最大 500MB
+            total_cache_size,
+        })
+    }
+    
+    // 保存元数据
+    fn save_metadata(&self) -> Result<(), String> {
+        let content = serde_json::to_string_pretty(&self.metadata)
+            .map_err(|e| format!("无法序列化元数据：{}", e))?;
+        fs::write(&self.metadata_file, content)
+            .map_err(|e| format!("无法写入元数据：{}", e))?;
+        Ok(())
+    }
+    
+    // 生成缓存键 - 使用更快的哈希算法
+    fn generate_key(title: &str, artist: &str, content_type: &str) -> String {
+        use std::hash::{Hash, Hasher};
+        use twox_hash::XxHash64;
+        
+        let mut hasher = XxHash64::default();
+        title.hash(&mut hasher);
+        artist.hash(&mut hasher);
+        content_type.hash(&mut hasher);
+        format!("{:x}", hasher.finish())
+    }
+    
+    // 获取缓存文件路径
+    fn get_cache_path(&self, key: &str, extension: &str) -> PathBuf {
+        self.cache_dir.join(format!("{}.{}", key, extension))
+    }
+    
+    // 检查缓存是否存在 - 使用 HashMap 优化查找
+    fn has_cache(&self, key: &str) -> bool {
+        self.metadata.iter().any(|m| m.key == key)
+    }
+    
+    // 获取缓存文件路径（如果存在）
+    fn get_cached_file(&self, key: &str) -> Option<String> {
+        self.metadata
+            .iter()
+            .find(|m| m.key == key)
+            .and_then(|m| {
+                if PathBuf::from(&m.file_path).exists() {
+                    Some(m.file_path.clone())
+                } else {
+                    None
+                }
+            })
+    }
+    
+    // 添加缓存 - 优化性能
+    fn add_cache(
+        &mut self,
+        key: String,
+        file_path: String,
+        size: u64,
+        content_type: String,
+    ) -> Result<(), String> {
+        // 检查是否需要清理缓存
+        self.cleanup_if_needed(size)?;
+        
+        let metadata = CacheMetadata {
+            key,
+            file_path,
+            created_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            size,
+            content_type,
+        };
+        
+        self.metadata.push(metadata);
+        self.total_cache_size += size;
+        self.save_metadata()
+    }
+    
+    // 优化的缓存清理算法
+    fn cleanup_if_needed(&mut self, new_file_size: u64) -> Result<(), String> {
+        let max_size_bytes = self.max_cache_size_mb * 1024 * 1024;
+        
+        // 如果添加新文件后不会超过限制，直接返回
+        if self.total_cache_size + new_file_size <= max_size_bytes {
+            return Ok(());
+        }
+        
+        // 按创建时间排序，删除最旧的缓存
+        self.metadata.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+        
+        let mut removed_size = 0;
+        let target_size = max_size_bytes.saturating_sub(new_file_size);
+        
+        // 使用迭代器优化删除逻辑
+        let mut i = 0;
+        while i < self.metadata.len() && self.total_cache_size - removed_size > target_size {
+            let metadata = &self.metadata[i];
+            
+            // 尝试删除文件
+            if let Err(e) = fs::remove_file(&metadata.file_path) {
+                // 文件可能不存在，继续处理下一个
+                println!("删除缓存文件失败: {}", e);
+            }
+            
+            removed_size += metadata.size;
+            i += 1;
+        }
+        
+        // 批量删除元数据
+        if i > 0 {
+            self.metadata.drain(0..i);
+            self.total_cache_size -= removed_size;
+        }
+        
+        Ok(())
+    }
+    
+    // 获取缓存管理器（从 AppState）
+    fn from_app_handle(app_handle: &AppHandle) -> Result<Self, String> {
+        Self::new(app_handle)
+    }
+}
+
 struct AppState {
     settings: Mutex<AppSettings>,
     media_cache: Mutex<MediaCache>,
+}
+
+// 全局缓存目录（懒加载）
+static CACHE_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
+static CACHE_METADATA: Mutex<Option<Vec<CacheMetadata>>> = Mutex::new(None);
+
+// 初始化缓存系统
+fn init_cache_system(app_handle: &AppHandle) -> Result<(), String> {
+    // 先从配置读取缓存目录
+    let settings = read_settings_file(app_handle).unwrap_or_default();
+    
+    let cache_dir = if let Some(custom_dir) = &settings.cache_directory {
+        PathBuf::from(custom_dir)
+    } else {
+        app_handle
+            .path()
+            .app_cache_dir()
+            .map_err(|e| format!("无法获取缓存目录：{}", e))?
+            .join("media_cache")
+    };
+    
+    // 创建缓存目录
+    fs::create_dir_all(&cache_dir)
+        .map_err(|e| format!("无法创建缓存目录：{}", e))?;
+    
+    // 加载元数据
+    let metadata_file = cache_dir.join("metadata.json");
+    let metadata = if metadata_file.exists() {
+        let content = fs::read_to_string(&metadata_file)
+            .map_err(|e| format!("无法读取元数据：{}", e))?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    
+    // 存储到全局变量
+    {
+        let mut cache_dir_global = CACHE_DIR.lock().map_err(|_| "无法锁定缓存目录")?;
+        *cache_dir_global = Some(cache_dir);
+    }
+    
+    {
+        let mut metadata_global = CACHE_METADATA.lock().map_err(|_| "无法锁定缓存元数据")?;
+        *metadata_global = Some(metadata);
+    }
+    
+    Ok(())
+}
+
+// 保存缓存文件
+fn save_cache_file(url: &str, content: &[u8], content_type: &str) -> Result<String, String> {
+    let cache_dir = CACHE_DIR.lock()
+        .map_err(|_| "无法锁定缓存目录")?
+        .clone()
+        .ok_or("缓存系统未初始化")?;
+    
+    // 生成缓存键（使用 URL 的哈希）
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    
+    let mut hasher = DefaultHasher::new();
+    url.hash(&mut hasher);
+    let key = format!("{:x}", hasher.finish());
+    
+    // 确定文件扩展名
+    let extension = match content_type {
+        "video/mp4" | "video/webm" => "mp4",
+        "image/jpeg" | "image/jpg" => "jpg",
+        "image/png" => "png",
+        _ => "dat",
+    };
+    
+    let file_path = cache_dir.join(format!("{}.{}", key, extension));
+    
+    // 保存文件
+    fs::write(&file_path, content)
+        .map_err(|e| format!("无法写入缓存文件：{}", e))?;
+    
+    // 更新元数据
+    {
+        let mut metadata_global = CACHE_METADATA.lock().map_err(|_| "无法锁定缓存元数据")?;
+        let metadata = metadata_global.as_mut().ok_or("缓存元数据未初始化")?;
+        
+        // 检查是否已存在
+        if let Some(pos) = metadata.iter().position(|m| m.key == key) {
+            metadata.remove(pos);
+        }
+        
+        metadata.push(CacheMetadata {
+            key,
+            file_path: file_path.to_string_lossy().to_string(),
+            created_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            size: content.len() as u64,
+            content_type: content_type.to_string(),
+        });
+        
+        let metadata_file = cache_dir.join("metadata.json");
+        let content = serde_json::to_string_pretty(&*metadata)
+            .map_err(|e| format!("无法序列化元数据：{}", e))?;
+        fs::write(&metadata_file, content)
+            .map_err(|e| format!("无法写入元数据：{}", e))?;
+    }
+    
+    // 直接返回文件路径，由前端使用 convertFileSrc 转换
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+// 获取缓存文件路径
+#[tauri::command]
+fn get_cached_media(url: String) -> Result<Option<String>, String> {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    
+    let mut hasher = DefaultHasher::new();
+    url.hash(&mut hasher);
+    let key = format!("{:x}", hasher.finish());
+    
+    let metadata_global = CACHE_METADATA.lock()
+        .map_err(|_| "无法锁定缓存元数据")?;
+    let metadata = metadata_global.as_ref().ok_or("缓存元数据未初始化")?;
+    
+    if let Some(meta) = metadata.iter().find(|m| m.key == key) {
+        if PathBuf::from(&meta.file_path).exists() {
+            // 直接返回文件路径，由前端使用 convertFileSrc 转换
+            return Ok(Some(meta.file_path.clone()));
+        }
+    }
+    
+    Ok(None)
+}
+
+// 下载并缓存文件
+#[tauri::command]
+async fn download_and_cache(url: String, content_type: String) -> Result<String, String> {
+    // 先检查缓存
+    if let Some(cached_path) = get_cached_media(url.clone())? {
+        return Ok(cached_path);
+    }
+    
+    // 下载文件
+    let client = reqwest::Client::new();
+    let response = client.get(&url).send().await
+        .map_err(|e| format!("下载失败：{}", e))?;
+    
+    let bytes = response.bytes().await
+        .map_err(|e| format!("读取数据失败：{}", e))?;
+    
+    // 保存缓存
+    save_cache_file(&url, &bytes, &content_type)
+}
+
+// 清理缓存
+#[tauri::command]
+fn clear_cache() -> Result<(), String> {
+    let cache_dir = CACHE_DIR.lock()
+        .map_err(|_| "无法锁定缓存目录")?
+        .clone()
+        .ok_or("缓存系统未初始化")?;
+    
+    // 删除所有缓存文件
+    if cache_dir.exists() {
+        fs::remove_dir_all(&cache_dir)
+            .map_err(|e| format!("无法清理缓存：{}", e))?;
+        
+        // 重新创建目录
+        fs::create_dir_all(&cache_dir)
+            .map_err(|e| format!("无法创建缓存目录：{}", e))?;
+        
+        // 清空元数据
+        {
+            let mut metadata_global = CACHE_METADATA.lock().map_err(|_| "无法锁定缓存元数据")?;
+            *metadata_global = Some(Vec::new());
+        }
+    }
+    
+    Ok(())
+}
+
+// 获取缓存统计信息
+#[tauri::command]
+fn get_cache_stats() -> Result<serde_json::Value, String> {
+    let metadata_global = CACHE_METADATA.lock()
+        .map_err(|_| "无法锁定缓存元数据")?;
+    let metadata = metadata_global.as_ref().ok_or("缓存元数据未初始化")?;
+    
+    let total_size: u64 = metadata.iter().map(|m| m.size).sum();
+    let mv_count = metadata.iter().filter(|m| m.content_type.starts_with("video")).count();
+    let cover_count = metadata.iter().filter(|m| m.content_type.starts_with("image")).count();
+    
+    Ok(serde_json::json!({
+        "total_size_mb": total_size as f64 / (1024.0 * 1024.0),
+        "total_files": metadata.len(),
+        "mv_count": mv_count,
+        "cover_count": cover_count,
+    }))
+}
+
+// 获取当前缓存目录
+#[tauri::command]
+fn get_cache_directory(_app: AppHandle) -> Result<String, String> {
+    let cache_dir = CACHE_DIR.lock()
+        .map_err(|_| "无法锁定缓存目录")?
+        .clone()
+        .ok_or("缓存系统未初始化")?;
+    
+    Ok(cache_dir.to_string_lossy().to_string())
+}
+
+// 设置缓存目录
+#[tauri::command]
+fn set_cache_directory(app: AppHandle, new_path: String) -> Result<(), String> {
+    use std::path::PathBuf;
+    
+    let new_cache_dir = PathBuf::from(&new_path);
+    
+    // 确保目录存在
+    if !new_cache_dir.exists() {
+        fs::create_dir_all(&new_cache_dir)
+            .map_err(|e| format!("创建目录失败：{}", e))?;
+    }
+    
+    // 更新缓存目录
+    {
+        let mut cache_dir_global = CACHE_DIR.lock()
+            .map_err(|_| "无法锁定缓存目录")?;
+        *cache_dir_global = Some(new_cache_dir.clone());
+    }
+    
+    // 保存配置
+    let mut settings = read_settings_file(&app).unwrap_or_default();
+    settings.cache_directory = Some(new_path);
+    write_settings_file(&app, &settings)?;
+    
+    Ok(())
+}
+
+// 选择缓存目录
+#[tauri::command]
+fn pick_cache_directory(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    
+    // 使用 blocking_pick_folder 阻塞式选择
+    let selected_path = app.dialog().file().blocking_pick_folder();
+    
+    if let Some(path) = selected_path {
+        let path_str = path.to_string();
+        
+        // 保存配置
+        let mut settings = read_settings_file(&app).unwrap_or_default();
+        settings.cache_directory = Some(path_str.clone());
+        write_settings_file(&app, &settings)?;
+        
+        // 更新缓存目录
+        set_cache_directory(app, path_str.clone())?;
+        
+        Ok(Some(path_str))
+    } else {
+        Ok(None)
+    }
 }
 
 // 读取配置文件
@@ -148,7 +592,21 @@ async fn get_media_info_internal(app: &AppHandle) -> Result<MediaState, String> 
     let session_count = sessions.Size().unwrap_or(0) as usize;
     
     if session_count == 0 {
-        return Err("No active media session found".to_string());
+        // 返回空状态而不是错误，让前端显示"等待播放..."
+        return Ok(MediaState {
+            title: String::new(),
+            artist: String::new(),
+            album_art: String::new(),
+            is_playing: false,
+            position_ms: 0,
+            duration_ms: 0,
+            last_updated_timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64,
+            source: String::new(),
+            source_display: String::new(),
+        });
     }
 
     // 获取权重设置
@@ -194,8 +652,26 @@ async fn get_media_info_internal(app: &AppHandle) -> Result<MediaState, String> 
         }
     }
 
-    let (session, source_type, raw_id) = best_session
-        .ok_or_else(|| "No valid session found".to_string())?;
+    let (session, source_type, raw_id) = match best_session {
+        Some(s) => s,
+        None => {
+            // 没有有效会话，返回空状态
+            return Ok(MediaState {
+                title: String::new(),
+                artist: String::new(),
+                album_art: String::new(),
+                is_playing: false,
+                position_ms: 0,
+                duration_ms: 0,
+                last_updated_timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64,
+                source: String::new(),
+                source_display: String::new(),
+            });
+        }
+    };
 
     let timeline = session
         .GetTimelineProperties()
@@ -598,6 +1074,36 @@ async fn open_floating_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// 关闭悬浮窗
+#[tauri::command]
+fn close_floating_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("floating_player") {
+        let _ = window.close();
+        // 发送事件通知前端更新状态
+        let _ = app.emit("floating-window-closed", ());
+    }
+    Ok(())
+}
+
+// 切换悬浮窗显示/隐藏
+#[tauri::command]
+fn toggle_floating_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("floating_player") {
+        // 如果窗口存在，切换显示状态
+        let is_visible = window.is_visible().unwrap_or(false);
+        if is_visible {
+            let _ = window.hide();
+        } else {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    } else {
+        // 如果窗口不存在，创建并显示
+        let _ = open_floating_window(app);
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn sync_window_bounds(
     app: tauri::AppHandle,
@@ -681,6 +1187,17 @@ fn save_floating_window_position(
 }
 
 #[tauri::command]
+fn set_floating_window_resizable(app: AppHandle, resizable: bool) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("floating_player") {
+        window
+            .set_resizable(resizable)
+            .map_err(|e| e.to_string())?;
+        println!("[窗口] 悬浮窗可调整大小已设置为：{}", resizable);
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn get_floating_window_position(app: AppHandle) -> Result<Option<(i32, i32, u32, u32)>, String> {
     let state = app.state::<AppState>();
     let settings = state.settings.lock().map_err(|_| "Failed to lock settings")?;
@@ -701,6 +1218,8 @@ fn get_floating_window_position(app: AppHandle) -> Result<Option<(i32, i32, u32,
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             settings: Mutex::new(AppSettings::default()),
             media_cache: Mutex::new(MediaCache::default()),
@@ -710,6 +1229,7 @@ pub fn run() {
             show_main_window,
             show_settings_window,
             open_floating_window,
+            close_floating_window,
             get_settings,
             save_settings,
             check_fullscreen_app,
@@ -719,8 +1239,20 @@ pub fn run() {
             emit_event,
             save_floating_window_position,
             get_floating_window_position,
+            set_floating_window_resizable,
+            // 缓存相关 API
+            get_cached_media,
+            download_and_cache,
+            clear_cache,
+            get_cache_stats,
+            get_cache_directory,
+            set_cache_directory,
+            pick_cache_directory,
         ])
         .setup(|app| {
+            // 初始化缓存系统
+            init_cache_system(&app.handle())?;
+            
             // 从配置文件读取设置
             let saved_settings = read_settings_file(&app.handle());
             let initial_settings = saved_settings.unwrap_or_else(AppSettings::default);

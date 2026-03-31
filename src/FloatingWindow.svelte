@@ -1,10 +1,18 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { fade } from "svelte/transition";
-  import { Play, Pause, SkipBack, SkipForward, X } from "lucide-svelte";
+  import { convertFileSrc } from "@tauri-apps/api/core";
+  import {
+    Play,
+    Pause,
+    SkipBack,
+    SkipForward,
+    X,
+    Pin,
+    Minimize2,
+  } from "lucide-svelte";
 
   interface MediaState {
     title: string;
@@ -51,10 +59,20 @@
   let mvUrl = $state(""); // MV 视频链接
   let isPlayingMV = $state(false); // 是否正在播放 MV
 
+  // 置顶状态
+  let isAlwaysOnTop = $state(false);
+
+  // 锁定悬浮窗（禁止移动）
+  let isFloatingWindowLocked = $state(false); // 初始值，会在 onMount 中从设置加载
+
+  // 专辑封面设置
+  let enableHDCover = $state(true); // 高清封面获取
+  let enablePixelArt = $state(false); // 像素化封面
+
   let unlisten: () => void;
   let unlistenResize: () => void;
-  let progressInterval: ReturnType<typeof setInterval>;
-  let savePositionTimeout: ReturnType<typeof setTimeout>;
+  let progressInterval: ReturnType<typeof setInterval> | null = null;
+  let savePositionTimeout: ReturnType<typeof setTimeout> | null = null;
 
   async function fetchHighResCover(
     title: string,
@@ -250,7 +268,20 @@
         const result = await source.fetch();
         if (result) {
           console.log(`✅ 高清图获取成功，来源：${source.name}`);
-          return result;
+
+          // 下载并缓存图片
+          try {
+            const cachedPath = await invoke<string>("download_and_cache", {
+              url: result,
+              contentType: "image/jpeg",
+            });
+            const safeUrl = convertFileSrc(cachedPath);
+            return safeUrl;
+          } catch (cacheError) {
+            console.warn("[封面] 缓存失败，使用原始链接:", cacheError);
+            // 缓存失败，返回原始链接
+            return result;
+          }
         }
       } catch (error: any) {
         if (error.name === "AbortError") {
@@ -268,7 +299,19 @@
         const result = await source.fetch();
         if (result) {
           console.log(`✅ 歌手图获取成功，来源：${source.name}`);
-          return result;
+
+          // 下载并缓存图片
+          try {
+            const cachedPath = await invoke<string>("download_and_cache", {
+              url: result,
+              contentType: "image/jpeg",
+            });
+            const safeUrl = convertFileSrc(cachedPath);
+            return safeUrl;
+          } catch (cacheError) {
+            console.warn("[封面] 缓存失败，使用原始链接:", cacheError);
+            return result;
+          }
         }
       } catch (error: any) {
         if (error.name === "AbortError") {
@@ -285,7 +328,8 @@
 
   function extractColors(imgSrc: string) {
     const img = new Image();
-    if (imgSrc.startsWith("http")) img.crossOrigin = "Anonymous";
+    if (imgSrc.startsWith("http") && !imgSrc.includes("asset.localhost"))
+      img.crossOrigin = "Anonymous";
     img.onload = () => {
       try {
         const canvas = document.createElement("canvas");
@@ -406,7 +450,7 @@
     });
   }
 
-  // 从 Apple Music 获取 MV 链接（优先流畅度）
+  // 从 Apple Music 获取 MV 链接（使用本地缓存）
   async function fetchMVFromAppleMusic(title: string, artist: string) {
     if (!isMVPlaybackEnabled) return null; // 功能未启用，直接返回
 
@@ -426,13 +470,25 @@
 
       if (data.results?.length > 0) {
         const mvData = data.results[0];
-        let previewUrl = mvData.previewUrl; // Apple Music 提供的 MV 预览链接
+        const previewUrl = mvData.previewUrl; // Apple Music 提供的 MV 预览链接
 
-        // 检测文件大小
+        // 先检查缓存
+        try {
+          const cachedPath = await invoke<string | null>("get_cached_media", {
+            url: previewUrl,
+          });
+          if (cachedPath) {
+            console.log("[MV] 使用缓存文件:", cachedPath);
+            // 使用 convertFileSrc 转换为可访问的 URL
+            return convertFileSrc(cachedPath);
+          }
+        } catch (cacheError) {
+          console.warn("[MV] 检查缓存失败:", cacheError);
+        }
+
+        // 检测文件大小和分辨率
         const fileSize = await getMVFileSize(previewUrl);
         const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
-
-        // 检测分辨率
         const resolution = await getMVResolution(previewUrl);
 
         console.log("[MV] 找到 MV:", mvData.trackName);
@@ -445,7 +501,20 @@
           );
         }
 
-        return previewUrl;
+        // 下载并缓存 MV
+        try {
+          console.log("[MV] 下载并缓存...");
+          const cachedPath = await invoke<string>("download_and_cache", {
+            url: previewUrl,
+            contentType: "video/mp4",
+          });
+          const safeUrl = convertFileSrc(cachedPath);
+          return safeUrl;
+        } catch (cacheError) {
+          console.warn("[MV] 缓存失败，使用原始链接:", cacheError);
+          // 缓存失败，返回原始链接
+          return previewUrl;
+        }
       }
       return null;
     } catch (error) {
@@ -455,7 +524,7 @@
   }
 
   onMount(async () => {
-    // 读取 MV 播放设置
+    // 读取设置
     try {
       const settings = await invoke<any>("get_settings");
       isMVPlaybackEnabled = settings.enable_mv_playback ?? false;
@@ -463,10 +532,40 @@
         "[MV 播放] 功能状态:",
         isMVPlaybackEnabled ? "已启用" : "已禁用",
       );
+
+      // 加载置顶设置
+      isAlwaysOnTop = settings.always_on_top ?? true; // 默认置顶
+      console.log("[置顶] 初始状态:", isAlwaysOnTop ? "已置顶" : "未置顶");
+
+      // 加载锁定悬浮窗设置
+      isFloatingWindowLocked = settings.lock_floating_window ?? false;
+      console.log(
+        "[锁定悬浮窗] 初始状态:",
+        isFloatingWindowLocked ? "锁定" : "解锁",
+      );
+
+      // 加载专辑封面设置
+      enableHDCover = settings.enable_hd_cover ?? true;
+      enablePixelArt = settings.enable_pixel_art ?? false;
+      console.log(
+        "[专辑封面] 高清获取:",
+        enableHDCover ? "开启" : "关闭",
+        "| 像素化:",
+        enablePixelArt ? "开启" : "关闭",
+      );
+
+      // 设置窗口是否可调整大小
+      await invoke("set_floating_window_resizable", {
+        resizable: !isFloatingWindowLocked,
+      });
     } catch (error) {
-      console.error("[MV 播放] 读取设置失败:", error);
+      console.error("[设置] 读取失败:", error);
       isMVPlaybackEnabled = false;
+      isAlwaysOnTop = false;
     }
+
+    // 初始化事件监听器管理器
+    eventListeners = [];
 
     // 监听 MV 播放设置变化事件
     const unlistenMVChange = await listen(
@@ -485,8 +584,50 @@
         }
       },
     );
-    // 保存监听器以便清理
-    (window as any).__unlistenMVChange = unlistenMVChange;
+    eventListeners.push(unlistenMVChange);
+
+    // 监听锁定悬浮窗设置变化事件
+    const unlistenLockChange = await listen(
+      "lock-floating-window-changed",
+      (event: any) => {
+        isFloatingWindowLocked = event.payload.lock;
+        console.log(
+          "[锁定悬浮窗] 设置已更新:",
+          isFloatingWindowLocked ? "锁定" : "解锁",
+        );
+
+        // 同时设置窗口是否可调整大小
+        invoke("set_floating_window_resizable", {
+          resizable: !isFloatingWindowLocked,
+        }).catch((err) => {
+          console.error("[锁定] 设置窗口可调整大小失败:", err);
+        });
+      },
+    );
+    eventListeners.push(unlistenLockChange);
+
+    // 监听高清封面获取设置变化事件
+    const unlistenHDCoverChange = await listen(
+      "hd-cover-changed",
+      (event: any) => {
+        enableHDCover = event.payload.enableHDCover;
+        console.log("[高清封面] 设置已更新:", enableHDCover ? "开启" : "关闭");
+      },
+    );
+    eventListeners.push(unlistenHDCoverChange);
+
+    // 监听像素化封面设置变化事件
+    const unlistenPixelArtChange = await listen(
+      "pixel-art-changed",
+      (event: any) => {
+        enablePixelArt = event.payload.enablePixelArt;
+        console.log(
+          "[像素化封面] 设置已更新:",
+          enablePixelArt ? "开启" : "关闭",
+        );
+      },
+    );
+    eventListeners.push(unlistenPixelArtChange);
 
     const appWindow = getCurrentWindow();
     const size = await appWindow.innerSize();
@@ -494,10 +635,16 @@
 
     // 监听窗口大小变化
     unlistenResize = await appWindow.onResized(({ payload }) => {
+      // 锁定时忽略大小变化
+      if (isFloatingWindowLocked) {
+        console.log("[缩放] 悬浮窗已锁定，禁止缩放");
+        return;
+      }
+
       windowSize = { width: payload.width, height: payload.height };
 
       // 防抖保存位置和大小
-      clearTimeout(savePositionTimeout);
+      if (savePositionTimeout) clearTimeout(savePositionTimeout);
       savePositionTimeout = setTimeout(async () => {
         try {
           const position = await appWindow.outerPosition();
@@ -517,7 +664,7 @@
     // 监听窗口位置变化
     const unlistenMoved = await appWindow.onMoved(({ payload }) => {
       // 防抖保存位置和大小
-      clearTimeout(savePositionTimeout);
+      if (savePositionTimeout) clearTimeout(savePositionTimeout);
       savePositionTimeout = setTimeout(async () => {
         try {
           await invoke("save_floating_window_position", {
@@ -576,7 +723,28 @@
         const payload = event.payload;
         const newTrackKey = `${payload.title}-${payload.artist}`;
 
-        if (newTrackKey !== currentTrackKey) {
+        // 检查是否是空状态（播放器关闭或无媒体）
+        const isEmptyState =
+          !payload.title ||
+          payload.title === "" ||
+          payload.title === "等待播放...";
+
+        if (isEmptyState) {
+          // 播放器退出，重置为等待状态
+          currentTrackKey = "";
+          mediaState = {
+            title: PLACEHOLDER_TITLE,
+            artist: PLACEHOLDER_ARTIST,
+            album_art: "",
+            is_playing: false,
+            position_ms: 0,
+            duration_ms: 0,
+          };
+          displayCover = "";
+          isPlayingMV = false;
+          mvUrl = "";
+          console.log("[媒体更新] 播放器已退出，重置状态");
+        } else if (newTrackKey !== currentTrackKey) {
           currentTrackKey = newTrackKey;
 
           // 使用 SMTC 提供的图片作为基础
@@ -600,53 +768,51 @@
             isPlayingMV = false;
             mvUrl = "";
 
-            // 获取专辑封面高清图
-            fetchHighResCover(payload.title, payload.artist, smtcCover)
-              .then((hdCover) => {
-                const img = new Image();
-                if (hdCover.startsWith("http")) img.crossOrigin = "Anonymous";
-                img.onload = () => {
-                  if (currentTrackKey === newTrackKey) {
-                    // 上一首歌从中间往左侧离开，下一首歌从右侧往中间移动
-                    previousCover = displayCover; // 保存旧图
-                    slideDirection = "left"; // 旧图向左滑出，新图从右滑入
-                    displayCover = hdCover;
-                    extractColors(hdCover);
-                    // 动画结束后清除旧图
-                    setTimeout(() => {
-                      slideDirection = "";
-                      previousCover = "";
-                    }, 400);
-                  }
-                };
-                img.onerror = () => {
-                  if (currentTrackKey === newTrackKey) {
-                    // 高清图加载失败，使用 SMTC 图片
-                    previousCover = displayCover;
-                    slideDirection = "left";
-                    displayCover = smtcCover;
-                    if (smtcCover) extractColors(smtcCover);
-                    setTimeout(() => {
-                      slideDirection = "";
-                      previousCover = "";
-                    }, 400);
-                  }
-                };
-                img.src = hdCover;
-              })
-              .catch(() => {
-                // 获取失败，使用 SMTC 图片
-                if (currentTrackKey === newTrackKey) {
-                  previousCover = displayCover;
-                  slideDirection = "left";
-                  displayCover = smtcCover;
-                  if (smtcCover) extractColors(smtcCover);
-                  setTimeout(() => {
-                    slideDirection = "";
-                    previousCover = "";
-                  }, 400);
-                }
-              });
+            // 根据设置决定是否获取高清图
+            if (enableHDCover) {
+              // 获取专辑封面高清图
+              fetchHighResCover(payload.title, payload.artist, smtcCover)
+                .then((hdCover) => {
+                  const img = new Image();
+                  if (
+                    hdCover.startsWith("http") &&
+                    !hdCover.includes("asset.localhost")
+                  )
+                    img.crossOrigin = "Anonymous";
+                  img.onload = () => {
+                    if (currentTrackKey === newTrackKey) {
+                      previousCover = displayCover;
+                      slideDirection = "left";
+                      displayCover = hdCover;
+                      extractColors(hdCover);
+                      setTimeout(() => {
+                        slideDirection = "";
+                        previousCover = "";
+                      }, 400);
+                    }
+                  };
+                  img.onerror = handleSMTCCover;
+                  img.src = hdCover;
+                })
+                .catch(handleSMTCCover);
+            } else {
+              // 不获取高清图，直接使用 SMTC 图片
+              handleSMTCCover();
+            }
+
+            // 处理 SMTC 图片的函数
+            function handleSMTCCover() {
+              if (currentTrackKey === newTrackKey) {
+                previousCover = displayCover;
+                slideDirection = "left";
+                displayCover = smtcCover;
+                if (smtcCover) extractColors(smtcCover);
+                setTimeout(() => {
+                  slideDirection = "";
+                  previousCover = "";
+                }, 400);
+              }
+            }
 
             // 如果启用了 MV 播放，尝试获取 MV（在专辑封面加载完成后）
             if (isMVPlaybackEnabled) {
@@ -761,13 +927,27 @@
       );
       delete (window as any).__handleMouseMove;
     }
-    // 清理 MV 播放设置变化监听
-    if ((window as any).__unlistenMVChange) {
-      (window as any).__unlistenMVChange();
-      delete (window as any).__unlistenMVChange;
+
+    // 清理所有事件监听器
+    if (eventListeners) {
+      eventListeners.forEach((unlisten: () => void) => unlisten());
+      eventListeners.length = 0;
     }
-    clearTimeout(savePositionTimeout);
-    clearInterval(progressInterval);
+
+    // 清理图片缓存
+    if (imageCache) {
+      Object.keys(imageCache).forEach((key) => {
+        delete imageCache[key];
+      });
+    }
+
+    // 清理临时 Canvas
+    tempCanvasCache = null;
+    newCanvasRef = null;
+    oldCanvasRef = null;
+
+    if (savePositionTimeout) clearTimeout(savePositionTimeout);
+    if (progressInterval) clearInterval(progressInterval);
   });
 
   function formatTime(ms: number): string {
@@ -788,10 +968,252 @@
     isHovered && windowSize.width > 100 && windowSize.height > 100,
   );
 
+  // 缓存 Canvas 元素引用，避免重复查询
+  let newCanvasRef = $state<HTMLCanvasElement | null>(null);
+  let oldCanvasRef = $state<HTMLCanvasElement | null>(null);
+
+  // 事件监听器管理器
+  let eventListeners = $state<(() => void)[]>([]);
+
+  // 设置 Canvas 元素引用 - 监听 displayCover 变化确保 Canvas 元素已创建
+  $effect(() => {
+    if (displayCover) {
+      requestAnimationFrame(() => {
+        const newCanvas = document.querySelector(
+          ".album-art-new",
+        ) as HTMLCanvasElement;
+        const oldCanvas = document.querySelector(
+          ".album-art-old",
+        ) as HTMLCanvasElement;
+
+        if (newCanvas && !newCanvasRef) {
+          newCanvasRef = newCanvas;
+        }
+        if (oldCanvas && !oldCanvasRef) {
+          oldCanvasRef = oldCanvas;
+        }
+      });
+    }
+  });
+
+  // 监听 displayCover 和 enablePixelArt 变化，渲染到 Canvas
+  $effect(() => {
+    if (displayCover) {
+      requestAnimationFrame(() => {
+        // 使用缓存的 Canvas 引用
+        const renderFunction = enablePixelArt
+          ? renderImageToCanvas
+          : renderImageToCanvasNormal;
+
+        // 渲染新图 - 如果缓存引用为空，直接查询DOM
+        if (newCanvasRef) {
+          renderFunction(newCanvasRef, displayCover);
+        } else {
+          const newCanvas = document.querySelector(
+            ".album-art-new",
+          ) as HTMLCanvasElement;
+          if (newCanvas) {
+            renderFunction(newCanvas, displayCover);
+            newCanvasRef = newCanvas; // 缓存引用
+          }
+        }
+
+        // 渲染旧图（如果有）
+        if (oldCanvasRef && previousCover) {
+          renderFunction(oldCanvasRef, previousCover);
+        } else if (previousCover) {
+          const oldCanvas = document.querySelector(
+            ".album-art-old",
+          ) as HTMLCanvasElement;
+          if (oldCanvas) {
+            renderFunction(oldCanvas, previousCover);
+            oldCanvasRef = oldCanvas; // 缓存引用
+          }
+        }
+      });
+    }
+  });
+
+  // 缓存临时 Canvas 和图片对象，避免重复创建
+  let tempCanvasCache = $state<HTMLCanvasElement | null>(null);
+  let imageCache = $state<{ [key: string]: HTMLImageElement }>({});
+
+  // 渲染图片到 Canvas 并应用像素化效果
+  function renderImageToCanvas(canvas: HTMLCanvasElement, imageUrl: string) {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // 检查图片缓存
+    if (imageCache[imageUrl]) {
+      renderCachedImage(canvas, imageCache[imageUrl], true);
+      return;
+    }
+
+    const img = new Image();
+    if (imageUrl.startsWith("http") && !imageUrl.includes("asset.localhost")) {
+      img.crossOrigin = "Anonymous";
+    }
+
+    img.onload = () => {
+      // 缓存图片对象
+      imageCache[imageUrl] = img;
+      renderCachedImage(canvas, img, true);
+    };
+
+    img.onerror = () => {
+      console.error("[Canvas] 图片加载失败:", imageUrl);
+    };
+
+    img.src = imageUrl;
+  }
+
+  // 智能图片质量分析函数
+  function analyzeImageQuality(img: HTMLImageElement): number {
+    // 基于图片尺寸、清晰度和内容复杂度评估质量
+    const width = img.width;
+    const height = img.height;
+
+    // 基础质量评分（0-1）
+    let qualityScore = Math.min(1, width / 500); // 基于宽度评分
+
+    // 如果图片太小，降低评分
+    if (width < 100 || height < 100) {
+      qualityScore *= 0.5;
+    }
+
+    // 如果图片太大但可能是低质量放大，适当调整
+    if (width > 800 && qualityScore > 0.8) {
+      qualityScore = 0.8 + (qualityScore - 0.8) * 0.5;
+    }
+
+    return Math.max(0.1, Math.min(1, qualityScore));
+  }
+
+  // 计算最优像素大小
+  function calculateOptimalPixelSize(
+    img: HTMLImageElement,
+    qualityScore: number,
+  ): number {
+    // 统一使用固定的6px像素大小
+    return 12;
+  }
+
+  // 渲染已缓存的图片（像素化版本）
+  function renderCachedImage(
+    canvas: HTMLCanvasElement,
+    img: HTMLImageElement,
+    pixelated: boolean,
+  ) {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // 设置 Canvas 尺寸与图片一致
+    canvas.width = img.width;
+    canvas.height = img.height;
+
+    if (pixelated) {
+      // 智能像素化算法：根据图片质量和内容决定像素化程度
+      const imgQuality = analyzeImageQuality(img);
+      const pixelSize = calculateOptimalPixelSize(img, imgQuality);
+
+      const scaledWidth = Math.ceil(img.width / pixelSize);
+      const scaledHeight = Math.ceil(img.height / pixelSize);
+
+      // 重用或创建临时 Canvas
+      if (
+        !tempCanvasCache ||
+        tempCanvasCache.width !== scaledWidth ||
+        tempCanvasCache.height !== scaledHeight
+      ) {
+        tempCanvasCache = document.createElement("canvas");
+        tempCanvasCache.width = scaledWidth;
+        tempCanvasCache.height = scaledHeight;
+      }
+
+      const tempCtx = tempCanvasCache.getContext("2d");
+      if (tempCtx) {
+        // 关闭图像平滑处理
+        tempCtx.imageSmoothingEnabled = false;
+        tempCtx.imageSmoothingQuality = "low";
+
+        // 缩小图片
+        tempCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+
+        // 清除主 Canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = false;
+
+        // 将缩小后的图片放大绘制回主 Canvas，创建像素化效果
+        ctx.drawImage(
+          tempCanvasCache,
+          0,
+          0,
+          scaledWidth,
+          scaledHeight,
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        );
+      }
+    } else {
+      // 正常渲染高清图
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+    }
+  }
+
+  // 渲染图片到 Canvas（正常高清，不像素化）
+  function renderImageToCanvasNormal(
+    canvas: HTMLCanvasElement,
+    imageUrl: string,
+  ) {
+    // 检查图片缓存
+    if (imageCache[imageUrl]) {
+      renderCachedImage(canvas, imageCache[imageUrl], false);
+      return;
+    }
+
+    const img = new Image();
+    if (imageUrl.startsWith("http") && !imageUrl.includes("asset.localhost")) {
+      img.crossOrigin = "Anonymous";
+    }
+
+    img.onload = () => {
+      // 缓存图片对象
+      imageCache[imageUrl] = img;
+      renderCachedImage(canvas, img, false);
+    };
+
+    img.onerror = () => {
+      console.error("[Canvas] 图片加载失败:", imageUrl);
+    };
+
+    img.src = imageUrl;
+  }
+
   async function togglePlay(e: MouseEvent) {
     e.stopPropagation();
     await invoke("control_media", { action: "play_pause" });
-    mediaState.is_playing = !mediaState.is_playing;
+    // 不手动更新状态，等待后端的 media-update 事件同步
+  }
+
+  async function toggleAlwaysOnTop(e: MouseEvent) {
+    e.stopPropagation();
+    console.log("[置顶] 按钮被点击，当前状态:", isAlwaysOnTop);
+    isAlwaysOnTop = !isAlwaysOnTop;
+    const appWindow = getCurrentWindow();
+    await appWindow.setAlwaysOnTop(isAlwaysOnTop);
+    console.log("[置顶] 设置为:", isAlwaysOnTop);
+
+    // 保存设置
+    try {
+      await invoke("save_settings", {
+        settings: { always_on_top: isAlwaysOnTop },
+      });
+    } catch (error) {
+      console.error("[置顶] 保存设置失败:", error);
+    }
   }
 
   function closeWindow(e: MouseEvent) {
@@ -799,17 +1221,21 @@
     getCurrentWindow().close();
   }
 
-  // 用于拖拽的标题栏区域 - 排除关闭按钮
+  // 用于拖拽的标题栏区域 - 排除关闭按钮和置顶按钮
   function handleDragBarMousedown(e: MouseEvent) {
-    const target = e.target as HTMLElement;
-    if (target.closest(".close-btn-topbar")) {
+    // 如果悬浮窗已锁定，禁止拖拽
+    if (isFloatingWindowLocked) {
+      console.log("[拖拽] 悬浮窗已锁定，禁止拖拽");
       return;
     }
-    getCurrentWindow().startDragging();
-  }
 
-  // 用于拖拽的标题栏区域
-  function handleTitlebarMousedown() {
+    const target = e.target as HTMLElement;
+    if (
+      target.closest(".close-btn-topbar") ||
+      target.closest(".pin-btn-topbar")
+    ) {
+      return; // 如果点击的是关闭按钮或置顶按钮，不拖拽
+    }
     getCurrentWindow().startDragging();
   }
 </script>
@@ -817,25 +1243,44 @@
 <div
   class="player"
   class:hovered={isHovered}
+  class:locked={isFloatingWindowLocked}
+  class:pixelated={enablePixelArt}
   role="region"
   aria-label="音乐播放器"
   style="--bg: {bgColor}; --bg-gradient: {bgGradient};"
 >
   <div class="bg-solid"></div>
 
-  <!-- 可拖拽的顶部栏 - 鼠标悬停时滑下 -->
-  <div class="drag-bar" onmousedown={handleDragBarMousedown}>
-    <div class="drag-handle">
-      <div class="drag-dots">
-        <div class="drag-dot"></div>
-        <div class="drag-dot"></div>
-        <div class="drag-dot"></div>
+  <!-- 可拖拽的顶部栏 - 鼠标悬停时滑下（锁定时固定显示） -->
+  {#if !isFloatingWindowLocked || isFloatingWindowLocked}
+    <div
+      class="drag-bar"
+      class:locked={isFloatingWindowLocked}
+      onmousedown={handleDragBarMousedown}
+      role="button"
+      aria-label="拖动窗口"
+      tabindex="0"
+    >
+      <button
+        class="pin-btn-topbar"
+        onclick={toggleAlwaysOnTop}
+        aria-label={isAlwaysOnTop ? "取消置顶" : "置顶"}
+        class:pinned={isAlwaysOnTop}
+      >
+        <Pin size={16} strokeWidth={2} />
+      </button>
+      <div class="drag-handle">
+        <div class="drag-dots">
+          <div class="drag-dot"></div>
+          <div class="drag-dot"></div>
+          <div class="drag-dot"></div>
+        </div>
       </div>
+      <button class="close-btn-topbar" onclick={closeWindow} aria-label="关闭">
+        <X size={16} strokeWidth={2} />
+      </button>
     </div>
-    <button class="close-btn-topbar" onclick={closeWindow} aria-label="关闭">
-      <X size={16} strokeWidth={2} />
-    </button>
-  </div>
+  {/if}
 
   <div class="album-stage">
     {#if displayCover}
@@ -870,22 +1315,18 @@
         {/if}
         <!-- 旧图（如果有） -->
         {#if previousCover}
-          <img
-            src={previousCover}
-            alt="专辑封面"
+          <canvas
             class="album-art album-art-old"
             class:slide-out={slideDirection}
             draggable="false"
-          />
+          ></canvas>
         {/if}
         <!-- 新图 -->
-        <img
-          src={displayCover}
-          alt="专辑封面"
+        <canvas
           class="album-art album-art-new"
           class:slide-in={slideDirection}
           draggable="false"
-        />
+        ></canvas>
       </div>
     {:else}
       <div class="album-placeholder">
@@ -1004,7 +1445,7 @@
     bottom: 60px; /* 填充到歌曲信息层上方 */
     z-index: 1;
     background: var(--bg-gradient);
-    border-radius: 10px;
+    border-radius: 5px;
     transition:
       background 1.2s cubic-bezier(0.4, 0, 0.2, 1),
       top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1014,6 +1455,11 @@
 
   .player.hovered .bg-solid {
     top: 25px; /* 顶部栏出现时，填充色向下移动 */
+  }
+
+  /* 锁定时，即使 hovered 也不下滑 */
+  .player.locked .bg-solid {
+    top: 0 !important;
   }
 
   /* 可拖拽的顶部栏 - 鼠标悬停时滑下 */
@@ -1026,7 +1472,9 @@
     z-index: 300; /* 最高层级，确保不被遮罩层盖住 */
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between; /* 两端对齐 */
+    padding: 0 4px; /* 左右留一点空间 */
+    box-sizing: border-box;
     visibility: hidden; /* 完全隐藏 */
     transform: translateY(-100%);
     transition:
@@ -1041,11 +1489,19 @@
     transform: translateY(0);
   }
 
+  /* 锁定状态下固定显示顶部栏 */
+  .player.locked .drag-bar {
+    visibility: visible !important;
+    transform: translateY(0) !important;
+    opacity: 0.8;
+  }
+
   .drag-handle {
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 1px 12px 7px 12px; /* 上内边距更小，让点更靠上 */
+    flex: 1; /* 占据中间空间 */
   }
 
   .drag-dots {
@@ -1066,12 +1522,8 @@
     background: rgba(255, 255, 255, 0.8);
   }
 
-  /* 顶部栏关闭按钮 */
-  .close-btn-topbar {
-    position: absolute;
-    right: 0px;
-    top: 50%;
-    transform: translateY(-50%);
+  /* 顶部栏置顶按钮 */
+  .pin-btn-topbar {
     background: none;
     border: none;
     outline: none;
@@ -1086,17 +1538,56 @@
       color 0.15s ease,
       transform 0.15s ease,
       background 0.15s ease;
-    z-index: 1000; /* 最高层级，确保可点击 */
+    flex-shrink: 0; /* 不被压缩 */
+  }
+
+  .pin-btn-topbar:hover {
+    color: #fff;
+    transform: scale(1.1);
+    background: transparent;
+  }
+
+  .pin-btn-topbar:active {
+    transform: scale(0.9);
+    background: transparent;
+  }
+
+  .pin-btn-topbar.pinned {
+    color: #fff;
+    transform: rotate(45deg);
+  }
+
+  .pin-btn-topbar.pinned:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  /* 顶部栏关闭按钮 */
+  .close-btn-topbar {
+    background: none;
+    border: none;
+    outline: none;
+    padding: 6px;
+    cursor: pointer;
+    color: #dfdfdf;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition:
+      color 0.15s ease,
+      transform 0.15s ease,
+      background 0.15s ease;
+    flex-shrink: 0; /* 不被压缩 */
   }
 
   .close-btn-topbar:hover {
     color: #fff;
-    transform: translateY(-50%) scale(1.1);
+    transform: scale(1.1);
     background: transparent;
   }
 
   .close-btn-topbar:active {
-    transform: translateY(-50%) scale(0.9);
+    transform: scale(0.9);
     background: transparent;
   }
 
@@ -1126,7 +1617,7 @@
     box-shadow:
       0 8px 32px rgba(0, 0, 0, 0.5),
       0 2px 12px rgba(0, 0, 0, 0.3);
-    border-radius: 5px;
+    border-radius: 10px;
     overflow: hidden;
     min-width: 50px;
     min-height: 50px;
@@ -1143,43 +1634,7 @@
     height: 100%;
     object-fit: cover;
     z-index: 10;
-    border-radius: 5px;
-  }
-
-  .album-wrapper.flipping {
-    animation: pulse-glow 0.6s ease-out;
-  }
-
-  /* 3D 翻转容器 */
-  .flipper {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    transform-style: preserve-3d;
-  }
-
-  /* 翻转面 */
-  .flip-face {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    overflow: hidden;
-    border-radius: 5px;
-  }
-
-  /* 前面（旧封面） */
-  .flip-face-front {
-    transform: rotateY(0deg);
-    animation: flip-out-front 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  }
-
-  /* 后面（新封面） */
-  .flip-face-back {
-    transform: rotateY(180deg);
-    animation: flip-in-back 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    border-radius: 10px;
   }
 
   .album-art {
@@ -1192,6 +1647,69 @@
     display: block;
     border-radius: 5px;
     pointer-events: none; /* 让鼠标事件穿透，不阻挡按钮点击 */
+    /* 优化的像素化效果 */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+    -ms-interpolation-mode: nearest-neighbor;
+  }
+
+  /* 像素字体定义 */
+  @font-face {
+    font-family: "Fusion Pixel Latin";
+    src: url("/fonts/fusion-pixel-12px-monospaced-latin.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Fusion Pixel Japanese";
+    src: url("/fonts/fusion-pixel-12px-monospaced-ja.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Fusion Pixel Korean";
+    src: url("/fonts/fusion-pixel-12px-monospaced-ko.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Fusion Pixel Simplified Chinese";
+    src: url("/fonts/fusion-pixel-12px-monospaced-zh_hans.ttf")
+      format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  @font-face {
+    font-family: "Fusion Pixel Traditional Chinese";
+    src: url("/fonts/fusion-pixel-12px-monospaced-zh_hant.ttf")
+      format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  /* 通用像素字体栈 */
+  :global(.pixel-font) {
+    font-family: "Fusion Pixel Simplified Chinese",
+      "Fusion Pixel Traditional Chinese", "Fusion Pixel Japanese",
+      "Fusion Pixel Korean", "Fusion Pixel Latin", "Courier New",
+      "Lucida Console", Monaco, monospace;
+    font-weight: bold;
+    letter-spacing: 0;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: grayscale;
+    font-smooth: never;
+    text-rendering: optimizeSpeed;
   }
 
   /* 旧图在上层，新图在下层 */
@@ -1255,6 +1773,7 @@
       BlinkMacSystemFont,
       sans-serif;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
   }
 
   .track-artist {
@@ -1267,6 +1786,68 @@
     overflow: hidden;
     text-overflow: ellipsis;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+  }
+
+  .player.pixelated .track-title,
+  .player.pixelated .track-artist {
+    font-family: "Fusion Pixel Simplified Chinese",
+      "Fusion Pixel Traditional Chinese", "Fusion Pixel Japanese",
+      "Fusion Pixel Korean", "Fusion Pixel Latin", "Courier New",
+      "Lucida Console", Monaco, monospace;
+    font-weight: bold;
+    letter-spacing: 0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: grayscale;
+    font-smooth: never;
+    text-rendering: optimizeSpeed;
+    /* 优化GPU加速 */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+
+  /* 像素化圆角效果 */
+  .player.pixelated {
+    border-radius: 0 !important; /* 移除圆角 */
+  }
+
+  .player.pixelated .bg-solid {
+    border-radius: 0 !important;
+  }
+
+  .player.pixelated .album-art {
+    border-radius: 0 !important;
+  }
+
+  .player.pixelated .control-mask {
+    border-radius: 0 !important;
+  }
+
+  .player.pixelated .control-btn {
+    border-radius: 0 !important;
+  }
+
+  .player.pixelated .close-btn-topbar,
+  .player.pixelated .pin-btn-topbar {
+    border-radius: 0 !important;
+  }
+
+  .player.pixelated .top-bar {
+    border-radius: 0 !important;
+  }
+
+  .player.pixelated .album-placeholder {
+    border-radius: 0 !important;
+  }
+
+  .player.pixelated .progress-bar {
+    border-radius: 0 !important;
+  }
+
+  .player.pixelated .progress-fill {
+    border-radius: 0 !important;
   }
 
   /* ==================== 进度条 ==================== */
@@ -1428,30 +2009,6 @@
     background: rgba(255, 255, 255, 0.1);
   }
 
-  .close-btn-bar {
-    background: none;
-    border: none;
-    padding: 6px;
-    cursor: pointer;
-    color: rgba(255, 255, 255, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    transition:
-      color 0.15s ease,
-      transform 0.15s ease,
-      background 0.15s ease;
-    flex-shrink: 0;
-    margin-left: 12px;
-  }
-
-  .close-btn-bar:hover {
-    color: #fff;
-    transform: scale(1.1);
-    background: rgba(255, 255, 255, 0.15);
-  }
-
   .ctrl-btn:active {
     transform: scale(0.9);
   }
@@ -1480,33 +2037,6 @@
 
   .play-btn:active {
     transform: scale(0.95);
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    padding: 4px;
-    cursor: pointer;
-    color: rgba(255, 255, 255, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    transition:
-      color 0.15s ease,
-      transform 0.15s ease,
-      background 0.15s ease;
-    margin-left: 2px;
-  }
-
-  .close-btn:hover {
-    color: #fff;
-    transform: scale(1.12);
-    background: rgba(226, 33, 52, 0.85);
-  }
-
-  .close-btn:active {
-    transform: scale(0.9);
   }
 
   /* 专辑图片淡入动画 */

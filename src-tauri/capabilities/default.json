@@ -18,6 +18,8 @@
     "core:event:allow-listen",
     "core:event:allow-emit",
     "global-shortcut:allow-register",
-    "core:window:allow-set-always-on-top"
+    "core:window:allow-set-always-on-top",
+    "fs:allow-read-file",
+    "fs:allow-cache-read"
   ]
 }

@@ -26,6 +26,11 @@
     Stars,
     Waves,
     Trees,
+    Image,
+    Grid,
+    Database,
+    Folder,
+    Trash2,
   } from "lucide-svelte";
 
   interface AppSettings {
@@ -41,6 +46,9 @@
     log_level: string;
     player_weights: Record<string, number>;
     enable_mv_playback: boolean; // MV 播放功能
+    lock_floating_window: boolean; // 锁定悬浮窗（禁止移动）
+    enable_hd_cover: boolean; // 高清专辑封面获取
+    enable_pixel_art: boolean; // 像素化专辑封面
   }
 
   let settings = $state<AppSettings>({
@@ -63,6 +71,9 @@
       generic: 10,
     },
     enable_mv_playback: false, // 默认关闭 MV 播放
+    lock_floating_window: false, // 默认不锁定悬浮窗
+    enable_hd_cover: true, // 默认开启高清封面获取
+    enable_pixel_art: false, // 默认关闭像素化
   });
 
   const appWindow = getCurrentWindow();
@@ -98,6 +109,28 @@
           payload: { islandTheme: settings.island_theme },
         });
         console.log("[设置] 主题已切换并保存:", settings.island_theme);
+      }
+      if (patch.enable_hd_cover !== undefined) {
+        // 发送到悬浮窗应用高清封面设置
+        await invoke("emit_event", {
+          event: "hd-cover-changed",
+          payload: { enableHDCover: settings.enable_hd_cover },
+        });
+        console.log(
+          "[设置] 高清封面获取已切换并保存:",
+          settings.enable_hd_cover,
+        );
+      }
+      if (patch.enable_pixel_art !== undefined) {
+        // 发送到悬浮窗应用像素化封面设置
+        await invoke("emit_event", {
+          event: "pixel-art-changed",
+          payload: { enablePixelArt: settings.enable_pixel_art },
+        });
+        console.log(
+          "[设置] 像素化封面已切换并保存:",
+          settings.enable_pixel_art,
+        );
       }
     } catch (e) {
       console.error("保存失败", e);
@@ -135,6 +168,8 @@
 
   onMount(() => {
     document.addEventListener("click", handleGlobalClick);
+    loadCacheStats();
+    loadCacheDirectory();
     return () => document.removeEventListener("click", handleGlobalClick);
   });
 
@@ -147,69 +182,6 @@
       accent: "bg-gray-500",
       icon: "circle",
       color: "#6b7280",
-    },
-    {
-      id: "ios26",
-      name: "iOS 26",
-      desc: "液态玻璃与光影",
-      gradient: "from-blue-400 to-purple-600",
-      accent: "bg-blue-500",
-      icon: "sparkles",
-      color: "#3b82f6",
-    },
-    {
-      id: "dark",
-      name: "暗夜黑",
-      desc: "极致简约暗黑风格",
-      gradient: "from-gray-800 to-black",
-      accent: "bg-gray-700",
-      icon: "moon",
-      color: "#4b5563",
-    },
-    {
-      id: "neon",
-      name: "霓虹幻彩",
-      desc: "炫彩渐变效果",
-      gradient: "from-pink-500 via-purple-500 to-cyan-500",
-      accent: "bg-pink-500",
-      icon: "zap",
-      color: "#ec4899",
-    },
-    {
-      id: "aurora",
-      name: "极光之境",
-      desc: "黑色夜空中的绿色极光",
-      gradient: "from-slate-950 via-emerald-950 to-green-700",
-      accent: "bg-emerald-500",
-      icon: "stars",
-      color: "#34d399",
-    },
-    {
-      id: "ocean",
-      name: "深海秘境",
-      desc: "深邃海洋的神秘蓝调",
-      gradient: "from-blue-600 to-cyan-600",
-      accent: "bg-blue-600",
-      icon: "waves",
-      color: "#2563eb",
-    },
-    {
-      id: "sunset",
-      name: "落日余晖",
-      desc: "温暖浪漫的晚霞色彩",
-      gradient: "from-orange-400 via-pink-500 to-purple-600",
-      accent: "bg-orange-500",
-      icon: "sun",
-      color: "#f97316",
-    },
-    {
-      id: "forest",
-      name: "翡翠森林",
-      desc: "清新自然的森林绿意",
-      gradient: "from-emerald-500 to-teal-600",
-      accent: "bg-emerald-500",
-      icon: "tree",
-      color: "#10b981",
     },
   ];
 
@@ -230,6 +202,59 @@
     apple: "Apple Music",
     generic: "其他播放器",
   };
+
+  // 缓存管理函数
+  async function loadCacheStats() {
+    try {
+      const stats: any = await invoke("get_cache_stats");
+      const cacheSizeEl = document.getElementById("cache-size");
+      if (cacheSizeEl) {
+        cacheSizeEl.textContent = `${stats.total_size_mb.toFixed(2)} MB (${stats.total_files} 个文件)`;
+      }
+    } catch (e) {
+      console.error("加载缓存统计失败", e);
+    }
+  }
+
+  async function loadCacheDirectory() {
+    try {
+      const cachePath: string = await invoke("get_cache_directory");
+      const cachePathEl = document.getElementById("cache-path");
+      if (cachePathEl) {
+        cachePathEl.textContent = cachePath;
+        cachePathEl.title = cachePath; // 显示完整路径的 tooltip
+      }
+    } catch (e) {
+      console.error("加载缓存目录失败", e);
+    }
+  }
+
+  async function pickCacheDir() {
+    try {
+      const result: string | null = await invoke("pick_cache_directory");
+      if (result) {
+        await loadCacheDirectory();
+      }
+    } catch (e) {
+      console.error("选择缓存目录失败", e);
+      alert("选择缓存目录失败：" + e);
+    }
+  }
+
+  async function clearCache() {
+    if (!confirm("确定要清除所有缓存文件吗？此操作不可恢复。")) {
+      return;
+    }
+
+    try {
+      await invoke("clear_cache");
+      await loadCacheStats();
+      alert("缓存已清除！");
+    } catch (e) {
+      console.error("清除缓存失败", e);
+      alert("清除缓存失败：" + e);
+    }
+  }
 </script>
 
 <div class="settings-container">
@@ -395,104 +420,114 @@
             </div>
           </div>
 
-          <div class="settings-list">
-            <!-- 自动隐藏 -->
-            <div
-              class="setting-item"
-              onclick={() => saveSettings({ auto_hide: !settings.auto_hide })}
-            >
-              <div class="item-icon" class:active={settings.auto_hide}>
-                <MonitorOff size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">自动隐藏</h3>
-                  <span class="item-value"
-                    >{settings.auto_hide ? "开启" : "关闭"}</span
-                  >
+          <!-- 显示设置子组 -->
+          <div class="settings-subgroup">
+            <h3 class="subgroup-title">显示设置</h3>
+            <div class="settings-list">
+              <div class="settings-list">
+                <!-- 自动隐藏 -->
+                <div
+                  class="setting-item"
+                  onclick={() =>
+                    saveSettings({ auto_hide: !settings.auto_hide })}
+                >
+                  <div class="item-icon" class:active={settings.auto_hide}>
+                    <MonitorOff size={18} />
+                  </div>
+                  <div class="item-content">
+                    <div class="item-header">
+                      <h3 class="item-title">自动隐藏</h3>
+                      <span class="item-value"
+                        >{settings.auto_hide ? "开启" : "关闭"}</span
+                      >
+                    </div>
+                    <p class="item-desc">检测到全屏应用时自动隐藏灵动岛</p>
+                  </div>
+                  <div class="toggle" class:on={settings.auto_hide}>
+                    <div class="toggle-knob"></div>
+                  </div>
                 </div>
-                <p class="item-desc">检测到全屏应用时自动隐藏灵动岛</p>
-              </div>
-              <div class="toggle" class:on={settings.auto_hide}>
-                <div class="toggle-knob"></div>
-              </div>
-            </div>
 
-            <!-- 显示频谱 -->
-            <div
-              class="setting-item"
-              onclick={() =>
-                saveSettings({ show_spectrum: !settings.show_spectrum })}
-            >
-              <div class="item-icon" class:active={settings.show_spectrum}>
-                <Sliders size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">显示频谱</h3>
-                  <span class="item-value"
-                    >{settings.show_spectrum ? "开启" : "关闭"}</span
-                  >
+                <!-- 显示频谱 -->
+                <div
+                  class="setting-item"
+                  onclick={() =>
+                    saveSettings({ show_spectrum: !settings.show_spectrum })}
+                >
+                  <div class="item-icon" class:active={settings.show_spectrum}>
+                    <Sliders size={18} />
+                  </div>
+                  <div class="item-content">
+                    <div class="item-header">
+                      <h3 class="item-title">显示频谱</h3>
+                      <span class="item-value"
+                        >{settings.show_spectrum ? "开启" : "关闭"}</span
+                      >
+                    </div>
+                    <p class="item-desc">显示音乐频谱动画效果</p>
+                  </div>
+                  <div class="toggle" class:on={settings.show_spectrum}>
+                    <div class="toggle-knob"></div>
+                  </div>
                 </div>
-                <p class="item-desc">显示音乐频谱动画效果</p>
-              </div>
-              <div class="toggle" class:on={settings.show_spectrum}>
-                <div class="toggle-knob"></div>
-              </div>
-            </div>
 
-            <!-- 启用动画 -->
-            <div
-              class="setting-item"
-              onclick={() =>
-                saveSettings({
-                  enable_animations: !settings.enable_animations,
-                })}
-            >
-              <div class="item-icon" class:active={settings.enable_animations}>
-                <Zap size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">启用动画</h3>
-                  <span class="item-value"
-                    >{settings.enable_animations ? "开启" : "关闭"}</span
-                  >
-                </div>
-                <p class="item-desc">启用流畅的过渡动画效果</p>
-              </div>
-              <div class="toggle" class:on={settings.enable_animations}>
-                <div class="toggle-knob"></div>
-              </div>
-            </div>
-
-            <!-- 窗口透明度 -->
-            <div class="setting-item slider-item">
-              <div class="item-icon">
-                <Eye size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">窗口透明度</h3>
-                  <span class="item-value">{opacityValue}</span>
-                </div>
-                <p class="item-desc">调整灵动岛的背景透明度</p>
-                <div class="slider-container">
-                  <input
-                    type="range"
-                    min="0"
-                    max="255"
-                    value={opacityValue}
-                    oninput={(e) =>
-                      (opacityValue = parseInt(
-                        (e.target as HTMLInputElement).value,
-                      ))}
-                    class="slider"
-                  />
+                <!-- 启用动画 -->
+                <div
+                  class="setting-item"
+                  onclick={() =>
+                    saveSettings({
+                      enable_animations: !settings.enable_animations,
+                    })}
+                >
                   <div
-                    class="slider-fill"
-                    style="width: {(opacityValue / 255) * 100}%"
-                  ></div>
+                    class="item-icon"
+                    class:active={settings.enable_animations}
+                  >
+                    <Zap size={18} />
+                  </div>
+                  <div class="item-content">
+                    <div class="item-header">
+                      <h3 class="item-title">启用动画</h3>
+                      <span class="item-value"
+                        >{settings.enable_animations ? "开启" : "关闭"}</span
+                      >
+                    </div>
+                    <p class="item-desc">启用流畅的过渡动画效果</p>
+                  </div>
+                  <div class="toggle" class:on={settings.enable_animations}>
+                    <div class="toggle-knob"></div>
+                  </div>
+                </div>
+
+                <!-- 窗口透明度 -->
+                <div class="setting-item slider-item">
+                  <div class="item-icon">
+                    <Eye size={18} />
+                  </div>
+                  <div class="item-content">
+                    <div class="item-header">
+                      <h3 class="item-title">窗口透明度</h3>
+                      <span class="item-value">{opacityValue}</span>
+                    </div>
+                    <p class="item-desc">调整灵动岛的背景透明度</p>
+                    <div class="slider-container">
+                      <input
+                        type="range"
+                        min="0"
+                        max="255"
+                        value={opacityValue}
+                        oninput={(e) =>
+                          (opacityValue = parseInt(
+                            (e.target as HTMLInputElement).value,
+                          ))}
+                        class="slider"
+                      />
+                      <div
+                        class="slider-fill"
+                        style="width: {(opacityValue / 255) * 100}%"
+                      ></div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -602,7 +637,10 @@
                     event: "mv-playback-changed",
                     payload: { enable: newValue },
                   });
-                  console.log("[设置] MV 播放已切换:", newValue ? "开启" : "关闭");
+                  console.log(
+                    "[设置] MV 播放已切换:",
+                    newValue ? "开启" : "关闭",
+                  );
                 } catch (e) {
                   console.error("[设置] 发送事件失败:", e);
                 }
@@ -625,6 +663,167 @@
               <div class="toggle" class:on={settings.enable_mv_playback}>
                 <div class="toggle-knob"></div>
               </div>
+            </div>
+
+            <!-- 高清封面获取 -->
+            <div
+              class="setting-item"
+              onclick={async () => {
+                const newValue = !settings.enable_hd_cover;
+                await saveSettings({
+                  enable_hd_cover: newValue,
+                });
+                console.log(
+                  "[设置] 高清封面获取已切换:",
+                  newValue ? "开启" : "关闭",
+                );
+              }}
+            >
+              <div class="item-icon" class:active={settings.enable_hd_cover}>
+                <Image size={18} />
+              </div>
+              <div class="item-content">
+                <div class="item-header">
+                  <h3 class="item-title">高清封面获取</h3>
+                  <span class="item-value"
+                    >{settings.enable_hd_cover ? "开启" : "关闭"}</span
+                  >
+                </div>
+                <p class="item-desc">从网络获取高清专辑封面（需网络）</p>
+              </div>
+              <div class="toggle" class:on={settings.enable_hd_cover}>
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+
+            <!-- 像素化封面 -->
+            <div
+              class="setting-item"
+              onclick={async () => {
+                const newValue = !settings.enable_pixel_art;
+                await saveSettings({
+                  enable_pixel_art: newValue,
+                });
+                console.log(
+                  "[设置] 像素化封面已切换:",
+                  newValue ? "开启" : "关闭",
+                );
+              }}
+            >
+              <div class="item-icon" class:active={settings.enable_pixel_art}>
+                <Grid size={18} />
+              </div>
+              <div class="item-content">
+                <div class="item-header">
+                  <h3 class="item-title">像素化封面</h3>
+                  <span class="item-value"
+                    >{settings.enable_pixel_art ? "开启" : "关闭"}</span
+                  >
+                </div>
+                <p class="item-desc">将专辑封面像素化显示（可搭配高清获取）</p>
+              </div>
+              <div class="toggle" class:on={settings.enable_pixel_art}>
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+
+            <!-- 锁定悬浮窗 -->
+            <div
+              class="setting-item"
+              onclick={async () => {
+                const newValue = !settings.lock_floating_window;
+                await saveSettings({
+                  lock_floating_window: newValue,
+                });
+                // 刷新悬浮窗，让设置立即生效
+                try {
+                  await invoke("emit_event", {
+                    event: "lock-floating-window-changed",
+                    payload: { lock: newValue },
+                  });
+                  console.log(
+                    "[设置] 锁定悬浮窗已切换:",
+                    newValue ? "锁定" : "解锁",
+                  );
+                } catch (e) {
+                  console.error("[设置] 发送事件失败:", e);
+                }
+              }}
+            >
+              <div
+                class="item-icon"
+                class:active={settings.lock_floating_window}
+              >
+                <Zap size={18} />
+              </div>
+              <div class="item-content">
+                <div class="item-header">
+                  <h3 class="item-title">锁定悬浮窗</h3>
+                  <span class="item-value"
+                    >{settings.lock_floating_window ? "锁定" : "解锁"}</span
+                  >
+                </div>
+                <p class="item-desc">锁定后悬浮窗不能移动，顶部栏不显示</p>
+              </div>
+              <div class="toggle" class:on={settings.lock_floating_window}>
+                <div class="toggle-knob"></div>
+              </div>
+            </div>
+
+            <!-- 缓存管理 -->
+            <div class="setting-section-title" style="margin-top: 20px;">
+              <h2>缓存管理</h2>
+            </div>
+
+            <!-- 缓存大小 -->
+            <div class="setting-item">
+              <div class="item-icon">
+                <Database size={18} />
+              </div>
+              <div class="item-content">
+                <div class="item-header">
+                  <h3 class="item-title">缓存大小</h3>
+                  <span class="item-value" id="cache-size">加载中...</span>
+                </div>
+                <p class="item-desc">当前缓存的文件大小和数量</p>
+              </div>
+            </div>
+
+            <!-- 缓存目录 -->
+            <div class="setting-item">
+              <div class="item-icon">
+                <Folder size={18} />
+              </div>
+              <div class="item-content">
+                <div class="item-header">
+                  <h3 class="item-title">缓存位置</h3>
+                </div>
+                <p class="item-desc" id="cache-path" title="加载中...">
+                  加载中...
+                </p>
+              </div>
+              <button class="action-btn" onclick={pickCacheDir}>
+                <span>更改</span>
+              </button>
+            </div>
+
+            <!-- 清除缓存 -->
+            <div class="setting-item">
+              <div class="item-icon" style="color: #ff4444;">
+                <Trash2 size={18} />
+              </div>
+              <div class="item-content">
+                <div class="item-header">
+                  <h3 class="item-title">清除缓存</h3>
+                  <span class="item-value" style="color: #ff4444;"
+                    >删除所有缓存文件</span
+                  >
+                </div>
+                <p class="item-desc">释放磁盘空间</p>
+              </div>
+              <button class="action-btn danger" onclick={clearCache}>
+                <span>清除</span>
+              </button>
             </div>
 
             <!-- 调试信息 -->
@@ -704,22 +903,24 @@
             </div>
             <div>
               <h2 class="section-title">播放器优先级</h2>
-              <p class="section-desc">设置不同播放器的检测权重</p>
+              <p class="section-desc">
+                设置不同播放器的检测权重（权重越高，优先级越高）
+              </p>
             </div>
           </div>
 
           <div class="players-list">
-            {#each Object.entries(playerIcons) as [player, icon]}
+            {#each Object.entries(playerNames) as [player, name]}
               <div class="player-item">
-                <div class="player-icon">
-                  <img src={icon} alt={playerNames[player]} />
-                </div>
                 <div class="player-content">
                   <div class="player-header">
-                    <h3 class="player-name">{playerNames[player]}</h3>
-                    <span class="player-value"
-                      >{settings.player_weights?.[player] ?? 50}</span
-                    >
+                    <h3 class="player-name">{name}</h3>
+                    <div class="player-value-container">
+                      <span class="player-value"
+                        >{settings.player_weights?.[player] ?? 50}</span
+                      >
+                      <span class="player-percent">%</span>
+                    </div>
                   </div>
                   <div class="player-slider-container">
                     <input
@@ -741,6 +942,11 @@
                         100) *
                         100}%"
                     ></div>
+                    <div class="player-slider-labels">
+                      <span class="slider-label">0</span>
+                      <span class="slider-label">50</span>
+                      <span class="slider-label">100</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1205,50 +1411,79 @@
     color: var(--text-tertiary);
   }
 
+  /* ========== 设置子组 ========== */
+  .settings-subgroup {
+    margin-bottom: 24px;
+  }
+
+  .settings-subgroup:last-child {
+    margin-bottom: 0;
+  }
+
+  .subgroup-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0 0 12px 0;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
   /* ========== 设置列表 ========== */
   .settings-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 16px;
   }
 
   .setting-item {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 16px;
+    gap: 20px;
+    padding: 20px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 16px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   }
 
   .setting-item:hover {
     background: var(--surface-hover);
     border-color: var(--border-hover);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
   }
 
   .setting-item.slider-item {
     cursor: default;
   }
 
+  .setting-item.slider-item:hover {
+    transform: none;
+  }
+
   .item-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
     background: var(--surface);
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--text-tertiary);
     flex-shrink: 0;
-    transition: all 0.2s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   }
 
   .item-icon.active {
     background: var(--accent);
     color: white;
+    box-shadow: 0 4px 12px var(--accent-glow);
   }
 
   .item-content {
@@ -1256,7 +1491,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
   }
 
   .item-header {
@@ -1267,55 +1502,69 @@
   }
 
   .item-title {
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 15px;
+    font-weight: 600;
     color: var(--text-primary);
     margin: 0;
+    line-height: 1.3;
   }
 
   .item-value {
     font-size: 13px;
     color: var(--text-secondary);
     font-weight: 500;
+    background: var(--surface);
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
   }
 
   .item-desc {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-tertiary);
     margin: 0;
   }
 
   /* ========== 开关 ========== */
   .toggle {
-    width: 44px;
-    height: 24px;
-    border-radius: 12px;
-    background: var(--surface);
-    border: 1px solid var(--border);
     position: relative;
-    flex-shrink: 0;
+    width: 52px;
+    height: 28px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    flex-shrink: 0;
+  }
+
+  .toggle:hover {
+    border-color: var(--border-hover);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
   }
 
   .toggle.on {
     background: var(--accent);
     border-color: var(--accent);
+    box-shadow: 0 4px 12px var(--accent-glow);
   }
 
   .toggle-knob {
     position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
     background: white;
+    border-radius: 50%;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   }
 
   .toggle.on .toggle-knob {
-    transform: translateX(20px);
+    left: calc(100% - 22px);
+    transform: scale(1.05);
   }
 
   /* ========== 滑块 ========== */
@@ -1324,40 +1573,60 @@
     height: 36px;
     display: flex;
     align-items: center;
+    margin-top: 12px;
   }
 
   .slider {
     position: absolute;
     width: 100%;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--surface);
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent) 0%, var(--surface) 0%);
     outline: none;
     -webkit-appearance: none;
     cursor: pointer;
     z-index: 2;
+    transition: all 0.2s;
+  }
+
+  .slider:hover {
+    height: 10px;
   }
 
   .slider::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     background: var(--accent);
     cursor: pointer;
-    box-shadow: 0 2px 8px var(--accent-glow);
+    border: 2px solid white;
+    box-shadow: 0 4px 12px var(--accent-glow);
     transition: all 0.2s;
   }
 
   .slider::-webkit-slider-thumb:hover {
     transform: scale(1.1);
+  }
+
+  .slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid white;
     box-shadow: 0 4px 12px var(--accent-glow);
+  }
+
+  .slider::-moz-range-thumb:hover {
+    transform: scale(1.1);
   }
 
   .slider-fill {
     position: absolute;
-    height: 4px;
-    border-radius: 2px;
+    height: 8px;
+    border-radius: 4px;
     background: var(--accent);
     pointer-events: none;
     z-index: 1;
@@ -1457,8 +1726,7 @@
   .player-item {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 16px;
+    padding: 16px 20px;
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     border-radius: 14px;
@@ -1468,24 +1736,6 @@
   .player-item:hover {
     background: var(--surface-hover);
     border-color: var(--border-hover);
-  }
-
-  .player-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    overflow: hidden;
-    flex-shrink: 0;
-    background: var(--surface);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .player-icon img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
   }
 
   .player-content {
@@ -1502,61 +1752,123 @@
   }
 
   .player-name {
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 15px;
+    font-weight: 600;
     color: var(--text-primary);
     margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  .player-value-container {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
   }
 
   .player-value {
-    font-size: 13px;
-    color: var(--text-secondary);
-    font-weight: 600;
+    font-size: 16px;
+    color: var(--accent);
+    font-weight: 700;
     min-width: 32px;
     text-align: right;
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+  }
+
+  .player-percent {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-weight: 500;
   }
 
   .player-slider-container {
     position: relative;
-    height: 36px;
+    height: 48px;
     display: flex;
     align-items: center;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .player-slider {
     position: absolute;
     width: 100%;
-    height: 4px;
-    border-radius: 2px;
+    height: 6px;
+    border-radius: 3px;
     background: var(--surface);
     outline: none;
     -webkit-appearance: none;
     cursor: pointer;
     z-index: 2;
+    top: 0;
   }
 
   .player-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     background: var(--accent);
     cursor: pointer;
-    box-shadow: 0 2px 8px var(--accent-glow);
-    transition: all 0.2s;
+    box-shadow:
+      0 4px 12px var(--accent-glow),
+      0 0 0 2px rgba(255, 255, 255, 0.1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid white;
   }
 
   .player-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.15);
-    box-shadow: 0 4px 12px var(--accent-glow);
+    transform: scale(1.2);
+    box-shadow:
+      0 6px 16px var(--accent-glow),
+      0 0 0 2px rgba(255, 255, 255, 0.2);
   }
 
   .player-slider-fill {
     position: absolute;
-    height: 4px;
-    border-radius: 2px;
+    height: 6px;
+    border-radius: 3px;
     background: linear-gradient(90deg, var(--accent), var(--accent-hover));
     pointer-events: none;
     z-index: 1;
+    top: 0;
+    box-shadow: 0 0 8px var(--accent-glow);
+  }
+
+  .player-slider-labels {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 24px;
+  }
+
+  .slider-label {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+  }
+
+  .action-btn {
+    padding: 8px 16px;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+
+  .action-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+
+  .action-btn.danger {
+    background: #ff4444;
+  }
+
+  .action-btn.danger:hover {
+    background: #ff6666;
   }
 </style>
