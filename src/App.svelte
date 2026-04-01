@@ -49,7 +49,7 @@
   };
 
   // 生产环境禁用调试日志
-  const isDev = import.meta.env.DEV;
+  const isDev = import.meta.env?.DEV ?? false;
 
   // 优化的日志系统
   const logger = {
@@ -192,6 +192,29 @@
     return borders[theme] || borders.original;
   }
 
+  // 根据当前高度动态计算 border-radius，确保与尺寸动画同步
+  function getDynamicBorderRadius(currentHeight: number): string {
+    // 收起状态：height = 27px，border-radius = 22px
+    // 展开状态：height = 160px，border-radius = 42px
+    // 线性插值计算
+    const minHeight = 27;
+    const maxHeight = 160;
+    const minRadius = 22;
+    const maxRadius = 42;
+
+    // 限制在有效范围内
+    const clampedHeight = Math.max(
+      minHeight,
+      Math.min(maxHeight, currentHeight),
+    );
+
+    // 线性插值
+    const progress = (clampedHeight - minHeight) / (maxHeight - minHeight);
+    const radius = minRadius + (maxRadius - minRadius) * progress;
+
+    return `${radius}px`;
+  }
+
   function getThemeBoxShadow(
     theme: string,
     isHidden: boolean,
@@ -223,6 +246,251 @@
     show_debug_info: false,
     window_opacity: 255,
   });
+
+  // ========== 性能检测和自适应系统 ==========
+  type PerformanceLevel = "high" | "medium" | "low";
+  let performanceLevel = $state<PerformanceLevel>("high");
+  let currentFps = $state(60);
+  let fpsHistory: number[] = [];
+  let performanceCheckInterval: number | null = null;
+  let displayRefreshRate = $state(60); // 显示器刷新率
+  let highFrameRateMode = $state(false); // 高帧率模式
+
+  // 检测显示器刷新率
+  async function detectDisplayRefreshRate(): Promise<number> {
+    return new Promise((resolve) => {
+      const frames: number[] = [];
+      let lastTime = performance.now();
+      let frameCount = 0;
+
+      function measureFrame(currentTime: number) {
+        frameCount++;
+        frames.push(currentTime);
+
+        // 测量60帧来计算刷新率
+        if (frameCount < 60) {
+          requestAnimationFrame(measureFrame);
+        } else {
+          // 计算平均帧间隔
+          const intervals = [];
+          for (let i = 1; i < frames.length; i++) {
+            intervals.push(frames[i] - frames[i - 1]);
+          }
+
+          const avgInterval =
+            intervals.reduce((a, b) => a + b, 0) / intervals.length;
+          const refreshRate = Math.round(1000 / avgInterval);
+
+          console.log(`[性能] 显示器刷新率: ${refreshRate}Hz`);
+          resolve(refreshRate);
+        }
+      }
+
+      requestAnimationFrame(measureFrame);
+    });
+  }
+
+  // 性能检测：评估设备性能等级
+  function detectPerformanceLevel(): PerformanceLevel {
+    // 检测硬件并发数（CPU 核心数）
+    const cores = navigator.hardwareConcurrency || 4;
+
+    // 检测设备内存（如果可用）
+    const memory = (navigator as any).deviceMemory || 8;
+
+    // 检测是否为移动设备
+    const isMobile =
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent,
+      );
+
+    // 检测是否支持硬件加速
+    const hasHardwareAcceleration = checkHardwareAcceleration();
+
+    // 综合评估性能等级
+    let score = 0;
+
+    // CPU 核心数评分
+    if (cores >= 8) score += 3;
+    else if (cores >= 4) score += 2;
+    else score += 1;
+
+    // 内存评分
+    if (memory >= 8) score += 3;
+    else if (memory >= 4) score += 2;
+    else score += 1;
+
+    // 硬件加速评分
+    if (hasHardwareAcceleration) score += 2;
+    else score += 0;
+
+    // 移动设备降级
+    if (isMobile) score -= 2;
+
+    // 根据总分确定性能等级
+    if (score >= 7) return "high";
+    else if (score >= 4) return "medium";
+    else return "low";
+  }
+
+  // 检测硬件加速是否可用
+  function checkHardwareAcceleration(): boolean {
+    try {
+      const canvas = document.createElement("canvas");
+      const gl =
+        canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+      if (gl && gl instanceof WebGLRenderingContext) {
+        const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+        if (debugInfo) {
+          const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+          // 如果是软件渲染器，则没有硬件加速
+          return (
+            !renderer.toLowerCase().includes("swiftshader") &&
+            !renderer.toLowerCase().includes("llvmpipe")
+          );
+        }
+      }
+      return true; // 默认假设有硬件加速
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // 根据性能等级和刷新率获取优化的 Spring 参数
+  function getOptimizedSpringParams(
+    level: PerformanceLevel,
+    refreshRate: number = 60,
+  ) {
+    // 高帧率模式下的基础参数调整
+    const frameMultiplier = refreshRate >= 120 ? 1.2 : 1.0;
+
+    switch (level) {
+      case "high":
+        // 高性能：流畅自然的动画
+        if (refreshRate >= 120) {
+          // 120Hz+ 显示器：更细腻的动画
+          return {
+            stiffness: 0.25 * frameMultiplier,
+            damping: 0.5,
+            precision: 0.005, // 更高精度
+          };
+        } else {
+          // 60Hz 显示器：标准优化
+          return {
+            stiffness: 0.3,
+            damping: 0.55,
+            precision: 0.01,
+          };
+        }
+      case "medium":
+        // 中等性能：平衡流畅度和性能
+        return {
+          stiffness: 0.4,
+          damping: 0.65,
+          precision: 0.05,
+        };
+      case "low":
+        // 低性能：快速响应，减少计算
+        return {
+          stiffness: 0.5,
+          damping: 0.75,
+          precision: 0.1,
+        };
+    }
+  }
+
+  // 实时帧率监控
+  function startFpsMonitoring() {
+    let lastTime = performance.now();
+    let frames = 0;
+
+    function measureFps() {
+      frames++;
+      const currentTime = performance.now();
+
+      if (currentTime - lastTime >= 1000) {
+        currentFps = Math.round((frames * 1000) / (currentTime - lastTime));
+
+        // 记录 FPS 历史
+        fpsHistory.push(currentFps);
+        if (fpsHistory.length > 10) {
+          fpsHistory.shift();
+        }
+
+        // 动态调整性能等级
+        adjustPerformanceBasedOnFps();
+
+        frames = 0;
+        lastTime = currentTime;
+      }
+
+      requestAnimationFrame(measureFps);
+    }
+
+    requestAnimationFrame(measureFps);
+  }
+
+  // 根据帧率动态调整性能等级
+  function adjustPerformanceBasedOnFps() {
+    if (fpsHistory.length < 5) return;
+
+    const avgFps = fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length;
+
+    // 如果平均帧率低于阈值，降低性能等级
+    if (avgFps < 30 && performanceLevel !== "low") {
+      console.log("[性能] 帧率过低，降低性能等级");
+      performanceLevel = "low";
+      updateSpringParams();
+    } else if (avgFps < 45 && avgFps >= 30 && performanceLevel === "high") {
+      console.log("[性能] 帧率中等，调整为中等性能");
+      performanceLevel = "medium";
+      updateSpringParams();
+    } else if (avgFps >= 55 && performanceLevel !== "high") {
+      console.log("[性能] 帧率良好，提升性能等级");
+      performanceLevel = "high";
+      updateSpringParams();
+    }
+  }
+
+  // 更新 Spring 参数（通过重新创建 Spring 实例）
+  function updateSpringParams() {
+    const params = getOptimizedSpringParams(
+      performanceLevel,
+      displayRefreshRate,
+    );
+
+    // 获取当前值
+    const currentWidth = $widthSpring;
+    const currentHeight = $heightSpring;
+    const currentOpacity = $contentOpacity;
+
+    // 重新创建 Spring 实例并设置新参数
+    widthSpring = spring(currentWidth, {
+      stiffness: params.stiffness,
+      damping: params.damping,
+      precision: params.precision,
+    });
+
+    heightSpring = spring(currentHeight, {
+      stiffness: params.stiffness,
+      damping: params.damping,
+      precision: params.precision,
+    });
+
+    contentOpacity = spring(currentOpacity, {
+      stiffness: params.stiffness * 1.2,
+      damping: params.damping * 1.2,
+      precision: params.precision,
+    });
+
+    // 更新高帧率模式状态
+    highFrameRateMode = displayRefreshRate >= 120;
+
+    console.log(
+      `[性能] 已更新 Spring 参数: ${performanceLevel}, 刷新率: ${displayRefreshRate}Hz, 高帧率模式: ${highFrameRateMode}`,
+      params,
+    );
+  }
 
   // 全屏检测和自动隐藏相关状态
   let isFullscreenApp = $state(false);
@@ -276,10 +544,25 @@
     durationMs > 0 ? (precisePosition() / durationMs) * 100 : $progressSpring,
   );
 
-  // ========== Spring 参数 ==========
-  const widthSpring = spring(160, { stiffness: 0.4, damping: 0.75 });
-  const heightSpring = spring(37, { stiffness: 0.4, damping: 0.75 });
-  const contentOpacity = spring(0, { stiffness: 0.3, damping: 0.8 });
+  // ========== 优化的Spring参数（极致流畅） ==========
+  // ========== Spring 动画实例（可动态调整参数） ==========
+  let widthSpring = spring(117, {
+    // 缩小默认宽度
+    stiffness: 0.3, // 降低刚度，更加柔和流畅
+    damping: 0.55, // 优化阻尼，快速稳定且自然
+    precision: 0.01, // 提高精度，确保动画完整性
+  });
+  let heightSpring = spring(27, {
+    // 缩小默认高度
+    stiffness: 0.3,
+    damping: 0.55,
+    precision: 0.01,
+  });
+  let contentOpacity = spring(0, {
+    stiffness: 0.35, // 优化透明度动画响应性
+    damping: 0.65, // 快速稳定
+    precision: 0.01, // 高精度透明度
+  });
 
   const win = getCurrentWindow();
 
@@ -325,7 +608,7 @@
         win.setPosition(new PhysicalPosition(centerX, targetY)),
       ]);
     } catch (err) {
-      error("窗口同步失败:", err);
+      logger.error("窗口同步失败:", err);
     } finally {
       isSyncing = false;
       if (hasPendingSync) {
@@ -337,13 +620,18 @@
   let lastW = 0;
   let lastH = 0;
 
-  // ===== 自动收起管理（响应动画开关） =====
+  // ===== 优化的自动收起管理（内存优化） =====
   function startAutoClose() {
     stopAutoClose();
     if (expanded && !hovering) {
       const delay = appSettings.enable_animations ? 5000 : 3000;
+      logger.log(`开始自动收起计时器: ${delay}ms`);
+      // 使用弱引用避免内存泄漏
       autoCloseTimer = setTimeout(() => {
+        logger.log("自动收起计时器触发");
         expanded = false;
+        // 清理计时器引用
+        autoCloseTimer = null;
       }, delay);
     }
   }
@@ -351,7 +639,7 @@
   function stopAutoClose() {
     if (autoCloseTimer) {
       clearTimeout(autoCloseTimer);
-      autoCloseTimer = null;
+      autoCloseTimer = null; // 立即释放引用
     }
   }
 
@@ -371,6 +659,7 @@
 
   function handleMouseLeave() {
     hovering = false;
+    logger.log("鼠标离开，开始自动收起计时器");
     if (expanded) {
       startAutoClose();
     }
@@ -388,7 +677,7 @@
         isFloatingWindowOpen = true;
       }
     } catch (error) {
-      error("切换悬浮窗失败:", error);
+      logger.error("切换悬浮窗失败:", error);
     }
   }
 
@@ -449,28 +738,41 @@
     }
   });
 
-  // ===== 展开/收起动画（响应 reduce_animations + enable_animations） =====
+  // ===== 优化的展开/收起动画（修复时序和同步） =====
   $effect(() => {
     const isExp = expanded;
     const isHov = hovering;
     const reduced = appSettings.reduce_animations;
     const animEnabled = appSettings.enable_animations;
 
-    if (isExp) {
-      widthSpring.set(360);
-      heightSpring.set(180);
-      if (!animEnabled) {
-        contentOpacity.set(1);
-      } else if (reduced) {
-        contentOpacity.set(1);
-      } else {
-        setTimeout(() => contentOpacity.set(1), 50);
-      }
-    } else {
-      widthSpring.set(isHov ? 152 : 140);
-      heightSpring.set(isHov ? 35 : 32);
-      contentOpacity.set(0);
-    }
+    // 使用双帧延迟确保动画同步
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (isExp) {
+          // 展开动画：先设置尺寸，再显示内容
+          widthSpring.set(300); // 缩小展开宽度
+          heightSpring.set(160); // 调整展开高度，确保所有内容可见
+
+          if (!animEnabled) {
+            contentOpacity.set(1);
+          } else if (reduced) {
+            contentOpacity.set(1);
+          } else {
+            // 优化延迟：与尺寸动画完美同步
+            setTimeout(() => contentOpacity.set(1), 80);
+          }
+        } else {
+          // 收起动画：先隐藏内容，再缩小尺寸
+          contentOpacity.set(0);
+
+          // 延迟尺寸变化，避免视觉冲突
+          setTimeout(() => {
+            widthSpring.set(isHov ? 127 : 117); // 缩小收起宽度
+            heightSpring.set(isHov ? 29 : 27); // 缩小收起高度
+          }, 60);
+        }
+      });
+    });
   });
 
   // --- 实时监听 Spring 动画值并同步窗口 ---
@@ -478,7 +780,13 @@
     const currentW = $widthSpring;
     const currentH = $heightSpring;
 
-    if (Math.abs(currentW - lastW) > 0.8 || Math.abs(currentH - lastH) > 0.8) {
+    // 根据刷新率调整同步阈值
+    const syncThreshold = highFrameRateMode ? 0.5 : 0.8;
+
+    if (
+      Math.abs(currentW - lastW) > syncThreshold ||
+      Math.abs(currentH - lastH) > syncThreshold
+    ) {
       pendingW = currentW;
       pendingH = currentH;
       hasPendingSync = true;
@@ -820,6 +1128,34 @@
         console.error("[设置] 读取失败:", error);
       }
 
+      // ===== 初始化性能检测系统 =====
+      try {
+        // 检测显示器刷新率
+        displayRefreshRate = await detectDisplayRefreshRate();
+        console.log(`[性能] 显示器刷新率: ${displayRefreshRate}Hz`);
+
+        // 检测设备性能等级
+        performanceLevel = detectPerformanceLevel();
+        console.log(`[性能] 设备性能等级: ${performanceLevel}`);
+
+        // 根据性能等级和刷新率初始化 Spring 参数
+        updateSpringParams();
+
+        // 启动帧率监控
+        startFpsMonitoring();
+        console.log("[性能] 帧率监控已启动");
+
+        // 显示高帧率模式状态
+        if (highFrameRateMode) {
+          console.log(`[性能] 🚀 高帧率模式已启用 (${displayRefreshRate}Hz)`);
+        }
+      } catch (error) {
+        console.error("[性能] 初始化失败:", error);
+        // 使用默认高性能设置
+        performanceLevel = "high";
+        displayRefreshRate = 60;
+      }
+
       // ===== 监听设置变更事件 =====
       const unlistenSettings = await listen(
         "settings-updated",
@@ -1095,20 +1431,16 @@
       -webkit-backdrop-filter: {getThemeBackdropFilter(currentTheme)};
       border: {getThemeBorder(currentTheme)};
       box-shadow: {getThemeBoxShadow(currentTheme, isHidden, expanded)};
-      border-radius: {expanded ? '42px' : '22px'};
+      border-radius: {getDynamicBorderRadius($heightSpring)};
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      transform: scale({isPressed ? 0.96 : 1});
+      transform: scale({isPressed ? 0.96 : 1}) translateZ(0);
+      will-change: transform; /* 优化：只声明必要的属性 */
       transition:
-        border-radius 0.6s cubic-bezier(0.25, 0.1, 0.25, 1),
-        transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-        background 0.4s cubic-bezier(0.25, 0.1, 0.25, 1),
-        backdrop-filter 0.4s cubic-bezier(0.25, 0.1, 0.25, 1),
-        border 0.4s cubic-bezier(0.25, 0.1, 0.25, 1),
-        box-shadow 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
-        opacity 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
-        filter 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+        transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+        /* 移除 border-radius 过渡，使用 Spring 动画同步 */
     "
     onmouseenter={handleMouseEnter}
     onmouseleave={handleMouseLeave}
@@ -1127,7 +1459,16 @@
     <!-- 调试信息覆盖层 -->
     {#if appSettings.show_debug_info}
       <div class="debug-overlay">
-        <span>FPS: {fps}</span>
+        <span>FPS: {currentFps}</span>
+        <span>刷新率: {displayRefreshRate}Hz</span>
+        <span>高帧率: {highFrameRateMode ? "✓" : "✗"}</span>
+        <span
+          >性能: {performanceLevel === "high"
+            ? "高性能"
+            : performanceLevel === "medium"
+              ? "中等"
+              : "低性能"}</span
+        >
         <span>Theme: {currentTheme}</span>
         <span>Src: {currentSource}</span>
         <span>Pos: {currentTimeMs}ms</span>
@@ -1212,11 +1553,11 @@
         style="opacity: {$contentOpacity};"
       >
         <!-- 顶部区域：封面 + 标题 + 显示器按钮 -->
-        <div class="flex items-center" style="gap: 16px; margin-bottom: 20px;">
+        <div class="flex items-center" style="gap: 12px; margin-bottom: 12px;">
           {#if artworkUrl}
             {#key flipKey}
               <div
-                class="w-[60px] h-[60px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
+                class="w-[50px] h-[50px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
                 data-stop-toggle
               >
                 <img
@@ -1254,7 +1595,7 @@
           <!-- 显示器选择按钮 -->
           <div class="relative">
             <button
-              class="w-10 h-10 flex items-center justify-center rounded-2xl bg-white/10 hover:bg-white/20 relative z-50 media-button transition-all duration-300 hover:scale-110"
+              class="w-8 h-8 flex items-center justify-center rounded-2xl bg-white/10 hover:bg-white/20 relative z-50 media-button transition-all duration-300 hover:scale-110"
               style="transform: translateZ(0); backface-visibility: hidden;"
               data-stop-toggle
               onclick={(e) => {
@@ -1421,12 +1762,13 @@
         <!-- 中部区域：播放控制按钮 -->
         <div
           class="flex-1 flex items-center justify-between"
-          style="margin-bottom: 24px;"
+          style="margin-bottom: 10px;" /* 缩小底部间距 */
         >
           <Heart
-            size={20}
+            size={18}
             class="text-white/40 hover:text-red-500 transition-all duration-300 hover:scale-110 relative z-50 cursor-pointer media-button"
-            style="transform: translateZ(0); backface-visibility: hidden;"
+            style="transform: translateZ(0); backface-visibility: hidden; margin-left: 8px;"
+            /* 添加左边距 */
             data-stop-toggle
             onclick={(e) => {
               e.stopPropagation();
@@ -1437,17 +1779,17 @@
           <div
             class="flex items-center justify-center"
             style="
-                width: 180px;
-                gap: 40px;
-                will-change: auto;
-                transform: translate3d(0, 0, 0);
-                backface-visibility: hidden;
-                perspective: 1000px;
-                flex-shrink: 0;
-              "
+              width: 130px;  /* 缩小宽度适应新按钮尺寸 */
+              gap: 20px;    /* 缩小按钮间距 */
+              will-change: auto;
+              transform: translate3d(0, 0, 0);
+              backface-visibility: hidden;
+              perspective: 1000px;
+              flex-shrink: 0;
+            "
           >
             <SkipBack
-              size={26}
+              size={22}
               fill="currentColor"
               class="text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button"
               data-stop-toggle
@@ -1455,7 +1797,7 @@
             />
             {#if isPlaying}
               <Pause
-                size={40}
+                size={32}
                 fill="currentColor"
                 class="text-white hover:scale-110 active:scale-95 transition-all duration-300 relative z-50 cursor-pointer media-button"
                 data-stop-toggle
@@ -1463,7 +1805,7 @@
               />
             {:else}
               <Play
-                size={40}
+                size={32}
                 fill="currentColor"
                 class="text-white hover:scale-110 active:scale-95 transition-all duration-300 relative z-50 cursor-pointer media-button"
                 data-stop-toggle
@@ -1471,7 +1813,7 @@
               />
             {/if}
             <SkipForward
-              size={26}
+              size={22}
               fill="currentColor"
               class="text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button"
               data-stop-toggle
@@ -1480,8 +1822,9 @@
           </div>
 
           <button
-            class="w-8 h-8 flex items-center justify-center rounded-xl border border-white/10 text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button hover:border-white/20"
-            style="transform: translateZ(0); backface-visibility: hidden;"
+            class="w-7 h-7 flex items-center justify-center rounded-xl border border-white/10 text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button hover:border-white/20"
+            style="transform: translateZ(0); backface-visibility: hidden; margin-right: 8px;"
+            /* 添加右边距 */
             data-stop-toggle
             aria-label={isFloatingWindowOpen
               ? "Close floating window"
@@ -1501,42 +1844,23 @@
           </button>
         </div>
 
-        <!-- 底部区域：进度条 -->
-        <div class="mt-auto" style="margin-bottom: 8px;">
-          {#if currentConfig.useProgressBar && durationMs > 0}
-            <div
-              class="relative w-full h-[4px] bg-white/10 rounded-full overflow-hidden"
-            >
-              <div
-                class="absolute left-0 top-0 h-full rounded-full transition-all duration-300 ease-out"
-                style="width: {progressPercent}%; background-color: {currentColor};"
-              ></div>
-            </div>
-
-            <div
-              class="flex justify-between text-[11px] font-semibold mt-3 tracking-tight"
-            >
-              <span class="text-white/30">{formatTime(currentTimeMs)}</span>
-              <span class="text-white/30">{formatTime(durationMs)}</span>
-            </div>
-          {:else}
-            <div class="flex flex-col items-center gap-2">
-              <div
-                class="breath-line w-full h-[2px] rounded-full"
-                style="--accent-color: {currentColor}"
-              ></div>
-
-              <div
-                class="flex items-center gap-2 opacity-30 text-[8px] tracking-[0.2em] uppercase"
-              >
-                {#if isPlaying}
-                  <span class="animate-pulse"
-                    >● Playing on {currentConfig.name}</span
-                  >
-                {:else}
-                  <span>Paused</span>
-                {/if}
-              </div>
+        <!-- 底部区域：频谱 -->
+        <div class="mt-auto" style="margin-bottom: 6px;">
+          <!-- 展开状态频谱显示 -->
+          {#if appSettings.show_spectrum}
+            <div class="flex gap-[3px] items-end justify-center h-[20px]">
+              {#each [0.6, 1.2, 0.9, 1.5, 0.7, 1.1, 0.8, 1.3, 0.5, 1.0] as h, i}
+                <div
+                  class="w-[3px] rounded-full transition-all duration-150"
+                  class:animate-island-wave={isPlaying}
+                  style="
+                    background-color: {accentColor};
+                    height: {h * 12}px;
+                    animation-delay: {i * 0.12}s;
+                    opacity: 0.8;
+                  "
+                ></div>
+              {/each}
             </div>
           {/if}
         </div>
@@ -1758,10 +2082,6 @@
     background-color: rgba(255, 255, 255, 0.15);
   }
 
-  button.hoverable:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-  }
-
   /* 显示器选择菜单动画 */
   .monitor-menu {
     animation: menu-slide-down 0.15s cubic-bezier(0.32, 0.72, 0, 1) forwards;
@@ -1778,6 +2098,63 @@
       opacity: 1;
       transform: translateY(0) scale(1);
     }
+  }
+
+  /* ========== 优化后的按钮布局 ========== */
+  .expanded-content .media-buttons {
+    gap: 6px; /* 缩小按钮间距 */
+    justify-content: space-between; /* 添加均匀分布 */
+    align-items: center; /* 垂直居中 */
+  }
+
+  .expanded-content .media-button {
+    width: 24px; /* 缩小按钮尺寸 */
+    height: 24px;
+    font-size: 11px;
+    flex-shrink: 0; /* 防止按钮被压缩 */
+  }
+
+  /* 播放控制按钮组特殊样式 */
+  .expanded-content .media-button-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    width: 130px;
+    flex-shrink: 0;
+  }
+
+  /* 左右两侧按钮特殊样式 */
+  .expanded-content .media-button:first-child {
+    margin-left: 8px; /* 左侧按钮左边距 */
+  }
+
+  .expanded-content .media-button:last-child {
+    margin-right: 8px; /* 右侧按钮右边距 */
+  }
+
+  /* ========== 优化后的内容布局 ========== */
+  .expanded-content {
+    padding: 6px 10px; /* 缩小内边距 */
+    gap: 4px; /* 缩小元素间距 */
+  }
+
+  .expanded-content .title {
+    font-size: 13px; /* 缩小标题字体 */
+    line-height: 1.2;
+  }
+
+  .expanded-content .artist {
+    font-size: 11px; /* 缩小艺术家字体 */
+    line-height: 1.1;
+  }
+
+  .expanded-content .progress-container {
+    margin-top: 4px; /* 缩小进度条间距 */
+  }
+
+  .expanded-content .progress-bar {
+    height: 3px; /* 缩小进度条高度 */
   }
 
   /* 水滴状自动显示动画 */
@@ -1851,11 +2228,12 @@
     flex-direction: column;
     padding: 20px 24px 36px 24px;
 
-    transform: translateY(30px) scale(0.92);
+    transform: translateY(30px) scale(0.92) translateZ(0);
+    will-change: transform, filter, opacity;
     transition:
-      transform 0.35s cubic-bezier(0.32, 0.72, 0, 1),
-      filter 0.35s cubic-bezier(0.32, 0.72, 0, 1),
-      opacity 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+      transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      filter 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      opacity 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
     filter: blur(8px);
     opacity: 0;
@@ -1865,7 +2243,7 @@
   }
 
   .expanded-content.is-visible {
-    transform: translateY(0) scale(1);
+    transform: translateY(0) scale(1) translateZ(0);
     filter: blur(0);
     opacity: 1;
     pointer-events: auto;
@@ -2003,7 +2381,7 @@
     padding: 0;
     width: 100vw;
     height: 100vh;
-    pointer-events: none;
+    pointer-events: auto; /* 修复：允许鼠标事件 */
     overflow: hidden;
     -webkit-app-region: no-drag;
     backdrop-filter: none;
@@ -2016,19 +2394,21 @@
     background: transparent !important;
   }
 
+  /* ========== 优化的GPU加速规则 ========== */
   .pointer-events-auto {
     -webkit-font-smoothing: antialiased;
     transform: translate3d(0, 0, 0) !important;
-    will-change: width, height, border-radius;
+    will-change: transform;
     mask-image: radial-gradient(white, black);
+    backface-visibility: hidden;
+    perspective: 1000px;
+    contain: layout style;
   }
 
-  /* 全局 GPU 加速规则 */
+  /* 优化的GPU加速按钮 */
   button,
   [data-stop-toggle],
-  .flex-1,
-  .expanded-content button,
-  .expanded-content [data-stop-toggle] {
+  .media-button {
     transform: translate3d(0, 0, 0) !important;
     backface-visibility: hidden !important;
     -webkit-font-smoothing: subpixel-antialiased;
@@ -2038,7 +2418,7 @@
   }
 
   button:active {
-    transform: scale(0.92) !important;
+    transform: scale(0.92) translateZ(0) !important;
     transition: transform 0.1s ease !important;
   }
 

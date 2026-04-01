@@ -106,166 +106,6 @@ struct CacheMetadata {
     content_type: String, // "mv" 或 "cover"
 }
 
-// 优化的缓存管理器
-struct CacheManager {
-    cache_dir: PathBuf,
-    metadata_file: PathBuf,
-    metadata: Vec<CacheMetadata>,
-    max_cache_size_mb: u64,
-    total_cache_size: u64, // 缓存总大小，避免重复计算
-}
-
-impl CacheManager {
-    fn new(app_handle: &AppHandle) -> Result<Self, String> {
-        let cache_dir = app_handle
-            .path()
-            .app_cache_dir()
-            .map_err(|e| format!("无法获取缓存目录：{}", e))?
-            .join("media_cache");
-        
-        // 创建缓存目录
-        fs::create_dir_all(&cache_dir)
-            .map_err(|e| format!("无法创建缓存目录：{}", e))?;
-        
-        let metadata_file = cache_dir.join("metadata.json");
-        
-        // 加载元数据并计算总大小
-        let (metadata, total_cache_size) = if metadata_file.exists() {
-            let content = fs::read_to_string(&metadata_file)
-                .map_err(|e| format!("无法读取元数据：{}", e))?;
-            let metadata: Vec<CacheMetadata> = serde_json::from_str(&content).unwrap_or_default();
-            let total_size = metadata.iter().map(|m| m.size).sum();
-            (metadata, total_size)
-        } else {
-            (Vec::new(), 0)
-        };
-        
-        Ok(Self {
-            cache_dir,
-            metadata_file,
-            metadata,
-            max_cache_size_mb: 500, // 默认最大 500MB
-            total_cache_size,
-        })
-    }
-    
-    // 保存元数据
-    fn save_metadata(&self) -> Result<(), String> {
-        let content = serde_json::to_string_pretty(&self.metadata)
-            .map_err(|e| format!("无法序列化元数据：{}", e))?;
-        fs::write(&self.metadata_file, content)
-            .map_err(|e| format!("无法写入元数据：{}", e))?;
-        Ok(())
-    }
-    
-    // 生成缓存键 - 使用更快的哈希算法
-    fn generate_key(title: &str, artist: &str, content_type: &str) -> String {
-        use std::hash::{Hash, Hasher};
-        use twox_hash::XxHash64;
-        
-        let mut hasher = XxHash64::default();
-        title.hash(&mut hasher);
-        artist.hash(&mut hasher);
-        content_type.hash(&mut hasher);
-        format!("{:x}", hasher.finish())
-    }
-    
-    // 获取缓存文件路径
-    fn get_cache_path(&self, key: &str, extension: &str) -> PathBuf {
-        self.cache_dir.join(format!("{}.{}", key, extension))
-    }
-    
-    // 检查缓存是否存在 - 使用 HashMap 优化查找
-    fn has_cache(&self, key: &str) -> bool {
-        self.metadata.iter().any(|m| m.key == key)
-    }
-    
-    // 获取缓存文件路径（如果存在）
-    fn get_cached_file(&self, key: &str) -> Option<String> {
-        self.metadata
-            .iter()
-            .find(|m| m.key == key)
-            .and_then(|m| {
-                if PathBuf::from(&m.file_path).exists() {
-                    Some(m.file_path.clone())
-                } else {
-                    None
-                }
-            })
-    }
-    
-    // 添加缓存 - 优化性能
-    fn add_cache(
-        &mut self,
-        key: String,
-        file_path: String,
-        size: u64,
-        content_type: String,
-    ) -> Result<(), String> {
-        // 检查是否需要清理缓存
-        self.cleanup_if_needed(size)?;
-        
-        let metadata = CacheMetadata {
-            key,
-            file_path,
-            created_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-            size,
-            content_type,
-        };
-        
-        self.metadata.push(metadata);
-        self.total_cache_size += size;
-        self.save_metadata()
-    }
-    
-    // 优化的缓存清理算法
-    fn cleanup_if_needed(&mut self, new_file_size: u64) -> Result<(), String> {
-        let max_size_bytes = self.max_cache_size_mb * 1024 * 1024;
-        
-        // 如果添加新文件后不会超过限制，直接返回
-        if self.total_cache_size + new_file_size <= max_size_bytes {
-            return Ok(());
-        }
-        
-        // 按创建时间排序，删除最旧的缓存
-        self.metadata.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-        
-        let mut removed_size = 0;
-        let target_size = max_size_bytes.saturating_sub(new_file_size);
-        
-        // 使用迭代器优化删除逻辑
-        let mut i = 0;
-        while i < self.metadata.len() && self.total_cache_size - removed_size > target_size {
-            let metadata = &self.metadata[i];
-            
-            // 尝试删除文件
-            if let Err(e) = fs::remove_file(&metadata.file_path) {
-                // 文件可能不存在，继续处理下一个
-                println!("删除缓存文件失败: {}", e);
-            }
-            
-            removed_size += metadata.size;
-            i += 1;
-        }
-        
-        // 批量删除元数据
-        if i > 0 {
-            self.metadata.drain(0..i);
-            self.total_cache_size -= removed_size;
-        }
-        
-        Ok(())
-    }
-    
-    // 获取缓存管理器（从 AppState）
-    fn from_app_handle(app_handle: &AppHandle) -> Result<Self, String> {
-        Self::new(app_handle)
-    }
-}
-
 struct AppState {
     settings: Mutex<AppSettings>,
     media_cache: Mutex<MediaCache>,
@@ -315,6 +155,25 @@ fn init_cache_system(app_handle: &AppHandle) -> Result<(), String> {
         *metadata_global = Some(metadata);
     }
     
+    Ok(())
+}
+
+// 切换悬浮窗显示/隐藏
+#[tauri::command]
+fn toggle_floating_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("floating_player") {
+        // 如果窗口存在，切换显示状态
+        let is_visible = window.is_visible().unwrap_or(false);
+        if is_visible {
+            let _ = window.hide();
+        } else {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    } else {
+        // 如果窗口不存在，创建并显示
+        let _ = open_floating_window(app);
+    }
     Ok(())
 }
 
@@ -1081,25 +940,6 @@ fn close_floating_window(app: tauri::AppHandle) -> Result<(), String> {
         let _ = window.close();
         // 发送事件通知前端更新状态
         let _ = app.emit("floating-window-closed", ());
-    }
-    Ok(())
-}
-
-// 切换悬浮窗显示/隐藏
-#[tauri::command]
-fn toggle_floating_window(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("floating_player") {
-        // 如果窗口存在，切换显示状态
-        let is_visible = window.is_visible().unwrap_or(false);
-        if is_visible {
-            let _ = window.hide();
-        } else {
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-    } else {
-        // 如果窗口不存在，创建并显示
-        let _ = open_floating_window(app);
     }
     Ok(())
 }
