@@ -1,5 +1,5 @@
 [package]
-name = "dynamic-island"
+name = "isle"
 version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
@@ -11,7 +11,7 @@ edition = "2021"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "dynamic_island_lib"
+name = "isle_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -25,6 +25,7 @@ tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 image = "0.25"
+color_quant = "1.1"
 twox-hash = "2"
 
 # Windows API 绑定 - 用于访问 Windows 原生功能
@@ -45,7 +46,7 @@ windows = { version = "0.52", features = [
 tokio = { version = "1", features = ["full"] }
 
 # HTTP 客户端 - 用于下载 MV 和封面图片
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "blocking"] }
 
 # Base64 编码解码 - 用于处理图片数据
 base64 = "0.21"

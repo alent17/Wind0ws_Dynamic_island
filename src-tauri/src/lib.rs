@@ -1,4 +1,6 @@
 use base64::{engine::general_purpose, Engine as _};
+use color_quant::NeuQuant;
+use image::{imageops::FilterType, DynamicImage, GenericImageView, Rgba, RgbaImage};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -51,6 +53,8 @@ pub struct AppSettings {
     pub enable_pixel_art: bool,
     // ===== 缓存目录设置 =====
     pub cache_directory: Option<String>,
+    // ===== 开机启动 =====
+    pub auto_start: bool,
 }
 
 impl Default for AppSettings {
@@ -86,6 +90,7 @@ impl Default for AppSettings {
             enable_hd_cover: true, // 默认开启高清封面获取
             enable_pixel_art: false, // 默认关闭像素化
             cache_directory: None, // 默认使用系统缓存目录
+            auto_start: false, // 默认关闭开机启动
         }
     }
 }
@@ -160,20 +165,8 @@ fn init_cache_system(app_handle: &AppHandle) -> Result<(), String> {
 
 // 切换悬浮窗显示/隐藏
 #[tauri::command]
-fn toggle_floating_window(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("floating_player") {
-        // 如果窗口存在，切换显示状态
-        let is_visible = window.is_visible().unwrap_or(false);
-        if is_visible {
-            let _ = window.hide();
-        } else {
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-    } else {
-        // 如果窗口不存在，创建并显示
-        let _ = open_floating_window(app);
-    }
+fn toggle_floating_window(_app: tauri::AppHandle) -> Result<(), String> {
+    // 此函数已废弃，使用前端直接控制
     Ok(())
 }
 
@@ -392,6 +385,78 @@ fn pick_cache_directory(app: AppHandle) -> Result<Option<String>, String> {
     }
 }
 
+// 设置开机启动
+#[tauri::command]
+fn set_auto_start(_app: AppHandle, enable: bool) -> Result<(), String> {
+    use std::process::Command;
+    
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("获取可执行文件路径失败：{}", e))?;
+    let exe_path_str = exe_path.to_string_lossy().to_string();
+    
+    if enable {
+        // 添加注册表项
+        let output = Command::new("reg")
+            .args(&[
+                "add",
+                "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+                "/v",
+                "Wind0wsDynamicIsland",
+                "/t",
+                "REG_SZ",
+                "/d",
+                &exe_path_str,
+                "/f",
+            ])
+            .output()
+            .map_err(|e| format!("执行 reg 命令失败：{}", e))?;
+        
+        if !output.status.success() {
+            return Err(format!("添加注册表项失败：{}", String::from_utf8_lossy(&output.stderr)));
+        }
+    } else {
+        // 删除注册表项
+        let output = Command::new("reg")
+            .args(&[
+                "delete",
+                "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+                "/v",
+                "Wind0wsDynamicIsland",
+                "/f",
+            ])
+            .output()
+            .map_err(|e| format!("执行 reg 命令失败：{}", e))?;
+        
+        if !output.status.success() {
+            // 删除失败可能是因为键不存在，这不算错误
+            eprintln!("删除注册表项失败：{}", String::from_utf8_lossy(&output.stderr));
+        }
+    }
+    
+    Ok(())
+}
+
+// 获取开机启动状态
+#[tauri::command]
+fn get_auto_start() -> Result<bool, String> {
+    use std::process::Command;
+    
+    // 查询注册表项
+    let output = Command::new("reg")
+        .args(&[
+            "query",
+            "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+            "/v",
+            "Wind0wsDynamicIsland",
+        ])
+        .output();
+    
+    match output {
+        Ok(out) => Ok(out.status.success()),
+        Err(_) => Ok(false),
+    }
+}
+
 // 读取配置文件
 fn read_settings_file(app: &AppHandle) -> Option<AppSettings> {
     let config_dir = app.path().app_data_dir().ok()?;
@@ -585,11 +650,14 @@ async fn get_media_info_internal(app: &AppHandle) -> Result<MediaState, String> 
             }
         }
 
-        let state = app.state::<AppState>();
-        if let Ok(mut cache) = state.media_cache.lock() {
-            cache.track_id = track_id;
-            cache.base64_img = thumbnail_base64.clone();
-        };
+        // 只在成功获取到封面时才更新缓存
+        if !thumbnail_base64.is_empty() {
+            let state = app.state::<AppState>();
+            if let Ok(mut cache) = state.media_cache.lock() {
+                cache.track_id = track_id;
+                cache.base64_img = thumbnail_base64.clone();
+            };
+        }
     }
 
     let playback_status = session
@@ -643,11 +711,7 @@ async fn get_media_info_internal(app: &AppHandle) -> Result<MediaState, String> 
     Ok(MediaState {
         title,
         artist,
-        album_art: if thumbnail_base64.is_empty() {
-            "https://picsum.photos/400/400?random=1".to_string()
-        } else {
-            thumbnail_base64
-        },
+        album_art: thumbnail_base64,
         is_playing,
         position_ms,
         duration_ms,
@@ -784,10 +848,11 @@ fn show_settings_window(app: AppHandle) -> Result<(), String> {
         "settings-window",
         tauri::WebviewUrl::App("/settings.html".into()),
     )
-    .title("Wind0ws Dynamic Island - 设置")
-    .inner_size(960.0, 680.0)
-    .min_inner_size(800.0, 600.0)
-    .resizable(true)
+    .title("Isle - 设置")
+    .inner_size(375.0, 812.0)
+    .min_inner_size(375.0, 812.0)
+    .max_inner_size(375.0, 812.0)
+    .resizable(false)
     .center()
     .decorations(false)
     .transparent(true)
@@ -810,6 +875,7 @@ fn get_settings(app: AppHandle) -> Result<AppSettings, String> {
 #[tauri::command]
 fn save_settings(app: AppHandle, settings: AppSettings) -> Result<(), String> {
     let always_on_top = settings.always_on_top;
+    let auto_start = settings.auto_start;
     let state = app.state::<AppState>();
     {
         let mut state_settings = state
@@ -825,6 +891,13 @@ fn save_settings(app: AppHandle, settings: AppSettings) -> Result<(), String> {
     // 应用置顶
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_always_on_top(always_on_top);
+    }
+
+    // 更新开机启动状态
+    if auto_start {
+        set_auto_start(app.clone(), true)?;
+    } else {
+        let _ = set_auto_start(app.clone(), false); // 忽略删除失败的错误
     }
 
     // ===== 关键：广播设置变更事件给所有窗口 =====
@@ -1054,6 +1127,494 @@ fn get_floating_window_position(app: AppHandle) -> Result<Option<(i32, i32, u32,
     }
 }
 
+// 打开指定的应用程序
+#[tauri::command]
+fn open_application(name: String) -> Result<(), String> {
+    use std::process::Command;
+    
+    // 优先使用协议处理器打开应用（更可靠）
+    let protocol = match name.as_str() {
+        "NeteaseCloudMusic" => "orpheus://",
+        "Spotify" => "spotify:",
+        "Bilibili" => "bilibili://",
+        "QQMusic" => "qqmusic://",
+        "AppleMusic" => "https://music.apple.com",
+        _ => "",
+    };
+    
+    if !protocol.is_empty() {
+        let output = Command::new("cmd")
+            .args(["/C", "start", "", protocol])
+            .output();
+        
+        if let Ok(out) = output {
+            if out.status.success() {
+                println!("[应用] 通过协议打开：{}", name);
+                return Ok(());
+            }
+        }
+    }
+    
+    // 如果协议处理失败，尝试常见的安装路径
+    let common_paths: Vec<&str> = match name.as_str() {
+        "Spotify" => vec![
+            r"%APPDATA%\Spotify\Spotify.exe",
+            r"%LOCALAPPDATA%\Spotify\Spotify.exe",
+        ],
+        "NeteaseCloudMusic" => vec![
+            r"%LOCALAPPDATA%\Netease\CloudMusic\cloudmusic.exe",
+            r"%PROGRAMFILES%\Netease\CloudMusic\cloudmusic.exe",
+            r"%PROGRAMFILES(X86)%\Netease\CloudMusic\cloudmusic.exe",
+        ],
+        "QQMusic" => vec![
+            r"%PROGRAMFILES%\Tencent\QQMusic\QQMusic.exe",
+            r"%PROGRAMFILES(X86)%\Tencent\QQMusic\QQMusic.exe",
+        ],
+        "Bilibili" => vec![
+            r"%LOCALAPPDATA%\Programs\bilibili\bilibili.exe",
+            r"%PROGRAMFILES%\Bilibili\bilibili.exe",
+        ],
+        "AppleMusic" => vec![
+            r"%LOCALAPPDATA%\Microsoft\WindowsApps\AppleMusic.exe",
+            r"%PROGRAMFILES%\WindowsApps\AppleMusic.exe",
+        ],
+        _ => vec![],
+    };
+    
+    for path_template in &common_paths {
+        let expanded = path_template.replace("%APPDATA%", &std::env::var("APPDATA").unwrap_or_default())
+            .replace("%LOCALAPPDATA%", &std::env::var("LOCALAPPDATA").unwrap_or_default())
+            .replace("%PROGRAMFILES%", &std::env::var("ProgramFiles").unwrap_or_default())
+            .replace("%PROGRAMFILES(X86)%", &std::env::var("ProgramFiles(x86)").unwrap_or_default());
+        
+        if std::path::Path::new(&expanded).exists() {
+            let output = Command::new("cmd")
+                .args(["/C", "start", "", &expanded])
+                .output();
+            
+            if let Ok(out) = output {
+                if out.status.success() {
+                    println!("[应用] 从路径打开：{}", expanded);
+                    return Ok(());
+                }
+            }
+        }
+    }
+    
+    // 最后尝试直接启动（适用于已加入PATH的应用）
+    let executable_name = match name.as_str() {
+        "NeteaseCloudMusic" => "cloudmusic.exe",
+        "Spotify" => "spotify.exe",
+        "Bilibili" => "bilibili.exe",
+        "QQMusic" => "QQMusic.exe",
+        "AppleMusic" => "AppleMusic.exe",
+        _ => &name,
+    };
+    
+    let output = Command::new("cmd")
+        .args(["/C", "start", "", executable_name])
+        .output();
+    
+    match output {
+        Ok(_) => {
+            println!("[应用] 已尝试打开：{}", executable_name);
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("[应用] 打开失败：{} - {}", executable_name, e);
+            Err(format!("无法打开应用：{}", e))
+        }
+    }
+}
+
+// ===== 高级像素化处理函数 =====
+/// 核心像素化处理函数 (使用 NeuQuant 调色板 + Floyd-Steinberg 抖动)
+fn pixelate_image_advanced(
+    img_data: &[u8],
+    pixel_size: u32,
+    num_colors: usize,
+) -> Result<Vec<u8>, String> {
+    // 从 PNG 数据加载图片
+    let img = image::load_from_memory(img_data)
+        .map_err(|e| format!("无法加载图片：{}", e))?;
+    
+    let (width, height) = img.dimensions();
+    
+    if width < pixel_size || height < pixel_size {
+        return Err("图片太小，无法像素化".to_string());
+    }
+    
+    // 1. 计算小图尺寸并进行平滑降采样
+    let target_width = width / pixel_size;
+    let target_height = height / pixel_size;
+    
+    if target_width == 0 || target_height == 0 {
+        return Err("图片太小，无法像素化".to_string());
+    }
+    
+    let downscaled = img.resize_exact(target_width, target_height, FilterType::Lanczos3);
+    let mut downscaled_rgba: RgbaImage = downscaled.into_rgba8();
+    
+    // 2. 提取像素供 NeuQuant 使用
+    let pixels: Vec<u8> = downscaled_rgba
+        .pixels()
+        .flat_map(|p| vec![p[0], p[1], p[2], p[3]])
+        .collect();
+    
+    // 3. 生成全局调色板
+    let nq = NeuQuant::new(10, num_colors, &pixels);
+    let palette = nq.color_map_rgb(); // 返回拍平的调色板数组 [R,G,B, R,G,B...]
+    
+    let (dw, dh) = downscaled_rgba.dimensions();
+    let dw_usize = dw as usize;
+    let dh_usize = dh as usize;
+    
+    // 创建误差缓冲区
+    let mut error_buffer = vec![vec![[0.0_f32; 3]; dw_usize]; dh_usize];
+    
+    // 4. 应用调色板并进行误差扩散
+    for y in 0..dh {
+        for x in 0..dw {
+            let x_usize = x as usize;
+            let y_usize = y as usize;
+            
+            let pixel = downscaled_rgba.get_pixel(x, y);
+            
+            let err_r = error_buffer[y_usize][x_usize][0];
+            let err_g = error_buffer[y_usize][x_usize][1];
+            let err_b = error_buffer[y_usize][x_usize][2];
+            
+            let r = (pixel[0] as f32 + err_r).clamp(0.0, 255.0);
+            let g = (pixel[1] as f32 + err_g).clamp(0.0, 255.0);
+            let b = (pixel[2] as f32 + err_b).clamp(0.0, 255.0);
+            
+            let color_idx = nq.index_of(&[r as u8, g as u8, b as u8, pixel[3]]);
+            
+            // 安全检查：确保索引不越界
+            let safe_idx = color_idx.min((palette.len() / 3).saturating_sub(1));
+            
+            // palette 现在是 RGB 格式，每个颜色占 3 个字节
+            let pr = palette[safe_idx * 3];
+            let pg = palette[safe_idx * 3 + 1];
+            let pb = palette[safe_idx * 3 + 2];
+            let pa = pixel[3]; // 保持原有透明度
+            
+            downscaled_rgba.put_pixel(x, y, Rgba([pr, pg, pb, pa]));
+            
+            let quant_error_r = r - pr as f32;
+            let quant_error_g = g - pg as f32;
+            let quant_error_b = b - pb as f32;
+            
+            let distribute_error = |eb: &mut Vec<Vec<[f32; 3]>>, dx: usize, dy: usize, ratio: f32| {
+                if dx < dw_usize && dy < dh_usize {
+                    eb[dy][dx][0] += quant_error_r * ratio;
+                    eb[dy][dx][1] += quant_error_g * ratio;
+                    eb[dy][dx][2] += quant_error_b * ratio;
+                }
+            };
+            
+            // 使用 saturating_add 防止溢出
+            let ux_next = x_usize.saturating_add(1);
+            let uy_next = y_usize.saturating_add(1);
+            
+            distribute_error(&mut error_buffer, ux_next, y_usize, 7.0 / 16.0);
+            if uy_next < dh_usize {
+                if x_usize > 0 {
+                    distribute_error(&mut error_buffer, x_usize - 1, uy_next, 3.0 / 16.0);
+                }
+                distribute_error(&mut error_buffer, x_usize, uy_next, 5.0 / 16.0);
+                distribute_error(&mut error_buffer, ux_next, uy_next, 1.0 / 16.0);
+            }
+        }
+    }
+    
+    // 5. 锐利升采样
+    let result = DynamicImage::ImageRgba8(downscaled_rgba)
+        .resize_exact(width, height, FilterType::Nearest);
+    
+    // 6. 转换为 PNG 格式
+    let mut output_data = Vec::new();
+    result
+        .write_to(&mut std::io::Cursor::new(&mut output_data), image::ImageFormat::Png)
+        .map_err(|e| format!("无法保存 PNG: {}", e))?;
+    
+    Ok(output_data)
+}
+
+// Tauri 命令：处理像素化图片
+#[tauri::command]
+async fn pixelate_cover(
+    image_path: String,
+    pixel_size: u32,
+    num_colors: usize,
+) -> Result<String, String> {
+    use std::time::Instant;
+    let start = Instant::now();
+    
+    // 处理不同的图片来源
+    let img_data = if image_path.starts_with("data:") {
+        // base64 数据
+        let parts: Vec<&str> = image_path.split(',').collect();
+        if parts.len() < 2 {
+            return Err("无效的 base64 图片".to_string());
+        }
+        let base64_data = parts[1];
+        base64::engine::general_purpose::STANDARD
+            .decode(base64_data)
+            .map_err(|e| format!("无法解码 base64: {}", e))?
+    } else if image_path.starts_with("http") {
+        // 网络图片，先下载到缓存
+        let client = reqwest::Client::new();
+        let response = client.get(&image_path).send().await
+            .map_err(|e| format!("无法下载图片：{}", e))?;
+        response.bytes().await
+            .map_err(|e| format!("无法读取图片数据：{}", e))?
+            .to_vec()
+    } else {
+        // 本地文件路径（包括 asset://）
+        let actual_path = if image_path.starts_with("asset://") {
+            image_path.strip_prefix("asset://").unwrap_or(&image_path)
+        } else {
+            &image_path
+        };
+        fs::read(actual_path)
+            .map_err(|e| format!("无法读取图片：{} ({})", e, actual_path))?
+    };
+    
+    // 处理像素化
+    let processed_data = pixelate_image_advanced(&img_data, pixel_size, num_colors)?;
+    
+    // 保存到缓存目录
+    let cache_dir = CACHE_DIR.lock()
+        .map_err(|_| "无法锁定缓存目录")?
+        .clone()
+        .ok_or("缓存系统未初始化")?;
+    
+    // 生成唯一的文件名
+    let file_name = format!("pixel_{}.png", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis());
+    
+    let output_path = cache_dir.join(&file_name);
+    
+    fs::write(&output_path, &processed_data)
+        .map_err(|e| format!("无法保存处理后的图片：{}", e))?;
+    
+    let elapsed = start.elapsed();
+    println!("[像素化] 处理完成：{:?}ms, 输出：{}", elapsed.as_millis(), output_path.display());
+    
+    Ok(output_path.to_string_lossy().to_string())
+}
+
+/// 解析本地文件路径（支持多种协议格式）
+fn resolve_local_path(image_path: &str) -> String {
+    if image_path.starts_with("asset://") {
+        // 移除 asset:// 前缀
+        let path = image_path.strip_prefix("asset://").unwrap_or(image_path);
+        path.replace("asset.localhost/", "")
+    } else if image_path.contains("asset.localhost") {
+        // 处理 http://asset.localhost/... 格式
+        let path = image_path
+            .replace("http://asset.localhost/", "")
+            .replace("https://asset.localhost/", "");
+        // URL 解码：处理常见的编码字符
+        path.replace("%3A", ":")
+            .replace("%5C", "\\")
+            .replace("%2F", "/")
+            .replace("%20", " ")
+    } else if image_path.starts_with("file://") {
+        image_path.strip_prefix("file://").unwrap_or(image_path).to_string()
+    } else {
+        image_path.to_string()
+    }
+}
+
+/// 带有备用方案的文件读取
+fn read_file_with_fallbacks(path: &str, log_prefix: &str) -> Result<Vec<u8>, String> {
+    println!("{} 读取文件：{}", log_prefix, path);
+    
+    if let Ok(data) = fs::read(path) {
+        println!("{} 文件读取成功：{} bytes", log_prefix, data.len());
+        return Ok(data);
+    }
+    
+    let alt_path = path.replace("/", "\\");
+    println!("{} 尝试备用路径（\\）：{}", log_prefix, alt_path);
+    
+    if let Ok(data) = fs::read(&alt_path) {
+        println!("{} 备用路径读取成功：{} bytes", log_prefix, data.len());
+        return Ok(data);
+    }
+    
+    let alt_path2 = alt_path.trim_start_matches('\\').to_string();
+    println!("{} 尝试备用路径 2：{}", log_prefix, alt_path2);
+    
+    fs::read(&alt_path2).map_err(|e| {
+        format!("无法读取图片：{} ({})", e, path)
+    })
+}
+
+/// 加载图片数据（支持 base64、网络、本地文件）
+fn load_image_data(image_path: &str, log_prefix: &str) -> Result<Vec<u8>, String> {
+    println!("{} 收到路径：{}", log_prefix, image_path.chars().take(100).collect::<String>());
+    
+    let is_local_asset = image_path.contains("asset.localhost");
+    
+    if image_path.starts_with("data:") {
+        println!("{} 检测到 base64 数据", log_prefix);
+        let parts: Vec<&str> = image_path.split(',').collect();
+        if parts.len() < 2 {
+            return Err("无效的 base64 图片".to_string());
+        }
+        
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(parts[1])
+            .map_err(|e| format!("无法解码 base64: {}", e))?;
+        
+        println!("{} base64 解码完成：{} bytes", log_prefix, decoded.len());
+        Ok(decoded)
+    } else if image_path.starts_with("http") && !is_local_asset {
+        println!("{} 下载网络图片", log_prefix);
+        let client = reqwest::blocking::Client::new();
+        let response = client.get(image_path).send()
+            .map_err(|e| format!("无法下载图片：{}", e))?;
+        
+        let bytes = response.bytes()
+            .map_err(|e| format!("无法读取图片数据：{}", e))?
+            .to_vec();
+        
+        println!("{} 下载完成：{} bytes", log_prefix, bytes.len());
+        Ok(bytes)
+    } else {
+        let actual_path = resolve_local_path(image_path);
+        read_file_with_fallbacks(&actual_path, log_prefix)
+    }
+}
+
+// Tauri 命令：提取图片主色
+#[tauri::command]
+fn extract_dominant_color(image_path: String) -> Result<(u8, u8, u8), String> {
+    let img_data = load_image_data(&image_path, "[颜色提取]")?;
+    
+    if img_data.is_empty() {
+        println!("[颜色提取] 图片数据为空，返回默认颜色");
+        return Ok((60, 80, 100));
+    }
+    
+    println!("[颜色提取] 尝试加载图片...");
+    let img = image::load_from_memory(&img_data)
+        .map_err(|e| {
+            println!("[颜色提取] 图片加载失败：{}", e);
+            format!("无法加载图片：{} (数据大小：{} bytes)", e, img_data.len())
+        })?;
+    
+    println!("[颜色提取] 图片加载成功：{}x{}", img.width(), img.height());
+    
+    // 缩小到 80x80 进行分析
+    let resized = img.resize_exact(80, 80, FilterType::Lanczos3);
+    let rgba = resized.to_rgba8();
+    
+    // 统计颜色频率
+    let mut color_count = std::collections::HashMap::new();
+    for pixel in rgba.pixels() {
+        let (r, g, b, a) = (pixel[0], pixel[1], pixel[2], pixel[3]);
+        if a < 128 || (r == 0 && g == 0 && b == 0) || (r == 255 && g == 255 && b == 255) {
+            continue; // 跳过透明、纯黑、纯白
+        }
+        
+        // 量化颜色（12 位分组）
+        let qr = r / 12 * 12;
+        let qg = g / 12 * 12;
+        let qb = b / 12 * 12;
+        
+        *color_count.entry((qr, qg, qb)).or_insert(0) += 1;
+    }
+    
+    // 计算饱和度并排序
+    let mut colors: Vec<_> = color_count.into_iter().collect();
+    colors.sort_by(|a, b| {
+        let ((r1, g1, b1), c1) = a;
+        let ((r2, g2, b2), c2) = b;
+        
+        fn saturation(r: u8, g: u8, b: u8) -> f32 {
+            let rn = r as f32 / 255.0;
+            let gn = g as f32 / 255.0;
+            let bn = b as f32 / 255.0;
+            let max = rn.max(gn).max(bn);
+            let min = rn.min(gn).min(bn);
+            let l = (max + min) / 2.0;
+            if max == min {
+                0.0
+            } else if l > 0.5 {
+                (max - min) / (2.0 - max - min)
+            } else {
+                (max - min) / (max + min)
+            }
+        }
+        
+        let sat1 = saturation(*r1, *g1, *b1);
+        let sat2 = saturation(*r2, *g2, *b2);
+        let score1 = sat1 * (*c1 as f32).ln();
+        let score2 = sat2 * (*c2 as f32).ln();
+        
+        score2.partial_cmp(&score1).unwrap_or(std::cmp::Ordering::Equal)
+    });
+    
+    // 返回最佳颜色（稍微调亮）
+    if let Some(((r, g, b), _)) = colors.first() {
+        let rr = r.saturating_add(12).min(255);
+        let gg = g.saturating_add(12).min(255);
+        let bb = b.saturating_add(12).min(255);
+        Ok((rr, gg, bb))
+    } else {
+        // 默认颜色
+        Ok((40, 50, 60))
+    }
+}
+
+// Tauri 命令：处理图片并返回 base64（支持像素化）
+#[tauri::command]
+async fn process_image(
+    image_path: String,
+    enable_pixel_art: bool,
+) -> Result<String, String> {
+    use std::time::Instant;
+    let start = Instant::now();
+    
+    println!("[图片处理] 像素化：{}", enable_pixel_art);
+    
+    let img_data = load_image_data(&image_path, "[图片处理]")?;
+    
+    if img_data.is_empty() {
+        println!("[图片处理] 图片数据为空，返回错误");
+        return Err("图片数据为空".to_string());
+    }
+    
+    println!("[图片处理] 验证图片格式...");
+    let _img = image::load_from_memory(&img_data)
+        .map_err(|e| format!("无法加载图片：{} (数据大小：{} bytes)", e, img_data.len()))?;
+    
+    println!("[图片处理] 图片验证成功");
+    
+    // 如果需要像素化
+    if enable_pixel_art {
+        let processed_data = pixelate_image_advanced(&img_data, 12, 32)?;
+        
+        // 转换为 base64 返回
+        let base64_result = base64::engine::general_purpose::STANDARD.encode(&processed_data);
+        let elapsed = start.elapsed();
+        println!("[图片处理] 像素化完成：{:?}ms", elapsed.as_millis());
+        Ok(format!("data:image/png;base64,{}", base64_result))
+    } else {
+        // 直接返回原图的 base64
+        let base64_result = base64::engine::general_purpose::STANDARD.encode(&img_data);
+        let elapsed = start.elapsed();
+        println!("[图片处理] 原图转换完成：{:?}ms", elapsed.as_millis());
+        Ok(format!("data:image/png;base64,{}", base64_result))
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -1080,6 +1641,7 @@ pub fn run() {
             save_floating_window_position,
             get_floating_window_position,
             set_floating_window_resizable,
+            open_application,
             // 缓存相关 API
             get_cached_media,
             download_and_cache,
@@ -1088,6 +1650,15 @@ pub fn run() {
             get_cache_directory,
             set_cache_directory,
             pick_cache_directory,
+            // 开机启动相关 API
+            set_auto_start,
+            get_auto_start,
+            // 像素化处理 API
+            pixelate_cover,
+            // 图片处理 API（支持像素化）
+            process_image,
+            // 颜色提取 API
+            extract_dominant_color,
         ])
         .setup(|app| {
             // 初始化缓存系统

@@ -3,65 +3,39 @@
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
-    Settings as SettingsIcon,
     X,
     Minus,
     Check,
-    Sliders,
     Palette,
-    Bell,
-    Eye,
-    Cpu,
-    Gauge,
-    Bug,
-    FileText,
-    MonitorOff,
-    Zap,
-    Sparkles,
     Music,
-    ChevronRight,
-    Circle,
+    Database,
+    GripVertical,
+    ArrowUp,
+    ArrowDown,
     Moon,
     Sun,
-    Stars,
-    Waves,
-    Trees,
-    Image,
-    Grid,
-    Database,
-    Folder,
-    Trash2,
+    Monitor,
+    ChevronRight,
   } from "lucide-svelte";
 
   interface AppSettings {
     island_theme: string;
     auto_hide: boolean;
     show_spectrum: boolean;
-    enable_animations: boolean;
-    window_opacity: number;
     always_on_top: boolean;
-    hardware_acceleration: boolean;
-    reduce_animations: boolean;
-    show_debug_info: boolean;
-    log_level: string;
     player_weights: Record<string, number>;
-    enable_mv_playback: boolean; // MV 播放功能
-    lock_floating_window: boolean; // 锁定悬浮窗（禁止移动）
-    enable_hd_cover: boolean; // 高清专辑封面获取
-    enable_pixel_art: boolean; // 像素化专辑封面
+    enable_mv_playback: boolean;
+    lock_floating_window: boolean;
+    enable_hd_cover: boolean;
+    enable_pixel_art: boolean;
+    auto_start: boolean;
   }
 
   let settings = $state<AppSettings>({
     island_theme: "original",
     auto_hide: true,
     show_spectrum: true,
-    enable_animations: true,
-    window_opacity: 255,
     always_on_top: true,
-    hardware_acceleration: true,
-    reduce_animations: false,
-    show_debug_info: false,
-    log_level: "Info",
     player_weights: {
       netease: 50,
       spotify: 50,
@@ -70,129 +44,29 @@
       apple: 50,
       generic: 10,
     },
-    enable_mv_playback: false, // 默认关闭 MV 播放
-    lock_floating_window: false, // 默认不锁定悬浮窗
-    enable_hd_cover: true, // 默认开启高清封面获取
-    enable_pixel_art: false, // 默认关闭像素化
+    enable_mv_playback: false,
+    lock_floating_window: false,
+    enable_hd_cover: true,
+    enable_pixel_art: false,
+    auto_start: false,
   });
 
   const appWindow = getCurrentWindow();
-  let opacityValue = $state(255);
-  let ready = $state(false);
-
-  const logLevels = ["Debug", "Info", "Warn", "Error"];
-  let showLogLevelMenu = $state(false);
-
-  onMount(async () => {
-    try {
-      const saved = await invoke<AppSettings>("get_settings");
-      settings = { ...settings, ...saved };
-      opacityValue = saved.window_opacity ?? 255;
-
-      if (saved.player_weights) {
-        settings.player_weights = saved.player_weights;
-      }
-    } catch (e) {
-      console.error("无法读取设置", e);
-    }
-    setTimeout(() => (ready = true), 50);
-  });
-
-  async function saveSettings(patch: Partial<AppSettings>) {
-    settings = { ...settings, ...patch };
-    try {
-      await invoke("save_settings", { settings });
-      if (patch.island_theme) {
-        // 发送到主窗口应用主题（使用全局事件）
-        await invoke("emit_event", {
-          event: "theme-changed",
-          payload: { islandTheme: settings.island_theme },
-        });
-        console.log("[设置] 主题已切换并保存:", settings.island_theme);
-      }
-      if (patch.enable_hd_cover !== undefined) {
-        // 发送到悬浮窗应用高清封面设置
-        await invoke("emit_event", {
-          event: "hd-cover-changed",
-          payload: { enableHDCover: settings.enable_hd_cover },
-        });
-        console.log(
-          "[设置] 高清封面获取已切换并保存:",
-          settings.enable_hd_cover,
-        );
-      }
-      if (patch.enable_pixel_art !== undefined) {
-        // 发送到悬浮窗应用像素化封面设置
-        await invoke("emit_event", {
-          event: "pixel-art-changed",
-          payload: { enablePixelArt: settings.enable_pixel_art },
-        });
-        console.log(
-          "[设置] 像素化封面已切换并保存:",
-          settings.enable_pixel_art,
-        );
-      }
-    } catch (e) {
-      console.error("保存失败", e);
-    }
-  }
-
-  async function updatePlayerWeight(player: string, weight: number) {
-    try {
-      await invoke("set_player_weight", { player, weight });
-      settings.player_weights[player] = weight;
-    } catch (e) {
-      console.error("更新权重失败", e);
-    }
-  }
-
-  $effect(() => {
-    if (ready && opacityValue !== settings.window_opacity) {
-      saveSettings({ window_opacity: opacityValue });
-    }
-  });
-
-  function selectLogLevel(level: string) {
-    saveSettings({ log_level: level });
-    showLogLevelMenu = false;
-  }
-
-  function handleGlobalClick(e: MouseEvent) {
-    if (
-      showLogLevelMenu &&
-      !(e.target as HTMLElement).closest(".log-level-selector")
-    ) {
-      showLogLevelMenu = false;
-    }
-  }
-
-  onMount(() => {
-    document.addEventListener("click", handleGlobalClick);
-    loadCacheStats();
-    loadCacheDirectory();
-    return () => document.removeEventListener("click", handleGlobalClick);
-  });
 
   const themes = [
     {
       id: "original",
       name: "极简经典",
-      desc: "Apple 原始质感设计",
-      gradient: "from-gray-700 to-gray-900",
-      accent: "bg-gray-500",
-      icon: "circle",
-      color: "#6b7280",
+      icon: Sun,
+      color: "#1a1a1a",
+    },
+    {
+      id: "glassmorphism",
+      name: "毛玻璃",
+      icon: Moon,
+      color: "#1a1a2e",
     },
   ];
-
-  const playerIcons: Record<string, string> = {
-    netease: "/src/assets/icons/netease.svg",
-    spotify: "/src/assets/icons/spotify.svg",
-    bilibili: "/src/assets/icons/bilibili.svg",
-    qqmusic: "/src/assets/icons/qqmusic.svg",
-    apple: "/src/assets/icons/apple_music.svg",
-    generic: "/src/assets/icons/default_music.svg",
-  };
 
   const playerNames: Record<string, string> = {
     netease: "网易云音乐",
@@ -203,7 +77,128 @@
     generic: "其他播放器",
   };
 
-  // 缓存管理函数
+  let playerOrder = $state<string[]>([]);
+  let dragIndex = $state<number | null>(null);
+  let overIndex = $state<number | null>(null);
+  let isDragging = $state(false);
+
+  onMount(async () => {
+    try {
+      const saved = await invoke<AppSettings>("get_settings");
+      settings = { ...settings, ...saved };
+      if (saved.player_weights) {
+        settings.player_weights = saved.player_weights;
+      }
+
+      try {
+        const autoStart = await invoke<boolean>("get_auto_start");
+        settings.auto_start = autoStart;
+      } catch (e) {
+        console.error("加载开机启动状态失败", e);
+      }
+    } catch (e) {
+      console.error("无法读取设置", e);
+    }
+    initPlayerOrder();
+    loadCacheStats();
+    loadCacheDirectory();
+  });
+
+  async function saveSettings(patch: Partial<AppSettings>) {
+    settings = { ...settings, ...patch };
+    try {
+      await invoke("save_settings", { settings });
+      if (patch.island_theme) {
+        await invoke("emit_event", {
+          event: "theme-changed",
+          payload: { islandTheme: settings.island_theme },
+        });
+      }
+      if (patch.enable_hd_cover !== undefined) {
+        await invoke("emit_event", {
+          event: "hd-cover-changed",
+          payload: { enableHDCover: settings.enable_hd_cover },
+        });
+      }
+      if (patch.enable_pixel_art !== undefined) {
+        await invoke("emit_event", {
+          event: "pixel-art-changed",
+          payload: { enablePixelArt: settings.enable_pixel_art },
+        });
+      }
+    } catch (e) {
+      console.error("保存失败", e);
+    }
+  }
+
+  function initPlayerOrder() {
+    const weights = settings.player_weights || {};
+    playerOrder = Object.entries(weights)
+      .sort((a, b) => b[1] - a[1])
+      .map(([key]) => key);
+    Object.keys(playerNames).forEach((key) => {
+      if (!playerOrder.includes(key)) {
+        playerOrder.push(key);
+      }
+    });
+  }
+
+  async function movePlayer(from: number, to: number) {
+    if (from === to) return;
+    const newOrder = [...playerOrder];
+    const item = newOrder.splice(from, 1)[0];
+    newOrder.splice(to, 0, item);
+    playerOrder = newOrder;
+
+    const total = playerOrder.length;
+    const newWeights: Record<string, number> = {};
+    playerOrder.forEach((player, index) => {
+      newWeights[player] = Math.round(((total - index) / total) * 100);
+    });
+
+    settings.player_weights = newWeights;
+    try {
+      await invoke("save_settings", { settings });
+      for (const [player, weight] of Object.entries(newWeights)) {
+        await invoke("set_player_weight", { player, weight });
+      }
+    } catch (e) {
+      console.error("保存排序失败", e);
+    }
+  }
+
+  function handleDragStart(index: number) {
+    dragIndex = index;
+    isDragging = true;
+  }
+
+  function handleDragOver(index: number) {
+    if (isDragging) {
+      overIndex = index;
+    }
+  }
+
+  function handleDragEnd() {
+    if (dragIndex !== null && overIndex !== null && dragIndex !== overIndex) {
+      movePlayer(dragIndex, overIndex);
+    }
+    dragIndex = null;
+    overIndex = null;
+    isDragging = false;
+  }
+
+  function moveUp(index: number) {
+    if (index > 0) {
+      movePlayer(index, index - 1);
+    }
+  }
+
+  function moveDown(index: number) {
+    if (index < playerOrder.length - 1) {
+      movePlayer(index, index + 1);
+    }
+  }
+
   async function loadCacheStats() {
     try {
       const stats: any = await invoke("get_cache_stats");
@@ -222,7 +217,7 @@
       const cachePathEl = document.getElementById("cache-path");
       if (cachePathEl) {
         cachePathEl.textContent = cachePath;
-        cachePathEl.title = cachePath; // 显示完整路径的 tooltip
+        cachePathEl.title = cachePath;
       }
     } catch (e) {
       console.error("加载缓存目录失败", e);
@@ -237,7 +232,6 @@
       }
     } catch (e) {
       console.error("选择缓存目录失败", e);
-      alert("选择缓存目录失败：" + e);
     }
   }
 
@@ -245,873 +239,547 @@
     if (!confirm("确定要清除所有缓存文件吗？此操作不可恢复。")) {
       return;
     }
-
     try {
       await invoke("clear_cache");
       await loadCacheStats();
-      alert("缓存已清除！");
     } catch (e) {
       console.error("清除缓存失败", e);
-      alert("清除缓存失败：" + e);
     }
   }
 </script>
 
-<div class="settings-container">
-  <!-- 背景装饰 -->
-  <div class="bg-decoration">
-    <div class="gradient-orb gradient-orb-1"></div>
-    <div class="gradient-orb gradient-orb-2"></div>
-    <div class="gradient-orb gradient-orb-3"></div>
-  </div>
-
-  <!-- 主内容区 -->
-  <div class="main-content">
-    <!-- 头部 -->
-    <header class="header">
-      <div class="header-content">
-        <div class="header-icon-wrapper">
-          <SettingsIcon size={24} class="header-icon" />
-        </div>
-        <div class="header-text">
-          <h1 class="title">设置</h1>
-          <p class="subtitle">个性化您的灵动岛体验</p>
-        </div>
-      </div>
+<div class="settings-app">
+  <div class="header">
+    <div class="header-content">
+      <h1 class="title">Settings</h1>
       <div class="window-controls">
         <button
-          class="win-btn minimize-btn"
-          onclick={async () => {
-            try {
-              await appWindow.minimize();
-              console.log("[窗口] 已最小化");
-            } catch (error) {
-              console.error("[窗口] 最小化失败:", error);
-            }
-          }}
+          class="icon-btn"
+          onclick={async () => await appWindow.minimize()}
           title="最小化"
         >
           <Minus size={18} />
         </button>
         <button
-          class="win-btn close-btn"
-          onclick={async () => {
-            try {
-              await appWindow.close();
-              console.log("[窗口] 已关闭");
-            } catch (error) {
-              console.error("[窗口] 关闭失败:", error);
-            }
-          }}
+          class="icon-btn close"
+          onclick={async () => await appWindow.close()}
           title="关闭"
         >
           <X size={18} />
         </button>
       </div>
-    </header>
+    </div>
+  </div>
 
-    <!-- 设置内容 -->
-    <div class="settings-scroll">
-      <div class="settings-inner">
-        <!-- 灵动岛主题 -->
-        <section class="settings-section">
-          <div class="section-header">
-            <div class="header-icon-box amber">
-              <Palette size={20} />
+  <div class="content">
+    <div class="preview-section">
+      <h2 class="preview-title">LIVE PREVIEW</h2>
+      <div class="preview-container">
+        <!-- 收起状态 -->
+        <div
+          class="island-preview"
+          class:theme-original={settings.island_theme === "original"}
+          class:theme-glassmorphism={settings.island_theme === "glassmorphism"}
+        >
+          <div class="island-content">
+            <div class="album-art-preview">
+              <div class="album-art-inner"></div>
             </div>
-            <div>
-              <h2 class="section-title">灵动岛主题</h2>
-              <p class="section-desc">选择你喜欢的外观风格</p>
+            <div class="track-info-preview">
+              <div class="track-title-preview">Goodbye Henry. (feat. ...</div>
+              <div class="artist-preview">RAVE</div>
             </div>
+            {#if settings.show_spectrum}
+              <div class="spectrum-preview">
+                <div class="spectrum-bar"></div>
+                <div class="spectrum-bar"></div>
+                <div class="spectrum-bar"></div>
+                <div class="spectrum-bar"></div>
+                <div class="spectrum-bar"></div>
+                <div class="spectrum-bar"></div>
+              </div>
+            {/if}
           </div>
-          <div class="theme-grid">
-            {#each themes as t, i}
+        </div>
+
+        <!-- 展开状态 -->
+        <div
+          class="island-preview expanded"
+          class:theme-original={settings.island_theme === "original"}
+          class:theme-glassmorphism={settings.island_theme === "glassmorphism"}
+        >
+          <div class="island-content expanded">
+            <!-- 顶部区域：封面 + 标题 -->
+            <div class="top-section">
+              <div class="album-art-preview expanded">
+                <div class="album-art-inner"></div>
+              </div>
+              <div class="track-info-preview expanded">
+                <div class="track-title-preview">
+                  Goodbye Henry. (feat. RAVE)
+                </div>
+                <div class="artist-preview">RAVE</div>
+              </div>
+            </div>
+
+            <!-- 中部区域：播放控制按钮 -->
+            <div class="controls-preview">
+              <button class="control-btn-preview settings" aria-label="设置">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+                  ></path>
+                </svg>
+              </button>
+
+              <div class="playback-controls">
+                <button class="control-btn-preview" aria-label="上一首">
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <polygon points="19 20 9 12 19 4 19 20"></polygon>
+                    <line
+                      x1="5"
+                      y1="19"
+                      x2="5"
+                      y2="5"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    ></line>
+                  </svg>
+                </button>
+                <button class="control-btn-preview play" aria-label="播放/暂停">
+                  <svg
+                    width="32"
+                    height="32"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                  </svg>
+                </button>
+                <button class="control-btn-preview" aria-label="下一首">
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <polygon points="5 4 15 12 5 20 5 4"></polygon>
+                    <line
+                      x1="19"
+                      y1="5"
+                      x2="19"
+                      y2="19"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    ></line>
+                  </svg>
+                </button>
+              </div>
+
+              <button class="control-btn-preview floating" aria-label="悬浮窗">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"
+                  ></rect>
+                  <line x1="8" y1="12" x2="16" y2="12"></line>
+                  <line x1="12" y1="8" x2="12" y2="16"></line>
+                </svg>
+              </button>
+            </div>
+
+            <!-- 底部区域：频谱 -->
+            {#if settings.show_spectrum}
+              <div class="spectrum-preview-expanded">
+                <div class="spectrum-bar-expanded"></div>
+                <div class="spectrum-bar-expanded"></div>
+                <div class="spectrum-bar-expanded"></div>
+                <div class="spectrum-bar-expanded"></div>
+                <div class="spectrum-bar-expanded"></div>
+                <div class="spectrum-bar-expanded"></div>
+                <div class="spectrum-bar-expanded"></div>
+                <div class="spectrum-bar-expanded"></div>
+                <div class="spectrum-bar-expanded"></div>
+                <div class="spectrum-bar-expanded"></div>
+              </div>
+            {/if}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="section">
+      <h2 class="section-title">Theme</h2>
+      <div class="theme-selector">
+        {#each themes as theme}
+          <button
+            class="theme-option"
+            class:active={settings.island_theme === theme.id}
+            onclick={() => saveSettings({ island_theme: theme.id })}
+          >
+            <div class="theme-icon-wrapper">
+              <svelte:component this={theme.icon} size={20} />
+            </div>
+            <span class="theme-label">{theme.name}</span>
+          </button>
+        {/each}
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">Appearance</h2>
+
+      <div class="setting-card">
+        <div class="setting-row">
+          <div class="setting-icon">
+            <Palette size={18} />
+          </div>
+          <div class="setting-info">
+            <span class="setting-label">显示频谱</span>
+            <span class="setting-hint">显示音乐频谱动画效果</span>
+          </div>
+          <button
+            class="toggle"
+            class:active={settings.show_spectrum}
+            onclick={() =>
+              saveSettings({ show_spectrum: !settings.show_spectrum })}
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">General</h2>
+
+      <div class="setting-card">
+        <div class="setting-row">
+          <div class="setting-icon">
+            <Music size={18} />
+          </div>
+          <div class="setting-info">
+            <span class="setting-label">自动隐藏</span>
+            <span class="setting-hint">检测到全屏应用时自动隐藏灵动岛</span>
+          </div>
+          <button
+            class="toggle"
+            class:active={settings.auto_hide}
+            onclick={() => saveSettings({ auto_hide: !settings.auto_hide })}
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-icon">
+            <Music size={18} />
+          </div>
+          <div class="setting-info">
+            <span class="setting-label">始终置顶</span>
+            <span class="setting-hint">保持灵动岛显示在所有窗口上方</span>
+          </div>
+          <button
+            class="toggle"
+            class:active={settings.always_on_top}
+            onclick={() =>
+              saveSettings({ always_on_top: !settings.always_on_top })}
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-icon">
+            <Music size={18} />
+          </div>
+          <div class="setting-info">
+            <span class="setting-label">开机启动</span>
+            <span class="setting-hint">系统启动时自动启动灵动岛</span>
+          </div>
+          <button
+            class="toggle"
+            class:active={settings.auto_start}
+            onclick={() => saveSettings({ auto_start: !settings.auto_start })}
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">Features</h2>
+
+      <div class="setting-card">
+        <div class="setting-row">
+          <div class="setting-icon">
+            <Music size={18} />
+          </div>
+          <div class="setting-info">
+            <span class="setting-label">MV 播放</span>
+            <span class="setting-hint">在专辑封面处播放 Apple Music MV</span>
+          </div>
+          <button
+            class="toggle"
+            class:active={settings.enable_mv_playback}
+            onclick={async () => {
+              const newValue = !settings.enable_mv_playback;
+              await saveSettings({ enable_mv_playback: newValue });
+              try {
+                await invoke("emit_event", {
+                  event: "mv-playback-changed",
+                  payload: { enable: newValue },
+                });
+              } catch (e) {
+                console.error("[设置] 发送事件失败:", e);
+              }
+            }}
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-icon">
+            <Music size={18} />
+          </div>
+          <div class="setting-info">
+            <span class="setting-label">高清封面获取</span>
+            <span class="setting-hint">从网络获取高清专辑封面</span>
+          </div>
+          <button
+            class="toggle"
+            class:active={settings.enable_hd_cover}
+            onclick={async () => {
+              const newValue = !settings.enable_hd_cover;
+              await saveSettings({ enable_hd_cover: newValue });
+            }}
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-icon">
+            <Music size={18} />
+          </div>
+          <div class="setting-info">
+            <span class="setting-label">像素化封面</span>
+            <span class="setting-hint">将专辑封面像素化显示</span>
+          </div>
+          <button
+            class="toggle"
+            class:active={settings.enable_pixel_art}
+            onclick={async () => {
+              const newValue = !settings.enable_pixel_art;
+              await saveSettings({ enable_pixel_art: newValue });
+            }}
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-icon">
+            <Music size={18} />
+          </div>
+          <div class="setting-info">
+            <span class="setting-label">锁定悬浮窗</span>
+            <span class="setting-hint">锁定后悬浮窗不能移动</span>
+          </div>
+          <button
+            class="toggle"
+            class:active={settings.lock_floating_window}
+            onclick={async () => {
+              const newValue = !settings.lock_floating_window;
+              await saveSettings({ lock_floating_window: newValue });
+              try {
+                await invoke("emit_event", {
+                  event: "lock-floating-window-changed",
+                  payload: { lock: newValue },
+                });
+              } catch (e) {
+                console.error("[设置] 发送事件失败:", e);
+              }
+            }}
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 class="section-title">Players</h2>
+      <p class="section-hint">拖拽排序，排名越靠前优先级越高</p>
+
+      <div
+        class="player-list"
+        role="list"
+        ondragover={(e) => e.preventDefault()}
+      >
+        {#each playerOrder as player, index (player)}
+          <div
+            class="player-item"
+            class:dragging={dragIndex === index}
+            class:over={overIndex === index && dragIndex !== index}
+            onmousedown={() => handleDragStart(index)}
+            onmouseover={() => handleDragOver(index)}
+            onmouseup={handleDragEnd}
+          >
+            <div class="player-grip">
+              <GripVertical size={16} />
+            </div>
+            <div class="player-info">
+              <span class="player-name">{playerNames[player]}</span>
+              <span class="player-weight">
+                {settings.player_weights?.[player] ?? 50}%
+              </span>
+            </div>
+            <div class="player-actions">
               <button
-                class="theme-card"
-                class:active={settings.island_theme === t.id}
-                style="animation-delay: {i * 80}ms"
-                onclick={() => saveSettings({ island_theme: t.id })}
+                class="move-btn"
+                class:disabled={index === 0}
+                onclick={() => moveUp(index)}
+                disabled={index === 0}
               >
-                <div class="theme-preview">
-                  <div class={`theme-gradient ${t.gradient}`}></div>
-                  <div class="theme-icon-wrapper">
-                    {#if t.icon === "circle"}
-                      <Circle
-                        size={28}
-                        strokeWidth={2}
-                        class="theme-icon"
-                        style="color: {t.color}"
-                      />
-                    {:else if t.icon === "sparkles"}
-                      <Sparkles
-                        size={28}
-                        strokeWidth={2}
-                        class="theme-icon"
-                        style="color: {t.color}"
-                      />
-                    {:else if t.icon === "moon"}
-                      <Moon
-                        size={28}
-                        strokeWidth={2}
-                        class="theme-icon"
-                        style="color: {t.color}"
-                      />
-                    {:else if t.icon === "zap"}
-                      <Zap
-                        size={28}
-                        strokeWidth={2}
-                        class="theme-icon"
-                        style="color: {t.color}"
-                      />
-                    {:else if t.icon === "stars"}
-                      <Stars
-                        size={28}
-                        strokeWidth={2}
-                        class="theme-icon"
-                        style="color: {t.color}"
-                      />
-                    {:else if t.icon === "waves"}
-                      <Waves
-                        size={28}
-                        strokeWidth={2}
-                        class="theme-icon"
-                        style="color: {t.color}"
-                      />
-                    {:else if t.icon === "sun"}
-                      <Sun
-                        size={28}
-                        strokeWidth={2}
-                        class="theme-icon"
-                        style="color: {t.color}"
-                      />
-                    {:else if t.icon === "tree"}
-                      <Trees
-                        size={28}
-                        strokeWidth={2}
-                        class="theme-icon"
-                        style="color: {t.color}"
-                      />
-                    {/if}
-                  </div>
-                  {#if settings.island_theme === t.id}
-                    <div class="theme-check">
-                      <Check size={16} strokeWidth={3} />
-                    </div>
-                  {/if}
-                </div>
-                <div class="theme-info">
-                  <span class="theme-name">{t.name}</span>
-                  <span class="theme-desc">{t.desc}</span>
-                </div>
+                <ArrowUp size={14} />
               </button>
-            {/each}
-          </div>
-        </section>
-
-        <!-- 外观与行为 -->
-        <section class="settings-section">
-          <div class="section-header">
-            <div class="header-icon-box rose">
-              <Sparkles size={20} />
-            </div>
-            <div>
-              <h2 class="section-title">外观与行为</h2>
-              <p class="section-desc">调整显示效果和交互体验</p>
-            </div>
-          </div>
-
-          <!-- 显示设置子组 -->
-          <div class="settings-subgroup">
-            <h3 class="subgroup-title">显示设置</h3>
-            <div class="settings-list">
-              <div class="settings-list">
-                <!-- 自动隐藏 -->
-                <div
-                  class="setting-item"
-                  onclick={() =>
-                    saveSettings({ auto_hide: !settings.auto_hide })}
-                >
-                  <div class="item-icon" class:active={settings.auto_hide}>
-                    <MonitorOff size={18} />
-                  </div>
-                  <div class="item-content">
-                    <div class="item-header">
-                      <h3 class="item-title">自动隐藏</h3>
-                      <span class="item-value"
-                        >{settings.auto_hide ? "开启" : "关闭"}</span
-                      >
-                    </div>
-                    <p class="item-desc">检测到全屏应用时自动隐藏灵动岛</p>
-                  </div>
-                  <div class="toggle" class:on={settings.auto_hide}>
-                    <div class="toggle-knob"></div>
-                  </div>
-                </div>
-
-                <!-- 显示频谱 -->
-                <div
-                  class="setting-item"
-                  onclick={() =>
-                    saveSettings({ show_spectrum: !settings.show_spectrum })}
-                >
-                  <div class="item-icon" class:active={settings.show_spectrum}>
-                    <Sliders size={18} />
-                  </div>
-                  <div class="item-content">
-                    <div class="item-header">
-                      <h3 class="item-title">显示频谱</h3>
-                      <span class="item-value"
-                        >{settings.show_spectrum ? "开启" : "关闭"}</span
-                      >
-                    </div>
-                    <p class="item-desc">显示音乐频谱动画效果</p>
-                  </div>
-                  <div class="toggle" class:on={settings.show_spectrum}>
-                    <div class="toggle-knob"></div>
-                  </div>
-                </div>
-
-                <!-- 启用动画 -->
-                <div
-                  class="setting-item"
-                  onclick={() =>
-                    saveSettings({
-                      enable_animations: !settings.enable_animations,
-                    })}
-                >
-                  <div
-                    class="item-icon"
-                    class:active={settings.enable_animations}
-                  >
-                    <Zap size={18} />
-                  </div>
-                  <div class="item-content">
-                    <div class="item-header">
-                      <h3 class="item-title">启用动画</h3>
-                      <span class="item-value"
-                        >{settings.enable_animations ? "开启" : "关闭"}</span
-                      >
-                    </div>
-                    <p class="item-desc">启用流畅的过渡动画效果</p>
-                  </div>
-                  <div class="toggle" class:on={settings.enable_animations}>
-                    <div class="toggle-knob"></div>
-                  </div>
-                </div>
-
-                <!-- 窗口透明度 -->
-                <div class="setting-item slider-item">
-                  <div class="item-icon">
-                    <Eye size={18} />
-                  </div>
-                  <div class="item-content">
-                    <div class="item-header">
-                      <h3 class="item-title">窗口透明度</h3>
-                      <span class="item-value">{opacityValue}</span>
-                    </div>
-                    <p class="item-desc">调整灵动岛的背景透明度</p>
-                    <div class="slider-container">
-                      <input
-                        type="range"
-                        min="0"
-                        max="255"
-                        value={opacityValue}
-                        oninput={(e) =>
-                          (opacityValue = parseInt(
-                            (e.target as HTMLInputElement).value,
-                          ))}
-                        class="slider"
-                      />
-                      <div
-                        class="slider-fill"
-                        style="width: {(opacityValue / 255) * 100}%"
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- 高级设置 -->
-        <section class="settings-section">
-          <div class="section-header">
-            <div class="header-icon-box violet">
-              <Cpu size={20} />
-            </div>
-            <div>
-              <h2 class="section-title">高级设置</h2>
-              <p class="section-desc">进阶功能与性能优化</p>
-            </div>
-          </div>
-
-          <div class="settings-list">
-            <!-- 始终置顶 -->
-            <div
-              class="setting-item"
-              onclick={() =>
-                saveSettings({ always_on_top: !settings.always_on_top })}
-            >
-              <div class="item-icon" class:active={settings.always_on_top}>
-                <Bell size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">始终置顶</h3>
-                  <span class="item-value"
-                    >{settings.always_on_top ? "开启" : "关闭"}</span
-                  >
-                </div>
-                <p class="item-desc">保持灵动岛显示在所有窗口上方</p>
-              </div>
-              <div class="toggle" class:on={settings.always_on_top}>
-                <div class="toggle-knob"></div>
-              </div>
-            </div>
-
-            <!-- 硬件加速 -->
-            <div
-              class="setting-item"
-              onclick={() =>
-                saveSettings({
-                  hardware_acceleration: !settings.hardware_acceleration,
-                })}
-            >
-              <div
-                class="item-icon"
-                class:active={settings.hardware_acceleration}
+              <button
+                class="move-btn"
+                class:disabled={index === playerOrder.length - 1}
+                onclick={() => moveDown(index)}
+                disabled={index === playerOrder.length - 1}
               >
-                <Cpu size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">硬件加速</h3>
-                  <span class="item-value"
-                    >{settings.hardware_acceleration ? "开启" : "关闭"}</span
-                  >
-                </div>
-                <p class="item-desc">使用 GPU 加速渲染，提升性能</p>
-              </div>
-              <div class="toggle" class:on={settings.hardware_acceleration}>
-                <div class="toggle-knob"></div>
-              </div>
-            </div>
-
-            <!-- 减少动画 -->
-            <div
-              class="setting-item"
-              onclick={() =>
-                saveSettings({
-                  reduce_animations: !settings.reduce_animations,
-                })}
-            >
-              <div class="item-icon" class:active={settings.reduce_animations}>
-                <Gauge size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">减少动画</h3>
-                  <span class="item-value"
-                    >{settings.reduce_animations ? "开启" : "关闭"}</span
-                  >
-                </div>
-                <p class="item-desc">降低动画效果，提升响应速度</p>
-              </div>
-              <div class="toggle" class:on={settings.reduce_animations}>
-                <div class="toggle-knob"></div>
-              </div>
-            </div>
-
-            <!-- MV 播放 -->
-            <div
-              class="setting-item"
-              onclick={async () => {
-                const newValue = !settings.enable_mv_playback;
-                await saveSettings({
-                  enable_mv_playback: newValue,
-                });
-                // 刷新悬浮窗，让设置立即生效
-                try {
-                  await invoke("emit_event", {
-                    event: "mv-playback-changed",
-                    payload: { enable: newValue },
-                  });
-                  console.log(
-                    "[设置] MV 播放已切换:",
-                    newValue ? "开启" : "关闭",
-                  );
-                } catch (e) {
-                  console.error("[设置] 发送事件失败:", e);
-                }
-              }}
-            >
-              <div class="item-icon" class:active={settings.enable_mv_playback}>
-                <MonitorOff size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">MV 播放</h3>
-                  <span class="item-value"
-                    >{settings.enable_mv_playback ? "开启" : "关闭"}</span
-                  >
-                </div>
-                <p class="item-desc">
-                  在专辑封面处播放 Apple Music MV（需网络）
-                </p>
-              </div>
-              <div class="toggle" class:on={settings.enable_mv_playback}>
-                <div class="toggle-knob"></div>
-              </div>
-            </div>
-
-            <!-- 高清封面获取 -->
-            <div
-              class="setting-item"
-              onclick={async () => {
-                const newValue = !settings.enable_hd_cover;
-                await saveSettings({
-                  enable_hd_cover: newValue,
-                });
-                console.log(
-                  "[设置] 高清封面获取已切换:",
-                  newValue ? "开启" : "关闭",
-                );
-              }}
-            >
-              <div class="item-icon" class:active={settings.enable_hd_cover}>
-                <Image size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">高清封面获取</h3>
-                  <span class="item-value"
-                    >{settings.enable_hd_cover ? "开启" : "关闭"}</span
-                  >
-                </div>
-                <p class="item-desc">从网络获取高清专辑封面（需网络）</p>
-              </div>
-              <div class="toggle" class:on={settings.enable_hd_cover}>
-                <div class="toggle-knob"></div>
-              </div>
-            </div>
-
-            <!-- 像素化封面 -->
-            <div
-              class="setting-item"
-              onclick={async () => {
-                const newValue = !settings.enable_pixel_art;
-                await saveSettings({
-                  enable_pixel_art: newValue,
-                });
-                console.log(
-                  "[设置] 像素化封面已切换:",
-                  newValue ? "开启" : "关闭",
-                );
-              }}
-            >
-              <div class="item-icon" class:active={settings.enable_pixel_art}>
-                <Grid size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">像素化封面</h3>
-                  <span class="item-value"
-                    >{settings.enable_pixel_art ? "开启" : "关闭"}</span
-                  >
-                </div>
-                <p class="item-desc">将专辑封面像素化显示（可搭配高清获取）</p>
-              </div>
-              <div class="toggle" class:on={settings.enable_pixel_art}>
-                <div class="toggle-knob"></div>
-              </div>
-            </div>
-
-            <!-- 锁定悬浮窗 -->
-            <div
-              class="setting-item"
-              onclick={async () => {
-                const newValue = !settings.lock_floating_window;
-                await saveSettings({
-                  lock_floating_window: newValue,
-                });
-                // 刷新悬浮窗，让设置立即生效
-                try {
-                  await invoke("emit_event", {
-                    event: "lock-floating-window-changed",
-                    payload: { lock: newValue },
-                  });
-                  console.log(
-                    "[设置] 锁定悬浮窗已切换:",
-                    newValue ? "锁定" : "解锁",
-                  );
-                } catch (e) {
-                  console.error("[设置] 发送事件失败:", e);
-                }
-              }}
-            >
-              <div
-                class="item-icon"
-                class:active={settings.lock_floating_window}
-              >
-                <Zap size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">锁定悬浮窗</h3>
-                  <span class="item-value"
-                    >{settings.lock_floating_window ? "锁定" : "解锁"}</span
-                  >
-                </div>
-                <p class="item-desc">锁定后悬浮窗不能移动，顶部栏不显示</p>
-              </div>
-              <div class="toggle" class:on={settings.lock_floating_window}>
-                <div class="toggle-knob"></div>
-              </div>
-            </div>
-
-            <!-- 缓存管理 -->
-            <div class="setting-section-title" style="margin-top: 20px;">
-              <h2>缓存管理</h2>
-            </div>
-
-            <!-- 缓存大小 -->
-            <div class="setting-item">
-              <div class="item-icon">
-                <Database size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">缓存大小</h3>
-                  <span class="item-value" id="cache-size">加载中...</span>
-                </div>
-                <p class="item-desc">当前缓存的文件大小和数量</p>
-              </div>
-            </div>
-
-            <!-- 缓存目录 -->
-            <div class="setting-item">
-              <div class="item-icon">
-                <Folder size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">缓存位置</h3>
-                </div>
-                <p class="item-desc" id="cache-path" title="加载中...">
-                  加载中...
-                </p>
-              </div>
-              <button class="action-btn" onclick={pickCacheDir}>
-                <span>更改</span>
+                <ArrowDown size={14} />
               </button>
             </div>
-
-            <!-- 清除缓存 -->
-            <div class="setting-item">
-              <div class="item-icon" style="color: #ff4444;">
-                <Trash2 size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">清除缓存</h3>
-                  <span class="item-value" style="color: #ff4444;"
-                    >删除所有缓存文件</span
-                  >
-                </div>
-                <p class="item-desc">释放磁盘空间</p>
-              </div>
-              <button class="action-btn danger" onclick={clearCache}>
-                <span>清除</span>
-              </button>
-            </div>
-
-            <!-- 调试信息 -->
-            <div
-              class="setting-item"
-              onclick={() =>
-                saveSettings({ show_debug_info: !settings.show_debug_info })}
-            >
-              <div class="item-icon" class:active={settings.show_debug_info}>
-                <Bug size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">调试信息</h3>
-                  <span class="item-value"
-                    >{settings.show_debug_info ? "开启" : "关闭"}</span
-                  >
-                </div>
-                <p class="item-desc">显示帧率等调试数据</p>
-              </div>
-              <div class="toggle" class:on={settings.show_debug_info}>
-                <div class="toggle-knob"></div>
-              </div>
-            </div>
-
-            <!-- 日志级别 -->
-            <div class="setting-item">
-              <div class="item-icon">
-                <FileText size={18} />
-              </div>
-              <div class="item-content">
-                <div class="item-header">
-                  <h3 class="item-title">日志级别</h3>
-                  <span class="item-value">{settings.log_level}</span>
-                </div>
-                <p class="item-desc">设置日志输出详细程度</p>
-                <div class="log-level-selector">
-                  <button
-                    class="log-level-btn"
-                    onclick={() => (showLogLevelMenu = !showLogLevelMenu)}
-                  >
-                    <span>{settings.log_level}</span>
-                    <ChevronRight
-                      size={16}
-                      class={showLogLevelMenu
-                        ? "chevron chevron-open"
-                        : "chevron"}
-                    />
-                  </button>
-                  {#if showLogLevelMenu}
-                    <div class="log-level-menu">
-                      {#each logLevels as level}
-                        <button
-                          class="log-level-option"
-                          class:active={settings.log_level === level}
-                          onclick={() => selectLogLevel(level)}
-                        >
-                          {level}
-                          {#if settings.log_level === level}
-                            <Check size={14} strokeWidth={3} />
-                          {/if}
-                        </button>
-                      {/each}
-                    </div>
-                  {/if}
-                </div>
-              </div>
-            </div>
           </div>
-        </section>
+        {/each}
+      </div>
+    </div>
 
-        <!-- 播放器权重 -->
-        <section class="settings-section">
-          <div class="section-header">
-            <div class="header-icon-box blue">
-              <Music size={20} />
-            </div>
-            <div>
-              <h2 class="section-title">播放器优先级</h2>
-              <p class="section-desc">
-                设置不同播放器的检测权重（权重越高，优先级越高）
-              </p>
-            </div>
-          </div>
+    <div class="section">
+      <h2 class="section-title">Storage</h2>
 
-          <div class="players-list">
-            {#each Object.entries(playerNames) as [player, name]}
-              <div class="player-item">
-                <div class="player-content">
-                  <div class="player-header">
-                    <h3 class="player-name">{name}</h3>
-                    <div class="player-value-container">
-                      <span class="player-value"
-                        >{settings.player_weights?.[player] ?? 50}</span
-                      >
-                      <span class="player-percent">%</span>
-                    </div>
-                  </div>
-                  <div class="player-slider-container">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={settings.player_weights?.[player] ?? 50}
-                      oninput={(e) =>
-                        updatePlayerWeight(
-                          player,
-                          parseInt((e.target as HTMLInputElement).value),
-                        )}
-                      class="player-slider"
-                    />
-                    <div
-                      class="player-slider-fill"
-                      style="width: {((settings.player_weights?.[player] ??
-                        50) /
-                        100) *
-                        100}%"
-                    ></div>
-                    <div class="player-slider-labels">
-                      <span class="slider-label">0</span>
-                      <span class="slider-label">50</span>
-                      <span class="slider-label">100</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            {/each}
+      <div class="setting-card">
+        <div class="setting-row">
+          <div class="setting-icon">
+            <Database size={18} />
           </div>
-        </section>
+          <div class="setting-info">
+            <span class="setting-label">缓存大小</span>
+            <span class="setting-hint" id="cache-size">加载中...</span>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-icon">
+            <Database size={18} />
+          </div>
+          <div class="setting-info">
+            <span class="setting-label">缓存位置</span>
+            <span class="setting-hint" id="cache-path" title="加载中...">
+              加载中...
+            </span>
+          </div>
+          <button class="link-btn" onclick={pickCacheDir}>
+            更改
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        <div class="setting-row danger">
+          <div class="setting-icon danger">
+            <Database size={18} />
+          </div>
+          <div class="setting-info">
+            <span class="setting-label danger-text">清除缓存</span>
+            <span class="setting-hint">删除所有缓存文件，释放磁盘空间</span>
+          </div>
+          <button class="danger-btn" onclick={clearCache}> 清除 </button>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
 <style>
-  /* ========== 基础变量 ========== */
   :root {
-    --bg-primary: #0a0a0f;
-    --bg-secondary: #12121a;
-    --bg-tertiary: #1a1a25;
-    --surface: rgba(255, 255, 255, 0.05);
-    --surface-hover: rgba(255, 255, 255, 0.08);
-    --surface-active: rgba(255, 255, 255, 0.1);
-    --border: rgba(255, 255, 255, 0.08);
-    --border-hover: rgba(255, 255, 255, 0.15);
-    --text-primary: #ffffff;
-    --text-secondary: rgba(255, 255, 255, 0.7);
-    --text-tertiary: rgba(255, 255, 255, 0.5);
-    --accent: #8b5cf6;
-    --accent-hover: #7c3aed;
-    --accent-glow: rgba(139, 92, 246, 0.3);
-    --success: #10b981;
-    --warning: #f59e0b;
-    --danger: #ef4444;
+    --bg-app: #000000;
+    --bg-card: #1c1c1e;
+    --bg-card-secondary: #2c2c2e;
+    --bg-hover: #3a3a3c;
+    --border: #38383a;
+    --text: #ffffff;
+    --text-secondary: #8e8e93;
+    --text-hint: #636366;
+    --accent: #30d158;
+    --accent-light: rgba(48, 209, 88, 0.15);
+    --success: #30d158;
+    --danger: #ff453a;
+    --radius: 10px;
+    --radius-sm: 8px;
+    --radius-lg: 20px;
   }
 
-  /* ========== 容器与布局 ========== */
-  .settings-container {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-    background: linear-gradient(135deg, var(--bg-primary) 0%, #0f0f1a 100%);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-      "Helvetica Neue", Arial, sans-serif;
-    color: var(--text-primary);
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
   }
 
-  /* 背景装饰 */
-  .bg-decoration {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    pointer-events: none;
-  }
-
-  .gradient-orb {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.3;
-    animation: float 20s ease-in-out infinite;
-  }
-
-  .gradient-orb-1 {
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, #8b5cf6 0%, transparent 70%);
-    top: -100px;
-    right: -100px;
-    animation-delay: 0s;
-  }
-
-  .gradient-orb-2 {
-    width: 300px;
-    height: 300px;
-    background: radial-gradient(circle, #ec4899 0%, transparent 70%);
-    bottom: -50px;
-    left: -50px;
-    animation-delay: -7s;
-  }
-
-  .gradient-orb-3 {
-    width: 350px;
-    height: 350px;
-    background: radial-gradient(circle, #3b82f6 0%, transparent 70%);
-    top: 50%;
-    left: 50%;
-    animation-delay: -14s;
-  }
-
-  @keyframes float {
-    0%,
-    100% {
-      transform: translate(0, 0) scale(1);
-    }
-    33% {
-      transform: translate(30px, -30px) scale(1.1);
-    }
-    66% {
-      transform: translate(-20px, 20px) scale(0.9);
-    }
-  }
-
-  /* 主内容区 */
-  .main-content {
-    position: relative;
-    z-index: 1;
+  .settings-app {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    backdrop-filter: blur(20px);
+    background: var(--bg-app);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+      Roboto, sans-serif;
+    color: var(--text);
+    overflow: hidden;
   }
 
-  /* ========== 头部 ========== */
+  /* ========== 顶部栏 ========== */
   .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 24px 32px;
-    border-bottom: 1px solid var(--border);
-    background: rgba(10, 10, 15, 0.8);
+    background: var(--bg-app);
+    padding: 12px 20px;
     -webkit-app-region: drag;
+    border-bottom: 0.5px solid var(--border);
   }
 
   .header-content {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 16px;
-  }
-
-  .header-icon-wrapper {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 8px 24px var(--accent-glow);
-  }
-
-  .header-icon {
-    color: white;
-  }
-
-  .header-text {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
   }
 
   .title {
-    font-size: 24px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    margin: 0;
-    background: linear-gradient(135deg, #fff, rgba(255, 255, 255, 0.7));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .subtitle {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin: 0;
-    font-weight: 400;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
   }
 
   .window-controls {
@@ -1120,755 +788,875 @@
     -webkit-app-region: no-drag;
   }
 
-  .win-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
+  .icon-btn {
+    width: 32px;
+    height: 32px;
     border: none;
-    background: var(--surface);
-    color: var(--text-secondary);
+    background: var(--bg-card-secondary);
+    border-radius: 50%;
+    color: var(--text);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
+    transition: all 0.15s ease;
   }
 
-  .win-btn::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(
-      circle at center,
-      rgba(255, 255, 255, 0.1) 0%,
-      transparent 70%
-    );
-    opacity: 0;
-    transition: opacity 0.25s;
+  .icon-btn:hover {
+    background: var(--bg-hover);
   }
 
-  .win-btn:hover::before {
-    opacity: 1;
-  }
-
-  .win-btn:hover {
-    background: var(--surface-hover);
-    color: var(--text-primary);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
-
-  .win-btn:active {
-    transform: translateY(0) scale(0.95);
-  }
-
-  .close-btn:hover {
+  .icon-btn.close:hover {
     background: var(--danger);
-    color: white;
-    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
   }
 
-  .close-btn:active {
-    transform: translateY(0) scale(0.9);
-  }
-
-  :global(.win-btn svg) {
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  :global(.win-btn.minimize-btn:hover svg) {
-    transform: translateY(1px);
-  }
-
-  :global(.win-btn.close-btn:hover svg) {
-    transform: rotate(90deg) scale(1.1);
-  }
-
-  /* ========== 滚动区域 ========== */
-  .settings-scroll {
+  /* ========== 内容区 ========== */
+  .content {
     flex: 1;
     overflow-y: auto;
-    overflow-x: hidden;
+    padding: 0;
   }
 
-  .settings-scroll::-webkit-scrollbar {
-    width: 6px;
+  .content::-webkit-scrollbar {
+    width: 1px;
   }
 
-  .settings-scroll::-webkit-scrollbar-track {
+  .content::-webkit-scrollbar-thumb {
     background: transparent;
   }
 
-  .settings-scroll::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
+  /* ========== 预览窗口 ========== */
+  .preview-section {
+    padding: 20px;
+    background: var(--bg-app);
   }
 
-  .settings-scroll::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+  .preview-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 16px;
   }
 
-  .settings-inner {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 32px;
+  .preview-container {
     display: flex;
     flex-direction: column;
-    gap: 32px;
+    gap: 20px;
+    margin-bottom: 20px;
+    width: 100%;
+    align-items: flex-start;
+    padding: 0;
+    background: transparent;
+    border-radius: 0;
+    border: none;
   }
 
-  /* ========== 设置区块 ========== */
-  .settings-section {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 24px;
-    backdrop-filter: blur(10px);
-    animation: slideUp 0.5s ease both;
-  }
-
-  .settings-section:nth-child(1) {
-    animation-delay: 0ms;
-  }
-  .settings-section:nth-child(2) {
-    animation-delay: 100ms;
-  }
-  .settings-section:nth-child(3) {
-    animation-delay: 200ms;
-  }
-  .settings-section:nth-child(4) {
-    animation-delay: 300ms;
-  }
-
-  @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .section-header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 24px;
-  }
-
-  .header-icon-box {
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .island-preview {
+    width: 340px;
+    height: 84px;
+    border-radius: 42px;
+    background: #000000;
+    padding: 10px 14px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+    margin-bottom: 20px;
     flex-shrink: 0;
   }
 
-  .header-icon-box.amber {
-    background: rgba(245, 158, 11, 0.15);
-    color: #f59e0b;
-  }
-
-  .header-icon-box.rose {
-    background: rgba(236, 72, 153, 0.15);
-    color: #ec4899;
-  }
-
-  .header-icon-box.violet {
-    background: rgba(139, 92, 246, 0.15);
-    color: #8b5cf6;
-  }
-
-  .header-icon-box.blue {
-    background: rgba(59, 130, 246, 0.15);
-    color: #3b82f6;
-  }
-
-  .section-title {
-    font-size: 18px;
-    font-weight: 600;
-    margin: 0 0 4px 0;
-    color: var(--text-primary);
-  }
-
-  .section-desc {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin: 0;
-  }
-
-  /* ========== 主题卡片 ========== */
-  .theme-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-  }
-
-  .theme-card {
-    position: relative;
-    background: var(--bg-tertiary);
-    border: 2px solid var(--border);
-    border-radius: 16px;
-    padding: 0;
-    cursor: pointer;
-    overflow: hidden;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    animation: fadeIn 0.6s ease both;
-  }
-
-  .theme-card:hover {
-    border-color: var(--border-hover);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  }
-
-  .theme-card.active {
-    border-color: var(--accent);
-    box-shadow:
-      0 0 0 3px var(--accent-glow),
-      0 8px 24px rgba(0, 0, 0, 0.3);
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .theme-preview {
-    position: relative;
-    height: 100px;
-    overflow: hidden;
-  }
-
-  .theme-gradient {
-    position: absolute;
-    inset: 0;
-    transition: all 0.3s;
-  }
-
-  .theme-icon-wrapper {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(10px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
-
-  .theme-icon {
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-  }
-
-  .theme-check {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--accent);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    box-shadow: 0 4px 12px var(--accent-glow);
-  }
-
-  .theme-info {
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .theme-name {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .theme-desc {
-    font-size: 12px;
-    color: var(--text-tertiary);
-  }
-
-  /* ========== 设置子组 ========== */
-  .settings-subgroup {
-    margin-bottom: 24px;
-  }
-
-  .settings-subgroup:last-child {
+  .island-preview:last-child {
     margin-bottom: 0;
   }
 
-  .subgroup-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin: 0 0 12px 0;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+  .island-preview.theme-glassmorphism {
+    background: var(--bg-card-secondary);
+    backdrop-filter: blur(10px);
   }
 
-  /* ========== 设置列表 ========== */
-  .settings-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+  .island-preview.expanded {
+    height: 220px;
+    padding: 16px;
   }
 
-  .setting-item {
+  .island-content {
     display: flex;
+    flex-direction: row;
     align-items: center;
-    gap: 20px;
-    padding: 20px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    justify-content: space-between;
+    gap: 8px;
+    height: 100%;
   }
 
-  .setting-item:hover {
-    background: var(--surface-hover);
-    border-color: var(--border-hover);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-    transform: translateY(-1px);
-  }
-
-  .setting-item.slider-item {
-    cursor: default;
-  }
-
-  .setting-item.slider-item:hover {
-    transform: none;
-  }
-
-  .item-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    background: var(--surface);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-tertiary);
-    flex-shrink: 0;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  }
-
-  .item-icon.active {
-    background: var(--accent);
-    color: white;
-    box-shadow: 0 4px 12px var(--accent-glow);
-  }
-
-  .item-content {
-    flex: 1;
-    min-width: 0;
-    display: flex;
+  .island-content.expanded {
     flex-direction: column;
     gap: 8px;
+    height: 100%;
   }
 
-  .item-header {
+  .top-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .album-art-preview {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .album-art-preview.expanded {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .album-art-inner {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.1) 0%,
+      transparent 50%,
+      rgba(0, 0, 0, 0.2) 100%
+    );
+    position: relative;
+  }
+
+  .album-art-inner::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    background: radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.15) 0%,
+      transparent 70%
+    );
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .track-info-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+    margin-left: 8px;
+    justify-content: center;
+  }
+
+  .track-info-preview.expanded {
+    flex: 1;
+    min-width: 0;
+    gap: 4px;
+    margin-left: 0;
+  }
+
+  .track-title-preview {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
+  }
+
+  .artist-preview {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
+  }
+
+  .spectrum-preview {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 20px;
+    padding: 0 4px;
+    margin-right: 4px;
+    margin-left: auto;
+  }
+
+  .spectrum-bar {
+    flex: 1;
+    background: linear-gradient(to top, #30d158, #34aada);
+    border-radius: 1px;
+    animation: spectrum 0.8s ease-in-out infinite;
+    min-width: 2px;
+    opacity: 0.9;
+  }
+
+  .spectrum-bar:nth-child(1) {
+    animation-delay: 0s;
+    height: 50%;
+  }
+  .spectrum-bar:nth-child(2) {
+    animation-delay: 0.1s;
+    height: 70%;
+  }
+  .spectrum-bar:nth-child(3) {
+    animation-delay: 0.2s;
+    height: 100%;
+  }
+  .spectrum-bar:nth-child(4) {
+    animation-delay: 0.3s;
+    height: 80%;
+  }
+  .spectrum-bar:nth-child(5) {
+    animation-delay: 0.4s;
+    height: 60%;
+  }
+  .spectrum-bar:nth-child(6) {
+    animation-delay: 0.5s;
+    height: 40%;
+  }
+
+  @keyframes spectrum {
+    0%,
+    100% {
+      transform: scaleY(0.5);
+      opacity: 0.6;
+    }
+    50% {
+      transform: scaleY(1);
+      opacity: 1;
+    }
+  }
+
+  .controls-preview {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
+    width: 100%;
+    flex: 1;
   }
 
-  .item-title {
-    font-size: 15px;
+  .control-btn-preview {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .control-btn-preview:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+  }
+
+  .control-btn-preview:active {
+    transform: scale(0.95);
+  }
+
+  .control-btn-preview.play {
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    color: #ffffff;
+  }
+
+  .control-btn-preview.play:hover {
+    transform: scale(1.1);
+  }
+
+  .control-btn-preview.settings {
+    color: rgba(255, 255, 255, 0.4);
+    margin-left: 8px;
+  }
+
+  .control-btn-preview.settings:hover {
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .control-btn-preview.floating {
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: transparent;
+    margin-right: 8px;
+  }
+
+  .control-btn-preview.floating:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+  }
+
+  .playback-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    width: 130px;
+    flex-shrink: 0;
+  }
+
+  .spectrum-preview-expanded {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    height: 24px;
+    width: 100%;
+    margin-top: auto;
+    margin-bottom: 6px;
+  }
+
+  .spectrum-bar-expanded {
+    flex: 1;
+    min-width: 2px;
+    border-radius: 2px;
+    background: linear-gradient(to top, #30d158, #34aada);
+    animation: spectrum-expanded 1.5s ease-in-out infinite;
+  }
+
+  .spectrum-bar-expanded:nth-child(1) {
+    animation: sp-e1 1.8s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded:nth-child(2) {
+    animation: sp-e2 1.6s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded:nth-child(3) {
+    animation: sp-e3 1.9s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded:nth-child(4) {
+    animation: sp-e4 1.5s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded:nth-child(5) {
+    animation: sp-e5 1.3s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded:nth-child(6) {
+    animation: sp-e6 1.7s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded:nth-child(7) {
+    animation: sp-e7 1.4s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded:nth-child(8) {
+    animation: sp-e8 1.6s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded:nth-child(9) {
+    animation: sp-e9 1.2s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded:nth-child(10) {
+    animation: sp-e10 1.5s ease-in-out infinite;
+  }
+
+  @keyframes sp-e1 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    15% {
+      height: 18px;
+    }
+    35% {
+      height: 6px;
+    }
+    55% {
+      height: 22px;
+    }
+    75% {
+      height: 3px;
+    }
+  }
+  @keyframes sp-e2 {
+    0%,
+    100% {
+      height: 1px;
+    }
+    20% {
+      height: 16px;
+    }
+    40% {
+      height: 8px;
+    }
+    60% {
+      height: 20px;
+    }
+    80% {
+      height: 4px;
+    }
+  }
+  @keyframes sp-e3 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    25% {
+      height: 14px;
+    }
+    50% {
+      height: 5px;
+    }
+    75% {
+      height: 18px;
+    }
+  }
+  @keyframes sp-e4 {
+    0%,
+    100% {
+      height: 1px;
+    }
+    30% {
+      height: 15px;
+    }
+    60% {
+      height: 7px;
+    }
+    90% {
+      height: 19px;
+    }
+  }
+  @keyframes sp-e5 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    20% {
+      height: 13px;
+    }
+    40% {
+      height: 9px;
+    }
+    60% {
+      height: 17px;
+    }
+    80% {
+      height: 3px;
+    }
+  }
+  @keyframes sp-e6 {
+    0%,
+    100% {
+      height: 1px;
+    }
+    25% {
+      height: 12px;
+    }
+    50% {
+      height: 6px;
+    }
+    75% {
+      height: 16px;
+    }
+  }
+  @keyframes sp-e7 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    30% {
+      height: 14px;
+    }
+    60% {
+      height: 8px;
+    }
+    90% {
+      height: 18px;
+    }
+  }
+  @keyframes sp-e8 {
+    0%,
+    100% {
+      height: 1px;
+    }
+    20% {
+      height: 11px;
+    }
+    40% {
+      height: 5px;
+    }
+    60% {
+      height: 15px;
+    }
+    80% {
+      height: 2px;
+    }
+  }
+  @keyframes sp-e9 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    25% {
+      height: 13px;
+    }
+    50% {
+      height: 7px;
+    }
+    75% {
+      height: 17px;
+    }
+  }
+  @keyframes sp-e10 {
+    0%,
+    100% {
+      height: 1px;
+    }
+    30% {
+      height: 12px;
+    }
+    60% {
+      height: 6px;
+    }
+    90% {
+      height: 16px;
+    }
+  }
+
+  /* ========== 区块 ========== */
+  .section {
+    margin-bottom: 0;
+    padding: 0 20px 20px;
+  }
+
+  .section-title {
+    font-size: 13px;
     font-weight: 600;
-    color: var(--text-primary);
-    margin: 0;
-    line-height: 1.3;
-  }
-
-  .item-value {
-    font-size: 13px;
     color: var(--text-secondary);
-    font-weight: 500;
-    background: var(--surface);
-    padding: 2px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    padding: 0 4px;
   }
 
-  .item-desc {
+  .section-hint {
+    font-size: 12px;
+    color: var(--text-hint);
+    margin-bottom: 12px;
+  }
+
+  /* ========== 主题选择器 ========== */
+  .theme-selector {
+    display: flex;
+    gap: 10px;
+    background: var(--bg-card);
+    padding: 6px;
+    border-radius: var(--radius-lg);
+    margin-bottom: 20px;
+  }
+
+  .theme-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: var(--radius);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+  }
+
+  .theme-option:hover {
+    background: var(--bg-hover);
+  }
+
+  .theme-option.active {
+    background: var(--accent);
+  }
+
+  .theme-icon-wrapper {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text);
+  }
+
+  .theme-option.active .theme-icon-wrapper {
+    color: white;
+  }
+
+  .theme-label {
     font-size: 13px;
-    color: var(--text-tertiary);
-    margin: 0;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .theme-option.active .theme-label {
+    color: white;
+  }
+
+  /* ========== 卡片 ========== */
+  .setting-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 0.5px solid var(--border);
+    transition: background 0.15s ease;
+  }
+
+  .setting-row:last-child {
+    border-bottom: none;
+  }
+
+  .setting-row:hover {
+    background: var(--bg-hover);
+  }
+
+  .setting-row.danger:hover {
+    background: rgba(255, 59, 48, 0.1);
+  }
+
+  .setting-icon {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-card-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+
+  .setting-icon.danger {
+    background: rgba(255, 59, 48, 0.1);
+    color: var(--danger);
+  }
+
+  .setting-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .setting-label {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .setting-hint {
+    font-size: 12px;
+    color: var(--text-hint);
+  }
+
+  .danger-text {
+    color: var(--danger);
   }
 
   /* ========== 开关 ========== */
   .toggle {
     position: relative;
-    width: 52px;
-    height: 28px;
-    background: var(--surface);
-    border: 2px solid var(--border);
+    width: 51px;
+    height: 31px;
+    border: none;
+    background: var(--bg-card-secondary);
     border-radius: 16px;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: background 0.2s ease;
     flex-shrink: 0;
   }
 
-  .toggle:hover {
-    border-color: var(--border-hover);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-  }
-
-  .toggle.on {
+  .toggle.active {
     background: var(--accent);
-    border-color: var(--accent);
-    box-shadow: 0 4px 12px var(--accent-glow);
   }
 
   .toggle-knob {
     position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 20px;
-    height: 20px;
+    top: 3px;
+    left: 3px;
+    width: 25px;
+    height: 25px;
     background: white;
     border-radius: 50%;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  .toggle.on .toggle-knob {
-    left: calc(100% - 22px);
-    transform: scale(1.05);
+  .toggle.active .toggle-knob {
+    transform: translateX(20px);
   }
 
-  /* ========== 滑块 ========== */
-  .slider-container {
-    position: relative;
-    height: 36px;
+  /* ========== 链接按钮 ========== */
+  .link-btn {
     display: flex;
     align-items: center;
-    margin-top: 12px;
-  }
-
-  .slider {
-    position: absolute;
-    width: 100%;
-    height: 8px;
-    border-radius: 4px;
-    background: linear-gradient(90deg, var(--accent) 0%, var(--surface) 0%);
-    outline: none;
-    -webkit-appearance: none;
-    cursor: pointer;
-    z-index: 2;
-    transition: all 0.2s;
-  }
-
-  .slider:hover {
-    height: 10px;
-  }
-
-  .slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--accent);
-    cursor: pointer;
-    border: 2px solid white;
-    box-shadow: 0 4px 12px var(--accent-glow);
-    transition: all 0.2s;
-  }
-
-  .slider::-webkit-slider-thumb:hover {
-    transform: scale(1.1);
-  }
-
-  .slider::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--accent);
-    cursor: pointer;
-    border: 2px solid white;
-    box-shadow: 0 4px 12px var(--accent-glow);
-  }
-
-  .slider::-moz-range-thumb:hover {
-    transform: scale(1.1);
-  }
-
-  .slider-fill {
-    position: absolute;
-    height: 8px;
-    border-radius: 4px;
-    background: var(--accent);
-    pointer-events: none;
-    z-index: 1;
-  }
-
-  /* ========== 日志级别选择器 ========== */
-  .log-level-selector {
-    position: relative;
-    margin-top: 8px;
-  }
-
-  .log-level-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text-secondary);
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .log-level-btn:hover {
-    background: var(--surface-hover);
-    border-color: var(--border-hover);
-  }
-
-  .chevron {
-    transition: transform 0.2s;
-  }
-
-  .chevron-open {
-    transform: rotate(90deg);
-  }
-
-  .log-level-menu {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    margin-top: 8px;
-    min-width: 140px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 6px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    z-index: 100;
-    animation: slideDown 0.2s ease;
-  }
-
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .log-level-option {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 10px 12px;
-    background: none;
+    gap: 4px;
+    padding: 6px 12px;
+    background: transparent;
     border: none;
-    border-radius: 6px;
-    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    color: var(--accent);
     font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s ease;
   }
 
-  .log-level-option:hover {
-    background: var(--surface-hover);
-    color: var(--text-primary);
+  .link-btn:hover {
+    background: var(--accent-light);
   }
 
-  .log-level-option.active {
-    background: var(--accent);
+  /* ========== 危险按钮 ========== */
+  .danger-btn {
+    padding: 8px 16px;
+    background: var(--danger);
     color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .danger-btn:hover {
+    opacity: 0.9;
   }
 
   /* ========== 播放器列表 ========== */
-  .players-list {
+  .player-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 0;
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
   }
 
   .player-item {
     display: flex;
     align-items: center;
-    padding: 16px 20px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    transition: all 0.2s;
+    gap: 10px;
+    padding: 14px 16px;
+    background: transparent;
+    border-bottom: 0.5px solid var(--border);
+    border-radius: 0;
+    cursor: grab;
+    transition: all 0.15s ease;
+  }
+
+  .player-item:last-child {
+    border-bottom: none;
   }
 
   .player-item:hover {
-    background: var(--surface-hover);
-    border-color: var(--border-hover);
+    background: var(--bg-hover);
   }
 
-  .player-content {
+  .player-item.dragging {
+    opacity: 0.5;
+    transform: scale(0.98);
+    border-color: var(--accent);
+  }
+
+  .player-item.over {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+
+  .player-grip {
+    color: var(--text-hint);
+    cursor: grab;
+    display: flex;
+    align-items: center;
+  }
+
+  .player-info {
     flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     min-width: 0;
   }
 
-  .player-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-
   .player-name {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin: 0;
-    letter-spacing: -0.01em;
-  }
-
-  .player-value-container {
-    display: flex;
-    align-items: baseline;
-    gap: 2px;
-  }
-
-  .player-value {
-    font-size: 16px;
-    color: var(--accent);
-    font-weight: 700;
-    min-width: 32px;
-    text-align: right;
-    font-feature-settings: "tnum";
-    font-variant-numeric: tabular-nums;
-  }
-
-  .player-percent {
-    font-size: 11px;
-    color: var(--text-tertiary);
+    font-size: 14px;
     font-weight: 500;
+    color: var(--text);
   }
 
-  .player-slider-container {
-    position: relative;
-    height: 48px;
+  .player-weight {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .player-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .move-btn {
+    width: 26px;
+    height: 22px;
+    border: none;
+    background: var(--bg-hover);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
     display: flex;
     align-items: center;
-    flex-direction: column;
-    gap: 8px;
+    justify-content: center;
+    transition: all 0.1s ease;
   }
 
-  .player-slider {
-    position: absolute;
-    width: 100%;
-    height: 6px;
-    border-radius: 3px;
-    background: var(--surface);
-    outline: none;
-    -webkit-appearance: none;
-    cursor: pointer;
-    z-index: 2;
-    top: 0;
-  }
-
-  .player-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
+  .move-btn:hover:not(.disabled) {
     background: var(--accent);
-    cursor: pointer;
-    box-shadow:
-      0 4px 12px var(--accent-glow),
-      0 0 0 2px rgba(255, 255, 255, 0.1);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 2px solid white;
-  }
-
-  .player-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.2);
-    box-shadow:
-      0 6px 16px var(--accent-glow),
-      0 0 0 2px rgba(255, 255, 255, 0.2);
-  }
-
-  .player-slider-fill {
-    position: absolute;
-    height: 6px;
-    border-radius: 3px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-hover));
-    pointer-events: none;
-    z-index: 1;
-    top: 0;
-    box-shadow: 0 0 8px var(--accent-glow);
-  }
-
-  .player-slider-labels {
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-    margin-top: 24px;
-  }
-
-  .slider-label {
-    font-size: 11px;
-    color: var(--text-tertiary);
-    font-weight: 500;
-  }
-
-  .action-btn {
-    padding: 8px 16px;
-    background: var(--accent-color);
     color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 13px;
-    transition: all 0.2s;
   }
 
-  .action-btn:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-  }
-
-  .action-btn.danger {
-    background: #ff4444;
-  }
-
-  .action-btn.danger:hover {
-    background: #ff6666;
+  .move-btn.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
   }
 </style>

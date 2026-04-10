@@ -19,6 +19,7 @@
     Heart,
     Monitor,
     GalleryHorizontalEnd,
+    Settings,
   } from "lucide-svelte";
 
   const platformIcons = {
@@ -128,16 +129,141 @@
   let trackTitle = $state<string>("");
   let artistName = $state<string>("");
   let isPlaying = $state<boolean>(false);
+
+  // 收起状态频谱高度控制（JavaScript驱动，支持平滑衰减）
+  let spectrumHeights = $state([0.5, 0.5, 0.5, 0.5, 0.5]);
+  let spectrumHeightsExpanded = $state(Array(20).fill(0.5));
+  let spectrumTimer: ReturnType<typeof setInterval> | null = null;
+
+  // 收起态频谱各条的最大高度（模拟不同频率）
+  const collapsedMaxHeights = [12, 10, 11, 8, 6];
+  // 展开态频谱各条的最大高度（模拟不同频率，低频更活跃）
+  const expandedMaxHeights = [
+    22, 20, 24, 18, 16, 14, 12, 10, 8, 7, 14, 16, 12, 10, 8, 9, 7, 6, 5, 4,
+  ];
+
+  function startSpectrumAnimation() {
+    if (spectrumTimer) return;
+    spectrumTimer = setInterval(() => {
+      if (isPlaying) {
+        // 播放时：生成随机频谱高度
+        spectrumHeights = spectrumHeights.map(
+          (_, i) => 0.5 + Math.random() * collapsedMaxHeights[i],
+        );
+        spectrumHeightsExpanded = spectrumHeightsExpanded.map(
+          (_, i) => 0.5 + Math.random() * expandedMaxHeights[i],
+        );
+      } else {
+        // 暂停时：平滑衰减
+        spectrumHeights = spectrumHeights.map((h) => {
+          const newH = h * 0.75;
+          return newH < 0.6 ? 0.5 : newH;
+        });
+        spectrumHeightsExpanded = spectrumHeightsExpanded.map((h) => {
+          const newH = h * 0.75;
+          return newH < 0.6 ? 0.5 : newH;
+        });
+      }
+    }, 100);
+  }
+
+  function stopSpectrumAnimation() {
+    if (spectrumTimer) {
+      clearInterval(spectrumTimer);
+      spectrumTimer = null;
+    }
+  }
+
+  // 监听播放状态变化
+  $effect(() => {
+    if (isPlaying) {
+      startSpectrumAnimation();
+    } else {
+      startSpectrumAnimation(); // 继续运行但做衰减动画
+      // 延迟停止，等衰减完成
+      setTimeout(() => {
+        if (!isPlaying) {
+          stopSpectrumAnimation();
+          spectrumHeights = [0.5, 0.5, 0.5, 0.5, 0.5];
+          spectrumHeightsExpanded = Array(20).fill(0.5);
+        }
+      }, 1200);
+    }
+  });
   let currentTimeMs = $state<number>(0);
   let durationMs = $state<number>(0);
   let currentSource = $state<string>("generic");
   let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
   let currentTheme = $state("original");
 
+  // 时间显示功能
+  let showTimeDisplay = $state(false);
+  let currentTime = $state("");
+  let pausedStartTime = $state<number>(0);
+
+  // 更新时间显示
+  function updateTimeDisplay() {
+    const now = new Date();
+    currentTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+  }
+
+  // 监听播放状态，暂停5分钟后显示时间
+  $effect(() => {
+    if (!isPlaying) {
+      // 暂停时记录开始时间
+      pausedStartTime = Date.now();
+      showTimeDisplay = false;
+    } else {
+      // 播放时隐藏时间
+      showTimeDisplay = false;
+    }
+  });
+
+  // 检查是否暂停超过5分钟
+  onMount(() => {
+    updateTimeDisplay();
+    const checkInterval = setInterval(() => {
+      updateTimeDisplay();
+      if (!isPlaying && pausedStartTime > 0) {
+        const elapsed = Date.now() - pausedStartTime;
+        if (elapsed >= 2 * 60 * 1000 && !showTimeDisplay) {
+          showTimeDisplay = true;
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(checkInterval);
+  });
+
+  // 播放器应用路径映射
+  const playerApps: Record<string, string> = {
+    netease: "NeteaseCloudMusic",
+    spotify: "Spotify",
+    bilibili: "Bilibili",
+    qqmusic: "QQMusic",
+    apple: "AppleMusic",
+    generic: "",
+  };
+
+  // 打开当前音乐播放器
+  async function openCurrentPlayer() {
+    try {
+      const appName = playerApps[currentSource] || "";
+      if (appName) {
+        await invoke("open_application", { name: appName });
+        console.log(`[播放器] 已尝试打开 ${appName}`);
+      } else {
+        console.warn(`[播放器] 未找到 ${currentSource} 的应用映射`);
+      }
+    } catch (error) {
+      console.error("[播放器] 打开失败:", error);
+    }
+  }
+
   // ===== 主题样式辅助函数 =====
   function getThemeBackground(theme: string): string {
     const backgrounds: Record<string, string> = {
-      original: "#0a0a0a",
+      original: "#000000",
       ios26:
         "linear-gradient(90deg, #2d3748, #2a3345, #252d3d, #2a3345, #2d3748)",
       dark: "linear-gradient(90deg, #2d2d3a, #282835, #222230, #282835, #2d2d3a)",
@@ -150,6 +276,7 @@
         "linear-gradient(90deg, #3a1f2a, #3a2530, #3a2a3a, #302535, #3a1f2a)",
       forest:
         "linear-gradient(90deg, #1a2a25, #1c3028, #1f3a2a, #1c3530, #1a2a25)",
+      glassmorphism: "rgba(255, 255, 255, 0.15)",
     };
     return backgrounds[theme] || backgrounds.original;
   }
@@ -174,6 +301,8 @@
       ocean: "none",
       sunset: "none",
       forest: "none",
+      // 毛玻璃主题：中度高斯模糊
+      glassmorphism: "blur(50px) saturate(180%)",
     };
     return filters[theme] || filters.original;
   }
@@ -188,18 +317,20 @@
       ocean: "none",
       sunset: "none",
       forest: "none",
+      // 毛玻璃主题：微弱高光边框
+      glassmorphism: "1px solid rgba(255, 255, 255, 0.15)",
     };
     return borders[theme] || borders.original;
   }
 
   // 根据当前高度动态计算 border-radius，确保与尺寸动画同步
   function getDynamicBorderRadius(currentHeight: number): string {
-    // 收起状态：height = 27px，border-radius = 22px
+    // 收起状态：height = 28px，border-radius = 22px
     // 展开状态：height = 160px，border-radius = 42px
     // 线性插值计算
-    const minHeight = 27;
+    const minHeight = 28;
     const maxHeight = 160;
-    const minRadius = 22;
+    const minRadius = 25;
     const maxRadius = 42;
 
     // 限制在有效范围内
@@ -221,18 +352,20 @@
     expanded: boolean,
   ): string {
     if (isHidden) {
-      return "0 2px 10px rgba(255, 255, 255, 0.1)";
+      return "none";
     }
 
     const shadows: Record<string, string> = {
-      original: "0 20px 60px rgba(0,0,0,0.7)",
-      ios26: "0 20px 60px rgba(0, 0, 0, 0.6)",
-      dark: "0 20px 60px rgba(0, 0, 0, 0.7)",
-      neon: "0 20px 60px rgba(0, 0, 0, 0.7)",
-      aurora: "0 20px 60px rgba(0, 0, 0, 0.8)",
-      ocean: "0 20px 60px rgba(0, 0, 0, 0.7)",
-      sunset: "0 20px 60px rgba(0, 0, 0, 0.7)",
-      forest: "0 20px 60px rgba(0, 0, 0, 0.7)",
+      original: "none",
+      ios26: "none",
+      dark: "none",
+      neon: "none",
+      aurora: "none",
+      ocean: "none",
+      sunset: "none",
+      forest: "none",
+      glassmorphism:
+        "0 25px 60px rgba(0, 0, 0, 0.4), 0 10px 25px rgba(0, 0, 0, 0.3)",
     };
     return shadows[theme] || shadows.original;
   }
@@ -366,34 +499,37 @@
 
     switch (level) {
       case "high":
-        // 高性能：流畅自然的动画
         if (refreshRate >= 120) {
-          // 120Hz+ 显示器：更细腻的动画
           return {
-            stiffness: 0.25 * frameMultiplier,
-            damping: 0.5,
-            precision: 0.005, // 更高精度
+            stiffness: 0.15,
+            damping: 0.7,
+            precision: 0.005,
           };
         } else {
-          // 60Hz 显示器：标准优化
           return {
-            stiffness: 0.3,
-            damping: 0.55,
+            stiffness: 0.18,
+            damping: 0.7,
             precision: 0.01,
           };
         }
       case "medium":
-        // 中等性能：平衡流畅度和性能
         return {
-          stiffness: 0.4,
-          damping: 0.65,
+          stiffness: 0.2,
+          damping: 0.75,
           precision: 0.05,
         };
       case "low":
-        // 低性能：快速响应，减少计算
         return {
-          stiffness: 0.5,
-          damping: 0.75,
+          stiffness: 0.25,
+          damping: 0.8,
+          precision: 0.1,
+        };
+
+      case "low":
+        // 低性能：减少弹性，保证流畅
+        return {
+          stiffness: 0.25,
+          damping: 0.85,
           precision: 0.1,
         };
     }
@@ -544,27 +680,25 @@
     durationMs > 0 ? (precisePosition() / durationMs) * 100 : $progressSpring,
   );
 
-  // ========== 优化的Spring参数（极致流畅） ==========
+  // ========== 优化的 Spring 参数（极致流畅） ==========
   // ========== Spring 动画实例（可动态调整参数） ==========
-  let widthSpring = spring(117, {
-    // 缩小默认宽度
-    stiffness: 0.3, // 降低刚度，更加柔和流畅
-    damping: 0.55, // 优化阻尼，快速稳定且自然
-    precision: 0.01, // 提高精度，确保动画完整性
+  let widthSpring = spring(100, {
+    stiffness: 0.15,
+    damping: 0.7,
+    precision: 0.01,
   });
-  let heightSpring = spring(27, {
-    // 缩小默认高度
-    stiffness: 0.3,
-    damping: 0.55,
+  let heightSpring = spring(28, {
+    stiffness: 0.15,
+    damping: 0.7,
     precision: 0.01,
   });
   let contentOpacity = spring(0, {
-    stiffness: 0.35, // 优化透明度动画响应性
-    damping: 0.65, // 快速稳定
-    precision: 0.01, // 高精度透明度
+    stiffness: 0.2,
+    damping: 0.75,
+    precision: 0.01,
   });
 
-  const win = getCurrentWindow();
+  let win;
 
   // ========== 窗口同步优化 ==========
   let cachedScreenWidth = 0;
@@ -601,7 +735,7 @@
       const physW = Math.round(w * dpr);
       const physH = Math.round(h * dpr);
       const centerX = Math.round(monitorAnchorX - physW / 2);
-      const targetY = Math.round(monitorAnchorY + 17 * dpr); // 向下移动 5px
+      const targetY = Math.round(monitorAnchorY + 22 * dpr);
 
       await Promise.all([
         win.setSize(new PhysicalSize(physW, physH)),
@@ -767,8 +901,8 @@
 
           // 延迟尺寸变化，避免视觉冲突
           setTimeout(() => {
-            widthSpring.set(isHov ? 127 : 117); // 缩小收起宽度
-            heightSpring.set(isHov ? 29 : 27); // 缩小收起高度
+            widthSpring.set(isHov ? 110 : 100); // 调整收起宽度
+            heightSpring.set(isHov ? 30 : 28); // 调整收起高度
           }, 60);
         }
       });
@@ -950,7 +1084,7 @@
         const screenCenterX =
           targetMonitor.position.x + targetMonitor.size.width / 2;
         const windowCenterX = screenCenterX - currentSize.width / 2;
-        const targetY = Math.round(17 * dpr); // 向下移动 5px
+        const targetY = Math.round(22 * dpr);
 
         await appWindow.setPosition(
           new PhysicalPosition(Math.round(windowCenterX), targetY),
@@ -964,7 +1098,7 @@
           windowCenterX,
         );
       } else {
-        const targetY = Math.round(17 * dpr); // 向下移动 5px
+        const targetY = Math.round(22 * dpr);
         await appWindow.setPosition(new PhysicalPosition(0, targetY));
         isHidden = false;
         console.log("[自动显示] 未找到显示器，使用默认位置");
@@ -1024,7 +1158,7 @@
       const currentSize = await appWindow.innerSize();
 
       const targetX = Math.round(monitorAnchorX - currentSize.width / 2);
-      const targetY = Math.round(monitorAnchorY + 17); // 向下移动 5px
+      const targetY = Math.round(monitorAnchorY + 22);
 
       await appWindow.setPosition(new PhysicalPosition(targetX, targetY));
       currentMonitorIndex = index;
@@ -1185,10 +1319,26 @@
       // 初始化显示器列表
       try {
         const allMonitors = await availableMonitors();
-        monitors = allMonitors.map((m, idx) => ({
-          name: m.name || `显示器 ${idx + 1}`,
-          index: idx,
-        }));
+        monitors = allMonitors.map((m, idx) => {
+          let name = m.name || `显示器 ${idx + 1}`;
+          // 提取简短名称
+          name = name.replace(/^\\\\\.\\DISPLAY/, "");
+          name = name.replace(/^DISPLAY/, "");
+          name = name.replace(/\\Device\\Video.*$/, "");
+          // 如果还很长，只取最后一段
+          const parts = name.split(/[\\/]/);
+          if (parts.length > 1) {
+            name = parts[parts.length - 1];
+          }
+          // 限制长度
+          if (name.length > 12) {
+            name = name.substring(0, 12) + "...";
+          }
+          return {
+            name: name || `显示器 ${idx + 1}`,
+            index: idx,
+          };
+        });
 
         // 从设置中读取上次选择的显示器索引
         const savedSettings = await invoke<any>("get_settings");
@@ -1249,17 +1399,38 @@
             const { WebviewWindow } = await import(
               "@tauri-apps/api/webviewWindow"
             );
+            const { getAllWindows } = await import("@tauri-apps/api/window");
             console.log("[App.svelte] 导入 WebviewWindow 成功");
+
+            // 获取所有窗口
+            const windows = await getAllWindows();
+            const windowLabels = windows.map((w) => w.label);
+            console.log("[设置窗口] 当前窗口标签:", windowLabels);
+
+            // 检查设置窗口是否已存在
+            if (windowLabels.includes("settings-window")) {
+              console.log("[设置窗口] 窗口已存在，显示并聚焦");
+              const existingWindow = windows.find(
+                (w) => w.label === "settings-window",
+              );
+              if (existingWindow) {
+                await existingWindow.show();
+                await existingWindow.setFocus();
+              }
+              return;
+            }
 
             console.log("[App.svelte] 创建设置窗口");
             const webview = new WebviewWindow("settings-window", {
               url: "/settings.html",
-              title: "设置",
-              width: 800,
-              height: 600,
-              minWidth: 600,
-              minHeight: 500,
-              resizable: true,
+              title: "Wind0ws Dynamic Island - 设置",
+              width: 375,
+              height: 812,
+              minWidth: 375,
+              minHeight: 812,
+              maxWidth: 375,
+              maxHeight: 812,
+              resizable: false,
               decorations: false,
               transparent: true,
               alwaysOnTop: false,
@@ -1308,36 +1479,47 @@
         currentTimeMs = data.position_ms || 0;
         durationMs = data.duration_ms || 0;
 
-        if (trackTitle !== data.title) {
-          trackTitle = data.title || "未知曲目";
-          artistName = data.artist || "未知艺术家";
+        // 检查是否有媒体信息变化
+        const titleChanged = trackTitle !== data.title;
+        const artistChanged = artistName !== data.artist;
+        const newCover =
+          data.album_art ||
+          data.thumbnail ||
+          data.cover_url ||
+          data.api_cover_url ||
+          data.image ||
+          "";
+        const coverChanged = newCover !== artworkUrl;
 
-          const newCover =
-            data.album_art ||
-            data.thumbnail ||
-            data.cover_url ||
-            data.api_cover_url ||
-            data.image ||
-            "";
+        if (titleChanged || artistChanged || coverChanged) {
+          if (titleChanged) {
+            trackTitle = data.title || "未知曲目";
+          }
+          if (artistChanged) {
+            artistName = data.artist || "未知艺术家";
+          }
 
-          if (newCover && newCover !== artworkUrl) {
+          // 封面变化时更新
+          if (coverChanged) {
             if (
-              newCover.startsWith("data:image") ||
-              newCover.startsWith("http://") ||
-              newCover.startsWith("https://") ||
-              newCover.startsWith("file://")
+              newCover &&
+              (newCover.startsWith("data:image") ||
+                newCover.startsWith("http://") ||
+                newCover.startsWith("https://") ||
+                newCover.startsWith("file://"))
             ) {
               flipKey += 1; // 触发翻转动画
               artworkUrl = newCover;
-            } else if (newCover.includes(":\\") || newCover.includes(":/")) {
+            } else if (
+              newCover &&
+              (newCover.includes(":\\") || newCover.includes(":/"))
+            ) {
               // 本地文件路径，使用 convertFileSrc 转换
               artworkUrl = convertFileSrc(newCover);
               flipKey += 1; // 触发翻转动画
             } else {
               artworkUrl = "";
             }
-          } else if (!newCover) {
-            artworkUrl = "";
           }
 
           progressSpring.set(0, { soft: true });
@@ -1371,6 +1553,10 @@
   }
 
   onMount(() => {
+    // 初始化窗口对象
+    win = getCurrentWindow();
+    console.log("[App.svelte] 窗口对象已初始化");
+
     document.addEventListener("click", handleGlobalClick);
     return () => {
       document.removeEventListener("click", handleGlobalClick);
@@ -1421,6 +1607,7 @@
     class:island-hidden={isHidden && !isMouseAtTop}
     class:island-drop-animation={isMouseAtTop && isHidden}
     class:island-visible-edge={isHidden && isMouseAtTop}
+    class:glassmorphism-theme={currentTheme === "glassmorphism"}
     style="
       width: {$widthSpring}px;
       height: {$heightSpring}px;
@@ -1485,65 +1672,77 @@
         class:is-hidden={expanded}
         style="opacity: {1 - $contentOpacity};"
       >
-        <div
-          class="h-full w-full flex items-center justify-between select-none"
-        >
-          {#if artworkUrl}
-            {#key flipKey}
+        {#if showTimeDisplay}
+          <!-- 时间显示模式：居中显示，隐藏频谱和封面 -->
+          <div
+            class="h-full w-full flex items-center justify-center select-none"
+          >
+            <div class="time-display">
+              <span>{currentTime}</span>
+            </div>
+          </div>
+        {:else}
+          <!-- 正常模式：封面 + 频谱 -->
+          <div
+            class="h-full w-full flex items-center justify-between select-none"
+          >
+            {#if artworkUrl}
+              {#key flipKey}
+                <div
+                  class="w-5 h-5 rounded overflow-hidden flex-shrink-0 select-none cursor-pointer"
+                  data-stop-toggle
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    openCurrentPlayer();
+                  }}
+                >
+                  <img
+                    src={artworkUrl}
+                    alt=""
+                    class="w-full h-full object-cover flip-enter"
+                    onload={() => console.log("[图片加载] 成功加载封面")}
+                    onerror={(e) => {
+                      console.error("[图片加载] 封面加载失败:", artworkUrl);
+                      (e.currentTarget as HTMLImageElement).style.display =
+                        "none";
+                    }}
+                  />
+                </div>
+              {/key}
+            {:else}
               <div
-                class="w-6 h-6 rounded-md overflow-hidden flex-shrink-0 ml-[4px]! select-none"
+                class="w-5 h-5 rounded overflow-hidden flex-shrink-0 select-none"
               >
                 <img
-                  src={artworkUrl}
+                  src={currentIcon}
                   alt=""
-                  class="w-full h-full object-cover flip-enter"
-                  onload={() => console.log("[图片加载] 成功加载封面")}
-                  onerror={(e) => {
-                    console.error("[图片加载] 封面加载失败:", artworkUrl);
-                    (e.currentTarget as HTMLImageElement).style.display =
-                      "none";
-                  }}
+                  class="w-full h-full object-cover"
                 />
               </div>
-            {/key}
-          {:else}
-            <div
-              class="w-6 h-6 rounded-md overflow-hidden flex-shrink-0 ml-[4px]! select-none"
-            >
-              <img
-                src={currentIcon}
-                alt=""
-                class="w-full h-full object-cover"
-              />
-            </div>
-          {/if}
+            {/if}
 
-          <!-- ===== 频谱：根据 show_spectrum 开关条件渲染 ===== -->
-          {#if appSettings.show_spectrum}
-            <div class="flex gap-[2px] items-center h-4 mr-[4px]!">
-              {#each [0.6, 1.2, 0.9, 1.5, 0.7] as h, i}
-                <div
-                  class="w-[2px] rounded-full"
-                  class:animate-island-wave={isPlaying}
-                  style="
-                    background-color: {accentColor};
-                    height: {h * 8}px;
-                    animation-delay: {i * 0.15}s;
-                  "
-                ></div>
-              {/each}
-            </div>
-          {:else}
-            <div class="flex items-center h-4 mr-[4px]! gap-[3px]">
-              {#if isPlaying}
-                <div
-                  class="w-[5px] h-[5px] rounded-full animate-pulse"
-                  style="background-color: {accentColor};"
-                ></div>
-              {/if}
-            </div>
-          {/if}
-        </div>
+            <!-- ===== 频谱：iOS灵动岛风格 ===== -->
+            {#if appSettings.show_spectrum}
+              <div
+                class="spectrum-container"
+                style="--accent-color: {accentColor};"
+              >
+                {#each spectrumHeights as h}
+                  <div class="spectrum-bar" style="height: {h}px;"></div>
+                {/each}
+              </div>
+            {:else}
+              <div class="flex items-center h-4 gap-[3px]">
+                {#if isPlaying}
+                  <div
+                    class="w-[3px] h-[3px] rounded-full animate-pulse"
+                    style="background-color: {accentColor};"
+                  ></div>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        {/if}
       </div>
 
       <!-- 展开态内容 -->
@@ -1559,6 +1758,10 @@
               <div
                 class="w-[50px] h-[50px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
                 data-stop-toggle
+                onclick={(e) => {
+                  e.stopPropagation();
+                  openCurrentPlayer();
+                }}
               >
                 <img
                   src={artworkUrl}
@@ -1581,12 +1784,14 @@
 
           <div class="flex-1 min-w-0">
             <h2
-              class="font-bold text-[18px] truncate text-white tracking-tight select-none leading-tight mb-1"
+              class="truncate text-white select-none leading-tight mb-1"
+              style="font-size: clamp(12px, 4vw, 18px); font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.03em;"
             >
               {trackTitle}
             </h2>
             <p
-              class="text-[14px] text-white/60 truncate font-medium select-none leading-tight"
+              class="truncate text-white/60 select-none leading-tight"
+              style="font-size: clamp(10px, 3vw, 14px); font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 500; letter-spacing: -0.01em;"
             >
               {artistName}
             </p>
@@ -1613,141 +1818,77 @@
             <!-- 显示器选择菜单 -->
             {#if showMonitorMenu}
               <div
-                class="absolute right-0 top-full mt-3 w-64 bg-black/90 backdrop-blur-3xl rounded-2xl shadow-2xl border border-white/20 overflow-hidden z-[100] monitor-menu transition-all duration-300 scale-95 opacity-0"
+                class="absolute right-0 top-full mt-1.5 w-[100px] bg-black/80 backdrop-blur-xl rounded-lg shadow-lg border border-white/10 overflow-hidden z-[100] monitor-menu transition-all duration-300 scale-95 opacity-0"
                 class:menu-open={showMonitorMenu}
                 style="transform: translateZ(0);"
               >
-                <div class="p-3">
+                <div class="p-1">
                   <div
-                    class="flex items-center justify-between px-2 py-1.5 mb-2"
+                    class="flex items-center justify-between px-1.5 py-0.5 mb-1"
                   >
-                    <div class="flex items-center gap-2">
-                      <div
-                        class="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center"
-                      >
-                        <Monitor size={14} class="text-white/80" />
-                      </div>
-                      <div>
-                        <span
-                          class="text-sm font-semibold text-white/95 tracking-wide subpixel-antialiased"
-                          style="font-smooth: always; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;"
-                        >
-                          显示器选择
-                        </span>
-                        <div
-                          class="text-xs text-white/60 mt-0.5 subpixel-antialiased"
-                          style="font-smooth: always; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;"
-                        >
-                          选择要显示的显示器
-                        </div>
-                      </div>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                      <div
-                        class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"
-                      ></div>
-                      <span
-                        class="text-xs text-white/70 font-medium subpixel-antialiased"
-                        style="font-smooth: always; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;"
-                      >
-                        {monitors.length} 个可用
-                      </span>
-                    </div>
+                    <span class="text-[10px] font-medium text-white/70">
+                      显示器
+                    </span>
+                    <span class="text-[10px] text-white/40">
+                      {monitors.length}
+                    </span>
                   </div>
 
-                  <div
-                    class="h-px bg-gradient-to-r from-transparent via-white/15 to-transparent mb-3"
-                  ></div>
+                  <div class="h-px bg-white/8 mb-1"></div>
 
-                  <div class="space-y-1">
+                  <div class="space-y-0.5">
                     {#each monitors as monitor, idx}
                       <button
-                        class="w-full text-left px-3 py-2 rounded-xl transition-all duration-300 flex items-center gap-3 group relative overflow-hidden hover:bg-white/5 active:scale-95"
+                        class="w-full text-left px-1.5 py-1 rounded-md transition-all duration-150 flex items-center gap-1 hover:bg-white/5 active:scale-95"
                         class:selected={currentMonitorIndex === idx}
                         onclick={(e) => {
                           e.stopPropagation();
                           switchMonitor(idx);
                         }}
                       >
-                        {#if currentMonitorIndex === idx}
-                          <div
-                            class="absolute inset-0 bg-gradient-to-br from-white/8 to-white/2"
-                          ></div>
-                          <div
-                            class="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-green-400 to-blue-400"
-                          ></div>
-                        {/if}
-
                         <div
-                          class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 relative transition-all duration-300 group-hover:scale-105"
+                          class="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
                           style="background: {currentMonitorIndex === idx
-                            ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05))'
-                            : 'rgba(255, 255, 255, 0.08)'};"
+                            ? 'rgba(255, 255, 255, 0.1)'
+                            : 'rgba(255, 255, 255, 0.05)'};"
                         >
                           <Monitor
-                            size={16}
-                            class="relative z-10 transition-all duration-300"
+                            size={9}
                             style="color: {currentMonitorIndex === idx
-                              ? '#ffffff'
-                              : 'rgba(255, 255, 255, 0.70)'};"
+                              ? '#fff'
+                              : 'rgba(255, 255, 255, 0.5)'};"
                           />
                         </div>
 
-                        <div class="flex-1 min-w-0 relative z-10">
-                          <div class="flex items-center gap-2">
-                            <span
-                              class="text-sm font-semibold truncate block transition-all duration-300 subpixel-antialiased"
-                              style="color: {currentMonitorIndex === idx
-                                ? '#ffffff'
-                                : 'rgba(255, 255, 255, 0.95)'};
-                                font-smooth: always; 
-                                -webkit-font-smoothing: antialiased; 
-                                -moz-osx-font-smoothing: grayscale;"
-                            >
-                              {monitor.name}
-                            </span>
-                          </div>
-                          {#if currentMonitorIndex === idx}
-                            <div
-                              class="text-xs text-green-400/90 font-semibold mt-0.5 flex items-center gap-1 subpixel-antialiased"
-                              style="font-smooth: always; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;"
-                            >
-                              <div
-                                class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"
-                              ></div>
-                              当前使用中
-                            </div>
-                          {:else}
-                            <div
-                              class="text-xs text-white/60 mt-0.5 subpixel-antialiased"
-                              style="font-smooth: always; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;"
-                            >
-                              点击切换
-                            </div>
-                          {/if}
+                        <div class="flex-1 min-w-0">
+                          <span
+                            class="text-[10px] font-medium truncate block"
+                            style="color: {currentMonitorIndex === idx
+                              ? '#fff'
+                              : 'rgba(255, 255, 255, 0.75)'};"
+                          >
+                            {monitor.name}
+                          </span>
                         </div>
 
                         {#if currentMonitorIndex === idx}
-                          <div class="flex items-center gap-1 relative z-10">
-                            <div
-                              class="w-5 h-5 rounded-full bg-gradient-to-r from-green-400 to-blue-400 flex items-center justify-center shadow"
+                          <div
+                            class="w-3 h-3 rounded-full bg-green-400 flex items-center justify-center flex-shrink-0"
+                          >
+                            <svg
+                              width="6"
+                              height="5"
+                              viewBox="0 0 10 8"
+                              fill="none"
                             >
-                              <svg
-                                width="10"
-                                height="8"
-                                viewBox="0 0 10 8"
-                                fill="none"
-                                class="relative z-10"
-                              >
-                                <path
-                                  d="M1 4L3.5 6.5L9 1"
-                                  stroke="white"
-                                  stroke-width="1.5"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                />
-                              </svg>
-                            </div>
+                              <path
+                                d="M1 4L3.5 6.5L9 1"
+                                stroke="white"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                              />
+                            </svg>
                           </div>
                         {/if}
                       </button>
@@ -1764,15 +1905,17 @@
           class="flex-1 flex items-center justify-between"
           style="margin-bottom: 10px;" /* 缩小底部间距 */
         >
-          <Heart
+          <Settings
             size={18}
-            class="text-white/40 hover:text-red-500 transition-all duration-300 hover:scale-110 relative z-50 cursor-pointer media-button"
+            class="text-white/40 hover:text-white/90 transition-all duration-300 hover:scale-110 relative z-50 cursor-pointer media-button"
             style="transform: translateZ(0); backface-visibility: hidden; margin-left: 8px;"
             /* 添加左边距 */
             data-stop-toggle
-            onclick={(e) => {
+            onclick={async (e) => {
               e.stopPropagation();
-              console.log("点击了喜欢按钮");
+              console.log("点击了设置按钮");
+              const { emit } = await import("@tauri-apps/api/event");
+              await emit("navigate-to-settings");
             }}
           />
 
@@ -1846,20 +1989,13 @@
 
         <!-- 底部区域：频谱 -->
         <div class="mt-auto" style="margin-bottom: 6px;">
-          <!-- 展开状态频谱显示 -->
           {#if appSettings.show_spectrum}
-            <div class="flex gap-[3px] items-end justify-center h-[20px]">
-              {#each [0.6, 1.2, 0.9, 1.5, 0.7, 1.1, 0.8, 1.3, 0.5, 1.0] as h, i}
-                <div
-                  class="w-[3px] rounded-full transition-all duration-150"
-                  class:animate-island-wave={isPlaying}
-                  style="
-                    background-color: {accentColor};
-                    height: {h * 12}px;
-                    animation-delay: {i * 0.12}s;
-                    opacity: 0.8;
-                  "
-                ></div>
+            <div
+              class="spectrum-container-expanded"
+              style="--accent-color: {accentColor};"
+            >
+              {#each spectrumHeightsExpanded as h}
+                <div class="spectrum-bar-expanded" style="height: {h}px;"></div>
               {/each}
             </div>
           {/if}
@@ -1883,21 +2019,515 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* 优化的动画关键帧 - 使用 GPU 加速 */
-  @keyframes island-wave {
-    0%,
-    100% {
-      transform: scaleY(0.6);
+  /* ========== 时间显示 ========== */
+  .time-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    animation: time-fade-in 0.5s ease-out forwards;
+  }
+
+  .time-display span {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+    letter-spacing: 0.05em;
+    font-variant-numeric: tabular-nums;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
+  }
+
+  @keyframes time-fade-in {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
     }
-    50% {
-      transform: scaleY(1.8);
+    to {
+      opacity: 1;
+      transform: scale(1);
     }
   }
 
-  .animate-island-wave {
-    animation: island-wave 0.35s cubic-bezier(0.32, 0.72, 0, 1) infinite;
-    will-change: transform;
-    transform: translateZ(0); /* GPU 加速 */
+  /* ========== iOS灵动岛风格频谱 ========== */
+  .spectrum-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5px;
+    height: 15px;
+  }
+
+  .spectrum-bar {
+    width: 2px;
+    min-height: 2px;
+    border-radius: 2px;
+    background: var(--accent-color, #fff);
+    transition: height 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* 展开状态频谱 - 20条独立动画，模拟真实音频频谱 */
+  .spectrum-container-expanded {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    height: 24px;
+  }
+
+  .spectrum-bar-expanded {
+    width: 2px;
+    min-height: 2px;
+    border-radius: 2px;
+    background: var(--accent-color, #fff);
+    transition: height 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* 低频区 (0-3): 幅度大，节奏慢 */
+  .spectrum-bar-expanded.playing:nth-child(1) {
+    animation: sp-e1 1.8s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(2) {
+    animation: sp-e2 1.6s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(3) {
+    animation: sp-e3 1.9s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(4) {
+    animation: sp-e4 1.5s ease-in-out infinite;
+  }
+
+  /* 中低频区 (5-8): 幅度中等 */
+  .spectrum-bar-expanded.playing:nth-child(5) {
+    animation: sp-e5 1.3s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(6) {
+    animation: sp-e6 1.7s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(7) {
+    animation: sp-e7 1.4s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(8) {
+    animation: sp-e8 1.6s ease-in-out infinite;
+  }
+
+  /* 中频区 (9-12): 活跃区域 */
+  .spectrum-bar-expanded.playing:nth-child(9) {
+    animation: sp-e9 1.2s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(10) {
+    animation: sp-e10 1.5s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(11) {
+    animation: sp-e11 1.3s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(12) {
+    animation: sp-e12 1.7s ease-in-out infinite;
+  }
+
+  /* 中高频区 (13-16): 幅度较小 */
+  .spectrum-bar-expanded.playing:nth-child(13) {
+    animation: sp-e13 1.1s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(14) {
+    animation: sp-e14 1.4s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(15) {
+    animation: sp-e15 1.2s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(16) {
+    animation: sp-e16 1.6s ease-in-out infinite;
+  }
+
+  /* 高频区 (17-20): 幅度小，节奏快 */
+  .spectrum-bar-expanded.playing:nth-child(17) {
+    animation: sp-e17 1s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(18) {
+    animation: sp-e18 1.3s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(19) {
+    animation: sp-e19 1.1s ease-in-out infinite;
+  }
+  .spectrum-bar-expanded.playing:nth-child(20) {
+    animation: sp-e20 1.4s ease-in-out infinite;
+  }
+
+  /* 低频 - 大幅度 */
+  @keyframes sp-e1 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    15% {
+      height: 18px;
+    }
+    35% {
+      height: 6px;
+    }
+    55% {
+      height: 22px;
+    }
+    75% {
+      height: 3px;
+    }
+  }
+  @keyframes sp-e2 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    20% {
+      height: 14px;
+    }
+    45% {
+      height: 4px;
+    }
+    70% {
+      height: 20px;
+    }
+    90% {
+      height: 2px;
+    }
+  }
+  @keyframes sp-e3 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    10% {
+      height: 16px;
+    }
+    30% {
+      height: 8px;
+    }
+    50% {
+      height: 24px;
+    }
+    80% {
+      height: 5px;
+    }
+  }
+  @keyframes sp-e4 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    25% {
+      height: 12px;
+    }
+    50% {
+      height: 3px;
+    }
+    75% {
+      height: 18px;
+    }
+    95% {
+      height: 1px;
+    }
+  }
+
+  /* 中低频 */
+  @keyframes sp-e5 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    20% {
+      height: 10px;
+    }
+    40% {
+      height: 5px;
+    }
+    60% {
+      height: 14px;
+    }
+    80% {
+      height: 3px;
+    }
+  }
+  @keyframes sp-e6 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    15% {
+      height: 12px;
+    }
+    45% {
+      height: 4px;
+    }
+    75% {
+      height: 16px;
+    }
+    95% {
+      height: 2px;
+    }
+  }
+  @keyframes sp-e7 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    30% {
+      height: 8px;
+    }
+    55% {
+      height: 6px;
+    }
+    80% {
+      height: 13px;
+    }
+  }
+  @keyframes sp-e8 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    10% {
+      height: 14px;
+    }
+    35% {
+      height: 3px;
+    }
+    65% {
+      height: 10px;
+    }
+    90% {
+      height: 1px;
+    }
+  }
+
+  /* 中频 - 最活跃 */
+  @keyframes sp-e9 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    12% {
+      height: 16px;
+    }
+    28% {
+      height: 5px;
+    }
+    44% {
+      height: 20px;
+    }
+    60% {
+      height: 8px;
+    }
+    76% {
+      height: 12px;
+    }
+    92% {
+      height: 3px;
+    }
+  }
+  @keyframes sp-e10 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    18% {
+      height: 12px;
+    }
+    36% {
+      height: 7px;
+    }
+    54% {
+      height: 18px;
+    }
+    72% {
+      height: 4px;
+    }
+    88% {
+      height: 10px;
+    }
+  }
+  @keyframes sp-e11 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    22% {
+      height: 14px;
+    }
+    44% {
+      height: 3px;
+    }
+    66% {
+      height: 16px;
+    }
+    88% {
+      height: 6px;
+    }
+  }
+  @keyframes sp-e12 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    8% {
+      height: 10px;
+    }
+    24% {
+      height: 6px;
+    }
+    40% {
+      height: 15px;
+    }
+    56% {
+      height: 2px;
+    }
+    72% {
+      height: 11px;
+    }
+    90% {
+      height: 4px;
+    }
+  }
+
+  /* 中高频 */
+  @keyframes sp-e13 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    20% {
+      height: 8px;
+    }
+    45% {
+      height: 3px;
+    }
+    70% {
+      height: 10px;
+    }
+    90% {
+      height: 1px;
+    }
+  }
+  @keyframes sp-e14 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    15% {
+      height: 10px;
+    }
+    40% {
+      height: 4px;
+    }
+    65% {
+      height: 12px;
+    }
+    85% {
+      height: 2px;
+    }
+  }
+  @keyframes sp-e15 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    25% {
+      height: 7px;
+    }
+    50% {
+      height: 5px;
+    }
+    75% {
+      height: 9px;
+    }
+  }
+  @keyframes sp-e16 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    10% {
+      height: 11px;
+    }
+    35% {
+      height: 2px;
+    }
+    60% {
+      height: 8px;
+    }
+    85% {
+      height: 4px;
+    }
+  }
+
+  /* 高频 - 小幅度 */
+  @keyframes sp-e17 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    20% {
+      height: 6px;
+    }
+    50% {
+      height: 2px;
+    }
+    80% {
+      height: 7px;
+    }
+  }
+  @keyframes sp-e18 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    15% {
+      height: 8px;
+    }
+    40% {
+      height: 3px;
+    }
+    65% {
+      height: 5px;
+    }
+    90% {
+      height: 1px;
+    }
+  }
+  @keyframes sp-e19 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    25% {
+      height: 5px;
+    }
+    55% {
+      height: 4px;
+    }
+    80% {
+      height: 6px;
+    }
+  }
+  @keyframes sp-e20 {
+    0%,
+    100% {
+      height: 0.5px;
+    }
+    12% {
+      height: 7px;
+    }
+    38% {
+      height: 2px;
+    }
+    62% {
+      height: 9px;
+    }
+    88% {
+      height: 3px;
+    }
   }
 
   /* 优化的显示器选择菜单动画 */
@@ -2038,6 +2668,65 @@
       opacity: 0.45;
       transform: translateY(-1px);
     }
+  }
+
+  /* 毛玻璃主题：高级磨砂玻璃效果 */
+  /* 主容器样式 */
+  .glassmorphism-theme {
+    /* 强烈的背景模糊 + 高透明度 */
+    backdrop-filter: blur(80px) saturate(200%) brightness(1.15);
+    -webkit-backdrop-filter: blur(80px) saturate(200%) brightness(1.15);
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    /* 悬浮阴影：多层次柔和阴影，营造Z轴纵深感 */
+    box-shadow:
+      0 25px 60px rgba(0, 0, 0, 0.35),
+      0 15px 30px rgba(0, 0, 0, 0.25),
+      0 8px 15px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4),
+      inset 1px 0 0 rgba(255, 255, 255, 0.25),
+      inset -1px 0 0 rgba(255, 255, 255, 0.1),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  /* 边缘高光：顶部和左侧的反光线条 */
+  .glassmorphism-theme::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: 
+      /* 顶部高光 */
+      linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.5) 0%,
+        rgba(255, 255, 255, 0.2) 1px,
+        transparent 3px
+      ),
+      /* 左侧高光 */
+        linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0.4) 0%,
+          rgba(255, 255, 255, 0.15) 1px,
+          transparent 3px
+        ),
+      /* 右下角暗部 */
+        linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, 0.05) 100%);
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* 材质噪点：磨砂物理质感 */
+  .glassmorphism-theme::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.04;
+    pointer-events: none;
+    z-index: 101;
+    mix-blend-mode: overlay;
   }
 
   /* 背景流动动画 */
@@ -2258,11 +2947,11 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 14px;
+    padding: 0 12px;
 
     transition:
-      transform 0.35s cubic-bezier(0.32, 0.72, 0, 1),
-      opacity 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+      transform 0.55s cubic-bezier(0.32, 0.72, 0, 1),
+      opacity 0.55s cubic-bezier(0.32, 0.72, 0, 1);
 
     will-change: transform, opacity;
     transform: translate3d(0, 0, 0);
@@ -2276,14 +2965,14 @@
 
   /* 按钮入场动画 */
   .expanded-content.is-visible .flex-1 {
-    animation: button-drop-in 0.2s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+    animation: button-drop-in 0.4s cubic-bezier(0.32, 0.72, 0, 1) forwards;
     opacity: 0;
     transform: translateY(-30px) scale(0.85);
     will-change: transform, opacity;
   }
 
   .expanded-content.is-visible .mt-auto {
-    animation: progress-fade-in 0.15s cubic-bezier(0.32, 0.72, 0, 1) 0.05s
+    animation: progress-fade-in 0.35s cubic-bezier(0.32, 0.72, 0, 1) 0.05s
       forwards;
     opacity: 0;
     transform: translateY(-15px);
@@ -2394,7 +3083,7 @@
     background: transparent !important;
   }
 
-  /* ========== 优化的GPU加速规则 ========== */
+  /* ========== 优化的 GPU 加速规则 ========== */
   .pointer-events-auto {
     -webkit-font-smoothing: antialiased;
     transform: translate3d(0, 0, 0) !important;
@@ -2403,6 +3092,19 @@
     backface-visibility: hidden;
     perspective: 1000px;
     contain: layout style;
+  }
+
+  /* 移除焦点时的默认边框 */
+  :global(*:focus) {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  :global(*:focus-visible) {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
   }
 
   /* 优化的GPU加速按钮 */

@@ -48,6 +48,8 @@
   let previousCover = $state("");
   let isHovered = $state(false);
   let slideDirection = $state<"left" | "right" | "">("");
+  let isAnimating = $state(false); // 动画进行中标志
+  let animationTimeoutId: ReturnType<typeof setTimeout> | null = null; // 动画定时器ID
   let bgColor = $state("rgb(40, 50, 60)");
   let bgGradient = $state(
     "radial-gradient(circle at 50% 50%, rgb(40, 50, 60), rgb(30, 40, 50))",
@@ -326,89 +328,149 @@
     return fallbackCover;
   }
 
-  function extractColors(imgSrc: string) {
-    const img = new Image();
-    if (imgSrc.startsWith("http") && !imgSrc.includes("asset.localhost"))
-      img.crossOrigin = "Anonymous";
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        const size = 80;
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0, size, size);
-        const data = ctx.getImageData(0, 0, size, size).data;
+  async function extractColors(imgSrc: string) {
+    const DEFAULT_COLOR = { r: 60, g: 80, b: 100 };
+    console.log("[颜色提取] 开始:", imgSrc.substring(0, 50));
 
-        const buckets: Record<
-          string,
-          { r: number; g: number; b: number; count: number }
-        > = {};
+    // 保存当前颜色
+    const currentColor = parseColor(bgColor);
 
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i],
-            g = data[i + 1],
-            b = data[i + 2];
-          const lum = r * 0.299 + g * 0.587 + b * 0.114;
-          if (lum < 30 || lum > 235) continue;
+    try {
+      const [r, g, b] = await invoke<[number, number, number]>(
+        "extract_dominant_color",
+        { imagePath: imgSrc },
+      );
 
-          const qr = Math.round(r / 12) * 12;
-          const qg = Math.round(g / 12) * 12;
-          const qb = Math.round(b / 12) * 12;
-          const key = `${qr},${qg},${qb}`;
-          if (!buckets[key]) buckets[key] = { r: qr, g: qg, b: qb, count: 0 };
-          buckets[key].count++;
-        }
+      if (
+        r === DEFAULT_COLOR.r &&
+        g === DEFAULT_COLOR.g &&
+        b === DEFAULT_COLOR.b
+      ) {
+        console.log("[颜色提取] 使用默认颜色");
+        animateColorTransition(currentColor, { r: 40, g: 50, b: 60 });
+        return;
+      }
 
-        function toSaturation(r: number, g: number, b: number): number {
-          const rn = r / 255,
-            gn = g / 255,
-            bn = b / 255;
-          const max = Math.max(rn, gn, bn);
-          const min = Math.min(rn, gn, bn);
-          const l = (max + min) / 2;
-          if (max === min) return 0;
-          return l > 0.5
-            ? (max - min) / (2 - max - min)
-            : (max - min) / (max + min);
-        }
+      // 避免黑色：确保 RGB 值不低于最小亮度
+      const MIN_BRIGHTNESS = 30; // 最小亮度值
+      const adjustedR = Math.max(r, MIN_BRIGHTNESS);
+      const adjustedG = Math.max(g, MIN_BRIGHTNESS);
+      const adjustedB = Math.max(b, MIN_BRIGHTNESS);
 
-        const sorted = Object.values(buckets)
-          .filter((c) => c.count >= 2)
-          .sort((a, b) => {
-            const satA = toSaturation(a.r, a.g, a.b);
-            const satB = toSaturation(b.r, b.g, b.b);
-            const scoreA = satA * Math.log2(a.count + 1);
-            const scoreB = satB * Math.log2(b.count + 1);
-            return scoreB - scoreA;
-          });
+      // 检查整体亮度，如果太暗则提升
+      const brightness = (adjustedR + adjustedG + adjustedB) / 3;
+      if (brightness < 50) {
+        const scale = 50 / brightness;
+        const finalR = Math.min(Math.round(adjustedR * scale), 255);
+        const finalG = Math.min(Math.round(adjustedG * scale), 255);
+        const finalB = Math.min(Math.round(adjustedB * scale), 255);
 
-        if (sorted.length > 0) {
-          const best = sorted[0];
-          const rr = Math.min(best.r + 12, 255);
-          const gg = Math.min(best.g + 12, 255);
-          const bb = Math.min(best.b + 12, 255);
+        const targetColor = {
+          r: Math.min(finalR + 12, 255),
+          g: Math.min(finalG + 12, 255),
+          b: Math.min(finalB + 12, 255),
+        };
+        animateColorTransition(currentColor, targetColor);
+      } else {
+        const targetColor = {
+          r: Math.min(adjustedR + 12, 255),
+          g: Math.min(adjustedG + 12, 255),
+          b: Math.min(adjustedB + 12, 255),
+        };
+        animateColorTransition(currentColor, targetColor);
+      }
 
-          const rr2 = Math.max(best.r - 20, 0);
-          const gg2 = Math.max(best.g - 20, 0);
-          const bb2 = Math.max(best.b - 20, 0);
+      console.log("[颜色提取] 成功");
+    } catch (error) {
+      console.error("[颜色提取] 失败:", error);
+      animateColorTransition(currentColor, { r: 40, g: 50, b: 60 });
+    }
+  }
 
-          // 直接设置最终颜色，不使用 interval 动画
-          bgColor = `rgb(${rr}, ${gg}, ${bb})`;
-          bgGradient = `radial-gradient(circle at 50% 50%, rgb(${rr}, ${gg}, ${bb}), rgb(${rr2}, ${gg2}, ${bb2}))`;
-        } else {
-          bgColor = "rgb(40, 50, 60)";
-          bgGradient =
-            "radial-gradient(circle at 50% 50%, rgb(40, 50, 60), rgb(30, 40, 50))";
-        }
-      } catch {
-        bgColor = "rgb(40, 50, 60)";
-        bgGradient =
-          "radial-gradient(circle at 50% 50%, rgb(40, 50, 60), rgb(30, 40, 50))";
+  // 解析颜色字符串为 RGB 对象
+  function parseColor(colorStr: string): { r: number; g: number; b: number } {
+    const match = colorStr.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (match) {
+      return {
+        r: parseInt(match[1]),
+        g: parseInt(match[2]),
+        b: parseInt(match[3]),
+      };
+    }
+    return { r: 40, g: 50, b: 60 }; // 默认颜色
+  }
+
+  // 颜色渐变动画
+  function animateColorTransition(
+    from: { r: number; g: number; b: number },
+    to: { r: number; g: number; b: number },
+  ) {
+    const startTime = Date.now();
+    const duration = 300;
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = easeInOutCubic(progress);
+
+      // 插值计算新颜色
+      const currentR = Math.round(from.r + (to.r - from.r) * eased);
+      const currentG = Math.round(from.g + (to.g - from.g) * eased);
+      const currentB = Math.round(from.b + (to.b - from.b) * eased);
+
+      bgColor = `rgb(${currentR}, ${currentG}, ${currentB})`;
+      bgGradient = `radial-gradient(circle at 50% 50%, rgb(${Math.min(currentR + 8, 255)}, ${Math.min(currentG + 8, 255)}, ${Math.min(currentB + 8, 255)}), rgb(${Math.max(currentR - 15, 0)}, ${Math.max(currentG - 15, 0)}, ${Math.max(currentB - 15, 0)}))`;
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
       }
     };
-    img.src = imgSrc;
+
+    requestAnimationFrame(animate);
+  }
+
+  // 封面切换函数（无动画）
+  function transitionCover(
+    newCover: string,
+    direction: "left" | "right" = "left",
+  ) {
+    if (animationTimeoutId) {
+      clearTimeout(animationTimeoutId);
+      animationTimeoutId = null;
+    }
+
+    // 保存当前颜色作为起始颜色
+    const oldBgColor = bgColor;
+    const oldBgGradient = bgGradient;
+
+    displayCover = newCover;
+    if (newCover) extractColors(newCover);
+    previousCover = "";
+    slideDirection = "";
+    isAnimating = false;
+
+    // 背景颜色渐变动画（200ms）
+    const startTime = Date.now();
+    const duration = 200;
+
+    const animateColor = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeProgress = easeInOutCubic(progress);
+
+      // 如果需要继续动画
+      if (progress < 1) {
+        requestAnimationFrame(animateColor);
+      }
+    };
+
+    // 启动动画
+    animateColor();
+  }
+
+  // 缓动函数
+  function easeInOutCubic(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
   // 检测 MV 文件大小
@@ -781,49 +843,40 @@
                     img.crossOrigin = "Anonymous";
                   img.onload = () => {
                     if (currentTrackKey === newTrackKey) {
-                      previousCover = displayCover;
-                      slideDirection = "left";
-                      displayCover = hdCover;
-                      extractColors(hdCover);
-                      setTimeout(() => {
-                        slideDirection = "";
-                        previousCover = "";
-                      }, 400);
+                      transitionCover(hdCover, "left");
                     }
                   };
-                  img.onerror = handleSMTCCover;
+                  img.onerror = () => {
+                    if (currentTrackKey === newTrackKey) {
+                      transitionCover(smtcCover, "left");
+                    }
+                  };
                   img.src = hdCover;
                 })
-                .catch(handleSMTCCover);
+                .catch(() => {
+                  if (currentTrackKey === newTrackKey) {
+                    transitionCover(smtcCover, "left");
+                  }
+                });
             } else {
               // 不获取高清图，直接使用 SMTC 图片
-              handleSMTCCover();
-            }
-
-            // 处理 SMTC 图片的函数
-            function handleSMTCCover() {
               if (currentTrackKey === newTrackKey) {
-                previousCover = displayCover;
-                slideDirection = "left";
-                displayCover = smtcCover;
-                if (smtcCover) extractColors(smtcCover);
-                setTimeout(() => {
-                  slideDirection = "";
-                  previousCover = "";
-                }, 400);
+                transitionCover(smtcCover, "left");
               }
             }
 
             // 如果启用了 MV 播放，尝试获取 MV（在专辑封面加载完成后）
             if (isMVPlaybackEnabled) {
-              // 先停止旧 MV，然后获取新 MV
               fetchMVFromAppleMusic(payload.title, payload.artist).then(
                 (mvLink) => {
                   if (mvLink && currentTrackKey === newTrackKey) {
-                    // 确保在切换歌曲时更新 MV
-                    mvUrl = mvLink;
-                    isPlayingMV = true;
-                    console.log("[MV] 切换到新 MV:", mvLink);
+                    setTimeout(() => {
+                      if (currentTrackKey === newTrackKey) {
+                        mvUrl = mvLink;
+                        isPlayingMV = true;
+                        console.log("[MV] 切换到新 MV:", mvLink);
+                      }
+                    }, 450);
                   }
                 },
               );
@@ -831,14 +884,7 @@
           } else {
             // 网页或其他来源，直接使用 SMTC 图片
             if (currentTrackKey === newTrackKey) {
-              previousCover = displayCover;
-              slideDirection = "left";
-              displayCover = smtcCover;
-              if (smtcCover) extractColors(smtcCover);
-              setTimeout(() => {
-                slideDirection = "";
-                previousCover = "";
-              }, 400);
+              transitionCover(smtcCover, "left");
             }
           }
         } else {
@@ -934,13 +980,6 @@
       eventListeners.length = 0;
     }
 
-    // 清理图片缓存
-    if (imageCache) {
-      Object.keys(imageCache).forEach((key) => {
-        delete imageCache[key];
-      });
-    }
-
     // 清理临时 Canvas
     tempCanvasCache = null;
     newCanvasRef = null;
@@ -999,72 +1038,124 @@
   // 监听 displayCover 和 enablePixelArt 变化，渲染到 Canvas
   $effect(() => {
     if (displayCover) {
-      requestAnimationFrame(() => {
-        // 使用缓存的 Canvas 引用
-        const renderFunction = enablePixelArt
-          ? renderImageToCanvas
-          : renderImageToCanvasNormal;
+      const renderFunction = enablePixelArt
+        ? renderImageToCanvas
+        : renderImageToCanvasNormal;
 
-        // 渲染新图 - 如果缓存引用为空，直接查询DOM
-        if (newCanvasRef) {
-          renderFunction(newCanvasRef, displayCover);
-        } else {
-          const newCanvas = document.querySelector(
-            ".album-art-new",
-          ) as HTMLCanvasElement;
-          if (newCanvas) {
-            renderFunction(newCanvas, displayCover);
-            newCanvasRef = newCanvas; // 缓存引用
-          }
-        }
+      const newCanvas =
+        newCanvasRef ||
+        (document.querySelector(".album-art-new") as HTMLCanvasElement);
 
-        // 渲染旧图（如果有）
-        if (oldCanvasRef && previousCover) {
-          renderFunction(oldCanvasRef, previousCover);
-        } else if (previousCover) {
-          const oldCanvas = document.querySelector(
-            ".album-art-old",
-          ) as HTMLCanvasElement;
-          if (oldCanvas) {
-            renderFunction(oldCanvas, previousCover);
-            oldCanvasRef = oldCanvas; // 缓存引用
-          }
+      if (newCanvas) {
+        if (!newCanvasRef) newCanvasRef = newCanvas;
+        renderFunction(newCanvas, displayCover);
+      }
+
+      if (previousCover) {
+        const oldCanvas =
+          oldCanvasRef ||
+          (document.querySelector(".album-art-old") as HTMLCanvasElement);
+
+        if (oldCanvas) {
+          if (!oldCanvasRef) oldCanvasRef = oldCanvas;
+          renderFunction(oldCanvas, previousCover);
         }
-      });
+      }
     }
   });
 
-  // 缓存临时 Canvas 和图片对象，避免重复创建
-  let tempCanvasCache = $state<HTMLCanvasElement | null>(null);
-  let imageCache = $state<{ [key: string]: HTMLImageElement }>({});
+  // 缓存处理后的图片
+  let processedImageCache = $state<{ [key: string]: string }>({}); // 缓存处理后的图片 base64
+  let processingQueue = $state<Set<string>>(new Set()); // 正在处理的图片队列
 
-  // 渲染图片到 Canvas 并应用像素化效果
-  function renderImageToCanvas(canvas: HTMLCanvasElement, imageUrl: string) {
+  // 使用后端 API 处理图片（支持像素化）
+  async function processImageBackend(
+    imageUrl: string,
+    enablePixelArt: boolean,
+  ): Promise<string> {
+    // 如果已经在处理队列中，等待
+    if (processingQueue.has(imageUrl)) {
+      return new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (!processingQueue.has(imageUrl) && processedImageCache[imageUrl]) {
+            clearInterval(checkInterval);
+            resolve(processedImageCache[imageUrl]);
+          }
+        }, 50);
+      });
+    }
+
+    // 如果已有缓存，直接返回
+    if (processedImageCache[imageUrl]) {
+      return processedImageCache[imageUrl];
+    }
+
+    processingQueue.add(imageUrl);
+
+    try {
+      // 调用后端 API 处理图片
+      const processedBase64 = await invoke<string>("process_image", {
+        imagePath: imageUrl,
+        enablePixelArt: enablePixelArt,
+      });
+
+      // 缓存结果
+      processedImageCache[imageUrl] = processedBase64;
+      console.log(
+        "[图片处理] 后端处理完成:",
+        enablePixelArt ? "像素化" : "原图",
+      );
+      return processedBase64;
+    } catch (error) {
+      console.error("[图片处理] 后端处理失败:", error);
+      // 如果是空图片错误，使用默认占位图
+      if (
+        error &&
+        typeof error === "string" &&
+        error.includes("图片数据为空")
+      ) {
+        console.log("[图片处理] 图片数据为空，使用原图");
+        return imageUrl;
+      }
+      // 失败时返回原图
+      return imageUrl;
+    } finally {
+      processingQueue.delete(imageUrl);
+    }
+  }
+
+  // 渲染图片到 Canvas（简化版，直接使用后端处理后的 base64）
+  async function renderImageToCanvas(
+    canvas: HTMLCanvasElement,
+    imageUrl: string,
+  ) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // 检查图片缓存
-    if (imageCache[imageUrl]) {
-      renderCachedImage(canvas, imageCache[imageUrl], true);
-      return;
+    try {
+      // 使用后端 API 处理图片
+      const processedUrl = await processImageBackend(imageUrl, enablePixelArt);
+
+      // 加载处理后的图片
+      const img = new Image();
+      img.onload = () => {
+        // 设置 Canvas 尺寸
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        // 绘制图片
+        ctx.drawImage(img, 0, 0);
+        console.log("[Canvas] 图片已绘制");
+      };
+      img.onerror = () => {
+        console.error("[Canvas] 图片加载失败，使用原图");
+        renderImageToCanvasNormal(canvas, imageUrl);
+      };
+      img.src = processedUrl;
+    } catch (error) {
+      console.error("[图片处理] 处理错误:", error);
+      renderImageToCanvasNormal(canvas, imageUrl);
     }
-
-    const img = new Image();
-    if (imageUrl.startsWith("http") && !imageUrl.includes("asset.localhost")) {
-      img.crossOrigin = "Anonymous";
-    }
-
-    img.onload = () => {
-      // 缓存图片对象
-      imageCache[imageUrl] = img;
-      renderCachedImage(canvas, img, true);
-    };
-
-    img.onerror = () => {
-      console.error("[Canvas] 图片加载失败:", imageUrl);
-    };
-
-    img.src = imageUrl;
   }
 
   // 智能图片质量分析函数
@@ -1098,7 +1189,7 @@
     return 12;
   }
 
-  // 渲染已缓存的图片（像素化版本）
+  // 高级像素化渲染（使用调色板量化 + Floyd-Steinberg 抖动）
   function renderCachedImage(
     canvas: HTMLCanvasElement,
     img: HTMLImageElement,
@@ -1131,19 +1222,24 @@
       }
 
       const tempCtx = tempCanvasCache.getContext("2d");
-      if (tempCtx) {
-        // 关闭图像平滑处理
-        tempCtx.imageSmoothingEnabled = false;
-        tempCtx.imageSmoothingQuality = "low";
+      if (!tempCtx) return;
 
-        // 缩小图片
-        tempCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+      // 关闭图像平滑处理
+      tempCtx.imageSmoothingEnabled = false;
+      tempCtx.imageSmoothingQuality = "low";
 
-        // 清除主 Canvas
+      // 缩小图片
+      tempCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+
+      // 尝试获取像素数据（可能会因为跨域而失败）
+      let imageData: ImageData;
+      try {
+        imageData = tempCtx.getImageData(0, 0, scaledWidth, scaledHeight);
+      } catch (e) {
+        // 跨域污染，使用简单像素化方案
+        console.warn("[像素化] 跨域图片污染，使用简单方案:", e);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.imageSmoothingEnabled = false;
-
-        // 将缩小后的图片放大绘制回主 Canvas，创建像素化效果
         ctx.drawImage(
           tempCanvasCache,
           0,
@@ -1155,11 +1251,189 @@
           canvas.width,
           canvas.height,
         );
+        return;
       }
+
+      const data = imageData.data;
+
+      // 提取全局调色板（使用 NeuQuant 简化版）
+      const palette = extractOptimalPalette(data, 32); // 32 种颜色
+
+      // 应用调色板量化 + Floyd-Steinberg 抖动
+      applyPaletteWithDithering(data, scaledWidth, scaledHeight, palette);
+
+      // 将处理后的数据放回临时 Canvas
+      tempCtx.putImageData(imageData, 0, 0);
+
+      // 清除主 Canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.imageSmoothingEnabled = false;
+
+      // 将处理好的像素画放大绘制回主 Canvas
+      ctx.drawImage(
+        tempCanvasCache,
+        0,
+        0,
+        scaledWidth,
+        scaledHeight,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
     } else {
       // 正常渲染高清图
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0);
+    }
+  }
+
+  // 提取最优全局调色板（简化版 NeuQuant 算法）
+  function extractOptimalPalette(
+    data: Uint8ClampedArray,
+    numColors: number,
+  ): Uint8ClampedArray {
+    // 统计颜色出现频率
+    const colorCount = new Map<string, number>();
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+      if (a < 128) continue; // 跳过透明像素
+
+      // 量化颜色以减少键数量
+      const qr = Math.round(r / 8) * 8;
+      const qg = Math.round(g / 8) * 8;
+      const qb = Math.round(b / 8) * 8;
+      const key = `${qr},${qg},${qb}`;
+
+      colorCount.set(key, (colorCount.get(key) || 0) + 1);
+    }
+
+    // 按频率排序
+    const sortedColors = Array.from(colorCount.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, numColors * 2); // 取前 2 倍数量用于后续优化
+
+    // 使用简单的 k-means 聚类思想优化调色板
+    const palette = new Uint8ClampedArray(numColors * 4);
+    for (let i = 0; i < numColors; i++) {
+      if (i < sortedColors.length) {
+        const [r, g, b] = sortedColors[i][0].split(",").map(Number);
+        palette[i * 4] = r;
+        palette[i * 4 + 1] = g;
+        palette[i * 4 + 2] = b;
+        palette[i * 4 + 3] = 255;
+      } else {
+        // 填充剩余颜色
+        palette[i * 4] = 0;
+        palette[i * 4 + 1] = 0;
+        palette[i * 4 + 2] = 0;
+        palette[i * 4 + 3] = 255;
+      }
+    }
+
+    return palette;
+  }
+
+  // 应用调色板量化 + Floyd-Steinberg 误差扩散抖动
+  function applyPaletteWithDithering(
+    data: Uint8ClampedArray,
+    width: number,
+    height: number,
+    palette: Uint8ClampedArray,
+  ) {
+    // 创建误差缓冲区
+    const errors = new Float32Array(data.length);
+
+    // 查找最接近的调色板颜色
+    function findClosestColor(
+      r: number,
+      g: number,
+      b: number,
+    ): [number, number, number] {
+      let minDist = Infinity;
+      let closestIdx = 0;
+
+      for (let i = 0; i < palette.length / 4; i++) {
+        const pr = palette[i * 4];
+        const pg = palette[i * 4 + 1];
+        const pb = palette[i * 4 + 2];
+
+        // 使用加权欧几里得距离（考虑人眼对绿色更敏感）
+        const dist = 2 * (r - pr) ** 2 + 4 * (g - pg) ** 2 + 3 * (b - pb) ** 2;
+
+        if (dist < minDist) {
+          minDist = dist;
+          closestIdx = i;
+        }
+      }
+
+      return [
+        palette[closestIdx * 4],
+        palette[closestIdx * 4 + 1],
+        palette[closestIdx * 4 + 2],
+      ];
+    }
+
+    // 逐像素处理
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+
+        // 加上累积的误差
+        const r = Math.max(0, Math.min(255, data[i] + errors[i]));
+        const g = Math.max(0, Math.min(255, data[i + 1] + errors[i + 1]));
+        const b = Math.max(0, Math.min(255, data[i + 2] + errors[i + 2]));
+
+        // 找到最接近的调色板颜色
+        const [qr, qg, qb] = findClosestColor(r, g, b);
+
+        // 更新像素
+        data[i] = qr;
+        data[i + 1] = qg;
+        data[i + 2] = qb;
+        // alpha 通道保持不变
+
+        // 计算量化误差
+        const errR = r - qr;
+        const errG = g - qg;
+        const errB = b - qb;
+
+        // Floyd-Steinberg 误差扩散
+        // 右：7/16
+        if (x + 1 < width) {
+          const ni = (y * width + (x + 1)) * 4;
+          errors[ni] += errR * (7 / 16);
+          errors[ni + 1] += errG * (7 / 16);
+          errors[ni + 2] += errB * (7 / 16);
+        }
+
+        // 左下：3/16
+        if (x > 0 && y + 1 < height) {
+          const ni = ((y + 1) * width + (x - 1)) * 4;
+          errors[ni] += errR * (3 / 16);
+          errors[ni + 1] += errG * (3 / 16);
+          errors[ni + 2] += errB * (3 / 16);
+        }
+
+        // 正下：5/16
+        if (y + 1 < height) {
+          const ni = ((y + 1) * width + x) * 4;
+          errors[ni] += errR * (5 / 16);
+          errors[ni + 1] += errG * (5 / 16);
+          errors[ni + 2] += errB * (5 / 16);
+        }
+
+        // 右下：1/16
+        if (x + 1 < width && y + 1 < height) {
+          const ni = ((y + 1) * width + (x + 1)) * 4;
+          errors[ni] += errR * (1 / 16);
+          errors[ni + 1] += errG * (1 / 16);
+          errors[ni + 2] += errB * (1 / 16);
+        }
+      }
     }
   }
 
@@ -1168,20 +1442,12 @@
     canvas: HTMLCanvasElement,
     imageUrl: string,
   ) {
-    // 检查图片缓存
-    if (imageCache[imageUrl]) {
-      renderCachedImage(canvas, imageCache[imageUrl], false);
-      return;
-    }
-
     const img = new Image();
     if (imageUrl.startsWith("http") && !imageUrl.includes("asset.localhost")) {
       img.crossOrigin = "Anonymous";
     }
 
     img.onload = () => {
-      // 缓存图片对象
-      imageCache[imageUrl] = img;
       renderCachedImage(canvas, img, false);
     };
 
@@ -1247,9 +1513,10 @@
   class:pixelated={enablePixelArt}
   role="region"
   aria-label="音乐播放器"
-  style="--bg: {bgColor}; --bg-gradient: {bgGradient};"
+  style:--bg={bgColor}
+  style:--bg-gradient={bgGradient}
 >
-  <div class="bg-solid"></div>
+  <div class="bg-solid" style:background={bgGradient}></div>
 
   <!-- 可拖拽的顶部栏 - 鼠标悬停时滑下（锁定时固定显示） -->
   {#if !isFloatingWindowLocked || isFloatingWindowLocked}
@@ -1368,7 +1635,6 @@
         class="ctrl-btn"
         onclick={(e) => {
           e.stopPropagation();
-          slideDirection = "right";
           invoke("control_media", { action: "prev" });
         }}
         aria-label="上一首"
@@ -1392,7 +1658,6 @@
         class="ctrl-btn"
         onclick={(e) => {
           e.stopPropagation();
-          slideDirection = "left";
           invoke("control_media", { action: "next" });
         }}
         aria-label="下一首"
@@ -1430,11 +1695,18 @@
     background: #000;
     user-select: none;
     -webkit-user-select: none;
-    border: 5px solid #000;
+    border: 3px solid #000; /* 缩小边框 */
     box-sizing: border-box;
     box-shadow:
       0 12px 48px rgba(0, 0, 0, 0.5),
       0 0 0 0.5px rgba(255, 255, 255, 0.05);
+
+    /* 原有的 clip-path 保留 */
+    clip-path: inset(0 round 5px);
+
+    /* 新增：修复 Webview 绝对定位子元素圆角溢出的核心代码 */
+    isolation: isolate;
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
   }
 
   .bg-solid {
@@ -1445,12 +1717,12 @@
     bottom: 60px; /* 填充到歌曲信息层上方 */
     z-index: 1;
     background: var(--bg-gradient);
-    border-radius: 5px;
     transition:
-      background 1.2s cubic-bezier(0.4, 0, 0.2, 1),
+      background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    /* 从上往下加深的阴影效果 */
-    box-shadow: inset 0 -20px 50px rgba(0, 0, 0, 0.4);
+
+    /* 新增：与父元素一致的圆角 */
+    border-radius: 5px;
   }
 
   .player.hovered .bg-solid {
@@ -1594,7 +1866,7 @@
   /* ==================== 专辑封面 ==================== */
   .album-stage {
     position: absolute;
-    top: 25px; /* 留出顶部栏的空间（20px） */
+    top: 25px; /* 留出顶部栏的空间（25px） */
     bottom: 60px; /* 与填充色底部对齐 */
     left: 0;
     right: 0;
@@ -1603,7 +1875,6 @@
     align-items: center;
     justify-content: center;
     padding: 12px; /* 减小内边距，让图片更大 */
-    border-radius: 5px;
     perspective: 1200px; /* 3D 透视效果 */
   }
 
@@ -1615,8 +1886,8 @@
     max-height: min(calc(100% - 24px), calc(100vh - 100px - 24px), 600px);
     position: relative;
     box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.5),
-      0 2px 12px rgba(0, 0, 0, 0.3);
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      0 2px 12px rgba(0, 0, 0, 0.15);
     border-radius: 10px;
     overflow: hidden;
     min-width: 50px;
@@ -1645,7 +1916,7 @@
     aspect-ratio: 1 / 1;
     object-fit: cover;
     display: block;
-    border-radius: 5px;
+    border-radius: 10px;
     pointer-events: none; /* 让鼠标事件穿透，不阻挡按钮点击 */
     /* 优化的像素化效果 */
     image-rendering: -webkit-optimize-contrast;
@@ -1715,10 +1986,14 @@
   /* 旧图在上层，新图在下层 */
   .album-art-old {
     z-index: 2;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
   }
 
   .album-art-new {
     z-index: 1;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
   }
 
   /* 旧图向左滑出动画 */
@@ -1808,15 +2083,7 @@
     perspective: 1000px;
   }
 
-  /* 像素化圆角效果 */
-  .player.pixelated {
-    border-radius: 0 !important; /* 移除圆角 */
-  }
-
-  .player.pixelated .bg-solid {
-    border-radius: 0 !important;
-  }
-
+  /* 像素化圆角效果 - 仅移除专辑封面和控制按钮的圆角，保留悬浮窗整体圆角 */
   .player.pixelated .album-art {
     border-radius: 0 !important;
   }

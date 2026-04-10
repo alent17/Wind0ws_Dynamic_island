@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Dynamic Island permissions",
+  "description": "Isle permissions",
   "windows": ["main", "settings-window", "settings", "floating_player"],
   "permissions": [
     "core:default",
@@ -20,6 +20,11 @@
     "global-shortcut:allow-register",
     "core:window:allow-set-always-on-top",
     "fs:allow-read-file",
-    "fs:allow-cache-read"
+    "fs:allow-cache-read",
+    "fs:allow-write-file",
+    "fs:allow-read-dir",
+    "fs:allow-remove",
+    "fs:allow-create",
+    "core:webview:allow-create-webview-window"
   ]
 }
