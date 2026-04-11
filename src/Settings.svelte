@@ -728,21 +728,49 @@
 
 <style>
   :root {
-    --bg-app: #000000;
-    --bg-card: #1c1c1e;
-    --bg-card-secondary: #2c2c2e;
-    --bg-hover: #3a3a3c;
-    --border: #38383a;
-    --text: #ffffff;
-    --text-secondary: #8e8e93;
-    --text-hint: #636366;
-    --accent: #30d158;
-    --accent-light: rgba(48, 209, 88, 0.15);
-    --success: #30d158;
-    --danger: #ff453a;
-    --radius: 10px;
-    --radius-sm: 8px;
-    --radius-lg: 20px;
+    /* Spotify Design System Colors */
+    /* Base */
+    --base-black: #000000;
+    --base-dark: #121212;
+    --base-dark-gray: #181818;
+    --base-mid-gray: #1f1f1f;
+    --base-card: #252525;
+
+    /* Text */
+    --text-base: #ffffff;
+    --text-secondary: #b3b3b3;
+    --text-subdued: #cbcbcb;
+
+    /* Accent */
+    --accent-green: #1ed760;
+    --accent-green-dark: #1db954;
+
+    /* Semantic */
+    --text-negative: #f3727f;
+    --text-warning: #ffa42b;
+    --text-announcement: #539df5;
+
+    /* Border & Shadow */
+    --border-gray: #4d4d4d;
+    --border-light: #7c7c7c;
+    --shadow-heavy: rgba(0, 0, 0, 0.5) 0px 8px 24px;
+    --shadow-medium: rgba(0, 0, 0, 0.3) 0px 8px 8px;
+    --inset-border: rgb(18, 18, 18) 0px 1px 0px,
+      rgb(124, 124, 124) 0px 0px 0px 1px inset;
+
+    /* Radius */
+    --radius-pill: 9999px;
+    --radius-circle: 50%;
+    --radius-card: 8px;
+    --radius-input: 500px;
+
+    /* Spacing */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 20px;
+    --spacing-xxl: 24px;
   }
 
   * {
@@ -755,19 +783,25 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
-    background: var(--bg-app);
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
-      Roboto, sans-serif;
-    color: var(--text);
+    background: var(--base-dark);
+    font-family:
+      "SpotifyMixUI",
+      -apple-system,
+      BlinkMacSystemFont,
+      "SF Pro Text",
+      "Segoe UI",
+      Roboto,
+      sans-serif;
+    color: var(--text-base);
     overflow: hidden;
   }
 
   /* ========== 顶部栏 ========== */
   .header {
-    background: var(--bg-app);
-    padding: 12px 20px;
+    background: var(--base-dark);
+    padding: var(--spacing-md) var(--spacing-xl);
     -webkit-app-region: drag;
-    border-bottom: 0.5px solid var(--border);
+    border-bottom: 1px solid var(--border-gray);
   }
 
   .header-content {
@@ -777,14 +811,19 @@
   }
 
   .title {
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 700;
-    color: var(--text);
+    color: var(--text-base);
+    font-family:
+      "SpotifyMixUITitle",
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif;
   }
 
   .window-controls {
     display: flex;
-    gap: 8px;
+    gap: var(--spacing-sm);
     -webkit-app-region: no-drag;
   }
 
@@ -792,59 +831,61 @@
     width: 32px;
     height: 32px;
     border: none;
-    background: var(--bg-card-secondary);
-    border-radius: 50%;
-    color: var(--text);
+    background: var(--base-mid-gray);
+    border-radius: var(--radius-circle);
+    color: var(--text-base);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
   }
 
   .icon-btn:hover {
-    background: var(--bg-hover);
+    background: var(--base-card);
+    transform: scale(1.05);
   }
 
   .icon-btn.close:hover {
-    background: var(--danger);
+    background: var(--text-negative);
   }
 
   /* ========== 内容区 ========== */
   .content {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: hidden;
     padding: 0;
+    background: var(--base-dark);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
   .content::-webkit-scrollbar {
-    width: 1px;
-  }
-
-  .content::-webkit-scrollbar-thumb {
-    background: transparent;
+    display: none;
   }
 
   /* ========== 预览窗口 ========== */
   .preview-section {
-    padding: 20px;
-    background: var(--bg-app);
+    padding: var(--spacing-xxl);
+    background: var(--base-dark-gray);
+    border-bottom: 1px solid var(--border-gray);
   }
 
   .preview-title {
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 12px;
+    font-weight: 700;
     color: var(--text-secondary);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 16px;
+    letter-spacing: 1.4px;
+    margin-bottom: var(--spacing-lg);
+    font-family: "SpotifyMixUI", sans-serif;
   }
 
   .preview-container {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    margin-bottom: 20px;
+    gap: var(--spacing-xxl);
+    margin-bottom: var(--spacing-xl);
     width: 100%;
     align-items: flex-start;
     padding: 0;
@@ -857,13 +898,13 @@
     width: 340px;
     height: 84px;
     border-radius: 42px;
-    background: #000000;
+    background: var(--base-black);
     padding: 10px 14px;
     position: relative;
     overflow: hidden;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-    margin-bottom: 20px;
+    box-shadow: var(--shadow-heavy);
+    margin-bottom: var(--spacing-xl);
     flex-shrink: 0;
   }
 
@@ -872,13 +913,13 @@
   }
 
   .island-preview.theme-glassmorphism {
-    background: var(--bg-card-secondary);
+    background: var(--base-mid-gray);
     backdrop-filter: blur(10px);
   }
 
   .island-preview.expanded {
     height: 220px;
-    padding: 16px;
+    padding: var(--spacing-lg);
   }
 
   .island-content {
@@ -886,13 +927,13 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--spacing-md);
     height: 100%;
   }
 
   .island-content.expanded {
     flex-direction: column;
-    gap: 8px;
+    gap: var(--spacing-sm);
     height: 100%;
   }
 
@@ -1348,33 +1389,36 @@
   /* ========== 区块 ========== */
   .section {
     margin-bottom: 0;
-    padding: 0 20px 20px;
+    padding: 0 var(--spacing-xl) var(--spacing-xl);
+    background: var(--base-dark);
   }
 
   .section-title {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 700;
     color: var(--text-secondary);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 12px;
-    padding: 0 4px;
+    letter-spacing: 1.4px;
+    margin-bottom: var(--spacing-md);
+    padding: 0 var(--spacing-sm);
+    font-family: "SpotifyMixUI", sans-serif;
   }
 
   .section-hint {
     font-size: 12px;
-    color: var(--text-hint);
-    margin-bottom: 12px;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-md);
   }
 
   /* ========== 主题选择器 ========== */
   .theme-selector {
     display: flex;
-    gap: 10px;
-    background: var(--bg-card);
-    padding: 6px;
-    border-radius: var(--radius-lg);
-    margin-bottom: 20px;
+    gap: var(--spacing-sm);
+    background: var(--base-mid-gray);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-card);
+    margin-bottom: var(--spacing-xl);
+    box-shadow: var(--shadow-medium);
   }
 
   .theme-option {
@@ -1382,22 +1426,30 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 12px 16px;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-lg);
     border: none;
-    border-radius: var(--radius);
+    border-radius: var(--radius-pill);
     background: transparent;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
+    font-family: "SpotifyMixUI", sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: var(--text-secondary);
   }
 
   .theme-option:hover {
-    background: var(--bg-hover);
+    background: var(--base-card);
+    transform: scale(1.02);
   }
 
   .theme-option.active {
-    background: var(--accent);
+    background: var(--accent-green);
+    color: var(--base-dark);
   }
 
   .theme-icon-wrapper {
@@ -1406,38 +1458,39 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text);
+    color: var(--text-base);
   }
 
   .theme-option.active .theme-icon-wrapper {
-    color: white;
+    color: var(--base-dark);
   }
 
   .theme-label {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-base);
   }
 
   .theme-option.active .theme-label {
-    color: white;
+    color: var(--base-dark);
   }
 
   /* ========== 卡片 ========== */
   .setting-card {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
+    background: var(--base-dark-gray);
+    border-radius: var(--radius-card);
     overflow: hidden;
-    margin-bottom: 20px;
+    margin-bottom: var(--spacing-xl);
+    box-shadow: var(--shadow-medium);
   }
 
   .setting-row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px 16px;
-    border-bottom: 0.5px solid var(--border);
-    transition: background 0.15s ease;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    border-bottom: 1px solid var(--border-gray);
+    transition: background 0.2s ease;
   }
 
   .setting-row:last-child {
@@ -1445,51 +1498,52 @@
   }
 
   .setting-row:hover {
-    background: var(--bg-hover);
+    background: var(--base-mid-gray);
   }
 
   .setting-row.danger:hover {
-    background: rgba(255, 59, 48, 0.1);
+    background: rgba(243, 114, 127, 0.1);
   }
 
   .setting-icon {
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--bg-card-secondary);
-    border-radius: var(--radius-sm);
+    background: var(--base-mid-gray);
+    border-radius: var(--radius-circle);
     color: var(--text-secondary);
     flex-shrink: 0;
   }
 
   .setting-icon.danger {
-    background: rgba(255, 59, 48, 0.1);
-    color: var(--danger);
+    background: rgba(243, 114, 127, 0.1);
+    color: var(--text-negative);
   }
 
   .setting-info {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--spacing-xs);
     min-width: 0;
   }
 
   .setting-label {
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--text);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-base);
+    font-family: "SpotifyMixUI", sans-serif;
   }
 
   .setting-hint {
-    font-size: 12px;
-    color: var(--text-hint);
+    font-size: 14px;
+    color: var(--text-secondary);
   }
 
   .danger-text {
-    color: var(--danger);
+    color: var(--text-negative);
   }
 
   /* ========== 开关 ========== */
@@ -1498,15 +1552,16 @@
     width: 51px;
     height: 31px;
     border: none;
-    background: var(--bg-card-secondary);
-    border-radius: 16px;
+    background: var(--base-mid-gray);
+    border-radius: var(--radius-pill);
     cursor: pointer;
     transition: background 0.2s ease;
     flex-shrink: 0;
+    box-shadow: var(--inset-border);
   }
 
   .toggle.active {
-    background: var(--accent);
+    background: var(--accent-green);
   }
 
   .toggle-knob {
@@ -1517,7 +1572,7 @@
     height: 25px;
     background: white;
     border-radius: 50%;
-    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
     transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
@@ -1529,37 +1584,45 @@
   .link-btn {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 6px 12px;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-md);
     background: transparent;
     border: none;
-    border-radius: var(--radius-sm);
-    color: var(--accent);
-    font-size: 13px;
-    font-weight: 500;
+    border-radius: var(--radius-pill);
+    color: var(--accent-green);
+    font-size: 14px;
+    font-weight: 700;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    font-family: "SpotifyMixUI", sans-serif;
   }
 
   .link-btn:hover {
-    background: var(--accent-light);
+    background: rgba(30, 215, 96, 0.1);
+    transform: scale(1.02);
   }
 
   /* ========== 危险按钮 ========== */
   .danger-btn {
-    padding: 8px 16px;
-    background: var(--danger);
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: var(--text-negative);
     color: white;
     border: none;
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    font-weight: 600;
+    border-radius: var(--radius-pill);
+    font-size: 14px;
+    font-weight: 700;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    font-family: "SpotifyMixUI", sans-serif;
   }
 
   .danger-btn:hover {
     opacity: 0.9;
+    transform: scale(1.02);
   }
 
   /* ========== 播放器列表 ========== */
@@ -1567,16 +1630,17 @@
     display: flex;
     flex-direction: column;
     gap: 0;
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
+    background: var(--base-dark-gray);
+    border-radius: var(--radius-card);
     overflow: hidden;
+    box-shadow: var(--shadow-medium);
   }
 
   .player-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 14px 16px;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
     background: transparent;
     border-bottom: 0.5px solid var(--border);
     border-radius: 0;
