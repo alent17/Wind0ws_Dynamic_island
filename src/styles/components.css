@@ -1,0 +1,168 @@
+/**
+ * Component Styles - 组件样式定义
+ */
+
+@import './variables.css';
+
+/* ========== Button Component ========== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  font-family: var(--font-family-ui);
+  font-weight: var(--font-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-decoration: none;
+}
+
+.btn:not(.btn-circular):not(.btn-disabled):hover {
+  transform: scale(1.02);
+}
+
+.btn:not(.btn-circular):not(.btn-disabled):active {
+  transform: scale(0.98);
+}
+
+.btn-primary {
+  background: var(--accent-green);
+  color: var(--base-dark);
+  border-radius: var(--radius-pill);
+}
+
+.btn-primary:hover:not(.btn-disabled) {
+  background: var(--accent-green-dark);
+}
+
+.btn-secondary {
+  background: var(--base-mid-gray);
+  color: var(--text-base);
+  border-radius: var(--radius-pill);
+}
+
+.btn-secondary:hover:not(.btn-disabled) {
+  background: var(--base-card);
+}
+
+.btn-circular {
+  background: var(--base-mid-gray);
+  color: var(--text-base);
+  border-radius: var(--radius-circle);
+  padding: var(--spacing-md);
+}
+
+.btn-circular:hover:not(.btn-disabled) {
+  background: var(--base-card);
+}
+
+/* ========== Card Component ========== */
+.card {
+  background: var(--base-dark-gray);
+  border-radius: var(--radius-card);
+  transition: all var(--transition-base);
+}
+
+.card-default {
+  box-shadow: var(--shadow-medium);
+}
+
+.card-elevated {
+  box-shadow: var(--shadow-heavy);
+}
+
+.card-interactive {
+  background: var(--base-mid-gray);
+  cursor: pointer;
+}
+
+.card-interactive:hover {
+  background: var(--base-card);
+  transform: translateY(-2px);
+}
+
+/* ========== Toggle Component ========== */
+.toggle {
+  position: relative;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  background: var(--base-mid-gray);
+  box-shadow: var(--inset-border);
+  flex-shrink: 0;
+}
+
+.toggle:hover:not(.toggle-disabled) {
+  background: var(--base-card);
+}
+
+.toggle-active {
+  background: var(--accent-green);
+  box-shadow: none;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  transform: translateY(-50%);
+  width: calc(100% - 6px);
+  max-width: 25px;
+  height: calc(100% - 6px);
+  background: white;
+  border-radius: var(--radius-circle);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  transition: transform var(--transition-base);
+}
+
+.toggle-active .toggle-knob {
+  transform: translateY(-50%) translateX(20px);
+}
+
+/* ========== Input Component ========== */
+.input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.input-label {
+  font-family: var(--font-family-ui);
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.input-field {
+  width: 100%;
+  font-family: var(--font-family-ui);
+  font-size: var(--text-md);
+  background: var(--base-mid-gray);
+  color: var(--text-base);
+  border: none;
+  transition: all var(--transition-base);
+}
+
+.input-field:focus {
+  outline: none;
+  box-shadow: var(--inset-border);
+}
+
+.input-field::placeholder {
+  color: var(--text-hint);
+}
+
+.input-pill .input-field {
+  border-radius: var(--radius-input);
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.input-rounded .input-field {
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+}

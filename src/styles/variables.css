@@ -1,0 +1,154 @@
+/**
+ * Spotify Design System - CSS Variables
+ * 基于 Spotify 设计规范的完整变量系统
+ */
+
+:root {
+  /* ========== Base Colors ========== */
+  --base-black: #000000;
+  --base-dark: #121212;        /* 主背景 - 沉浸式暗色 */
+  --base-dark-gray: #181818;   /* 卡片背景 - 深色表面 */
+  --base-mid-gray: #1f1f1f;    /* 按钮背景 - 中等深色 */
+  --base-card: #252525;        /*  elevated 卡片 */
+  --base-card-alt: #272727;    /* 替代卡片表面 */
+
+  /* ========== Text Colors ========== */
+  --text-base: #ffffff;        /* 主文本 */
+  --text-secondary: #b3b3b3;   /* 次要文本/非活动导航 */
+  --text-subdued: #cbcbcb;     /* 柔和文本 */
+  --text-hint: #7c7c7c;        /* 提示文本 */
+  --text-disabled: #4d4d4d;    /* 禁用文本 */
+
+  /* ========== Accent Colors ========== */
+  --accent-green: #1ed760;     /* Spotify Green - 主强调色 */
+  --accent-green-dark: #1db954; /* 深绿色变体 */
+  --accent-green-light: #1ed760; /* 亮绿色变体 */
+
+  /* ========== Semantic Colors ========== */
+  --text-negative: #f3727f;    /* 错误状态 */
+  --text-warning: #ffa42b;     /* 警告状态 */
+  --text-announcement: #539df5; /* 信息状态 */
+  --text-positive: #1ed760;    /* 成功状态 */
+
+  /* ========== Border Colors ========== */
+  --border-gray: #4d4d4d;      /* 按钮边框 */
+  --border-light: #7c7c7c;     /* 轮廓按钮边框 */
+  --border-separator: #b3b3b3; /* 分隔线 */
+  --border-green: #1db954;     /* 绿色强调边框 */
+
+  /* ========== Shadows ========== */
+  --shadow-heavy: rgba(0, 0, 0, 0.5) 0px 8px 24px;      /* 对话框、菜单 */
+  --shadow-medium: rgba(0, 0, 0, 0.3) 0px 8px 8px;      /* 卡片、下拉菜单 */
+  --shadow-light: rgba(0, 0, 0, 0.15) 0px 4px 4px;      /* 轻微悬浮 */
+  --inset-border: rgb(18, 18, 18) 0px 1px 0px, rgb(124, 124, 124) 0px 0px 0px 1px inset;
+
+  /* ========== Border Radius ========== */
+  --radius-pill: 9999px;       /* 完全药丸形 */
+  --radius-circle: 50%;        /* 圆形 */
+  --radius-card: 8px;          /* 卡片圆角 */
+  --radius-input: 500px;       /* 输入框药丸形 */
+  --radius-sm: 4px;            /* 小圆角 */
+  --radius-md: 6px;            /* 中等圆角 */
+  --radius-lg: 10px;           /* 大圆角 */
+  --radius-xl: 20px;           /* 超大圆角 */
+
+  /* ========== Spacing (8px base unit) ========== */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-xxl: 24px;
+  --spacing-xxxl: 32px;
+
+  /* ========== Typography ========== */
+  --font-family-title: 'SpotifyMixUITitle', 'CircularSp-Arab', 'CircularSp-Hebr', 'CircularSp-Cyrl', 'CircularSp-Grek', 'CircularSp-Deva', 'Helvetica Neue', helvetica, arial, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Meiryo', 'MS Gothic', sans-serif;
+  --font-family-ui: 'SpotifyMixUI', 'CircularSp', 'CircularSp-Arab', 'CircularSp-Hebr', 'CircularSp-Cyrl', 'CircularSp-Grek', 'CircularSp-Deva', 'Helvetica Neue', helvetica, arial, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Meiryo', 'MS Gothic', sans-serif;
+  --font-family-body: 'SpotifyMixUI', 'CircularSp', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Font Sizes */
+  --text-xs: 10px;             /* Micro */
+  --text-sm: 12px;             /* Small */
+  --text-md: 14px;             /* Caption/Button/Nav */
+  --text-lg: 16px;             /* Body */
+  --text-xl: 18px;             /* Feature Heading */
+  --text-2xl: 24px;            /* Section Title */
+
+  /* Font Weights */
+  --font-normal: 400;
+  --font-medium: 600;
+  --font-bold: 700;
+
+  /* Line Heights */
+  --leading-tight: 1.00;
+  --leading-normal: normal;
+  --leading-relaxed: 1.30;
+  --leading-loose: 1.50;
+
+  /* Letter Spacing */
+  --tracking-tight: normal;
+  --tracking-normal: normal;
+  --tracking-wide: 1.4px;
+  --tracking-wider: 2px;
+
+  /* ========== Transitions ========== */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.3s ease;
+  --transition-bounce: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ========== Z-Index Scale ========== */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 300;
+  --z-tooltip: 400;
+  --z-toast: 500;
+
+  /* ========== Container Max Widths ========== */
+  --container-sm: 576px;
+  --container-md: 768px;
+  --container-lg: 1024px;
+  --container-xl: 1280px;
+}
+
+/* ========== Global Reset ========== */
+:global(*) {
+  box-sizing: border-box;
+}
+
+:global(html, body) {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--base-dark);
+  color: var(--text-base);
+  font-family: var(--font-family-body);
+}
+
+/* ========== Utility Classes ========== */
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-subdued {
+  color: var(--text-subdued);
+}
+
+.text-negative {
+  color: var(--text-negative);
+}
+
+.text-warning {
+  color: var(--text-warning);
+}
+
+.text-announcement {
+  color: var(--text-announcement);
+}
+
+.text-accent {
+  color: var(--accent-green);
+}
