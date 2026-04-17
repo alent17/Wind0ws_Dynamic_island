@@ -109,4 +109,27 @@ export const settingsApi = {
   async setLogLevel(level: string): Promise<void> {
     return await invoke("set_log_level", { level });
   },
+
+  // UI 显示控制 API
+  async setHideSettingsButton(enable: boolean): Promise<void> {
+    return await invoke("set_hide_settings_button", { enable });
+  },
+
+  async setHideMonitorSelector(enable: boolean): Promise<void> {
+    return await invoke("set_hide_monitor_selector", { enable });
+  },
+
+  async setHideFloatingWindow(enable: boolean): Promise<void> {
+    return await invoke("set_hide_floating_window", { enable });
+  },
+
+  // 灵动岛样式 API
+  async setExpandedCornerRadius(radius: number): Promise<void> {
+    return await invoke("set_expanded_corner_radius", { radius });
+  },
+
+  // 实时频谱 API
+  async setRealTimeSpectrum(enable: boolean): Promise<void> {
+    return await invoke("set_real_time_spectrum", { enable });
+  },
 };

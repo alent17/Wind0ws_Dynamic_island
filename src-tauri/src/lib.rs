@@ -55,6 +55,14 @@ pub struct AppSettings {
     pub cache_directory: Option<String>,
     // ===== 开机启动 =====
     pub auto_start: bool,
+    // ===== UI 显示控制 =====
+    pub hide_settings_button: bool,
+    pub hide_monitor_selector: bool,
+    pub hide_floating_window: bool,
+    // ===== 灵动岛样式 =====
+    pub expanded_corner_radius: u32,
+    // ===== 实时频谱 =====
+    pub real_time_spectrum: bool,
 }
 
 impl Default for AppSettings {
@@ -91,6 +99,11 @@ impl Default for AppSettings {
             enable_pixel_art: false, // 默认关闭像素化
             cache_directory: None, // 默认使用系统缓存目录
             auto_start: false, // 默认关闭开机启动
+            hide_settings_button: false, // 默认显示设置按钮
+            hide_monitor_selector: false, // 默认显示显示器选择
+            hide_floating_window: false, // 默认显示悬浮窗按钮
+            expanded_corner_radius: 16, // 默认圆角 16px
+            real_time_spectrum: false, // 默认关闭实时频谱
         }
     }
 }
@@ -1576,6 +1589,107 @@ fn extract_dominant_color(image_path: String) -> Result<(u8, u8, u8), String> {
     }
 }
 
+// 设置隐藏灵动岛设置按钮
+#[tauri::command]
+fn set_hide_settings_button(enable: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let mut settings = state.settings.lock().unwrap();
+    settings.hide_settings_button = enable;
+    
+    // 保存设置到文件
+    save_settings_to_file(&settings)?;
+    
+    // 发送事件通知前端更新 UI
+    let app_handle = state.app_handle.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = app_handle.emit("settings-changed", "hide_settings_button") {
+            eprintln!("发送设置变更事件失败：{}", e);
+        }
+    });
+    
+    Ok(())
+}
+
+// 设置隐藏显示器选择按钮
+#[tauri::command]
+fn set_hide_monitor_selector(enable: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let mut settings = state.settings.lock().unwrap();
+    settings.hide_monitor_selector = enable;
+    
+    // 保存设置到文件
+    save_settings_to_file(&settings)?;
+    
+    // 发送事件通知前端更新 UI
+    let app_handle = state.app_handle.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = app_handle.emit("settings-changed", "hide_monitor_selector") {
+            eprintln!("发送设置变更事件失败：{}", e);
+        }
+    });
+    
+    Ok(())
+}
+
+// 设置隐藏悬浮窗按钮
+#[tauri::command]
+fn set_hide_floating_window(enable: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let mut settings = state.settings.lock().unwrap();
+    settings.hide_floating_window = enable;
+    
+    // 保存设置到文件
+    save_settings_to_file(&settings)?;
+    
+    // 发送事件通知前端更新 UI
+    let app_handle = state.app_handle.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = app_handle.emit("settings-changed", "hide_floating_window") {
+            eprintln!("发送设置变更事件失败：{}", e);
+        }
+    });
+    
+    Ok(())
+}
+
+// 设置展开后的圆角大小
+#[tauri::command]
+fn set_expanded_corner_radius(radius: u32, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let mut settings = state.settings.lock().unwrap();
+    // 限制圆角范围在 0-32px 之间
+    settings.expanded_corner_radius = radius.min(32);
+    
+    // 保存设置到文件
+    save_settings_to_file(&settings)?;
+    
+    // 发送事件通知前端更新 UI
+    let app_handle = state.app_handle.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = app_handle.emit("corner-radius-changed", radius.min(32)) {
+            eprintln!("发送圆角变更事件失败：{}", e);
+        }
+    });
+    
+    Ok(())
+}
+
+// 设置实时频谱功能
+#[tauri::command]
+fn set_real_time_spectrum(enable: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let mut settings = state.settings.lock().unwrap();
+    settings.real_time_spectrum = enable;
+    
+    // 保存设置到文件
+    save_settings_to_file(&settings)?;
+    
+    // 发送事件通知前端更新 UI
+    let app_handle = state.app_handle.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = app_handle.emit("spectrum-mode-changed", enable) {
+            eprintln!("发送频谱模式变更事件失败：{}", e);
+        }
+    });
+    
+    Ok(())
+}
+
 // Tauri 命令：处理图片并返回 base64（支持像素化）
 #[tauri::command]
 async fn process_image(
@@ -1662,6 +1776,13 @@ pub fn run() {
             process_image,
             // 颜色提取 API
             extract_dominant_color,
+            // UI 显示控制 API
+            set_hide_settings_button,
+            set_hide_monitor_selector,
+            set_hide_floating_window,
+            set_expanded_corner_radius,
+            // 实时频谱 API
+            set_real_time_spectrum,
         ])
         .setup(|app| {
             // 初始化缓存系统

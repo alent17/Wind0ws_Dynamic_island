@@ -30,6 +30,11 @@
     enable_hd_cover: boolean;
     enable_pixel_art: boolean;
     auto_start: boolean;
+    hide_settings_button: boolean;
+    hide_monitor_selector: boolean;
+    hide_floating_window: boolean;
+    expanded_corner_radius: number;
+    real_time_spectrum: boolean;
   }
 
   let settings = $state<AppSettings>({
@@ -50,6 +55,11 @@
     enable_hd_cover: true,
     enable_pixel_art: false,
     auto_start: false,
+    hide_settings_button: false,
+    hide_monitor_selector: false,
+    hide_floating_window: false,
+    expanded_corner_radius: 16,
+    real_time_spectrum: false,
   });
 
   const appWindow = getCurrentWindow();
@@ -427,6 +437,74 @@
           <span>开机自启</span>
           <div class="retro-checkbox" class:checked={settings.auto_start}></div>
         </button>
+        <button
+          class="retro-toggle"
+          onclick={() =>
+            saveSettings({
+              hide_settings_button: !settings.hide_settings_button,
+            })}
+        >
+          <span>隐藏设置按钮</span>
+          <div
+            class="retro-checkbox"
+            class:checked={settings.hide_settings_button}
+          ></div>
+        </button>
+        <button
+          class="retro-toggle"
+          onclick={() =>
+            saveSettings({
+              hide_monitor_selector: !settings.hide_monitor_selector,
+            })}
+        >
+          <span>隐藏显示器选择</span>
+          <div
+            class="retro-checkbox"
+            class:checked={settings.hide_monitor_selector}
+          ></div>
+        </button>
+        <button
+          class="retro-toggle"
+          onclick={() =>
+            saveSettings({
+              hide_floating_window: !settings.hide_floating_window,
+            })}
+        >
+          <span>隐藏悬浮窗按钮</span>
+          <div
+            class="retro-checkbox"
+            class:checked={settings.hide_floating_window}
+          ></div>
+        </button>
+        <button
+          class="retro-toggle"
+          onclick={() =>
+            saveSettings({
+              real_time_spectrum: !settings.real_time_spectrum,
+            })}
+        >
+          <span>实时频谱</span>
+          <div
+            class="retro-checkbox"
+            class:checked={settings.real_time_spectrum}
+          ></div>
+        </button>
+        <div class="corner-radius-control">
+          <span class="corner-label">展开圆角</span>
+          <input
+            type="range"
+            min="0"
+            max="32"
+            value={settings.expanded_corner_radius}
+            oninput={(e) => {
+              const value = parseInt(e.currentTarget.value);
+              settings.expanded_corner_radius = value;
+              invoke("set_expanded_corner_radius", { radius: value });
+            }}
+            class="corner-slider"
+          />
+          <span class="corner-value">{settings.expanded_corner_radius}px</span>
+        </div>
       </div>
     </section>
   </div>
@@ -946,5 +1024,71 @@
   .retro-checkbox.checked {
     background: #111;
     box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.8);
+  }
+
+  .corner-radius-control {
+    display: flex;
+    align-items: center;
+    gap: clamp(6px, 1vw, 10px);
+    padding: clamp(4px, 0.6vw, 8px) 0;
+    border-bottom: 1px dotted rgba(0, 0, 0, 0.3);
+    width: 100%;
+  }
+
+  .corner-label {
+    font-family: monospace;
+    font-size: clamp(9px, 1.1vw, 11px);
+    font-weight: bold;
+    color: #111;
+    min-width: 60px;
+  }
+
+  .corner-slider {
+    flex: 1;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(17, 17, 17, 0.2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .corner-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: clamp(12px, 1.5vw, 16px);
+    height: clamp(12px, 1.5vw, 16px);
+    background: #111;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+
+  .corner-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+  }
+
+  .corner-slider::-moz-range-thumb {
+    width: clamp(12px, 1.5vw, 16px);
+    height: clamp(12px, 1.5vw, 16px);
+    background: #111;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    transition: transform 0.15s ease;
+  }
+
+  .corner-slider::-moz-range-thumb:hover {
+    transform: scale(1.2);
+  }
+
+  .corner-value {
+    font-family: monospace;
+    font-size: clamp(9px, 1.1vw, 11px);
+    font-weight: bold;
+    color: #111;
+    min-width: 40px;
+    text-align: right;
   }
 </style>

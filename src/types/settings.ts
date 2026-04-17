@@ -23,6 +23,11 @@ export interface AppSettings {
   enable_pixel_art: boolean;
   cache_directory: string | null;
   auto_start: boolean;
+  hide_settings_button: boolean;
+  hide_monitor_selector: boolean;
+  hide_floating_window: boolean;
+  expanded_corner_radius: number;
+  real_time_spectrum: boolean;
 }
 
 export interface CacheStats {
@@ -69,6 +74,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   enable_pixel_art: false,
   cache_directory: null,
   auto_start: false,
+  hide_settings_button: false,
+  hide_monitor_selector: false,
+  hide_floating_window: false,
+  expanded_corner_radius: 16,
+  real_time_spectrum: false,
 };
 
 export const PLAYER_NAMES: Record<string, string> = {
