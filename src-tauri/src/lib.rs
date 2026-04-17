@@ -1591,101 +1591,91 @@ fn extract_dominant_color(image_path: String) -> Result<(u8, u8, u8), String> {
 
 // 设置隐藏灵动岛设置按钮
 #[tauri::command]
-fn set_hide_settings_button(enable: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let mut settings = state.settings.lock().unwrap();
+fn set_hide_settings_button(app: AppHandle, enable: bool) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut settings = state.settings.lock().map_err(|_| "Failed to lock settings")?;
     settings.hide_settings_button = enable;
     
     // 保存设置到文件
-    save_settings_to_file(&settings)?;
+    write_settings_file(&app, &settings)?;
     
     // 发送事件通知前端更新 UI
-    let app_handle = state.app_handle.clone();
-    std::thread::spawn(move || {
-        if let Err(e) = app_handle.emit("settings-changed", "hide_settings_button") {
-            eprintln!("发送设置变更事件失败：{}", e);
-        }
-    });
+    if let Err(e) = app.emit("settings-changed", "hide_settings_button") {
+        eprintln!("发送设置变更事件失败：{}", e);
+    }
     
     Ok(())
 }
 
 // 设置隐藏显示器选择按钮
 #[tauri::command]
-fn set_hide_monitor_selector(enable: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let mut settings = state.settings.lock().unwrap();
+fn set_hide_monitor_selector(app: AppHandle, enable: bool) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut settings = state.settings.lock().map_err(|_| "Failed to lock settings")?;
     settings.hide_monitor_selector = enable;
     
     // 保存设置到文件
-    save_settings_to_file(&settings)?;
+    write_settings_file(&app, &settings)?;
     
     // 发送事件通知前端更新 UI
-    let app_handle = state.app_handle.clone();
-    std::thread::spawn(move || {
-        if let Err(e) = app_handle.emit("settings-changed", "hide_monitor_selector") {
-            eprintln!("发送设置变更事件失败：{}", e);
-        }
-    });
+    if let Err(e) = app.emit("settings-changed", "hide_monitor_selector") {
+        eprintln!("发送设置变更事件失败：{}", e);
+    }
     
     Ok(())
 }
 
 // 设置隐藏悬浮窗按钮
 #[tauri::command]
-fn set_hide_floating_window(enable: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let mut settings = state.settings.lock().unwrap();
+fn set_hide_floating_window(app: AppHandle, enable: bool) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut settings = state.settings.lock().map_err(|_| "Failed to lock settings")?;
     settings.hide_floating_window = enable;
     
     // 保存设置到文件
-    save_settings_to_file(&settings)?;
+    write_settings_file(&app, &settings)?;
     
     // 发送事件通知前端更新 UI
-    let app_handle = state.app_handle.clone();
-    std::thread::spawn(move || {
-        if let Err(e) = app_handle.emit("settings-changed", "hide_floating_window") {
-            eprintln!("发送设置变更事件失败：{}", e);
-        }
-    });
+    if let Err(e) = app.emit("settings-changed", "hide_floating_window") {
+        eprintln!("发送设置变更事件失败：{}", e);
+    }
     
     Ok(())
 }
 
 // 设置展开后的圆角大小
 #[tauri::command]
-fn set_expanded_corner_radius(radius: u32, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let mut settings = state.settings.lock().unwrap();
+fn set_expanded_corner_radius(app: AppHandle, radius: u32) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut settings = state.settings.lock().map_err(|_| "Failed to lock settings")?;
     // 限制圆角范围在 0-32px 之间
     settings.expanded_corner_radius = radius.min(32);
     
     // 保存设置到文件
-    save_settings_to_file(&settings)?;
+    write_settings_file(&app, &settings)?;
     
     // 发送事件通知前端更新 UI
-    let app_handle = state.app_handle.clone();
-    std::thread::spawn(move || {
-        if let Err(e) = app_handle.emit("corner-radius-changed", radius.min(32)) {
-            eprintln!("发送圆角变更事件失败：{}", e);
-        }
-    });
+    if let Err(e) = app.emit("corner-radius-changed", radius.min(32)) {
+        eprintln!("发送圆角变更事件失败：{}", e);
+    }
     
     Ok(())
 }
 
 // 设置实时频谱功能
 #[tauri::command]
-fn set_real_time_spectrum(enable: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let mut settings = state.settings.lock().unwrap();
+fn set_real_time_spectrum(app: AppHandle, enable: bool) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut settings = state.settings.lock().map_err(|_| "Failed to lock settings")?;
     settings.real_time_spectrum = enable;
     
     // 保存设置到文件
-    save_settings_to_file(&settings)?;
+    write_settings_file(&app, &settings)?;
     
     // 发送事件通知前端更新 UI
-    let app_handle = state.app_handle.clone();
-    std::thread::spawn(move || {
-        if let Err(e) = app_handle.emit("spectrum-mode-changed", enable) {
-            eprintln!("发送频谱模式变更事件失败：{}", e);
-        }
-    });
+    if let Err(e) = app.emit("spectrum-mode-changed", enable) {
+        eprintln!("发送频谱模式变更事件失败：{}", e);
+    }
     
     Ok(())
 }
