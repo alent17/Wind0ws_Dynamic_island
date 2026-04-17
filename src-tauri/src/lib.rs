@@ -402,11 +402,11 @@ fn pick_cache_directory(app: AppHandle) -> Result<Option<String>, String> {
 #[tauri::command]
 fn set_auto_start(_app: AppHandle, enable: bool) -> Result<(), String> {
     use std::process::Command;
-    
+
     let exe_path = std::env::current_exe()
         .map_err(|e| format!("获取可执行文件路径失败：{}", e))?;
     let exe_path_str = exe_path.to_string_lossy().to_string();
-    
+
     if enable {
         // 添加注册表项
         let output = Command::new("reg")
@@ -423,13 +423,16 @@ fn set_auto_start(_app: AppHandle, enable: bool) -> Result<(), String> {
             ])
             .output()
             .map_err(|e| format!("执行 reg 命令失败：{}", e))?;
-        
+
         if !output.status.success() {
-            return Err(format!("添加注册表项失败：{}", String::from_utf8_lossy(&output.stderr)));
+            return Err(format!(
+                "添加注册表项失败：{}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
         }
     } else {
         // 删除注册表项
-        let output = Command::new("reg")
+        match Command::new("reg")
             .args(&[
                 "delete",
                 "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
@@ -438,14 +441,25 @@ fn set_auto_start(_app: AppHandle, enable: bool) -> Result<(), String> {
                 "/f",
             ])
             .output()
-            .map_err(|e| format!("执行 reg 命令失败：{}", e))?;
-        
-        if !output.status.success() {
-            // 删除失败可能是因为键不存在，这不算错误
-            eprintln!("删除注册表项失败：{}", String::from_utf8_lossy(&output.stderr));
+        {
+            Ok(output) => {
+                // 删除失败如果是因为键不存在，这是正常的，不算错误
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    // 只在非"键不存在"错误时记录日志
+                    if !stderr.contains("系统找不到指定的注册表值") && !stderr.contains("The system cannot find the registry key") {
+                        eprintln!("删除注册表项警告：{}", stderr);
+                    }
+                    // 键不存在是正常情况，返回成功
+                }
+            }
+            Err(e) => {
+                // 执行命令失败才返回错误
+                return Err(format!("执行 reg delete 命令失败：{}", e));
+            }
         }
     }
-    
+
     Ok(())
 }
 

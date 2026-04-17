@@ -326,12 +326,11 @@
   // 根据当前高度动态计算 border-radius，确保与尺寸动画同步
   function getDynamicBorderRadius(currentHeight: number): string {
     // 收起状态：height = 28px，border-radius = 22px
-    // 展开状态：height = 160px，border-radius = 42px
-    // 线性插值计算
+    // 展开状态：height = 160px，border-radius = 用户设置值（默认 42px）
     const minHeight = 28;
     const maxHeight = 160;
     const minRadius = 25;
-    const maxRadius = 42;
+    const maxRadius = appSettings.expanded_corner_radius || 42; // 使用用户设置的圆角
 
     // 限制在有效范围内
     const clampedHeight = Math.max(
@@ -378,6 +377,11 @@
     reduce_animations: false,
     show_debug_info: false,
     window_opacity: 255,
+    hide_settings_button: false,
+    hide_monitor_selector: false,
+    hide_floating_window: false,
+    expanded_corner_radius: 16,
+    real_time_spectrum: false,
   });
 
   // ========== 性能检测和自适应系统 ==========
@@ -1305,6 +1309,16 @@
                 s.reduce_animations ?? appSettings.reduce_animations,
               show_debug_info: s.show_debug_info ?? appSettings.show_debug_info,
               window_opacity: s.window_opacity ?? appSettings.window_opacity,
+              hide_settings_button:
+                s.hide_settings_button ?? appSettings.hide_settings_button,
+              hide_monitor_selector:
+                s.hide_monitor_selector ?? appSettings.hide_monitor_selector,
+              hide_floating_window:
+                s.hide_floating_window ?? appSettings.hide_floating_window,
+              expanded_corner_radius:
+                s.expanded_corner_radius ?? appSettings.expanded_corner_radius,
+              real_time_spectrum:
+                s.real_time_spectrum ?? appSettings.real_time_spectrum,
             };
             console.log("[设置] 实时更新:", appSettings);
 
@@ -1313,6 +1327,44 @@
               showWindow();
             }
           }
+        },
+      );
+
+      // 监听单独的设置变更事件（用于实时响应）
+      const unlistenSettingsChanged = await listen(
+        "settings-changed",
+        (event: any) => {
+          const settingName = event.payload;
+          console.log("[设置] 单项变更:", settingName);
+
+          // 重新加载完整设置以保持同步
+          invoke("get_settings")
+            .then((s: any) => {
+              if (s) {
+                appSettings = { ...appSettings, ...s };
+              }
+            })
+            .catch(console.error);
+        },
+      );
+
+      // 监听圆角变更事件
+      const unlistenCornerRadiusChanged = await listen(
+        "corner-radius-changed",
+        (event: any) => {
+          const radius = event.payload;
+          console.log("[设置] 圆角变更:", radius);
+          appSettings.expanded_corner_radius = radius;
+        },
+      );
+
+      // 监听频谱模式变更事件
+      const unlistenSpectrumModeChanged = await listen(
+        "spectrum-mode-changed",
+        (event: any) => {
+          const enabled = event.payload;
+          console.log("[设置] 频谱模式变更:", enabled);
+          appSettings.real_time_spectrum = enabled;
         },
       );
 
@@ -1414,8 +1466,16 @@
                 (w) => w.label === "settings-window",
               );
               if (existingWindow) {
-                await existingWindow.setSize({ type: "Physical", width: 1000, height: 750 });
-                await existingWindow.setMinSize({ type: "Physical", width: 800, height: 600 });
+                await existingWindow.setSize({
+                  type: "Physical",
+                  width: 1000,
+                  height: 750,
+                });
+                await existingWindow.setMinSize({
+                  type: "Physical",
+                  width: 800,
+                  height: 600,
+                });
                 await existingWindow.center();
                 await existingWindow.show();
                 await existingWindow.setFocus();
@@ -1539,6 +1599,9 @@
         unlistenTheme();
         unlistenNavigate();
         unlistenSettings();
+        unlistenSettingsChanged();
+        unlistenCornerRadiusChanged();
+        unlistenSpectrumModeChanged();
         unlistenFloatingWindowClosed();
         stopDebugFps();
       };
@@ -1798,107 +1861,109 @@
             </p>
           </div>
 
-          <!-- 显示器选择按钮 -->
-          <div class="relative">
-            <button
-              class="w-8 h-8 flex items-center justify-center rounded-2xl bg-white/10 hover:bg-white/20 relative z-50 media-button transition-all duration-300 hover:scale-110"
-              style="transform: translateZ(0); backface-visibility: hidden;"
-              data-stop-toggle
-              onclick={(e) => {
-                e.stopPropagation();
-                toggleMonitorMenu();
-              }}
-            >
-              <Monitor
-                size={18}
-                class="text-white/80"
+          <!-- 显示器选择按钮 - 可通过设置页面隐藏 -->
+          {#if !appSettings.hide_monitor_selector}
+            <div class="relative">
+              <button
+                class="w-8 h-8 flex items-center justify-center rounded-2xl bg-white/10 hover:bg-white/20 relative z-50 media-button transition-all duration-300 hover:scale-110"
                 style="transform: translateZ(0); backface-visibility: hidden;"
-              />
-            </button>
-
-            <!-- 显示器选择菜单 -->
-            {#if showMonitorMenu}
-              <div
-                class="absolute right-0 top-full mt-1.5 w-[100px] bg-black/80 backdrop-blur-xl rounded-lg shadow-lg border border-white/10 overflow-hidden z-[100] monitor-menu transition-all duration-300 scale-95 opacity-0"
-                class:menu-open={showMonitorMenu}
-                style="transform: translateZ(0);"
+                data-stop-toggle
+                onclick={(e) => {
+                  e.stopPropagation();
+                  toggleMonitorMenu();
+                }}
               >
-                <div class="p-1">
-                  <div
-                    class="flex items-center justify-between px-1.5 py-0.5 mb-1"
-                  >
-                    <span class="text-[10px] font-medium text-white/70">
-                      显示器
-                    </span>
-                    <span class="text-[10px] text-white/40">
-                      {monitors.length}
-                    </span>
-                  </div>
+                <Monitor
+                  size={18}
+                  class="text-white/80"
+                  style="transform: translateZ(0); backface-visibility: hidden;"
+                />
+              </button>
 
-                  <div class="h-px bg-white/8 mb-1"></div>
+              <!-- 显示器选择菜单 -->
+              {#if showMonitorMenu}
+                <div
+                  class="absolute right-0 top-full mt-1.5 w-[100px] bg-black/80 backdrop-blur-xl rounded-lg shadow-lg border border-white/10 overflow-hidden z-[100] monitor-menu transition-all duration-300 scale-95 opacity-0"
+                  class:menu-open={showMonitorMenu}
+                  style="transform: translateZ(0);"
+                >
+                  <div class="p-1">
+                    <div
+                      class="flex items-center justify-between px-1.5 py-0.5 mb-1"
+                    >
+                      <span class="text-[10px] font-medium text-white/70">
+                        显示器
+                      </span>
+                      <span class="text-[10px] text-white/40">
+                        {monitors.length}
+                      </span>
+                    </div>
 
-                  <div class="space-y-0.5">
-                    {#each monitors as monitor, idx}
-                      <button
-                        class="w-full text-left px-1.5 py-1 rounded-md transition-all duration-150 flex items-center gap-1 hover:bg-white/5 active:scale-95"
-                        class:selected={currentMonitorIndex === idx}
-                        onclick={(e) => {
-                          e.stopPropagation();
-                          switchMonitor(idx);
-                        }}
-                      >
-                        <div
-                          class="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
-                          style="background: {currentMonitorIndex === idx
-                            ? 'rgba(255, 255, 255, 0.1)'
-                            : 'rgba(255, 255, 255, 0.05)'};"
+                    <div class="h-px bg-white/8 mb-1"></div>
+
+                    <div class="space-y-0.5">
+                      {#each monitors as monitor, idx}
+                        <button
+                          class="w-full text-left px-1.5 py-1 rounded-md transition-all duration-150 flex items-center gap-1 hover:bg-white/5 active:scale-95"
+                          class:selected={currentMonitorIndex === idx}
+                          onclick={(e) => {
+                            e.stopPropagation();
+                            switchMonitor(idx);
+                          }}
                         >
-                          <Monitor
-                            size={9}
-                            style="color: {currentMonitorIndex === idx
-                              ? '#fff'
-                              : 'rgba(255, 255, 255, 0.5)'};"
-                          />
-                        </div>
-
-                        <div class="flex-1 min-w-0">
-                          <span
-                            class="text-[10px] font-medium truncate block"
-                            style="color: {currentMonitorIndex === idx
-                              ? '#fff'
-                              : 'rgba(255, 255, 255, 0.75)'};"
-                          >
-                            {monitor.name}
-                          </span>
-                        </div>
-
-                        {#if currentMonitorIndex === idx}
                           <div
-                            class="w-3 h-3 rounded-full bg-green-400 flex items-center justify-center flex-shrink-0"
+                            class="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
+                            style="background: {currentMonitorIndex === idx
+                              ? 'rgba(255, 255, 255, 0.1)'
+                              : 'rgba(255, 255, 255, 0.05)'};"
                           >
-                            <svg
-                              width="6"
-                              height="5"
-                              viewBox="0 0 10 8"
-                              fill="none"
-                            >
-                              <path
-                                d="M1 4L3.5 6.5L9 1"
-                                stroke="white"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                              />
-                            </svg>
+                            <Monitor
+                              size={9}
+                              style="color: {currentMonitorIndex === idx
+                                ? '#fff'
+                                : 'rgba(255, 255, 255, 0.5)'};"
+                            />
                           </div>
-                        {/if}
-                      </button>
-                    {/each}
+
+                          <div class="flex-1 min-w-0">
+                            <span
+                              class="text-[10px] font-medium truncate block"
+                              style="color: {currentMonitorIndex === idx
+                                ? '#fff'
+                                : 'rgba(255, 255, 255, 0.75)'};"
+                            >
+                              {monitor.name}
+                            </span>
+                          </div>
+
+                          {#if currentMonitorIndex === idx}
+                            <div
+                              class="w-3 h-3 rounded-full bg-green-400 flex items-center justify-center flex-shrink-0"
+                            >
+                              <svg
+                                width="6"
+                                height="5"
+                                viewBox="0 0 10 8"
+                                fill="none"
+                              >
+                                <path
+                                  d="M1 4L3.5 6.5L9 1"
+                                  stroke="white"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                />
+                              </svg>
+                            </div>
+                          {/if}
+                        </button>
+                      {/each}
+                    </div>
                   </div>
                 </div>
-              </div>
-            {/if}
-          </div>
+              {/if}
+            </div>
+          {/if}
         </div>
 
         <!-- 中部区域：播放控制按钮 -->
@@ -1906,19 +1971,22 @@
           class="flex-1 flex items-center justify-between"
           style="margin-bottom: 10px;" /* 缩小底部间距 */
         >
-          <Settings
-            size={18}
-            class="text-white/40 hover:text-white/90 transition-all duration-300 hover:scale-110 relative z-50 cursor-pointer media-button"
-            style="transform: translateZ(0); backface-visibility: hidden; margin-left: 8px;"
-            /* 添加左边距 */
-            data-stop-toggle
-            onclick={async (e) => {
-              e.stopPropagation();
-              console.log("点击了设置按钮");
-              const { emit } = await import("@tauri-apps/api/event");
-              await emit("navigate-to-settings");
-            }}
-          />
+          <!-- 设置按钮 - 可通过设置页面隐藏 -->
+          {#if !appSettings.hide_settings_button}
+            <Settings
+              size={18}
+              class="text-white/40 hover:text-white/90 transition-all duration-300 hover:scale-110 relative z-50 cursor-pointer media-button"
+              style="transform: translateZ(0); backface-visibility: hidden; margin-left: 8px;"
+              /* 添加左边距 */
+              data-stop-toggle
+              onclick={async (e) => {
+                e.stopPropagation();
+                console.log("点击了设置按钮");
+                const { emit } = await import("@tauri-apps/api/event");
+                await emit("navigate-to-settings");
+              }}
+            />
+          {/if}
 
           <div
             class="flex items-center justify-center"
@@ -1965,27 +2033,30 @@
             />
           </div>
 
-          <button
-            class="w-7 h-7 flex items-center justify-center rounded-xl border border-white/10 text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button hover:border-white/20"
-            style="transform: translateZ(0); backface-visibility: hidden; margin-right: 8px;"
-            /* 添加右边距 */
-            data-stop-toggle
-            aria-label={isFloatingWindowOpen
-              ? "Close floating window"
-              : "Open floating window"}
-            onclick={(e) => {
-              e.stopPropagation();
-              toggleFloatingWindow();
-            }}
-            onkeydown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
+          <!-- 悬浮窗按钮 - 可通过设置页面隐藏 -->
+          {#if !appSettings.hide_floating_window}
+            <button
+              class="w-7 h-7 flex items-center justify-center rounded-xl border border-white/10 text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button hover:border-white/20"
+              style="transform: translateZ(0); backface-visibility: hidden; margin-right: 8px;"
+              /* 添加右边距 */
+              data-stop-toggle
+              aria-label={isFloatingWindowOpen
+                ? "Close floating window"
+                : "Open floating window"}
+              onclick={(e) => {
                 e.stopPropagation();
                 toggleFloatingWindow();
-              }
-            }}
-          >
-            <GalleryHorizontalEnd size={18} />
-          </button>
+              }}
+              onkeydown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  toggleFloatingWindow();
+                }
+              }}
+            >
+              <GalleryHorizontalEnd size={18} />
+            </button>
+          {/if}
         </div>
 
         <!-- 底部区域：频谱 -->
