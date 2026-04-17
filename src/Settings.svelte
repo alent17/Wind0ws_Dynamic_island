@@ -563,8 +563,8 @@
     display: grid;
     /* 划分为完美的三列比例 */
     grid-template-columns: 1.4fr 1.1fr 1fr;
-    /* 划分为行：头部自适应、中间行撑开、底部行紧凑 */
-    grid-template-rows: auto 2fr 1.2fr;
+    /* 划分为行：头部自适应、中间行撑开、底部行宽松以容纳更多控件 */
+    grid-template-rows: auto 2fr 1.5fr;
     gap: 12px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
     overflow: hidden;
@@ -637,7 +637,8 @@
   .data-panel {
     grid-column: 3 / 4;
     grid-row: 3 / 4;
-    padding: 16px;
+    padding: 12px;
+    overflow-y: auto;
   }
 
   /* ==================== 顶部导航 ==================== */
@@ -989,7 +990,7 @@
   .comp-toggles {
     display: flex;
     flex-direction: column;
-    gap: clamp(6px, 1vw, 10px);
+    gap: clamp(4px, 0.8vw, 8px);
     margin-top: auto;
   }
 
