@@ -223,12 +223,6 @@
   <div class="bento-container">
     <header class="t-panel header-panel" data-tauri-drag-region>
       <div class="brand">ISLAND_CTRL&reg;</div>
-      <nav class="nav-links">
-        <span>功能</span>
-        <span>审核保护</span>
-        <span>定价</span>
-        <span class="nav-active">登录</span>
-      </nav>
       <div class="window-controls">
         <button onclick={async () => await appWindow.minimize()} title="最小化"
           ><Minus size={14} color="#000" strokeWidth={3} /></button
