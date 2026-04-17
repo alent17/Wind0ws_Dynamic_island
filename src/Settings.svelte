@@ -551,8 +551,8 @@
     background-color: #f1b979;
   }
 
-  /* * 完美的 4行响应式网格布局
-   * 优化空间分配：所有内容无滚动显示
+  /* * 灵活的网格布局
+   * 各区域高度不同，参差不齐的设计感
    */
   .bento-container {
     width: 100%;
@@ -563,11 +563,12 @@
     display: grid;
     /* 划分为三列 */
     grid-template-columns: 1.4fr 1.1fr 1fr;
-    /* 划分为4行：紧凑布局 */
-    grid-template-rows: auto 2fr 1.8fr auto;
+    /* 使用不规则行高，营造参差感 */
+    grid-template-rows: auto 2.2fr 1.6fr auto;
     gap: 10px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
     overflow: hidden;
+    align-items: stretch; /* 让各区域自动拉伸填满 */
   }
 
   .t-panel {
@@ -577,6 +578,37 @@
     flex-direction: column;
     overflow: hidden;
     position: relative;
+  }
+
+  /* 不同面板使用不同的圆角，营造参差感 */
+  .hero-panel {
+    border-radius: 16px 12px 14px 18px; /* 不规则圆角 */
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); /* 更深阴影 */
+  }
+
+  .risk-panel {
+    border-radius: 14px 16px 12px 14px; /* 略有不同 */
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  }
+
+  .ts26-panel {
+    border-radius: 12px 14px 16px 12px; /* 另一种组合 */
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); /* 较浅阴影 */
+  }
+
+  .comp-panel {
+    border-radius: 15px 13px 15px 13px; /* 对称但不完全相同 */
+    box-shadow: 0 7px 22px rgba(0, 0, 0, 0.13);
+  }
+
+  .data-panel {
+    border-radius: 13px 15px 11px 16px; /* 更不规则 */
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.11);
+  }
+
+  .live-panel {
+    border-radius: 10px 10px 12px 12px; /* 底部稍小 */
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08); /* 最浅阴影 */
   }
 
   /* 通用标签样式 */
@@ -606,33 +638,33 @@
   .hero-panel {
     grid-column: 1 / 2;
     grid-row: 2 / 3;
-    padding: 20px;
+    padding: 22px; /* 稍大一些 */
   }
 
   .risk-panel {
     grid-column: 2 / 3;
     grid-row: 2 / 3;
-    padding: 14px;
+    padding: 14px; /* 标准大小 */
   }
 
   .ts26-panel {
-    /* 显示设置 - 移到第二行右侧 */
+    /* 显示设置 - 移到第二行右侧，稍小 */
     grid-column: 3 / 4;
     grid-row: 2 / 3;
-    padding: 16px;
+    padding: 14px; /* 稍紧凑 */
     flex-direction: row;
-    gap: 14px;
+    gap: 12px;
   }
 
   .comp-panel {
-    /* 专辑封面 - 第三行左侧 */
+    /* 专辑封面 - 第三行左侧，较大 */
     grid-column: 1 / 2;
     grid-row: 3 / 4;
-    padding: 14px;
+    padding: 16px; /* 较宽松 */
   }
 
   .data-panel {
-    /* 高级设置 - 扩大到跨2列 */
+    /* 高级设置 - 跨2列，中等 */
     grid-column: 2 / 4;
     grid-row: 3 / 4;
     padding: 10px;
@@ -640,10 +672,10 @@
   }
 
   .live-panel {
-    /* 缓存管理 - 移到第四行，缩小尺寸 */
+    /* 缓存管理 - 底部全宽，最小 */
     grid-column: 1 / 4;
     grid-row: 4 / 5;
-    padding: 10px;
+    padding: 8px; /* 最紧凑 */
   }
 
   /* ==================== 顶部导航 ==================== */
