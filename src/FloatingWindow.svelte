@@ -140,12 +140,15 @@
             }
 
             const contentType = res.headers.get("content-type");
-            const isJSON = contentType && 
-              (contentType.includes("application/json") || 
-               contentType.includes("text/javascript"));
-            
+            const isJSON =
+              contentType &&
+              (contentType.includes("application/json") ||
+                contentType.includes("text/javascript"));
+
             if (!isJSON) {
-              console.warn(`iTunes API 返回非 JSON 内容 (Content-Type: ${contentType})`);
+              console.warn(
+                `iTunes API 返回非 JSON 内容 (Content-Type: ${contentType})`,
+              );
               return null;
             }
 
@@ -284,14 +287,17 @@
           const res = await fetchWithTimeout(
             `https://itunes.apple.com/search?term=${query}&limit=1&entity=musicArtist`,
           );
-          
+
           const contentType = res.headers.get("content-type");
-          const isJSON = contentType && 
-            (contentType.includes("application/json") || 
-             contentType.includes("text/javascript"));
-          
+          const isJSON =
+            contentType &&
+            (contentType.includes("application/json") ||
+              contentType.includes("text/javascript"));
+
           if (!isJSON) {
-            console.warn(`iTunes API 返回非 JSON 内容 (Content-Type: ${contentType})`);
+            console.warn(
+              `iTunes API 返回非 JSON 内容 (Content-Type: ${contentType})`,
+            );
             return null;
           }
 
@@ -605,14 +611,17 @@
           },
         },
       );
-      
+
       const contentType = res.headers.get("content-type");
-      const isJSON = contentType && 
-        (contentType.includes("application/json") || 
-         contentType.includes("text/javascript"));
-      
+      const isJSON =
+        contentType &&
+        (contentType.includes("application/json") ||
+          contentType.includes("text/javascript"));
+
       if (!isJSON) {
-        console.warn(`iTunes API 返回非 JSON 内容 (Content-Type: ${contentType})`);
+        console.warn(
+          `iTunes API 返回非 JSON 内容 (Content-Type: ${contentType})`,
+        );
         return null;
       }
 

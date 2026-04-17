@@ -210,9 +210,10 @@
     await saveSettings({ player_weights: newWeights });
   }
 
-  // 循环切换主题的辅助函数
   function cycleTheme() {
-    const currentIndex = themes.findIndex(t => t.id === settings.island_theme);
+    const currentIndex = themes.findIndex(
+      (t) => t.id === settings.island_theme,
+    );
     const nextIndex = (currentIndex + 1) % themes.length;
     saveSettings({ island_theme: themes[nextIndex].id });
   }
@@ -220,83 +221,96 @@
 
 <div class="theradyme-app">
   <div class="bento-container">
-    
-    <header class="t-panel header-panel">
+    <header class="t-panel header-panel" data-tauri-drag-region>
       <div class="brand">ISLAND_CTRL&reg;</div>
       <nav class="nav-links">
-        <span>CAPABILITIES</span>
-        <span>AUDIT SHIELD</span>
-        <span>PRICING</span>
-        <span class="nav-active">LOGIN</span>
+        <span>功能</span>
+        <span>审核保护</span>
+        <span>定价</span>
+        <span class="nav-active">登录</span>
       </nav>
       <div class="window-controls">
-        <button onclick={async () => await appWindow.minimize()} title="最小化"><Minus size={14} color="#000" strokeWidth={3} /></button>
-        <button onclick={async () => await appWindow.toggleMaximize()} title="最大化"><Maximize2 size={14} color="#000" strokeWidth={3} /></button>
-        <button onclick={async () => await appWindow.close()} title="关闭"><X size={14} color="#000" strokeWidth={3} /></button>
+        <button onclick={async () => await appWindow.minimize()} title="最小化"
+          ><Minus size={14} color="#000" strokeWidth={3} /></button
+        >
+        <button
+          onclick={async () => await appWindow.toggleMaximize()}
+          title="最大化"
+          ><Maximize2 size={14} color="#000" strokeWidth={3} /></button
+        >
+        <button onclick={async () => await appWindow.close()} title="关闭"
+          ><X size={14} color="#000" strokeWidth={3} /></button
+        >
       </div>
     </header>
 
     <section class="t-panel hero-panel bg-orange">
       <div class="panel-top-bar">
-        <span>SYSTEM STATUS: ACTIVE</span>
+        <span>系统状态：运行中</span>
         <span>UA 670-B</span>
       </div>
-      
+
       <div class="hero-content">
-        <h1 class="giant-text">AUTONOMOUS<br>ISLAND DEFENSE</h1>
+        <h1 class="giant-text">自主<br />灵动岛防御</h1>
         <p class="hero-subtext">
-          Advanced algorithmic layout for desktop interfaces.<br>
-          Minimize distraction. Maximize retention.<br>
-          Zero human latency.
+          先进的桌面界面算法布局。<br />
+          最小化干扰，最大化留存。<br />
+          零延迟响应。
         </p>
       </div>
 
       <div class="hero-bottom-action">
-        <span class="action-label">INITIALIZE THEME SEQUENCE</span>
+        <span class="action-label">启动主题序列</span>
         <div class="action-input-group">
           <div class="theme-readout">
-            <span class="muted">CURRENT_THEME_ID:</span> 
-            {themes.find(t => t.id === settings.island_theme)?.name || 'UNKNOWN'}
+            <span class="muted">当前主题 ID:</span>
+            {themes.find((t) => t.id === settings.island_theme)?.name || "未知"}
           </div>
-          <button class="action-btn" onclick={cycleTheme}>ENGAGE &rarr;</button>
+          <button class="action-btn" onclick={cycleTheme}>启动 &rarr;</button>
         </div>
         <div class="secure-line">
           <div class="barcode"></div>
-          <span>SECURE CONNECTION ESTABLISHED</span>
+          <span>安全连接已建立</span>
         </div>
       </div>
     </section>
 
     <section class="t-panel risk-panel bg-gray">
-      <span class="panel-label">PLAYER PRIORITY ASSESSMENT</span>
+      <span class="panel-label">播放器优先级评估</span>
+
       <div class="risk-stat">
-        <span class="risk-value">OPT.</span>
-        <span class="risk-sub">Historical conflict avg: 2.4%</span>
+        <span class="risk-value">最优</span>
+        <span class="risk-sub">历史冲突平均：2.4%</span>
       </div>
       <div class="risk-box">
-        <span class="rb-label">ACTIVE SOURCES</span>
+        <span class="rb-label">活动音源</span>
         <span class="rb-badge">{playerOrder.length}</span>
       </div>
-      
+
       <div class="priority-list">
-        <span class="list-title">WEIGHT ALLOCATION</span>
+        <span class="list-title">权重分配</span>
         {#each playerOrder as player, index}
           <div
             class="p-item"
             class:dragging={dragIndex === index}
             draggable="true"
             ondragstart={() => handleDragStart(index)}
-            ondragover={(e) => { e.preventDefault(); handleDragOver(index); }}
+            ondragover={(e) => {
+              e.preventDefault();
+              handleDragOver(index);
+            }}
             ondragleave={handleDragLeave}
             ondrop={handleDrop}
           >
             <div class="p-name">
-              <span class="p-idx">[{index + 1}]</span> 
+              <span class="p-idx">[{index + 1}]</span>
               {playerNames[player] || player}
             </div>
             <div class="p-controls">
               <button onclick={() => updatePlayerWeight(player, -10)}>-</button>
-              <span class="p-weight">{settings.player_weights[player] ?? 50}</span>
+              <span class="p-weight"
+                >{settings.player_weights[player] ?? 50}</span
+              >
               <button onclick={() => updatePlayerWeight(player, 10)}>+</button>
             </div>
           </div>
@@ -306,136 +320,182 @@
 
     <section class="t-panel live-panel bg-red">
       <div class="live-inner">
-        <span class="live-label">CACHE PROCESSING</span>
+        <span class="live-label">缓存处理</span>
         <span class="live-status">{cacheSize}</span>
         <div class="cache-actions">
-          <button onclick={pickCacheDir}>DIR</button>
-          <button onclick={clearCache}>PURGE</button>
+          <button onclick={pickCacheDir}>目录</button>
+          <button onclick={clearCache}>清除</button>
         </div>
       </div>
     </section>
 
     <section class="t-panel ts26-panel bg-green">
       <div class="ts-left">
-        <h2 class="giant-ts">DISP</h2>
-        <div class="ts-line">MODULE_4</div>
+        <h2 class="giant-ts">显示</h2>
+        <div class="ts-line">模块_4</div>
       </div>
       <div class="ts-right toggles-container">
-        <button class="retro-toggle" onclick={() => saveSettings({ show_spectrum: !settings.show_spectrum })}>
-          <span>SPECTRUM</span>
-          <div class="retro-checkbox" class:checked={settings.show_spectrum}></div>
+        <button
+          class="retro-toggle"
+          onclick={() =>
+            saveSettings({ show_spectrum: !settings.show_spectrum })}
+        >
+          <span>频谱显示</span>
+          <div
+            class="retro-checkbox"
+            class:checked={settings.show_spectrum}
+          ></div>
         </button>
-        <button class="retro-toggle" onclick={() => saveSettings({ auto_hide: !settings.auto_hide })}>
-          <span>AUTO-HIDE</span>
+        <button
+          class="retro-toggle"
+          onclick={() => saveSettings({ auto_hide: !settings.auto_hide })}
+        >
+          <span>自动隐藏</span>
           <div class="retro-checkbox" class:checked={settings.auto_hide}></div>
         </button>
-        <button class="retro-toggle" onclick={() => saveSettings({ always_on_top: !settings.always_on_top })}>
-          <span>TOPMOST</span>
-          <div class="retro-checkbox" class:checked={settings.always_on_top}></div>
+        <button
+          class="retro-toggle"
+          onclick={() =>
+            saveSettings({ always_on_top: !settings.always_on_top })}
+        >
+          <span>窗口置顶</span>
+          <div
+            class="retro-checkbox"
+            class:checked={settings.always_on_top}
+          ></div>
         </button>
       </div>
     </section>
 
     <section class="t-panel comp-panel bg-gray">
-      <span class="panel-label">COVER ENGINE</span>
+      <span class="panel-label">封面引擎</span>
       <div class="comp-features">
         <div class="comp-toggles">
-          <button class="retro-toggle" onclick={() => saveSettings({ enable_hd_cover: !settings.enable_hd_cover })}>
-            <span>HD SYNC</span>
-            <div class="retro-checkbox" class:checked={settings.enable_hd_cover}></div>
+          <button
+            class="retro-toggle"
+            onclick={() =>
+              saveSettings({ enable_hd_cover: !settings.enable_hd_cover })}
+          >
+            <span>高清同步</span>
+            <div
+              class="retro-checkbox"
+              class:checked={settings.enable_hd_cover}
+            ></div>
           </button>
-          <button class="retro-toggle" onclick={() => saveSettings({ enable_pixel_art: !settings.enable_pixel_art })}>
-            <span>PIXEL ART</span>
-            <div class="retro-checkbox" class:checked={settings.enable_pixel_art}></div>
+          <button
+            class="retro-toggle"
+            onclick={() =>
+              saveSettings({ enable_pixel_art: !settings.enable_pixel_art })}
+          >
+            <span>像素艺术</span>
+            <div
+              class="retro-checkbox"
+              class:checked={settings.enable_pixel_art}
+            ></div>
           </button>
-          <button class="retro-toggle" onclick={() => saveSettings({ enable_mv_playback: !settings.enable_mv_playback })}>
-            <span>MV STREAM</span>
-            <div class="retro-checkbox" class:checked={settings.enable_mv_playback}></div>
+          <button
+            class="retro-toggle"
+            onclick={() =>
+              saveSettings({
+                enable_mv_playback: !settings.enable_mv_playback,
+              })}
+          >
+            <span>MV 播放</span>
+            <div
+              class="retro-checkbox"
+              class:checked={settings.enable_mv_playback}
+            ></div>
           </button>
-        </div>
-        <div class="comp-icon">
-          <div class="diamond">
-            <span class="arrow">&#x21B1;</span>
-          </div>
         </div>
       </div>
     </section>
 
     <section class="t-panel data-panel bg-yellow">
-      <span class="panel-label">SYSTEM CONFIG</span>
+      <span class="panel-label">系统配置</span>
       <div class="data-box">
-        <span>SYS-V1.0</span>
+        <span>系统版本 V1.0</span>
       </div>
       <div class="toggles-container" style="margin-top: auto;">
-        <button class="retro-toggle" onclick={() => saveSettings({ lock_floating_window: !settings.lock_floating_window })}>
-          <span>LOCK WIN</span>
-          <div class="retro-checkbox" class:checked={settings.lock_floating_window}></div>
+        <button
+          class="retro-toggle"
+          onclick={() =>
+            saveSettings({
+              lock_floating_window: !settings.lock_floating_window,
+            })}
+        >
+          <span>锁定窗口</span>
+          <div
+            class="retro-checkbox"
+            class:checked={settings.lock_floating_window}
+          ></div>
         </button>
         <button class="retro-toggle" onclick={toggleAutoStart}>
-          <span>AUTO BOOT</span>
+          <span>开机自启</span>
           <div class="retro-checkbox" class:checked={settings.auto_start}></div>
         </button>
       </div>
     </section>
-
   </div>
 </div>
 
 <style>
-  /* 基础重置 & 变量 */
+  /* 全局重置与背景 */
   :global(*) {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
   }
 
-  :global(body) {
-    /* 尽量匹配复古扩展字体和等宽字体 */
-    font-family: 'Space Grotesk', 'Microgramma', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    background: linear-gradient(135deg, #d3cbbd 0%, #a29b92 100%);
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  :global(body),
+  :global(html) {
+    width: 100vw;
     height: 100vh;
     overflow: hidden;
-  }
-
-  :global(html) {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
+    font-family: "Space Grotesk", "Microgramma", "Helvetica Neue", Helvetica,
+      Arial, sans-serif;
   }
 
   .theradyme-app {
-    width: 100%;
-    height: 100%;
-    padding: 16px;
+    width: 100vw;
+    height: 100vh;
+    padding: clamp(12px, 2vw, 24px); /* 响应式边缘留白 */
     display: flex;
-    box-sizing: border-box;
-    overflow: hidden;
+    background: linear-gradient(135deg, #d3cbbd 0%, #a29b92 100%);
   }
 
   /* 核心配色板 */
-  .bg-orange { background-color: #efb574; }
-  .bg-gray   { background-color: #c7c9cc; }
-  .bg-red    { background-color: #c56d5e; }
-  .bg-green  { background-color: #8bab93; }
-  .bg-yellow { background-color: #f1b979; }
+  .bg-orange {
+    background-color: #efb574;
+  }
+  .bg-gray {
+    background-color: #c7c9cc;
+  }
+  .bg-red {
+    background-color: #c56d5e;
+  }
+  .bg-green {
+    background-color: #8bab93;
+  }
+  .bg-yellow {
+    background-color: #f1b979;
+  }
 
-  /* 粗犷主义网格布局 - 4:3 比例 */
+  /* * 完美的 3x3 响应式网格布局 
+   * 彻底修复溢出、错位和黑边问题
+   */
   .bento-container {
     width: 100%;
     height: 100%;
     background: #0f0f0f;
     border-radius: 20px;
-    padding: 8px;
+    padding: 12px;
     display: grid;
-    grid-template-columns: 4fr 3fr !important;
-    grid-template-rows: auto 1fr auto !important;
-    gap: 6px;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-    min-width: 0;
-    min-height: 0;
+    /* 划分为完美的三列比例 */
+    grid-template-columns: 1.4fr 1.1fr 1fr;
+    /* 划分为行：头部自适应、中间行撑开、底部行紧凑 */
+    grid-template-rows: auto 2fr 1.2fr;
+    gap: 12px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
     overflow: hidden;
   }
 
@@ -451,16 +511,17 @@
   /* 通用标签样式 */
   .panel-label {
     font-size: 9px;
-    font-family: 'SF Mono', 'Courier New', monospace;
+    font-family: "SF Mono", "Courier New", monospace;
     text-transform: uppercase;
     font-weight: bold;
     letter-spacing: 0.5px;
     color: #333;
   }
 
-  /* ==================== 区域分配 ==================== */
+  /* ==================== 区域分配 (绝对精准的网格坐标) ==================== */
+
   .header-panel {
-    grid-column: 1 / -1;
+    grid-column: 1 / 4; /* 横跨1, 2, 3列 */
     grid-row: 1 / 2;
     background: #e6e8eb;
     border-radius: 18px 18px 14px 14px;
@@ -468,58 +529,44 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 24px;
-    overflow: hidden;
-    min-height: 0;
   }
 
   .hero-panel {
     grid-column: 1 / 2;
-    grid-row: 1 / 4;
+    grid-row: 2 / 3;
     padding: 24px;
-    overflow: hidden;
-    min-height: 0;
   }
 
   .risk-panel {
     grid-column: 2 / 3;
-    grid-row: 1 / 2;
+    grid-row: 2 / 3;
     padding: 16px;
-    overflow: hidden;
-    min-height: 0;
   }
 
   .live-panel {
     grid-column: 3 / 4;
-    grid-row: 3 / 4;
+    grid-row: 2 / 3;
     padding: 20px;
-    overflow: hidden;
-    min-height: 0;
   }
 
   .ts26-panel {
     grid-column: 1 / 2;
     grid-row: 3 / 4;
-    padding: 16px;
+    padding: 20px;
     flex-direction: row;
     gap: 16px;
-    overflow: hidden;
-    min-height: 0;
   }
 
   .comp-panel {
     grid-column: 2 / 3;
     grid-row: 3 / 4;
     padding: 16px;
-    overflow: hidden;
-    min-height: 0;
   }
 
   .data-panel {
-    grid-column: 2 / 3;
-    grid-row: 4 / 5;
+    grid-column: 3 / 4;
+    grid-row: 3 / 4;
     padding: 16px;
-    overflow: hidden;
-    min-height: 0;
   }
 
   /* ==================== 顶部导航 ==================== */
@@ -532,9 +579,10 @@
   .nav-links {
     display: flex;
     gap: clamp(16px, 3vw, 32px);
-    font-family: 'SF Mono', 'Courier New', monospace;
+    font-family: "SF Mono", "Courier New", monospace;
     font-size: clamp(8px, 1vw, 10px);
     font-weight: bold;
+    -webkit-app-region: no-drag;
   }
 
   .nav-active {
@@ -545,6 +593,7 @@
   .window-controls {
     display: flex;
     gap: clamp(8px, 1vw, 12px);
+    -webkit-app-region: no-drag;
   }
 
   .window-controls button {
@@ -555,16 +604,20 @@
     align-items: center;
     justify-content: center;
     padding: 4px;
+    transition: opacity 0.2s;
+  }
+  .window-controls button:hover {
+    opacity: 0.5;
   }
 
   /* ==================== HERO 左侧橙色区域 ==================== */
   .panel-top-bar {
     display: flex;
     justify-content: space-between;
-    font-family: 'SF Mono', 'Courier New', monospace;
+    font-family: "SF Mono", "Courier New", monospace;
     font-size: clamp(7px, 0.9vw, 9px);
     font-weight: bold;
-    border-bottom: 1px solid rgba(0,0,0,0.2);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.2);
     padding-bottom: clamp(4px, 0.5vw, 6px);
     margin-bottom: clamp(12px, 2vw, 24px);
   }
@@ -575,25 +628,24 @@
     flex-direction: column;
     justify-content: center;
     min-height: 0;
-    overflow: hidden;
   }
 
   .giant-text {
-    font-size: clamp(1.2rem, 4vw, 3.8rem);
-    font-weight: 600;
+    font-size: clamp(1.5rem, 3.5vw, 3.8rem);
+    font-weight: 700;
     line-height: 1.05;
     letter-spacing: -1px;
-    margin-bottom: clamp(8px, 1.5vw, 16px);
+    margin-bottom: 16px;
     text-transform: uppercase;
   }
 
   .hero-subtext {
-    font-family: 'SF Mono', 'Courier New', monospace;
-    font-size: clamp(9px, 1.1vw, 11px);
+    font-family: "SF Mono", "Courier New", monospace;
+    font-size: clamp(10px, 1.1vw, 12px);
     line-height: 1.7;
     border-left: 2px solid #111;
     padding-left: clamp(8px, 1.2vw, 12px);
-    max-width: 80%;
+    max-width: 85%;
     font-weight: 600;
   }
 
@@ -602,7 +654,7 @@
   }
 
   .action-label {
-    font-family: 'SF Mono', 'Courier New', monospace;
+    font-family: "SF Mono", "Courier New", monospace;
     font-size: clamp(7px, 0.9vw, 9px);
     font-weight: bold;
     display: block;
@@ -614,6 +666,8 @@
     border: 1.5px solid #111;
     height: clamp(36px, 5vw, 48px);
     margin-bottom: clamp(4px, 0.8vw, 8px);
+    border-radius: 4px;
+    overflow: hidden;
   }
 
   .theme-readout {
@@ -621,7 +675,7 @@
     display: flex;
     align-items: center;
     padding: 0 clamp(8px, 1.5vw, 16px);
-    font-family: 'SF Mono', 'Courier New', monospace;
+    font-family: "SF Mono", "Courier New", monospace;
     font-size: clamp(10px, 1.2vw, 12px);
     font-weight: bold;
   }
@@ -637,17 +691,21 @@
     color: #efb574;
     border: none;
     padding: 0 clamp(12px, 2.5vw, 24px);
-    font-family: 'SF Mono', 'Courier New', monospace;
+    font-family: "SF Mono", "Courier New", monospace;
     font-weight: bold;
     font-size: clamp(10px, 1.2vw, 12px);
     cursor: pointer;
+    transition: filter 0.2s;
+  }
+  .action-btn:hover {
+    filter: brightness(1.2);
   }
 
   .secure-line {
     display: flex;
     align-items: center;
     gap: clamp(8px, 1.2vw, 12px);
-    font-family: 'SF Mono', 'Courier New', monospace;
+    font-family: "SF Mono", "Courier New", monospace;
     font-size: clamp(6px, 0.8vw, 8px);
     font-weight: bold;
   }
@@ -664,40 +722,62 @@
     );
   }
 
-  /* ==================== RISK / PRIORITY 右上灰色 ==================== */
+  /* ==================== RISK / PRIORITY 中间灰色区域 ==================== */
   .risk-stat {
     margin: clamp(8px, 1.5vw, 16px) 0;
   }
   .risk-value {
     font-size: clamp(20px, 3vw, 28px);
-    font-weight: 600;
+    font-weight: 700;
     display: block;
   }
   .risk-sub {
-    font-family: 'SF Mono', 'Courier New', monospace;
+    font-family: "SF Mono", "Courier New", monospace;
     font-size: clamp(8px, 1vw, 10px);
     opacity: 0.7;
   }
-  
+
   .risk-box {
     border: 1.5px solid #111;
     padding: 10px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
   }
-  
-  .rb-label { font-family: monospace; font-size: 10px; font-weight: bold;}
-  .rb-badge { border: 1.5px solid #111; padding: 2px 8px; font-weight: 800; font-size: 12px; }
+
+  .rb-label {
+    font-family: monospace;
+    font-size: 10px;
+    font-weight: bold;
+  }
+  .rb-badge {
+    border: 1.5px solid #111;
+    padding: 2px 8px;
+    font-weight: 800;
+    font-size: 12px;
+  }
 
   .priority-list {
-    margin-top: 12px;
+    margin-top: 8px;
     display: flex;
     flex-direction: column;
     gap: 6px;
     flex: 1;
     overflow-y: auto;
+    padding-right: 4px; /* Scrollbar padding */
+  }
+
+  /* 滚动条美化 */
+  .priority-list::-webkit-scrollbar {
+    width: 4px;
+  }
+  .priority-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .priority-list::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
   }
 
   .list-title {
@@ -706,7 +786,7 @@
     font-weight: bold;
     border-bottom: 1px solid #111;
     padding-bottom: 4px;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
   }
 
   .p-item {
@@ -714,11 +794,21 @@
     justify-content: space-between;
     align-items: center;
     padding: clamp(4px, 0.8vw, 8px) clamp(6px, 1vw, 10px);
-    border-bottom: 1px dotted rgba(0,0,0,0.2);
-    font-size: clamp(9px, 1.1vw, 11px);
+    border-bottom: 1px dotted rgba(0, 0, 0, 0.2);
+    font-size: clamp(10px, 1.1vw, 12px);
+    transition: background 0.2s;
   }
-  .p-item.dragging { opacity: 0.4; }
-  .p-idx { opacity: 0.5; margin-right: clamp(2px, 0.4vw, 4px); }
+  .p-item:hover {
+    background: rgba(0, 0, 0, 0.05);
+  }
+  .p-item.dragging {
+    opacity: 0.4;
+  }
+  .p-idx {
+    opacity: 0.5;
+    margin-right: clamp(2px, 0.4vw, 4px);
+    font-family: monospace;
+  }
 
   .p-controls {
     display: flex;
@@ -732,21 +822,22 @@
     background: transparent;
     font-size: clamp(12px, 1.4vw, 14px);
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .p-controls button:active {
+    background: #111;
+    color: #fff;
   }
   .p-weight {
-    font-weight: 600;
+    font-weight: 700;
     font-size: clamp(10px, 1.2vw, 12px);
     min-width: clamp(24px, 2.8vw, 28px);
     text-align: center;
   }
 
-  /* ==================== LIVE PROCESSING 右中红色 ==================== */
-  .live-panel {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-  }
+  /* ==================== LIVE PROCESSING 右上红色区域 ==================== */
   .live-inner {
     width: 100%;
     height: 100%;
@@ -754,31 +845,34 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: clamp(8px, 1.2vw, 12px);
+    gap: clamp(8px, 1.2vw, 16px);
+    text-align: center;
   }
   .live-label {
-    font-size: clamp(7px, 0.9vw, 9px);
-    font-weight: 600;
+    font-size: clamp(8px, 1vw, 10px);
+    font-weight: 700;
     letter-spacing: 1.5px;
+    font-family: monospace;
   }
   .live-status {
-    font-size: clamp(20px, 3vw, 28px);
+    font-size: clamp(20px, 2.5vw, 36px); /* 放大字体更具冲击力 */
     font-weight: 700;
     line-height: 1.2;
   }
   .cache-actions {
     display: flex;
-    gap: clamp(4px, 0.8vw, 8px);
-    margin-top: clamp(4px, 0.8vw, 8px);
+    gap: clamp(8px, 1vw, 12px);
+    margin-top: clamp(8px, 1vw, 16px);
+    width: 80%;
   }
   .cache-actions button {
     flex: 1;
-    padding: clamp(4px, 0.8vw, 8px) clamp(8px, 1.2vw, 12px);
+    padding: clamp(6px, 1vw, 10px);
     border: 1.5px solid #111;
     background: transparent;
     font-family: monospace;
-    font-size: clamp(8px, 1vw, 10px);
-    font-weight: 600;
+    font-size: clamp(10px, 1.2vw, 12px);
+    font-weight: 700;
     cursor: pointer;
     transition: 0.2s;
   }
@@ -787,19 +881,17 @@
     color: #fff;
   }
 
-  /* ==================== TS26 左下绿色 ==================== */
+  /* ==================== 底部控制区 ==================== */
   .ts-left {
     flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    min-height: 0;
-    overflow: hidden;
   }
 
   .giant-ts {
     font-size: clamp(24px, 3.5vw, 36px);
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1;
     letter-spacing: -1px;
     margin-bottom: clamp(4px, 0.6vw, 6px);
@@ -813,20 +905,21 @@
     padding-bottom: 4px;
   }
 
-  .ts-right {
+  .ts-right,
+  .comp-features,
+  .data-box {
     flex: 1.5;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
-    padding-left: clamp(8px, 1.5vw, 16px);
-    min-height: 0;
-    overflow: hidden;
+    justify-content: space-between;
   }
 
-  .toggles-container {
+  .toggles-container,
+  .comp-toggles {
     display: flex;
     flex-direction: column;
-    gap: clamp(4px, 0.6vw, 6px);
+    gap: clamp(6px, 1vw, 10px);
+    margin-top: auto;
   }
 
   .retro-toggle {
@@ -836,18 +929,22 @@
     background: transparent;
     border: none;
     font-family: monospace;
-    font-size: clamp(8px, 1vw, 10px);
+    font-size: clamp(9px, 1.1vw, 11px);
     font-weight: bold;
     color: #111;
     cursor: pointer;
-    padding: clamp(2px, 0.4vw, 4px) 0;
-    border-bottom: 1px dotted rgba(0,0,0,0.3);
+    padding: clamp(4px, 0.6vw, 6px) 0;
+    border-bottom: 1px dotted rgba(0, 0, 0, 0.3);
     width: 100%;
+    transition: opacity 0.2s;
+  }
+  .retro-toggle:hover {
+    opacity: 0.6;
   }
 
   .retro-checkbox {
-    width: clamp(10px, 1.2vw, 12px);
-    height: clamp(10px, 1.2vw, 12px);
+    width: clamp(12px, 1.4vw, 14px);
+    height: clamp(12px, 1.4vw, 14px);
     border: 1.5px solid #111;
     background: transparent;
     transition: 0.2s;
@@ -855,10 +952,6 @@
 
   .retro-checkbox.checked {
     background: #111;
-    box-shadow: inset 0 0 0 2px var(--bg-color, transparent);
-  }
-
-  .ts26-panel .retro-checkbox.checked {
-    box-shadow: inset 0 0 0 2px #8bab93;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.8);
   }
 </style>
