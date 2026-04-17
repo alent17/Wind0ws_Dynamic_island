@@ -124,90 +124,143 @@
       {
         name: "iTunes",
         fetch: async () => {
-          const query = encodeURIComponent(`${title} ${artist}`);
-          const res = await fetchWithTimeout(
-            `https://itunes.apple.com/search?term=${query}&limit=1&media=music`,
-          );
-          const data = await res.json();
-          if (data.results?.length > 0) {
-            // 将 iTunes 图片改为 600x600
-            return data.results[0].artworkUrl100.replace(
-              "100x100bb.jpg",
-              "600x600bb.jpg",
+          try {
+            const query = encodeURIComponent(`${title} ${artist}`);
+            const res = await fetchWithTimeout(
+              `https://itunes.apple.com/search?term=${query}&limit=1&media=music`,
             );
+
+            // 检查响应状态
+            if (!res.ok) {
+              console.warn(`iTunes API 返回错误状态：${res.status}`);
+              return null;
+            }
+
+            const contentType = res.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+              console.warn("iTunes API 返回非 JSON 内容");
+              return null;
+            }
+
+            const data = await res.json();
+            if (data.results?.length > 0) {
+              // 将 iTunes 图片改为 600x600
+              return data.results[0].artworkUrl100.replace(
+                "100x100bb.jpg",
+                "600x600bb.jpg",
+              );
+            }
+            return null;
+          } catch (error) {
+            console.warn("iTunes 封面获取失败:", error);
+            return null;
           }
-          return null;
         },
       },
       {
         name: "Spotify",
         fetch: async () => {
-          const query = encodeURIComponent(`${artist} ${title}`);
-          const res = await fetchWithTimeout(
-            `https://open.spotify.com/search/${query}`,
-          );
-          const html = await res.text();
-          const imgMatch = html.match(/"images":\[{"url":"([^"]+)"}/);
-          if (imgMatch?.[1]) {
-            // Spotify 图片已经是高清，尝试获取更高清版本
-            return imgMatch[1].replace("640x640", "600x600");
+          try {
+            const query = encodeURIComponent(`${artist} ${title}`);
+            const res = await fetchWithTimeout(
+              `https://open.spotify.com/search/${query}`,
+            );
+            if (!res.ok) {
+              console.warn(`Spotify 返回错误状态：${res.status}`);
+              return null;
+            }
+            const html = await res.text();
+            const imgMatch = html.match(/"images":\[{"url":"([^"]+)"}/);
+            if (imgMatch?.[1]) {
+              return imgMatch[1].replace("640x640", "600x600");
+            }
+            const ogMatch = html.match(
+              /<meta property="og:image" content="([^"]+)"/,
+            );
+            return ogMatch?.[1]?.replace("640x640", "600x600") || null;
+          } catch (error) {
+            console.warn("Spotify 封面获取失败:", error);
+            return null;
           }
-          const ogMatch = html.match(
-            /<meta property="og:image" content="([^"]+)"/,
-          );
-          return ogMatch?.[1]?.replace("640x640", "600x600") || null;
         },
       },
       {
         name: "Apple Music",
         fetch: async () => {
-          const query = encodeURIComponent(`${title} ${artist}`);
-          const res = await fetchWithTimeout(
-            `https://music.apple.com/search?term=${query}`,
-          );
-          const html = await res.text();
-          const match = html.match(/"artworkUrl100":"([^"]+)"/);
-          // 将 Apple Music 图片改为 600x600
-          return match?.[1]?.replace("100x100bb.jpg", "600x600bb.jpg") || null;
+          try {
+            const query = encodeURIComponent(`${title} ${artist}`);
+            const res = await fetchWithTimeout(
+              `https://music.apple.com/search?term=${query}`,
+            );
+            if (!res.ok) {
+              console.warn(`Apple Music 返回错误状态：${res.status}`);
+              return null;
+            }
+            const html = await res.text();
+            const match = html.match(/"artworkUrl100":"([^"]+)"/);
+            return (
+              match?.[1]?.replace("100x100bb.jpg", "600x600bb.jpg") || null
+            );
+          } catch (error) {
+            console.warn("Apple Music 封面获取失败:", error);
+            return null;
+          }
         },
       },
       {
         name: "Last.fm",
         fetch: async () => {
-          const artistQuery = encodeURIComponent(artist);
-          const trackQuery = encodeURIComponent(title);
-          const res = await fetchWithTimeout(
-            `https://www.last.fm/music/${artistQuery}/_/${trackQuery}`,
-          );
-          const html = await res.text();
-          const match = html.match(
-            /<meta property="og:image" content="([^"]+)"/,
-          );
-          return match?.[1] || null;
+          try {
+            const artistQuery = encodeURIComponent(artist);
+            const trackQuery = encodeURIComponent(title);
+            const res = await fetchWithTimeout(
+              `https://www.last.fm/music/${artistQuery}/_/${trackQuery}`,
+            );
+            if (!res.ok) {
+              console.warn(`Last.fm 返回错误状态：${res.status}`);
+              return null;
+            }
+            const html = await res.text();
+            const match = html.match(
+              /<meta property="og:image" content="([^"]+)"/,
+            );
+            return match?.[1] || null;
+          } catch (error) {
+            console.warn("Last.fm 封面获取失败:", error);
+            return null;
+          }
         },
       },
       {
         name: "MusicBrainz",
         fetch: async () => {
-          const query = encodeURIComponent(
-            `artist:${artist} recording:${title}`,
-          );
-          const res = await fetchWithTimeout(
-            `https://musicbrainz.org/ws/2/recording/?query=${query}&fmt=json&limit=1`,
-          );
-          const data = await res.json();
-          if (data.recordings?.length > 0) {
-            const recording = data.recordings[0];
-            const releases = recording.releases;
-            if (releases?.length > 0) {
-              const release = releases[0];
-              if (release["cover-art-archive"]?.count > 0) {
-                // MusicBrainz 使用 Cover Art Archive，获取高清版本
-                return `https://coverartarchive.org/release/${release.id}/front`;
+          try {
+            const query = encodeURIComponent(
+              `artist:${artist} recording:${title}`,
+            );
+            const res = await fetchWithTimeout(
+              `https://musicbrainz.org/ws/2/recording/?query=${query}&fmt=json&limit=1`,
+            );
+            if (!res.ok) {
+              console.warn(`MusicBrainz 返回错误状态：${res.status}`);
+              return null;
+            }
+            const data = await res.json();
+            if (data.recordings?.length > 0) {
+              const recording = data.recordings[0];
+              const releases = recording.releases;
+              if (releases?.length > 0) {
+                const release = releases[0];
+                if (release["cover-art-archive"]?.count > 0) {
+                  return `https://coverartarchive.org/release/${release.id}/front`;
+                }
               }
             }
+            return null;
+          } catch (error) {
+            console.warn("MusicBrainz 封面获取失败:", error);
+            return null;
           }
-          return null;
         },
       },
     ];
