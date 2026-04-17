@@ -480,15 +480,15 @@
     width: 100%;
     height: 100%;
     background: #0f0f0f;
-    border-radius: 0;
-    padding: 0;
+    border-radius: 12px;
+    padding: 12px;
     display: grid;
     /* 划分为完美的三列比例 */
     grid-template-columns: 1.4fr 1.1fr 1fr;
     /* 划分为行：头部自适应、中间行撑开、底部行紧凑 */
     grid-template-rows: auto 2fr 1.2fr;
-    gap: 0;
-    box-shadow: none;
+    gap: 12px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
     overflow: hidden;
   }
 
@@ -514,10 +514,10 @@
   /* ==================== 区域分配 (绝对精准的网格坐标) ==================== */
 
   .header-panel {
-    grid-column: 1 / 4; /* 横跨 1, 2, 3 列 */
+    grid-column: 1 / 4; /* 横跨1, 2, 3列 */
     grid-row: 1 / 2;
     background: #e6e8eb;
-    border-radius: 0;
+    border-radius: 18px 18px 14px 14px;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
@@ -528,21 +528,18 @@
     grid-column: 1 / 2;
     grid-row: 2 / 3;
     padding: 24px;
-    border-radius: 0;
   }
 
   .risk-panel {
     grid-column: 2 / 3;
     grid-row: 2 / 3;
     padding: 16px;
-    border-radius: 0;
   }
 
   .live-panel {
     grid-column: 3 / 4;
     grid-row: 2 / 3;
     padding: 20px;
-    border-radius: 0;
   }
 
   .ts26-panel {
@@ -551,21 +548,18 @@
     padding: 20px;
     flex-direction: row;
     gap: 16px;
-    border-radius: 0;
   }
 
   .comp-panel {
     grid-column: 2 / 3;
     grid-row: 3 / 4;
     padding: 16px;
-    border-radius: 0;
   }
 
   .data-panel {
     grid-column: 3 / 4;
     grid-row: 3 / 4;
     padding: 16px;
-    border-radius: 0;
   }
 
   /* ==================== 顶部导航 ==================== */
