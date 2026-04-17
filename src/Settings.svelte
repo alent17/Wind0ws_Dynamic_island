@@ -552,20 +552,20 @@
   }
 
   /* * 完美的 4行响应式网格布局
-   * 优化空间分配：缓存管理移到底部，高级设置扩大
+   * 优化空间分配：所有内容无滚动显示
    */
   .bento-container {
     width: 100%;
     height: 100%;
     background: #0f0f0f;
     border-radius: 12px;
-    padding: 12px;
+    padding: 10px;
     display: grid;
     /* 划分为三列 */
     grid-template-columns: 1.4fr 1.1fr 1fr;
-    /* 划分为4行：头部、主内容区、次级内容区、缓存管理 */
-    grid-template-rows: auto 2fr 1.6fr auto;
-    gap: 12px;
+    /* 划分为4行：紧凑布局 */
+    grid-template-rows: auto 2fr 1.8fr auto;
+    gap: 10px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
     overflow: hidden;
   }
@@ -581,12 +581,13 @@
 
   /* 通用标签样式 */
   .panel-label {
-    font-size: 9px;
+    font-size: 8px;
     font-family: "SF Mono", "Courier New", monospace;
     text-transform: uppercase;
     font-weight: bold;
     letter-spacing: 0.5px;
     color: #333;
+    margin-bottom: clamp(4px, 0.6vw, 6px);
   }
 
   /* ==================== 区域分配 (绝对精准的网格坐标) ==================== */
@@ -599,50 +600,50 @@
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 24px;
+    padding: 10px 20px;
   }
 
   .hero-panel {
     grid-column: 1 / 2;
     grid-row: 2 / 3;
-    padding: 24px;
+    padding: 20px;
   }
 
   .risk-panel {
     grid-column: 2 / 3;
     grid-row: 2 / 3;
-    padding: 16px;
+    padding: 14px;
   }
 
   .ts26-panel {
     /* 显示设置 - 移到第二行右侧 */
     grid-column: 3 / 4;
     grid-row: 2 / 3;
-    padding: 20px;
+    padding: 16px;
     flex-direction: row;
-    gap: 16px;
+    gap: 14px;
   }
 
   .comp-panel {
     /* 专辑封面 - 第三行左侧 */
     grid-column: 1 / 2;
     grid-row: 3 / 4;
-    padding: 16px;
+    padding: 14px;
   }
 
   .data-panel {
     /* 高级设置 - 扩大到跨2列 */
     grid-column: 2 / 4;
     grid-row: 3 / 4;
-    padding: 12px;
-    overflow-y: auto;
+    padding: 10px;
+    overflow-y: hidden;
   }
 
   .live-panel {
     /* 缓存管理 - 移到第四行，缩小尺寸 */
     grid-column: 1 / 4;
     grid-row: 4 / 5;
-    padding: 12px;
+    padding: 10px;
   }
 
   /* ==================== 顶部导航 ==================== */
@@ -707,11 +708,11 @@
   }
 
   .giant-text {
-    font-size: clamp(1.5rem, 3.5vw, 3.8rem);
+    font-size: clamp(1.3rem, 3vw, 3.2rem);
     font-weight: 700;
     line-height: 1.05;
     letter-spacing: -1px;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     text-transform: uppercase;
   }
 
@@ -835,12 +836,12 @@
   }
 
   .priority-list {
-    margin-top: 8px;
+    margin-top: 6px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
     flex: 1;
-    overflow-y: auto;
+    overflow-y: hidden;
     padding-right: 4px; /* Scrollbar padding */
   }
 
@@ -869,9 +870,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: clamp(4px, 0.8vw, 8px) clamp(6px, 1vw, 10px);
+    padding: clamp(3px, 0.6vw, 6px) clamp(5px, 0.8vw, 8px);
     border-bottom: 1px dotted rgba(0, 0, 0, 0.2);
-    font-size: clamp(10px, 1.1vw, 12px);
+    font-size: clamp(9px, 1vw, 11px);
     transition: background 0.2s;
   }
   .p-item:hover {
@@ -925,25 +926,25 @@
     text-align: left;
   }
   .live-label {
-    font-size: clamp(8px, 1vw, 10px);
+    font-size: clamp(7px, 0.9vw, 9px);
     font-weight: 700;
     letter-spacing: 1.5px;
     font-family: monospace;
   }
   .live-status {
-    font-size: clamp(14px, 1.8vw, 24px);
+    font-size: clamp(12px, 1.5vw, 20px);
     font-weight: 700;
     line-height: 1.2;
   }
   .cache-actions {
     display: flex;
-    gap: clamp(6px, 0.8vw, 10px);
+    gap: clamp(5px, 0.7vw, 8px);
     margin-top: 0;
     width: auto;
   }
   .cache-actions button {
     flex: 1;
-    padding: clamp(4px, 0.8vw, 8px);
+    padding: clamp(3px, 0.6vw, 6px);
     border: 1.5px solid #111;
     background: transparent;
     font-family: monospace;
@@ -966,11 +967,11 @@
   }
 
   .giant-ts {
-    font-size: clamp(24px, 3.5vw, 36px);
+    font-size: clamp(20px, 3vw, 32px);
     font-weight: 700;
     line-height: 1;
     letter-spacing: -1px;
-    margin-bottom: clamp(4px, 0.6vw, 6px);
+    margin-bottom: clamp(3px, 0.5vw, 5px);
   }
 
   .ts-line {
@@ -994,7 +995,7 @@
   .comp-toggles {
     display: flex;
     flex-direction: column;
-    gap: clamp(4px, 0.8vw, 8px);
+    gap: clamp(3px, 0.6vw, 6px);
     margin-top: auto;
   }
 
@@ -1005,11 +1006,11 @@
     background: transparent;
     border: none;
     font-family: monospace;
-    font-size: clamp(9px, 1.1vw, 11px);
+    font-size: clamp(8px, 1vw, 10px);
     font-weight: bold;
     color: #111;
     cursor: pointer;
-    padding: clamp(4px, 0.6vw, 6px) 0;
+    padding: clamp(3px, 0.5vw, 5px) 0;
     border-bottom: 1px dotted rgba(0, 0, 0, 0.3);
     width: 100%;
     transition: opacity 0.2s;
@@ -1034,18 +1035,18 @@
   .corner-radius-control {
     display: flex;
     align-items: center;
-    gap: clamp(6px, 1vw, 10px);
-    padding: clamp(4px, 0.6vw, 8px) 0;
+    gap: clamp(5px, 0.8vw, 8px);
+    padding: clamp(3px, 0.5vw, 6px) 0;
     border-bottom: 1px dotted rgba(0, 0, 0, 0.3);
     width: 100%;
   }
 
   .corner-label {
     font-family: monospace;
-    font-size: clamp(9px, 1.1vw, 11px);
+    font-size: clamp(8px, 1vw, 10px);
     font-weight: bold;
     color: #111;
-    min-width: 60px;
+    min-width: 55px;
   }
 
   .corner-slider {
