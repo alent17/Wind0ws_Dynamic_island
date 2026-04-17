@@ -1409,11 +1409,14 @@
 
             // 检查设置窗口是否已存在
             if (windowLabels.includes("settings-window")) {
-              console.log("[设置窗口] 窗口已存在，显示并聚焦");
+              console.log("[设置窗口] 窗口已存在，调整大小并显示");
               const existingWindow = windows.find(
                 (w) => w.label === "settings-window",
               );
               if (existingWindow) {
+                await existingWindow.setSize({ type: "Physical", width: 1000, height: 750 });
+                await existingWindow.setMinSize({ type: "Physical", width: 800, height: 600 });
+                await existingWindow.center();
                 await existingWindow.show();
                 await existingWindow.setFocus();
               }
@@ -1423,14 +1426,12 @@
             console.log("[App.svelte] 创建设置窗口");
             const webview = new WebviewWindow("settings-window", {
               url: "/settings.html",
-              title: "Wind0ws Dynamic Island - 设置",
-              width: 375,
-              height: 812,
-              minWidth: 375,
-              minHeight: 812,
-              maxWidth: 375,
-              maxHeight: 812,
-              resizable: false,
+              title: "Isle - 设置",
+              width: 1000,
+              height: 750,
+              minWidth: 800,
+              minHeight: 600,
+              resizable: true,
               decorations: false,
               transparent: true,
               alwaysOnTop: false,

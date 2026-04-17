@@ -85,7 +85,7 @@ impl Default for AppSettings {
             floating_window_y: None,
             floating_window_width: None,
             floating_window_height: None,
-            enable_mv_playback: false, // 默认关闭 MV 播放
+            enable_mv_playback: true, // 默认开启 MV 播放
             lock_floating_window: false, // 默认不锁定悬浮窗
             enable_hd_cover: true, // 默认开启高清封面获取
             enable_pixel_art: false, // 默认关闭像素化
@@ -838,6 +838,10 @@ fn show_main_window(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn show_settings_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("settings-window") {
+        // 窗口已存在，调整大小并居中显示
+        let _ = window.set_size(tauri::PhysicalSize::new(1000, 750));
+        let _ = window.set_min_size(Some(tauri::PhysicalSize::new(800, 600)));
+        let _ = window.center();
         let _ = window.show();
         let _ = window.set_focus();
         return Ok(());
@@ -849,10 +853,9 @@ fn show_settings_window(app: AppHandle) -> Result<(), String> {
         tauri::WebviewUrl::App("/settings.html".into()),
     )
     .title("Isle - 设置")
-    .inner_size(375.0, 812.0)
-    .min_inner_size(375.0, 812.0)
-    .max_inner_size(375.0, 812.0)
-    .resizable(false)
+    .inner_size(1000.0, 750.0)
+    .min_inner_size(800.0, 600.0)
+    .resizable(true)
     .center()
     .decorations(false)
     .transparent(true)

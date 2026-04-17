@@ -61,6 +61,9 @@
   let mvUrl = $state(""); // MV 视频链接
   let isPlayingMV = $state(false); // 是否正在播放 MV
 
+  // 半色调网点效果
+  let halftoneOverlayVisible = $state(false);
+
   // 置顶状态
   let isAlwaysOnTop = $state(false);
 
@@ -137,12 +140,19 @@
             }
 
             const contentType = res.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-              console.warn("iTunes API 返回非 JSON 内容");
+            const isJSON = contentType && 
+              (contentType.includes("application/json") || 
+               contentType.includes("text/javascript"));
+            
+            if (!isJSON) {
+              console.warn(`iTunes API 返回非 JSON 内容 (Content-Type: ${contentType})`);
               return null;
             }
 
-            const data = await res.json();
+            // 使用 text() 方法读取内容，然后解析为 JSON
+            // 这样可以处理非标准的 Content-Type
+            const text = await res.text();
+            const data = JSON.parse(text);
             if (data.results?.length > 0) {
               // 将 iTunes 图片改为 600x600
               return data.results[0].artworkUrl100.replace(
@@ -274,7 +284,21 @@
           const res = await fetchWithTimeout(
             `https://itunes.apple.com/search?term=${query}&limit=1&entity=musicArtist`,
           );
-          const data = await res.json();
+          
+          const contentType = res.headers.get("content-type");
+          const isJSON = contentType && 
+            (contentType.includes("application/json") || 
+             contentType.includes("text/javascript"));
+          
+          if (!isJSON) {
+            console.warn(`iTunes API 返回非 JSON 内容 (Content-Type: ${contentType})`);
+            return null;
+          }
+
+          // 使用 text() 方法读取内容，然后解析为 JSON
+          // 这样可以处理非标准的 Content-Type
+          const text = await res.text();
+          const data = JSON.parse(text);
           if (data.results?.length > 0) {
             // 获取歌手图片并转为 600x600
             return (
@@ -581,7 +605,21 @@
           },
         },
       );
-      const data = await res.json();
+      
+      const contentType = res.headers.get("content-type");
+      const isJSON = contentType && 
+        (contentType.includes("application/json") || 
+         contentType.includes("text/javascript"));
+      
+      if (!isJSON) {
+        console.warn(`iTunes API 返回非 JSON 内容 (Content-Type: ${contentType})`);
+        return null;
+      }
+
+      // 使用 text() 方法读取内容，然后解析为 JSON
+      // 这样可以处理非标准的 Content-Type
+      const text = await res.text();
+      const data = JSON.parse(text);
 
       if (data.results?.length > 0) {
         const mvData = data.results[0];
