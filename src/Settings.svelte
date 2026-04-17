@@ -245,44 +245,44 @@
       </div>
 
       <div class="hero-content">
-        <h1 class="giant-text">自主<br />灵动岛防御</h1>
+        <h1 class="giant-text">灵动岛<br />控制中心</h1>
         <p class="hero-subtext">
-          先进的桌面界面算法布局。<br />
-          最小化干扰，最大化留存。<br />
-          零延迟响应。
+          智能桌面媒体交互体验。<br />
+          实时音乐播放监控。<br />
+          多播放器智能切换。
         </p>
       </div>
 
       <div class="hero-bottom-action">
-        <span class="action-label">启动主题序列</span>
+        <span class="action-label">主题切换</span>
         <div class="action-input-group">
           <div class="theme-readout">
-            <span class="muted">当前主题 ID:</span>
+            <span class="muted">当前主题:</span>
             {themes.find((t) => t.id === settings.island_theme)?.name || "未知"}
           </div>
-          <button class="action-btn" onclick={cycleTheme}>启动 &rarr;</button>
+          <button class="action-btn" onclick={cycleTheme}>切换 &rarr;</button>
         </div>
         <div class="secure-line">
           <div class="barcode"></div>
-          <span>安全连接已建立</span>
+          <span>系统运行正常</span>
         </div>
       </div>
     </section>
 
     <section class="t-panel risk-panel bg-gray">
-      <span class="panel-label">播放器优先级评估</span>
+      <span class="panel-label">播放器优先级</span>
 
       <div class="risk-stat">
         <span class="risk-value">最优</span>
-        <span class="risk-sub">历史冲突平均：2.4%</span>
+        <span class="risk-sub">智能优先级管理</span>
       </div>
       <div class="risk-box">
-        <span class="rb-label">活动音源</span>
+        <span class="rb-label">已配置播放器</span>
         <span class="rb-badge">{playerOrder.length}</span>
       </div>
 
       <div class="priority-list">
-        <span class="list-title">权重分配</span>
+        <span class="list-title">优先级权重</span>
         {#each playerOrder as player, index}
           <div
             class="p-item"
@@ -314,19 +314,19 @@
 
     <section class="t-panel live-panel bg-red">
       <div class="live-inner">
-        <span class="live-label">缓存处理</span>
+        <span class="live-label">缓存管理</span>
         <span class="live-status">{cacheSize}</span>
         <div class="cache-actions">
-          <button onclick={pickCacheDir}>目录</button>
-          <button onclick={clearCache}>清除</button>
+          <button onclick={pickCacheDir}>选择目录</button>
+          <button onclick={clearCache}>清空缓存</button>
         </div>
       </div>
     </section>
 
     <section class="t-panel ts26-panel bg-green">
       <div class="ts-left">
-        <h2 class="giant-ts">显示</h2>
-        <div class="ts-line">模块_4</div>
+        <h2 class="giant-ts">显示设置</h2>
+        <div class="ts-line">基础配置</div>
       </div>
       <div class="ts-right toggles-container">
         <button
@@ -334,7 +334,7 @@
           onclick={() =>
             saveSettings({ show_spectrum: !settings.show_spectrum })}
         >
-          <span>频谱显示</span>
+          <span>频谱动画</span>
           <div
             class="retro-checkbox"
             class:checked={settings.show_spectrum}
@@ -362,7 +362,7 @@
     </section>
 
     <section class="t-panel comp-panel bg-gray">
-      <span class="panel-label">封面引擎</span>
+      <span class="panel-label">专辑封面</span>
       <div class="comp-features">
         <div class="comp-toggles">
           <button
@@ -370,7 +370,7 @@
             onclick={() =>
               saveSettings({ enable_hd_cover: !settings.enable_hd_cover })}
           >
-            <span>高清同步</span>
+            <span>高清封面</span>
             <div
               class="retro-checkbox"
               class:checked={settings.enable_hd_cover}
@@ -381,7 +381,7 @@
             onclick={() =>
               saveSettings({ enable_pixel_art: !settings.enable_pixel_art })}
           >
-            <span>像素艺术</span>
+            <span>像素风格</span>
             <div
               class="retro-checkbox"
               class:checked={settings.enable_pixel_art}
@@ -405,9 +405,9 @@
     </section>
 
     <section class="t-panel data-panel bg-yellow">
-      <span class="panel-label">系统配置</span>
+      <span class="panel-label">高级设置</span>
       <div class="data-box">
-        <span>系统版本 V1.0</span>
+        <span>版本 V1.0</span>
       </div>
       <div class="toggles-container" style="margin-top: auto;">
         <button
@@ -417,7 +417,7 @@
               lock_floating_window: !settings.lock_floating_window,
             })}
         >
-          <span>锁定窗口</span>
+          <span>锁定悬浮窗</span>
           <div
             class="retro-checkbox"
             class:checked={settings.lock_floating_window}
