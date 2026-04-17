@@ -454,7 +454,7 @@
     height: 100vh;
     padding: clamp(12px, 2vw, 24px); /* 响应式边缘留白 */
     display: flex;
-    background: linear-gradient(135deg, #d3cbbd 0%, #a29b92 100%);
+    background: transparent;
   }
 
   /* 核心配色板 */
