@@ -551,8 +551,8 @@
     background-color: #f1b979;
   }
 
-  /* * 完美的 3x3 响应式网格布局 
-   * 彻底修复溢出、错位和黑边问题
+  /* * 完美的 4行响应式网格布局
+   * 优化空间分配：缓存管理移到底部，高级设置扩大
    */
   .bento-container {
     width: 100%;
@@ -561,10 +561,10 @@
     border-radius: 12px;
     padding: 12px;
     display: grid;
-    /* 划分为完美的三列比例 */
+    /* 划分为三列 */
     grid-template-columns: 1.4fr 1.1fr 1fr;
-    /* 划分为行：头部自适应、中间行撑开、底部行宽松以容纳更多控件 */
-    grid-template-rows: auto 2fr 1.5fr;
+    /* 划分为4行：头部、主内容区、次级内容区、缓存管理 */
+    grid-template-rows: auto 2fr 1.6fr auto;
     gap: 12px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
     overflow: hidden;
@@ -614,31 +614,35 @@
     padding: 16px;
   }
 
-  .live-panel {
+  .ts26-panel {
+    /* 显示设置 - 移到第二行右侧 */
     grid-column: 3 / 4;
     grid-row: 2 / 3;
-    padding: 20px;
-  }
-
-  .ts26-panel {
-    grid-column: 1 / 2;
-    grid-row: 3 / 4;
     padding: 20px;
     flex-direction: row;
     gap: 16px;
   }
 
   .comp-panel {
-    grid-column: 2 / 3;
+    /* 专辑封面 - 第三行左侧 */
+    grid-column: 1 / 2;
     grid-row: 3 / 4;
     padding: 16px;
   }
 
   .data-panel {
-    grid-column: 3 / 4;
+    /* 高级设置 - 扩大到跨2列 */
+    grid-column: 2 / 4;
     grid-row: 3 / 4;
     padding: 12px;
     overflow-y: auto;
+  }
+
+  .live-panel {
+    /* 缓存管理 - 移到第四行，缩小尺寸 */
+    grid-column: 1 / 4;
+    grid-row: 4 / 5;
+    padding: 12px;
   }
 
   /* ==================== 顶部导航 ==================== */
@@ -914,11 +918,11 @@
     width: 100%;
     height: 100%;
     display: flex;
-    flex-direction: column;
-    justify-content: center;
+    flex-direction: row;
+    justify-content: space-between;
     align-items: center;
     gap: clamp(8px, 1.2vw, 16px);
-    text-align: center;
+    text-align: left;
   }
   .live-label {
     font-size: clamp(8px, 1vw, 10px);
@@ -927,19 +931,19 @@
     font-family: monospace;
   }
   .live-status {
-    font-size: clamp(20px, 2.5vw, 36px); /* 放大字体更具冲击力 */
+    font-size: clamp(14px, 1.8vw, 24px);
     font-weight: 700;
     line-height: 1.2;
   }
   .cache-actions {
     display: flex;
-    gap: clamp(8px, 1vw, 12px);
-    margin-top: clamp(8px, 1vw, 16px);
-    width: 80%;
+    gap: clamp(6px, 0.8vw, 10px);
+    margin-top: 0;
+    width: auto;
   }
   .cache-actions button {
     flex: 1;
-    padding: clamp(6px, 1vw, 10px);
+    padding: clamp(4px, 0.8vw, 8px);
     border: 1.5px solid #111;
     background: transparent;
     font-family: monospace;
