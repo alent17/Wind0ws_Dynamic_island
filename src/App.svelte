@@ -130,41 +130,58 @@
   let artistName = $state<string>("");
   let isPlaying = $state<boolean>(false);
 
-  // 收起状态频谱高度控制（JavaScript驱动，支持平滑衰减）
+  // iOS风格频谱动画系统
+  let spectrumPhase = $state(0); // 全局相位，用于驱动波浪
   let spectrumHeights = $state([0.5, 0.5, 0.5, 0.5, 0.5]);
   let spectrumHeightsExpanded = $state(Array(20).fill(0.5));
   let spectrumTimer: ReturnType<typeof setInterval> | null = null;
 
-  // 收起态频谱各条的最大高度（模拟不同频率）
-  const collapsedMaxHeights = [12, 10, 11, 8, 6];
-  // 展开态频谱各条的最大高度（模拟不同频率，低频更活跃）
+  // iOS风格收起态频谱配置（波浪式，低频更强）
+  const collapsedMaxHeights = [10, 8, 9, 7, 5];
+  const collapsedPhases = [0, 0.5, 1.0, 1.5, 0.8]; // 相位偏移，创造波浪
+
+  // iOS风格展开态频谱配置（波浪式，低频更活跃）
   const expandedMaxHeights = [
-    22, 20, 24, 18, 16, 14, 12, 10, 8, 7, 14, 16, 12, 10, 8, 9, 7, 6, 5, 4,
+    24, 22, 26, 20, 18, 15, 13, 11, 9, 7, 15, 17, 13, 11, 9, 10, 8, 6, 4, 3,
+  ];
+  const expandedPhases = [
+    0, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 0.15, 0.45, 0.75, 1.05,
+    1.35, 1.65, 1.95, 2.25, 2.55, 2.85,
   ];
 
   function startSpectrumAnimation() {
     if (spectrumTimer) return;
     spectrumTimer = setInterval(() => {
+      spectrumPhase += 0.15; // iOS风格：平滑相位递进
+
       if (isPlaying) {
-        // 播放时：生成随机频谱高度
-        spectrumHeights = spectrumHeights.map(
-          (_, i) => 0.5 + Math.random() * collapsedMaxHeights[i],
-        );
-        spectrumHeightsExpanded = spectrumHeightsExpanded.map(
-          (_, i) => 0.5 + Math.random() * expandedMaxHeights[i],
-        );
+        // iOS风格：使用正弦波生成平滑的频谱高度
+        spectrumHeights = collapsedMaxHeights.map((maxH, i) => {
+          const wave = Math.sin(
+            spectrumPhase + collapsedPhases[i] * Math.PI * 2,
+          );
+          const noise = Math.sin(spectrumPhase * 2.3 + i * 1.7) * 0.15;
+          return Math.max(2, (wave * 0.4 + 0.6 + noise) * maxH * 0.5);
+        });
+        spectrumHeightsExpanded = expandedMaxHeights.map((maxH, i) => {
+          const wave = Math.sin(
+            spectrumPhase + expandedPhases[i] * Math.PI * 2,
+          );
+          const noise = Math.sin(spectrumPhase * 1.7 + i * 2.1) * 0.12;
+          return Math.max(2, (wave * 0.4 + 0.6 + noise) * maxH * 0.5);
+        });
       } else {
-        // 暂停时：平滑衰减
+        // iOS风格：平滑衰减到最小
         spectrumHeights = spectrumHeights.map((h) => {
-          const newH = h * 0.75;
-          return newH < 0.6 ? 0.5 : newH;
+          const newH = h * 0.92;
+          return newH < 2 ? 0.5 : newH;
         });
         spectrumHeightsExpanded = spectrumHeightsExpanded.map((h) => {
-          const newH = h * 0.75;
-          return newH < 0.6 ? 0.5 : newH;
+          const newH = h * 0.92;
+          return newH < 2 ? 0.5 : newH;
         });
       }
-    }, 100);
+    }, 50); // iOS风格：更快的刷新率，平滑动画
   }
 
   function stopSpectrumAnimation() {
@@ -2137,12 +2154,11 @@
   .spectrum-bar {
     width: 2px;
     min-height: 2px;
-    border-radius: 2px;
+    border-radius: 1px;
     background: var(--accent-color, #fff);
-    transition: height 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: height 0.08s ease-out;
   }
 
-  /* 展开状态频谱 - 20条独立动画，模拟真实音频频谱 */
   .spectrum-container-expanded {
     display: flex;
     align-items: flex-end;
@@ -2154,154 +2170,12 @@
   .spectrum-bar-expanded {
     width: 2px;
     min-height: 2px;
-    border-radius: 2px;
+    border-radius: 1px;
     background: var(--accent-color, #fff);
-    transition: height 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: height 0.08s ease-out;
   }
 
-  /* 低频区 (0-3): 幅度大，节奏慢 */
-  .spectrum-bar-expanded.playing:nth-child(1) {
-    animation: sp-e1 1.8s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(2) {
-    animation: sp-e2 1.6s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(3) {
-    animation: sp-e3 1.9s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(4) {
-    animation: sp-e4 1.5s ease-in-out infinite;
-  }
-
-  /* 中低频区 (5-8): 幅度中等 */
-  .spectrum-bar-expanded.playing:nth-child(5) {
-    animation: sp-e5 1.3s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(6) {
-    animation: sp-e6 1.7s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(7) {
-    animation: sp-e7 1.4s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(8) {
-    animation: sp-e8 1.6s ease-in-out infinite;
-  }
-
-  /* 中频区 (9-12): 活跃区域 */
-  .spectrum-bar-expanded.playing:nth-child(9) {
-    animation: sp-e9 1.2s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(10) {
-    animation: sp-e10 1.5s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(11) {
-    animation: sp-e11 1.3s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(12) {
-    animation: sp-e12 1.7s ease-in-out infinite;
-  }
-
-  /* 中高频区 (13-16): 幅度较小 */
-  .spectrum-bar-expanded.playing:nth-child(13) {
-    animation: sp-e13 1.1s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(14) {
-    animation: sp-e14 1.4s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(15) {
-    animation: sp-e15 1.2s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(16) {
-    animation: sp-e16 1.6s ease-in-out infinite;
-  }
-
-  /* 高频区 (17-20): 幅度小，节奏快 */
-  .spectrum-bar-expanded.playing:nth-child(17) {
-    animation: sp-e17 1s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(18) {
-    animation: sp-e18 1.3s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(19) {
-    animation: sp-e19 1.1s ease-in-out infinite;
-  }
-  .spectrum-bar-expanded.playing:nth-child(20) {
-    animation: sp-e20 1.4s ease-in-out infinite;
-  }
-
-  /* 低频 - 大幅度 */
-  @keyframes sp-e1 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    15% {
-      height: 18px;
-    }
-    35% {
-      height: 6px;
-    }
-    55% {
-      height: 22px;
-    }
-    75% {
-      height: 3px;
-    }
-  }
-  @keyframes sp-e2 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    20% {
-      height: 14px;
-    }
-    45% {
-      height: 4px;
-    }
-    70% {
-      height: 20px;
-    }
-    90% {
-      height: 2px;
-    }
-  }
-  @keyframes sp-e3 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    10% {
-      height: 16px;
-    }
-    30% {
-      height: 8px;
-    }
-    50% {
-      height: 24px;
-    }
-    80% {
-      height: 5px;
-    }
-  }
-  @keyframes sp-e4 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    25% {
-      height: 12px;
-    }
-    50% {
-      height: 3px;
-    }
-    75% {
-      height: 18px;
-    }
-    95% {
-      height: 1px;
-    }
-  }
+  /* iOS风格：使用JavaScript正弦波驱动频谱动画，无需CSS动画 */
 
   /* 中低频 */
   @keyframes sp-e5 {
