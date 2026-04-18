@@ -325,11 +325,11 @@
 
   // 根据当前高度动态计算 border-radius，确保与尺寸动画同步
   function getDynamicBorderRadius(currentHeight: number): string {
-    // 收起状态：height = 28px，border-radius = 22px
+    // 收起状态：height = 22px，border-radius = 20px
     // 展开状态：height = 160px，border-radius = 用户设置值（默认 42px）
-    const minHeight = 28;
+    const minHeight = 22;
     const maxHeight = 160;
-    const minRadius = 25;
+    const minRadius = 18;
     const maxRadius = appSettings.expanded_corner_radius || 42; // 使用用户设置的圆角
 
     // 限制在有效范围内
@@ -691,7 +691,7 @@
     damping: 0.7,
     precision: 0.01,
   });
-  let heightSpring = spring(28, {
+  let heightSpring = spring(22, {
     stiffness: 0.15,
     damping: 0.7,
     precision: 0.01,
@@ -906,7 +906,7 @@
           // 延迟尺寸变化，避免视觉冲突
           setTimeout(() => {
             widthSpring.set(isHov ? 110 : 100); // 调整收起宽度
-            heightSpring.set(isHov ? 30 : 28); // 调整收起高度
+            heightSpring.set(isHov ? 24 : 22); // 调整收起高度
           }, 60);
         }
       });
