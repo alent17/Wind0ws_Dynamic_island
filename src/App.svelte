@@ -888,7 +888,7 @@
       requestAnimationFrame(() => {
         if (isExp) {
           // 展开动画：先设置尺寸，再显示内容
-          widthSpring.set(250); // 缩小展开宽度
+          widthSpring.set(300); // 恢复展开宽度
           heightSpring.set(160); // 调整展开高度，确保所有内容可见
 
           if (!animEnabled) {
