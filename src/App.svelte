@@ -325,11 +325,11 @@
 
   // 根据当前高度动态计算 border-radius，确保与尺寸动画同步
   function getDynamicBorderRadius(currentHeight: number): string {
-    // 收起状态：height = 22px，border-radius = 20px
+    // 收起状态：height = 25px，border-radius = 22px
     // 展开状态：height = 160px，border-radius = 用户设置值（默认 42px）
-    const minHeight = 22;
+    const minHeight = 25;
     const maxHeight = 160;
-    const minRadius = 18;
+    const minRadius = 22;
     const maxRadius = appSettings.expanded_corner_radius || 42; // 使用用户设置的圆角
 
     // 限制在有效范围内
@@ -686,12 +686,12 @@
 
   // ========== 优化的 Spring 参数（极致流畅） ==========
   // ========== Spring 动画实例（可动态调整参数） ==========
-  let widthSpring = spring(100, {
+  let widthSpring = spring(80, {
     stiffness: 0.15,
     damping: 0.7,
     precision: 0.01,
   });
-  let heightSpring = spring(22, {
+  let heightSpring = spring(25, {
     stiffness: 0.15,
     damping: 0.7,
     precision: 0.01,
@@ -888,7 +888,7 @@
       requestAnimationFrame(() => {
         if (isExp) {
           // 展开动画：先设置尺寸，再显示内容
-          widthSpring.set(300); // 缩小展开宽度
+          widthSpring.set(250); // 缩小展开宽度
           heightSpring.set(160); // 调整展开高度，确保所有内容可见
 
           if (!animEnabled) {
@@ -905,8 +905,8 @@
 
           // 延迟尺寸变化，避免视觉冲突
           setTimeout(() => {
-            widthSpring.set(isHov ? 110 : 100); // 调整收起宽度
-            heightSpring.set(isHov ? 24 : 22); // 调整收起高度
+            widthSpring.set(isHov ? 90 : 80); // 调整收起宽度
+            heightSpring.set(isHov ? 27 : 25); // 调整收起高度
           }, 60);
         }
       });
