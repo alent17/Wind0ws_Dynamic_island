@@ -687,18 +687,18 @@
   // ========== 优化的 Spring 参数（极致流畅） ==========
   // ========== Spring 动画实例（可动态调整参数） ==========
   let widthSpring = spring(80, {
-    stiffness: 0.15,
-    damping: 0.7,
+    stiffness: 0.2, // 适中的刚度，确保回弹有力
+    damping: 0.85, // 较高阻尼，防止过多抖动
     precision: 0.01,
   });
   let heightSpring = spring(25, {
-    stiffness: 0.15,
-    damping: 0.7,
+    stiffness: 0.2, // 适中的刚度，确保回弹有力
+    damping: 0.85, // 较高阻尼，防止过多抖动
     precision: 0.01,
   });
   let contentOpacity = spring(0, {
-    stiffness: 0.2,
-    damping: 0.75,
+    stiffness: 0.15, // 透明度动画稍快
+    damping: 0.8,
     precision: 0.01,
   });
 
