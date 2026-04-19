@@ -19,6 +19,7 @@ use windows::Media::Control::{
 use windows::Storage::Streams::DataReader;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use rustfft::{FftPlanner, num_complex::Complex};
+use window_vibrancy::{apply_acrylic, clear_acrylic};
 
 const SHOW_MENU_ID: &str = "show";
 const SETTINGS_MENU_ID: &str = "settings";
@@ -53,6 +54,7 @@ pub struct AppSettings {
     // ===== 专辑封面设置 =====
     pub enable_hd_cover: bool,
     pub enable_pixel_art: bool,
+    pub enable_halftone: bool,
     // ===== 缓存目录设置 =====
     pub cache_directory: Option<String>,
     // ===== 开机启动 =====
@@ -63,8 +65,8 @@ pub struct AppSettings {
     pub hide_floating_window: bool,
     // ===== 灵动岛样式 =====
     pub expanded_corner_radius: u32,
-    // ===== 实时频谱 =====
-    pub real_time_spectrum: bool,
+    // ===== 顶部栏显示 =====
+    pub always_show_top_bar: bool,
 }
 
 impl Default for AppSettings {
@@ -99,13 +101,14 @@ impl Default for AppSettings {
             lock_floating_window: false, // 默认不锁定悬浮窗
             enable_hd_cover: true, // 默认开启高清封面获取
             enable_pixel_art: false, // 默认关闭像素化
+            enable_halftone: false, // 默认关闭网点效果
             cache_directory: None, // 默认使用系统缓存目录
             auto_start: false, // 默认关闭开机启动
             hide_settings_button: false, // 默认显示设置按钮
             hide_monitor_selector: false, // 默认显示显示器选择
             hide_floating_window: false, // 默认显示悬浮窗按钮
             expanded_corner_radius: 16, // 默认圆角 16px
-            real_time_spectrum: false, // 默认关闭实时频谱
+            always_show_top_bar: true, // 默认固定显示顶部栏
         }
     }
 }
@@ -434,7 +437,7 @@ fn set_auto_start(_app: AppHandle, enable: bool) -> Result<(), String> {
         }
     } else {
         // 删除注册表项
-        match Command::new("reg")
+        let output = Command::new("reg")
             .args(&[
                 "delete",
                 "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
@@ -443,22 +446,9 @@ fn set_auto_start(_app: AppHandle, enable: bool) -> Result<(), String> {
                 "/f",
             ])
             .output()
-        {
-            Ok(output) => {
-                // 删除失败如果是因为键不存在，这是正常的，不算错误
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    // 只在非"键不存在"错误时记录日志
-                    if !stderr.contains("系统找不到指定的注册表值") && !stderr.contains("The system cannot find the registry key") {
-                        eprintln!("删除注册表项警告：{}", stderr);
-                    }
-                    // 键不存在是正常情况，返回成功
-                }
-            }
-            Err(e) => {
-                // 执行命令失败才返回错误
-                return Err(format!("执行 reg delete 命令失败：{}", e));
-            }
+            .map_err(|e| format!("执行 reg delete 命令失败：{}", e))?;
+
+        if !output.status.success() {
         }
     }
 
@@ -1036,11 +1026,14 @@ fn save_settings(app: AppHandle, settings: AppSettings) -> Result<(), String> {
     let always_on_top = settings.always_on_top;
     let auto_start = settings.auto_start;
     let state = app.state::<AppState>();
+    
+    let mut old_settings: Option<AppSettings> = None;
     {
         let mut state_settings = state
             .settings
             .lock()
             .map_err(|_| "Failed to lock settings")?;
+        old_settings = Some(state_settings.clone());
         *state_settings = settings.clone();
     }
 
@@ -1056,10 +1049,47 @@ fn save_settings(app: AppHandle, settings: AppSettings) -> Result<(), String> {
     if auto_start {
         set_auto_start(app.clone(), true)?;
     } else {
-        let _ = set_auto_start(app.clone(), false); // 忽略删除失败的错误
+        let _ = set_auto_start(app.clone(), false);
     }
 
-    // ===== 关键：广播设置变更事件给所有窗口 =====
+    // ===== 广播各设置项的单独变更事件 =====
+    if let Some(old) = old_settings {
+        if old.enable_halftone != settings.enable_halftone {
+            let _ = app.emit("halftone-changed", serde_json::json!({
+                "enableHalftone": settings.enable_halftone
+            }));
+        }
+        if old.enable_pixel_art != settings.enable_pixel_art {
+            let _ = app.emit("pixel-art-changed", serde_json::json!({
+                "enablePixelArt": settings.enable_pixel_art
+            }));
+        }
+        if old.enable_hd_cover != settings.enable_hd_cover {
+            let _ = app.emit("hd-cover-changed", serde_json::json!({
+                "enableHDCover": settings.enable_hd_cover
+            }));
+        }
+        if old.enable_mv_playback != settings.enable_mv_playback {
+            let _ = app.emit("mv-playback-changed", serde_json::json!({
+                "enable": settings.enable_mv_playback
+            }));
+        }
+        if old.lock_floating_window != settings.lock_floating_window {
+            let _ = app.emit("lock-floating-window-changed", serde_json::json!({
+                "lock": settings.lock_floating_window
+            }));
+        }
+        if old.always_on_top != settings.always_on_top {
+            let _ = app.emit("always-on-top-changed", serde_json::json!({
+                "isAlwaysOnTop": settings.always_on_top
+            }));
+        }
+        if old.expanded_corner_radius != settings.expanded_corner_radius {
+            let _ = app.emit("corner-radius-changed", settings.expanded_corner_radius);
+        }
+    }
+
+    // ===== 广播完整设置更新事件 =====
     let _ = app.emit("settings-updated", settings);
 
     Ok(())
@@ -1075,7 +1105,8 @@ fn check_fullscreen_app(
     use windows::Win32::Foundation::RECT;
     use windows::Win32::UI::WindowsAndMessaging::{
         GetForegroundWindow, GetWindowLongPtrW, GetWindowRect,
-        GWL_STYLE, WS_CAPTION, WS_POPUP, WS_THICKFRAME,
+        GetSystemMetrics, GWL_STYLE, WS_CAPTION, WS_POPUP, WS_THICKFRAME,
+        SM_CXSCREEN, SM_CYSCREEN,
     };
 
     unsafe {
@@ -1088,30 +1119,34 @@ fn check_fullscreen_app(
         if GetWindowRect(hwnd, &mut rect).is_ok() {
             let width = rect.right - rect.left;
             let height = rect.bottom - rect.top;
-            
-            // 检查窗口是否在目标显示器上
-            let window_center_x = rect.left + width / 2;
-            let window_center_y = rect.top + height / 2;
-            
-            // 检查窗口中心点是否在目标显示器范围内
-            let is_on_target_monitor = 
-                window_center_x >= monitor_x && 
-                window_center_x < monitor_x + monitor_width &&
-                window_center_y >= monitor_y && 
-                window_center_y < monitor_y + monitor_height;
-            
+
+            let screen_w = GetSystemMetrics(SM_CXSCREEN);
+            let screen_h = GetSystemMetrics(SM_CYSCREEN);
+
+            let is_on_target_monitor =
+                rect.left <= monitor_x + monitor_width &&
+                rect.right >= monitor_x &&
+                rect.top <= monitor_y + monitor_height &&
+                rect.bottom >= monitor_y;
+
             if !is_on_target_monitor {
                 return Ok(false);
             }
-            
-            // 检查窗口是否占满目标显示器
-            let near_fs = width >= monitor_width - 10 && height >= monitor_height - 10;
+
             let no_border = (style & WS_POPUP.0 as isize) != 0
                 && (style & WS_CAPTION.0 as isize) == 0
                 && (style & WS_THICKFRAME.0 as isize) == 0;
+
             let at_monitor_origin = rect.left <= monitor_x && rect.top <= monitor_y;
-            
-            return Ok(no_border || (near_fs && at_monitor_origin));
+
+            let near_fs = width >= monitor_width - 10 && height >= monitor_height - 10;
+
+            let strict_fs = rect.left <= monitor_x &&
+                rect.top <= monitor_y &&
+                rect.right >= monitor_x + monitor_width &&
+                rect.bottom >= monitor_y + monitor_height;
+
+            return Ok(no_border || near_fs || strict_fs);
         }
         Ok(false)
     }
@@ -1796,30 +1831,35 @@ fn set_expanded_corner_radius(app: AppHandle, radius: u32) -> Result<(), String>
     
     // 保存设置到文件
     write_settings_file(&app, &settings)?;
-    
+
     // 发送事件通知前端更新 UI
     if let Err(e) = app.emit("corner-radius-changed", radius.min(32)) {
         eprintln!("发送圆角变更事件失败：{}", e);
     }
-    
+
     Ok(())
 }
 
-// 设置实时频谱功能
+// Tauri 命令：应用/移除系统毛玻璃效果
 #[tauri::command]
-fn set_real_time_spectrum(app: AppHandle, enable: bool) -> Result<(), String> {
-    let state = app.state::<AppState>();
-    let mut settings = state.settings.lock().map_err(|_| "Failed to lock settings")?;
-    settings.real_time_spectrum = enable;
-    
-    // 保存设置到文件
-    write_settings_file(&app, &settings)?;
-    
-    // 发送事件通知前端更新 UI
-    if let Err(e) = app.emit("spectrum-mode-changed", enable) {
-        eprintln!("发送频谱模式变更事件失败：{}", e);
+fn set_window_vibrancy(window: tauri::Window, enable: bool) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        if enable {
+            apply_acrylic(&window, Some((0, 0, 0, 0)))
+                .map_err(|e| format!("Failed to apply acrylic: {}", e))?;
+        } else {
+            clear_acrylic(&window)
+                .map_err(|e| format!("Failed to clear acrylic: {}", e))?;
+        }
     }
-    
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = window;
+        let _ = enable;
+    }
+
     Ok(())
 }
 
@@ -1914,8 +1954,8 @@ pub fn run() {
             set_hide_monitor_selector,
             set_hide_floating_window,
             set_expanded_corner_radius,
-            // 实时频谱 API
-            set_real_time_spectrum,
+            // 系统毛玻璃 API
+            set_window_vibrancy,
         ])
         .setup(|app| {
             // 初始化缓存系统
@@ -1935,6 +1975,7 @@ pub fn run() {
             
             let window = app.get_webview_window("main").unwrap();
             window.set_focus().unwrap();
+
             start_media_listener(app.handle().clone());
             start_audio_visualizer(app.handle().clone());
 

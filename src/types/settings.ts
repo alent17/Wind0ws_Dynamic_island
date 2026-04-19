@@ -27,7 +27,6 @@ export interface AppSettings {
   hide_monitor_selector: boolean;
   hide_floating_window: boolean;
   expanded_corner_radius: number;
-  real_time_spectrum: boolean;
 }
 
 export interface CacheStats {
@@ -78,7 +77,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hide_monitor_selector: false,
   hide_floating_window: false,
   expanded_corner_radius: 16,
-  real_time_spectrum: false,
 };
 
 export const PLAYER_NAMES: Record<string, string> = {

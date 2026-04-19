@@ -127,9 +127,4 @@ export const settingsApi = {
   async setExpandedCornerRadius(radius: number): Promise<void> {
     return await invoke("set_expanded_corner_radius", { radius });
   },
-
-  // 实时频谱 API
-  async setRealTimeSpectrum(enable: boolean): Promise<void> {
-    return await invoke("set_real_time_spectrum", { enable });
-  },
 };

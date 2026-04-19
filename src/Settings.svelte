@@ -29,11 +29,13 @@
     lock_floating_window: boolean;
     enable_hd_cover: boolean;
     enable_pixel_art: boolean;
+    enable_halftone: boolean;
     auto_start: boolean;
     hide_settings_button: boolean;
     hide_monitor_selector: boolean;
     hide_floating_window: boolean;
     expanded_corner_radius: number;
+    always_show_top_bar: boolean;
   }
 
   let settings = $state<AppSettings>({
@@ -53,11 +55,13 @@
     lock_floating_window: false,
     enable_hd_cover: true,
     enable_pixel_art: false,
+    enable_halftone: false,
     auto_start: false,
     hide_settings_button: false,
     hide_monitor_selector: false,
     hide_floating_window: false,
     expanded_corner_radius: 16,
+    always_show_top_bar: true,
   });
 
   const appWindow = getCurrentWindow();
@@ -70,10 +74,10 @@
       gradient: "linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)",
     },
     {
-      id: "glassmorphism",
-      name: "毛玻璃",
-      color: "#1a1a2e",
-      gradient: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+      id: "liquid_glass",
+      name: "液体玻璃",
+      color: "#0f0f0f",
+      gradient: "linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%)",
     },
   ];
 
@@ -278,19 +282,19 @@
     </section>
 
     <section class="t-panel risk-panel bg-gray">
-      <span class="panel-label">播放器优先级</span>
+      <span class="panel-label">播放器管理</span>
 
       <div class="risk-stat">
-        <span class="risk-value">最优</span>
-        <span class="risk-sub">智能优先级管理</span>
+        <span class="risk-value">优先</span>
+        <span class="risk-sub">智能排序引擎</span>
       </div>
       <div class="risk-box">
-        <span class="rb-label">已配置播放器</span>
+        <span class="rb-label">已配置项</span>
         <span class="rb-badge">{playerOrder.length}</span>
       </div>
 
       <div class="priority-list">
-        <span class="list-title">优先级权重</span>
+        <span class="list-title">优先级列表</span>
         {#each playerOrder as player, index}
           <div
             class="p-item"
@@ -320,23 +324,16 @@
       </div>
     </section>
 
-    <section class="t-panel live-panel bg-red">
-      <div class="live-inner">
-        <span class="live-label">缓存管理</span>
-        <span class="live-status">{cacheSize}</span>
-        <div class="cache-actions">
-          <button onclick={pickCacheDir}>选择目录</button>
-          <button onclick={clearCache}>清空缓存</button>
-        </div>
-      </div>
-    </section>
-
     <section class="t-panel ts26-panel bg-green">
       <div class="ts-left">
-        <h2 class="giant-ts">显示设置</h2>
-        <div class="ts-line">基础配置</div>
+        <h2 class="giant-ts" style="font-size: 24px;">系统</h2>
+        <div class="ts-line">OS 级别交互</div>
       </div>
-      <div class="ts-right toggles-container">
+      <div class="toggles-container" style="margin-top: auto;">
+        <button class="retro-toggle" onclick={toggleAutoStart}>
+          <span>开机自启</span>
+          <div class="retro-checkbox" class:checked={settings.auto_start}></div>
+        </button>
         <button
           class="retro-toggle"
           onclick={() => saveSettings({ auto_hide: !settings.auto_hide })}
@@ -344,22 +341,11 @@
           <span>自动隐藏</span>
           <div class="retro-checkbox" class:checked={settings.auto_hide}></div>
         </button>
-        <button
-          class="retro-toggle"
-          onclick={() =>
-            saveSettings({ always_on_top: !settings.always_on_top })}
-        >
-          <span>窗口置顶</span>
-          <div
-            class="retro-checkbox"
-            class:checked={settings.always_on_top}
-          ></div>
-        </button>
       </div>
     </section>
 
     <section class="t-panel comp-panel bg-gray">
-      <span class="panel-label">专辑封面</span>
+      <span class="panel-label">媒体视觉</span>
       <div class="comp-features">
         <div class="comp-toggles">
           <button
@@ -387,11 +373,22 @@
           <button
             class="retro-toggle"
             onclick={() =>
+              saveSettings({ enable_halftone: !settings.enable_halftone })}
+          >
+            <span>网点效果</span>
+            <div
+              class="retro-checkbox"
+              class:checked={settings.enable_halftone}
+            ></div>
+          </button>
+          <button
+            class="retro-toggle"
+            onclick={() =>
               saveSettings({
                 enable_mv_playback: !settings.enable_mv_playback,
               })}
           >
-            <span>MV 播放</span>
+            <span>MV 引擎</span>
             <div
               class="retro-checkbox"
               class:checked={settings.enable_mv_playback}
@@ -401,12 +398,20 @@
       </div>
     </section>
 
-    <section class="t-panel data-panel bg-yellow">
-      <span class="panel-label">高级设置</span>
-      <div class="data-box">
-        <span>版本 V1.0</span>
-      </div>
-      <div class="toggles-container" style="margin-top: auto;">
+    <section class="t-panel window-panel bg-yellow">
+      <span class="panel-label">悬浮窗功能</span>
+      <div class="wide-toggles">
+        <button
+          class="retro-toggle"
+          onclick={() =>
+            saveSettings({ always_on_top: !settings.always_on_top })}
+        >
+          <span>窗口置顶</span>
+          <div
+            class="retro-checkbox"
+            class:checked={settings.always_on_top}
+          ></div>
+        </button>
         <button
           class="retro-toggle"
           onclick={() =>
@@ -420,10 +425,41 @@
             class:checked={settings.lock_floating_window}
           ></div>
         </button>
-        <button class="retro-toggle" onclick={toggleAutoStart}>
-          <span>开机自启</span>
-          <div class="retro-checkbox" class:checked={settings.auto_start}></div>
+        <button
+          class="retro-toggle"
+          onclick={() =>
+            saveSettings({
+              always_show_top_bar: !settings.always_show_top_bar,
+            })}
+        >
+          <span>固定顶部栏</span>
+          <div
+            class="retro-checkbox"
+            class:checked={settings.always_show_top_bar}
+          ></div>
         </button>
+        <button
+          class="retro-toggle"
+          onclick={() =>
+            saveSettings({
+              hide_floating_window: !settings.hide_floating_window,
+            })}
+        >
+          <span>隐藏悬浮窗</span>
+          <div
+            class="retro-checkbox"
+            class:checked={settings.hide_floating_window}
+          ></div>
+        </button>
+      </div>
+    </section>
+
+    <section
+      class="t-panel island-panel bg-orange"
+      style="background-color: #e2a878;"
+    >
+      <span class="panel-label">灵动岛功能</span>
+      <div class="wide-toggles">
         <button
           class="retro-toggle"
           onclick={() =>
@@ -444,23 +480,10 @@
               hide_monitor_selector: !settings.hide_monitor_selector,
             })}
         >
-          <span>隐藏显示器选择</span>
+          <span>隐藏显示器按钮</span>
           <div
             class="retro-checkbox"
             class:checked={settings.hide_monitor_selector}
-          ></div>
-        </button>
-        <button
-          class="retro-toggle"
-          onclick={() =>
-            saveSettings({
-              hide_floating_window: !settings.hide_floating_window,
-            })}
-        >
-          <span>隐藏悬浮窗按钮</span>
-          <div
-            class="retro-checkbox"
-            class:checked={settings.hide_floating_window}
           ></div>
         </button>
 
@@ -482,6 +505,17 @@
         </div>
       </div>
     </section>
+
+    <section class="t-panel live-panel bg-red">
+      <div class="live-inner">
+        <span class="live-label">系统缓存</span>
+        <span class="live-status">{cacheSize}</span>
+        <div class="cache-actions">
+          <button onclick={pickCacheDir}>映射路径</button>
+          <button onclick={clearCache}>清空冗余</button>
+        </div>
+      </div>
+    </section>
   </div>
 </div>
 
@@ -498,8 +532,12 @@
     width: 100vw;
     height: 100vh;
     overflow: hidden;
-    font-family: "Space Grotesk", "Microgramma", "Helvetica Neue", Helvetica,
-      Arial, sans-serif;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
   }
 
   .theradyme-app {
@@ -509,7 +547,7 @@
     background: transparent;
   }
 
-  /* 核心配色板 */
+  /* 核心配色板保持不变 */
   .bg-orange {
     background-color: #efb574;
   }
@@ -526,8 +564,8 @@
     background-color: #f1b979;
   }
 
-  /* * 灵活的网格布局
-   * 各区域高度不同，参差不齐的设计感
+  /* * [修改重点]：彻底重构底层网格，实现内容决定的参差排版
+   * 使用 4列 基础网格搭配 grid-auto-flow: dense;
    */
   .bento-container {
     width: 100%;
@@ -536,18 +574,17 @@
     border-radius: 12px;
     padding: 10px;
     display: grid;
-    /* 划分为三列 */
-    grid-template-columns: 1.4fr 1.1fr 1fr;
-    /* 使用不规则行高，营造参差感 */
-    grid-template-rows: auto 2.2fr 1.6fr auto;
+    grid-template-columns: repeat(4, 1fr); /* 4列等分底座 */
+    grid-auto-rows: minmax(min-content, max-content);
+    grid-auto-flow: dense; /* 核心：允许错落排列填补空隙 */
     gap: 10px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-    overflow: hidden;
-    align-items: stretch; /* 让各区域自动拉伸填满 */
+    overflow-y: auto; /* 允许滚动 */
+    overflow-x: hidden;
   }
 
+  /* 面板基础样式保留 */
   .t-panel {
-    border-radius: 12px;
     color: #111;
     display: flex;
     flex-direction: column;
@@ -555,53 +592,11 @@
     position: relative;
   }
 
-  /* 不同面板使用不同的圆角，营造参差感 */
-  .hero-panel {
-    border-radius: 16px 12px 14px 18px; /* 不规则圆角 */
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); /* 更深阴影 */
-  }
-
-  .risk-panel {
-    border-radius: 14px 16px 12px 14px; /* 略有不同 */
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
-  }
-
-  .ts26-panel {
-    border-radius: 12px 14px 16px 12px; /* 另一种组合 */
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); /* 较浅阴影 */
-  }
-
-  .comp-panel {
-    border-radius: 15px 13px 15px 13px; /* 对称但不完全相同 */
-    box-shadow: 0 7px 22px rgba(0, 0, 0, 0.13);
-  }
-
-  .data-panel {
-    border-radius: 13px 15px 11px 16px; /* 更不规则 */
-    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.11);
-  }
-
-  .live-panel {
-    border-radius: 10px 10px 12px 12px; /* 底部稍小 */
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08); /* 最浅阴影 */
-  }
-
-  /* 通用标签样式 */
-  .panel-label {
-    font-size: 8px;
-    font-family: "SF Mono", "Courier New", monospace;
-    text-transform: uppercase;
-    font-weight: bold;
-    letter-spacing: 0.5px;
-    color: #333;
-    margin-bottom: clamp(4px, 0.6vw, 6px);
-  }
-
-  /* ==================== 区域分配 (绝对精准的网格坐标) ==================== */
-
+  /* * [修改重点]：利用 grid-column/row 的 span 跨度重塑排版
+   * 制造极其规整又参差错落的拼图感
+   */
   .header-panel {
-    grid-column: 1 / 4; /* 横跨1, 2, 3列 */
-    grid-row: 1 / 2;
+    grid-column: span 4;
     background: #e6e8eb;
     border-radius: 18px 18px 14px 14px;
     flex-direction: row;
@@ -611,67 +606,64 @@
   }
 
   .hero-panel {
-    grid-column: 1 / 2;
-    grid-row: 2 / 3;
-    padding: 22px; /* 稍大一些 */
+    grid-column: span 2;
+    grid-row: span 2; /* 巨无霸方块 */
+    padding: 22px;
+    border-radius: 16px 12px 14px 18px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   }
 
   .risk-panel {
-    grid-column: 2 / 3;
-    grid-row: 2 / 3;
-    padding: 14px; /* 标准大小 */
+    grid-column: span 1;
+    grid-row: span 2; /* 高挑细长方块 */
+    padding: 14px;
+    border-radius: 14px 16px 12px 14px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
   }
 
   .ts26-panel {
-    /* 显示设置 - 移到第二行右侧，稍小 */
-    grid-column: 3 / 4;
-    grid-row: 2 / 3;
-    padding: 14px; /* 稍紧凑 */
-    flex-direction: row;
-    gap: 12px;
+    grid-column: span 1;
+    grid-row: span 1; /* 小正块 */
+    padding: 14px;
+    flex-direction: column;
+    border-radius: 12px 14px 16px 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   }
 
   .comp-panel {
-    /* 专辑封面 - 第三行左侧，较大 */
-    grid-column: 1 / 2;
-    grid-row: 3 / 4;
-    padding: 16px; /* 较宽松 */
+    grid-column: span 1;
+    grid-row: span 1; /* 小正块 */
+    padding: 14px;
+    border-radius: 15px 13px 15px 13px;
+    box-shadow: 0 7px 22px rgba(0, 0, 0, 0.13);
   }
 
-  .data-panel {
-    /* 高级设置 - 跨2列，中等 */
-    grid-column: 2 / 4;
-    grid-row: 3 / 4;
-    padding: 10px;
-    overflow-y: hidden;
+  .window-panel {
+    grid-column: span 2; /* 宽横条 */
+    padding: 14px;
+    border-radius: 13px 15px 11px 16px;
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.11);
+  }
+
+  .island-panel {
+    grid-column: span 2; /* 宽横条 */
+    padding: 14px;
+    border-radius: 16px 11px 14px 12px;
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
   }
 
   .live-panel {
-    /* 缓存管理 - 底部全宽，最小 */
-    grid-column: 1 / 4;
-    grid-row: 4 / 5;
-    padding: 8px; /* 最紧凑 */
+    grid-column: span 4; /* 底座横栏 */
+    padding: 8px 12px;
+    border-radius: 10px 10px 12px 12px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
   }
 
-  /* ==================== 顶部导航 ==================== */
+  /* ==================== 局部样式微调与兼容 ==================== */
   .brand {
     font-weight: 800;
     font-size: clamp(12px, 1.5vw, 16px);
     letter-spacing: 1px;
-  }
-
-  .nav-links {
-    display: flex;
-    gap: clamp(16px, 3vw, 32px);
-    font-family: "SF Mono", "Courier New", monospace;
-    font-size: clamp(8px, 1vw, 10px);
-    font-weight: bold;
-    -webkit-app-region: no-drag;
-  }
-
-  .nav-active {
-    border-bottom: 2px solid #000;
-    padding-bottom: 2px;
   }
 
   .window-controls {
@@ -694,11 +686,15 @@
     opacity: 0.5;
   }
 
-  /* ==================== HERO 左侧橙色区域 ==================== */
   .panel-top-bar {
     display: flex;
     justify-content: space-between;
-    font-family: "SF Mono", "Courier New", monospace;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
     font-size: clamp(7px, 0.9vw, 9px);
     font-weight: bold;
     border-bottom: 1px solid rgba(0, 0, 0, 0.2);
@@ -724,7 +720,12 @@
   }
 
   .hero-subtext {
-    font-family: "SF Mono", "Courier New", monospace;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
     font-size: clamp(10px, 1.1vw, 12px);
     line-height: 1.7;
     border-left: 2px solid #111;
@@ -738,7 +739,12 @@
   }
 
   .action-label {
-    font-family: "SF Mono", "Courier New", monospace;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
     font-size: clamp(7px, 0.9vw, 9px);
     font-weight: bold;
     display: block;
@@ -759,7 +765,12 @@
     display: flex;
     align-items: center;
     padding: 0 clamp(8px, 1.5vw, 16px);
-    font-family: "SF Mono", "Courier New", monospace;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
     font-size: clamp(10px, 1.2vw, 12px);
     font-weight: bold;
   }
@@ -775,7 +786,12 @@
     color: #efb574;
     border: none;
     padding: 0 clamp(12px, 2.5vw, 24px);
-    font-family: "SF Mono", "Courier New", monospace;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
     font-weight: bold;
     font-size: clamp(10px, 1.2vw, 12px);
     cursor: pointer;
@@ -789,7 +805,12 @@
     display: flex;
     align-items: center;
     gap: clamp(8px, 1.2vw, 12px);
-    font-family: "SF Mono", "Courier New", monospace;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
     font-size: clamp(6px, 0.8vw, 8px);
     font-weight: bold;
   }
@@ -806,32 +827,55 @@
     );
   }
 
-  /* ==================== RISK / PRIORITY 中间灰色区域 ==================== */
+  /* 面板内部细节保留 */
+  .panel-label {
+    font-size: 8px;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
+    text-transform: uppercase;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    color: #333;
+    margin-bottom: clamp(4px, 0.6vw, 6px);
+  }
+
   .risk-stat {
-    margin: clamp(8px, 1.5vw, 16px) 0;
+    margin: clamp(4px, 1vw, 8px) 0;
   }
   .risk-value {
-    font-size: clamp(20px, 3vw, 28px);
+    font-size: clamp(18px, 2.5vw, 24px);
     font-weight: 700;
     display: block;
   }
   .risk-sub {
-    font-family: "SF Mono", "Courier New", monospace;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
     font-size: clamp(8px, 1vw, 10px);
     opacity: 0.7;
   }
-
   .risk-box {
     border: 1.5px solid #111;
-    padding: 10px;
+    padding: 6px 10px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
   }
-
   .rb-label {
-    font-family: monospace;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
     font-size: 10px;
     font-weight: bold;
   }
@@ -843,16 +887,14 @@
   }
 
   .priority-list {
-    margin-top: 6px;
+    margin-top: 4px;
     display: flex;
     flex-direction: column;
     gap: 4px;
     flex: 1;
-    overflow-y: hidden;
-    padding-right: 4px; /* Scrollbar padding */
+    overflow-y: auto;
+    padding-right: 4px;
   }
-
-  /* 滚动条美化 */
   .priority-list::-webkit-scrollbar {
     width: 4px;
   }
@@ -865,7 +907,12 @@
   }
 
   .list-title {
-    font-family: monospace;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
     font-size: 9px;
     font-weight: bold;
     border-bottom: 1px solid #111;
@@ -891,9 +938,13 @@
   .p-idx {
     opacity: 0.5;
     margin-right: clamp(2px, 0.4vw, 4px);
-    font-family: monospace;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
   }
-
   .p-controls {
     display: flex;
     align-items: center;
@@ -921,88 +972,30 @@
     text-align: center;
   }
 
-  /* ==================== LIVE PROCESSING 右上红色区域 ==================== */
-  .live-inner {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    gap: clamp(8px, 1.2vw, 16px);
-    text-align: left;
-  }
-  .live-label {
-    font-size: clamp(7px, 0.9vw, 9px);
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    font-family: monospace;
-  }
-  .live-status {
-    font-size: clamp(12px, 1.5vw, 20px);
-    font-weight: 700;
-    line-height: 1.2;
-  }
-  .cache-actions {
-    display: flex;
-    gap: clamp(5px, 0.7vw, 8px);
-    margin-top: 0;
-    width: auto;
-  }
-  .cache-actions button {
-    flex: 1;
-    padding: clamp(3px, 0.6vw, 6px);
-    border: 1.5px solid #111;
-    background: transparent;
-    font-family: monospace;
-    font-size: clamp(10px, 1.2vw, 12px);
-    font-weight: 700;
-    cursor: pointer;
-    transition: 0.2s;
-  }
-  .cache-actions button:hover {
-    background: #111;
-    color: #fff;
-  }
-
-  /* ==================== 底部控制区 ==================== */
-  .ts-left {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-  }
-
-  .giant-ts {
-    font-size: clamp(20px, 3vw, 32px);
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: -1px;
-    margin-bottom: clamp(3px, 0.5vw, 5px);
-  }
-
-  .ts-line {
-    font-family: monospace;
-    font-size: clamp(7px, 0.9vw, 9px);
-    font-weight: bold;
-    border-bottom: 1.5px solid #111;
-    padding-bottom: 4px;
-  }
-
-  .ts-right,
-  .comp-features,
-  .data-box {
-    flex: 1.5;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-
+  /* --- 修改重点：为新划分的宽体区域实现密集的二级排列 --- */
   .toggles-container,
   .comp-toggles {
     display: flex;
     flex-direction: column;
     gap: clamp(3px, 0.6vw, 6px);
+    margin-top: auto;
+  }
+
+  .toggles-container .retro-toggle span {
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
+    font-size: clamp(10px, 1.2vw, 12px);
+    font-weight: bold;
+  }
+
+  .wide-toggles {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* 两列排布按钮，让横向的 Panel 显得信息完整充实 */
+    gap: 4px 16px;
     margin-top: auto;
   }
 
@@ -1012,12 +1005,17 @@
     align-items: center;
     background: transparent;
     border: none;
-    font-family: monospace;
-    font-size: clamp(8px, 1vw, 10px);
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
+    font-size: clamp(9px, 1.1vw, 11px);
     font-weight: bold;
     color: #111;
     cursor: pointer;
-    padding: clamp(3px, 0.5vw, 5px) 0;
+    padding: clamp(3px, 0.5vw, 6px) 0;
     border-bottom: 1px dotted rgba(0, 0, 0, 0.3);
     width: 100%;
     transition: opacity 0.2s;
@@ -1033,12 +1031,37 @@
     background: transparent;
     transition: 0.2s;
   }
-
   .retro-checkbox.checked {
     background: #111;
     box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.8);
   }
 
+  /* 基础系统区调整 */
+  .ts-left {
+    flex: none;
+    margin-bottom: 8px;
+  }
+  .giant-ts {
+    font-size: clamp(20px, 3vw, 26px);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -1px;
+    margin-bottom: 4px;
+  }
+  .ts-line {
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
+    font-size: clamp(7px, 0.9vw, 9px);
+    font-weight: bold;
+    border-bottom: 1.5px solid #111;
+    padding-bottom: 4px;
+  }
+
+  /* 滑动条保持不变 */
   .corner-radius-control {
     display: flex;
     align-items: center;
@@ -1047,15 +1070,18 @@
     border-bottom: 1px dotted rgba(0, 0, 0, 0.3);
     width: 100%;
   }
-
   .corner-label {
-    font-family: monospace;
-    font-size: clamp(8px, 1vw, 10px);
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
+    font-size: clamp(9px, 1.1vw, 11px);
     font-weight: bold;
     color: #111;
     min-width: 55px;
   }
-
   .corner-slider {
     flex: 1;
     height: 4px;
@@ -1066,7 +1092,6 @@
     outline: none;
     cursor: pointer;
   }
-
   .corner-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
@@ -1077,31 +1102,70 @@
     cursor: pointer;
     transition: transform 0.15s ease;
   }
-
   .corner-slider::-webkit-slider-thumb:hover {
     transform: scale(1.2);
   }
-
-  .corner-slider::-moz-range-thumb {
-    width: clamp(12px, 1.5vw, 16px);
-    height: clamp(12px, 1.5vw, 16px);
-    background: #111;
-    border-radius: 50%;
-    cursor: pointer;
-    border: none;
-    transition: transform 0.15s ease;
-  }
-
-  .corner-slider::-moz-range-thumb:hover {
-    transform: scale(1.2);
-  }
-
   .corner-value {
-    font-family: monospace;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
     font-size: clamp(9px, 1.1vw, 11px);
     font-weight: bold;
     color: #111;
     min-width: 40px;
     text-align: right;
+  }
+
+  .live-inner {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: clamp(8px, 1.2vw, 16px);
+  }
+  .live-label {
+    font-size: clamp(7px, 0.9vw, 9px);
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
+  }
+  .live-status {
+    font-size: clamp(12px, 1.5vw, 18px);
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .cache-actions {
+    display: flex;
+    gap: clamp(5px, 0.7vw, 8px);
+    width: auto;
+  }
+  .cache-actions button {
+    padding: clamp(3px, 0.6vw, 6px) 12px;
+    border: 1.5px solid #111;
+    background: transparent;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Inter",
+      sans-serif;
+    font-size: clamp(10px, 1.2vw, 12px);
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .cache-actions button:hover {
+    background: #111;
+    color: #fff;
   }
 </style>

@@ -124,6 +124,7 @@
   let expanded = $state(false);
   let hovering = $state(false);
   let accentColor = $state<string>("#fe2c55");
+  let secondaryColor = $state<string>("#fe2c55");
   let artworkUrl = $state<string>("");
   let flipKey = $state(0);
   let trackTitle = $state<string>("");
@@ -156,9 +157,14 @@
   ];
 
   function startSpectrumAnimation() {
-    if (spectrumTimer) return;
+    if (spectrumTimer || !appSettings.show_spectrum) return;
 
     function animate() {
+      if (!appSettings.show_spectrum) {
+        spectrumTimer = null;
+        return;
+      }
+
       spectrumTimer = requestAnimationFrame(animate);
 
       if (isPlaying) {
@@ -209,9 +215,9 @@
     }
   }
 
-  // 监听播放状态变化
+  // 监听播放状态和频谱开关变化
   $effect(() => {
-    if (isPlaying) {
+    if (isPlaying && appSettings.show_spectrum) {
       startSpectrumAnimation();
     } else {
       startSpectrumAnimation(); // 继续运行但做衰减动画
@@ -311,7 +317,7 @@
         "linear-gradient(90deg, #3a1f2a, #3a2530, #3a2a3a, #302535, #3a1f2a)",
       forest:
         "linear-gradient(90deg, #1a2a25, #1c3028, #1f3a2a, #1c3530, #1a2a25)",
-      glassmorphism: "rgba(255, 255, 255, 0.15)",
+      liquid_glass: "rgba(255, 255, 255, 0.07)",
     };
     return backgrounds[theme] || backgrounds.original;
   }
@@ -336,8 +342,7 @@
       ocean: "none",
       sunset: "none",
       forest: "none",
-      // 毛玻璃主题：中度高斯模糊
-      glassmorphism: "blur(50px) saturate(180%)",
+      liquid_glass: "blur(20px) saturate(150%) contrast(110%)",
     };
     return filters[theme] || filters.original;
   }
@@ -352,28 +357,26 @@
       ocean: "none",
       sunset: "none",
       forest: "none",
-      // 毛玻璃主题：微弱高光边框
-      glassmorphism: "1px solid rgba(255, 255, 255, 0.15)",
+      liquid_glass: "none",
     };
     return borders[theme] || borders.original;
   }
 
   // 根据当前高度动态计算 border-radius，确保与尺寸动画同步
   function getDynamicBorderRadius(currentHeight: number): string {
-    // 收起状态：height = 28px，border-radius = 24px
-    // 展开状态：height = 160px，border-radius = 用户设置值（默认 42px）
     const minHeight = 28;
     const maxHeight = 160;
     const minRadius = 24;
-    const maxRadius = appSettings.expanded_corner_radius || 42; // 使用用户设置的圆角
+    const maxRadius =
+      currentTheme === "liquid_glass"
+        ? 24
+        : appSettings.expanded_corner_radius || 42;
 
-    // 限制在有效范围内
     const clampedHeight = Math.max(
       minHeight,
       Math.min(maxHeight, currentHeight),
     );
 
-    // 线性插值
     const progress = (clampedHeight - minHeight) / (maxHeight - minHeight);
     const radius = minRadius + (maxRadius - minRadius) * progress;
 
@@ -398,8 +401,7 @@
       ocean: "none",
       sunset: "none",
       forest: "none",
-      glassmorphism:
-        "0 25px 60px rgba(0, 0, 0, 0.4), 0 10px 25px rgba(0, 0, 0, 0.3)",
+      liquid_glass: "none",
     };
     return shadows[theme] || shadows.original;
   }
@@ -416,7 +418,7 @@
     hide_monitor_selector: false,
     hide_floating_window: false,
     expanded_corner_radius: 16,
-    real_time_spectrum: false,
+    always_show_top_bar: true,
   });
 
   // ========== 性能检测和自适应系统 ==========
@@ -743,12 +745,13 @@
   let cachedScreenWidth = 0;
   let cachedScreenHeight = 0;
   let isSyncing = false;
-  let pendingW = 0;
   let pendingH = 0;
   let hasPendingSync = false;
 
   let monitorAnchorX = 0;
   let monitorAnchorY = 0;
+
+  const MAX_PHYSICAL_WIDTH = 380;
 
   async function processSyncQueue() {
     if (isSyncing || !hasPendingSync) return;
@@ -756,7 +759,6 @@
     isSyncing = true;
     hasPendingSync = false;
 
-    const w = pendingW;
     const h = pendingH;
     const dpr = window.devicePixelRatio || 1;
 
@@ -771,7 +773,7 @@
         }
       }
 
-      const physW = Math.round(w * dpr);
+      const physW = Math.round(MAX_PHYSICAL_WIDTH * dpr);
       const physH = Math.round(h * dpr);
       const centerX = Math.round(monitorAnchorX - physW / 2);
       const targetY = Math.round(monitorAnchorY + 22 * dpr);
@@ -781,7 +783,7 @@
         win.setPosition(new PhysicalPosition(centerX, targetY)),
       ]);
     } catch (err) {
-      logger.error("窗口同步失败:", err);
+      console.log("[窗口同步] 已安全中断 (可能正在关闭)");
     } finally {
       isSyncing = false;
       if (hasPendingSync) {
@@ -789,9 +791,6 @@
       }
     }
   }
-
-  let lastW = 0;
-  let lastH = 0;
 
   // ===== 优化的自动收起管理（内存优化） =====
   function startAutoClose() {
@@ -854,16 +853,16 @@
     }
   }
 
-  // 替换原本的 extractDominantColor 函数
+  // 替换原本的 extractDominantColor 函数 - 提取两个面积最大的颜色
   async function extractDominantColor(imgSrc: string) {
     if (!imgSrc) {
-      accentColor = currentColor; // 如果没有图片，回退到播放器默认颜色
+      accentColor = currentColor;
+      secondaryColor = currentColor;
       return;
     }
 
     try {
       const img = new Image();
-      // 允许跨域图片取色
       img.crossOrigin = "Anonymous";
       img.src = imgSrc;
 
@@ -874,29 +873,51 @@
 
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d")!;
-      canvas.width = 10;
-      canvas.height = 10;
-      ctx.drawImage(img, 0, 0, 10, 10);
+      canvas.width = 24;
+      canvas.height = 24;
+      ctx.drawImage(img, 0, 0, 24, 24);
 
-      const data = ctx.getImageData(0, 0, 10, 10).data;
-      let r = 0,
-        g = 0,
-        b = 0;
+      const data = ctx.getImageData(0, 0, 24, 24).data;
 
-      for (let i = 0; i < data.length; i += 4) {
-        r += data[i];
-        g += data[i + 1];
-        b += data[i + 2];
+      const colorMap: Map<string, number> = new Map();
+
+      for (let i = 0; i < data.length; i += 16) {
+        const r = Math.floor(data[i] / 16) * 16;
+        const g = Math.floor(data[i + 1] / 16) * 16;
+        const b = Math.floor(data[i + 2] / 16) * 16;
+        const brightness = (r + g + b) / 3;
+
+        if (brightness > 30 && brightness < 240) {
+          const key = `${r},${g},${b}`;
+          colorMap.set(key, (colorMap.get(key) || 0) + 1);
+        }
       }
 
-      // 修复原本算法的 Bug：10x10画布共 100 个像素点，应除以 100 取平均值，而不是原先的 25
-      const pixelCount = 100;
+      const sortedColors = [...colorMap.entries()].sort((a, b) => b[1] - a[1]);
 
-      // 保留你的最小亮度限制 (100)，防止专辑封面太黑导致频谱看不清
-      accentColor = `rgb(${Math.max(Math.floor(r / pixelCount), 100)},${Math.max(Math.floor(g / pixelCount), 100)},${Math.max(Math.floor(b / pixelCount), 100)})`;
+      if (sortedColors.length >= 2) {
+        const [mainKey] = sortedColors[0];
+        const [secondKey] = sortedColors[1];
+        const [r1, g1, b1] = mainKey.split(",").map(Number);
+        const [r2, g2, b2] = secondKey.split(",").map(Number);
+
+        const clamp = (v: number) => Math.max(80, Math.min(255, v));
+        accentColor = `rgb(${clamp(r1)},${clamp(g1)},${clamp(b1)})`;
+        secondaryColor = `rgb(${clamp(r2)},${clamp(g2)},${clamp(b2)})`;
+      } else if (sortedColors.length === 1) {
+        const [mainKey] = sortedColors[0];
+        const [r, g, b] = mainKey.split(",").map(Number);
+        const clamp = (v: number) => Math.max(80, Math.min(255, v));
+        accentColor = `rgb(${clamp(r)},${clamp(g)},${clamp(b)})`;
+        secondaryColor = accentColor;
+      } else {
+        accentColor = currentColor;
+        secondaryColor = currentColor;
+      }
     } catch (e) {
       console.warn("取色失败，将使用播放器默认颜色", e);
-      accentColor = currentColor; // 取色因为跨域或协议拦截失败时，使用兜底颜色
+      accentColor = currentColor;
+      secondaryColor = currentColor;
     }
   }
 
@@ -908,6 +929,7 @@
     } else {
       // 如果没有封面，同步恢复为当前播放器的颜色
       accentColor = currentColor;
+      secondaryColor = currentColor;
     }
   });
 
@@ -948,28 +970,24 @@
     });
   });
 
-  // --- 实时监听 Spring 动画值并同步窗口 ---
+  // --- 基于状态的低频窗口尺寸控制 ---
   $effect(() => {
-    const currentW = $widthSpring;
-    const currentH = $heightSpring;
+    const isExp = expanded;
 
-    // 根据刷新率调整同步阈值
-    const syncThreshold = highFrameRateMode ? 0.5 : 0.8;
+    const targetPhysicalHeight = isExp ? 200 : 60;
 
-    if (
-      Math.abs(currentW - lastW) > syncThreshold ||
-      Math.abs(currentH - lastH) > syncThreshold
-    ) {
-      pendingW = currentW;
-      pendingH = currentH;
+    if (isExp) {
+      pendingH = targetPhysicalHeight;
       hasPendingSync = true;
-
-      if (!isSyncing) {
-        requestAnimationFrame(processSyncQueue);
-      }
-
-      lastW = currentW;
-      lastH = currentH;
+      if (!isSyncing) processSyncQueue();
+    } else {
+      setTimeout(() => {
+        if (!expanded) {
+          pendingH = targetPhysicalHeight;
+          hasPendingSync = true;
+          if (!isSyncing) processSyncQueue();
+        }
+      }, 300);
     }
   });
 
@@ -1299,7 +1317,7 @@
           hide_monitor_selector: loadedSettings.hide_monitor_selector ?? false,
           hide_floating_window: loadedSettings.hide_floating_window ?? false,
           expanded_corner_radius: loadedSettings.expanded_corner_radius ?? 16,
-          real_time_spectrum: loadedSettings.real_time_spectrum ?? false,
+          always_show_top_bar: loadedSettings.always_show_top_bar ?? true,
         };
         console.log("[设置] 已加载:", appSettings);
       } catch (error) {
@@ -1357,8 +1375,8 @@
                 s.hide_floating_window ?? appSettings.hide_floating_window,
               expanded_corner_radius:
                 s.expanded_corner_radius ?? appSettings.expanded_corner_radius,
-              real_time_spectrum:
-                s.real_time_spectrum ?? appSettings.real_time_spectrum,
+              always_show_top_bar:
+                s.always_show_top_bar ?? appSettings.always_show_top_bar,
             };
             console.log("[设置] 实时更新:", appSettings);
 
@@ -1395,16 +1413,6 @@
           const radius = event.payload;
           console.log("[设置] 圆角变更:", radius);
           appSettings.expanded_corner_radius = radius;
-        },
-      );
-
-      // 监听频谱模式变更事件
-      const unlistenSpectrumModeChanged = await listen(
-        "spectrum-mode-changed",
-        (event: any) => {
-          const enabled = event.payload;
-          console.log("[设置] 频谱模式变更:", enabled);
-          appSettings.real_time_spectrum = enabled;
         },
       );
 
@@ -1629,10 +1637,10 @@
           if (!isPlaying) return;
           const { bands, bands_expanded } = event.payload;
 
-          const sensitivity = 1.5;
+          const sensitivity = 1.2;
 
           targetSpectrumHeights = bands.map((val: number, i: number) => {
-            let compressedVal = Math.min(1.0, val * sensitivity * 1.2);
+            let compressedVal = Math.min(1.0, val * sensitivity * 1.0);
             let mapped =
               compressedVal * baseCollapsedHeight * iOSCollapsedEnvelope[i];
             return Math.max(2, mapped);
@@ -1730,7 +1738,7 @@
     class:island-hidden={isHidden && !isMouseAtTop}
     class:island-drop-animation={isMouseAtTop && isHidden}
     class:island-visible-edge={isHidden && isMouseAtTop}
-    class:glassmorphism-theme={currentTheme === "glassmorphism"}
+    class:theme-liquid_glass={currentTheme === "liquid_glass"}
     style="
       width: {$widthSpring}px;
       height: {$heightSpring}px;
@@ -1761,11 +1769,6 @@
     tabindex="0"
     aria-label="Dynamic Island - Click to toggle"
   >
-    <!-- 星空背景层（除默认主题外） -->
-    {#if currentTheme !== "original"}
-      <div class="stars-bg"></div>
-    {/if}
-
     <!-- 调试信息覆盖层 -->
     {#if appSettings.show_debug_info}
       <div class="debug-overlay">
@@ -1848,7 +1851,7 @@
             {#if appSettings.show_spectrum}
               <div
                 class="spectrum-container"
-                style="--accent-color: {accentColor};"
+                style="--accent-color: {accentColor}; --secondary-color: {secondaryColor};"
               >
                 {#each spectrumHeights as h}
                   <div class="spectrum-bar" style="height: {h}px;"></div>
@@ -1874,182 +1877,192 @@
         class:is-visible={expanded}
         style="opacity: {$contentOpacity};"
       >
-        <!-- 顶部区域：封面 + 标题 + 显示器按钮 -->
-        <div class="flex items-center" style="gap: 12px; margin-bottom: 12px;">
-          {#if artworkUrl}
-            {#key flipKey}
-              <div
-                class="w-[50px] h-[50px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
-                data-stop-toggle
-                onclick={(e) => {
-                  e.stopPropagation();
-                  openCurrentPlayer();
-                }}
-              >
-                <img
-                  src={artworkUrl}
-                  alt="cover"
-                  class="w-full h-full object-cover pointer-events-none flip-enter"
-                  onload={() =>
-                    console.log("[图片加载] 成功加载封面 (展开状态)")}
-                  onerror={(e) => {
-                    console.error(
-                      "[图片加载] 封面加载失败 (展开状态):",
-                      artworkUrl,
-                    );
-                    (e.currentTarget as HTMLImageElement).style.display =
-                      "none";
-                  }}
-                />
-              </div>
-            {/key}
-          {/if}
-
-          <div class="flex-1 min-w-0">
-            <h2
-              class="truncate text-white select-none leading-tight mb-1"
-              style="font-size: clamp(12px, 4vw, 18px); font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.03em;"
-            >
-              {trackTitle}
-            </h2>
-            <p
-              class="truncate text-white/60 select-none leading-tight"
-              style="font-size: clamp(10px, 3vw, 14px); font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 500; letter-spacing: -0.01em;"
-            >
-              {artistName}
-            </p>
-          </div>
-
-          <!-- 显示器选择按钮 - 可通过设置页面隐藏 -->
-          {#if !appSettings.hide_monitor_selector}
-            <div class="relative">
-              <button
-                class="w-8 h-8 flex items-center justify-center rounded-2xl bg-white/10 hover:bg-white/20 relative z-50 media-button transition-all duration-300 hover:scale-110"
-                style="transform: translateZ(0); backface-visibility: hidden;"
-                data-stop-toggle
-                onclick={(e) => {
-                  e.stopPropagation();
-                  toggleMonitorMenu();
-                }}
-              >
-                <Monitor
-                  size={18}
-                  class="text-white/80"
-                  style="transform: translateZ(0); backface-visibility: hidden;"
-                />
-              </button>
-
-              <!-- 显示器选择菜单 -->
-              {#if showMonitorMenu}
+        <div class="ui-content-layer">
+          <!-- 顶部区域：封面 + 标题 + 显示器按钮 -->
+          <div
+            class="flex items-center"
+            style="gap: 12px; margin-bottom: 12px;"
+          >
+            {#if artworkUrl}
+              {#key flipKey}
                 <div
-                  class="absolute right-0 top-full mt-1.5 w-[100px] bg-black/80 backdrop-blur-xl rounded-lg shadow-lg border border-white/10 overflow-hidden z-[100] monitor-menu transition-all duration-300 scale-95 opacity-0"
-                  class:menu-open={showMonitorMenu}
-                  style="transform: translateZ(0);"
+                  class="w-[50px] h-[50px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
+                  data-stop-toggle
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    openCurrentPlayer();
+                  }}
                 >
-                  <div class="p-1">
-                    <div
-                      class="flex items-center justify-between px-1.5 py-0.5 mb-1"
-                    >
-                      <span class="text-[10px] font-medium text-white/70">
-                        显示器
-                      </span>
-                      <span class="text-[10px] text-white/40">
-                        {monitors.length}
-                      </span>
-                    </div>
+                  <img
+                    src={artworkUrl}
+                    alt="cover"
+                    class="w-full h-full object-cover pointer-events-none flip-enter"
+                    onload={() =>
+                      console.log("[图片加载] 成功加载封面 (展开状态)")}
+                    onerror={(e) => {
+                      console.error(
+                        "[图片加载] 封面加载失败 (展开状态):",
+                        artworkUrl,
+                      );
+                      (e.currentTarget as HTMLImageElement).style.display =
+                        "none";
+                    }}
+                  />
+                </div>
+              {/key}
+            {/if}
 
-                    <div class="h-px bg-white/8 mb-1"></div>
+            <div class="flex-1 min-w-0">
+              <h2
+                class="truncate dynamic-glass-text select-none leading-tight mb-1"
+                style="font-size: clamp(12px, 4vw, 18px); font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.03em;"
+              >
+                {trackTitle}
+              </h2>
+              <p
+                class="truncate dynamic-glass-text-secondary select-none leading-tight"
+                style="font-size: clamp(10px, 3vw, 14px); font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 500; letter-spacing: -0.01em;"
+              >
+                {artistName}
+              </p>
+            </div>
 
-                    <div class="space-y-0.5">
-                      {#each monitors as monitor, idx}
-                        <button
-                          class="w-full text-left px-1.5 py-1 rounded-md transition-all duration-150 flex items-center gap-1 hover:bg-white/5 active:scale-95"
-                          class:selected={currentMonitorIndex === idx}
-                          onclick={(e) => {
-                            e.stopPropagation();
-                            switchMonitor(idx);
-                          }}
-                        >
-                          <div
-                            class="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
-                            style="background: {currentMonitorIndex === idx
-                              ? 'rgba(255, 255, 255, 0.1)'
-                              : 'rgba(255, 255, 255, 0.05)'};"
+            <!-- 显示器选择按钮 - 可通过设置页面隐藏 -->
+            <div
+              class="media-button-wrapper"
+              class:hidden={appSettings.hide_monitor_selector}
+            >
+              <div class="relative">
+                <button
+                  class="w-8 h-8 flex items-center justify-center rounded-2xl bg-white/10 hover:bg-white/20 relative z-50 media-button transition-all duration-300 hover:scale-110"
+                  style="transform: translateZ(0); backface-visibility: hidden;"
+                  data-stop-toggle
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    toggleMonitorMenu();
+                  }}
+                >
+                  <Monitor
+                    size={18}
+                    class="text-white/80"
+                    style="transform: translateZ(0); backface-visibility: hidden;"
+                  />
+                </button>
+
+                <!-- 显示器选择菜单 -->
+                {#if showMonitorMenu}
+                  <div
+                    class="absolute right-0 top-full mt-1.5 w-[100px] bg-black/80 backdrop-blur-xl rounded-lg shadow-lg border border-white/10 overflow-hidden z-[100] monitor-menu transition-all duration-300 scale-95 opacity-0"
+                    class:menu-open={showMonitorMenu}
+                    style="transform: translateZ(0);"
+                  >
+                    <div class="p-1">
+                      <div
+                        class="flex items-center justify-between px-1.5 py-0.5 mb-1"
+                      >
+                        <span class="text-[10px] font-medium text-white/70">
+                          显示器
+                        </span>
+                        <span class="text-[10px] text-white/40">
+                          {monitors.length}
+                        </span>
+                      </div>
+
+                      <div class="h-px bg-white/8 mb-1"></div>
+
+                      <div class="space-y-0.5">
+                        {#each monitors as monitor, idx}
+                          <button
+                            class="w-full text-left px-1.5 py-1 rounded-md transition-all duration-150 flex items-center gap-1 hover:bg-white/5 active:scale-95"
+                            class:selected={currentMonitorIndex === idx}
+                            onclick={(e) => {
+                              e.stopPropagation();
+                              switchMonitor(idx);
+                            }}
                           >
-                            <Monitor
-                              size={9}
-                              style="color: {currentMonitorIndex === idx
-                                ? '#fff'
-                                : 'rgba(255, 255, 255, 0.5)'};"
-                            />
-                          </div>
-
-                          <div class="flex-1 min-w-0">
-                            <span
-                              class="text-[10px] font-medium truncate block"
-                              style="color: {currentMonitorIndex === idx
-                                ? '#fff'
-                                : 'rgba(255, 255, 255, 0.75)'};"
-                            >
-                              {monitor.name}
-                            </span>
-                          </div>
-
-                          {#if currentMonitorIndex === idx}
                             <div
-                              class="w-3 h-3 rounded-full bg-green-400 flex items-center justify-center flex-shrink-0"
+                              class="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
+                              style="background: {currentMonitorIndex === idx
+                                ? 'rgba(255, 255, 255, 0.1)'
+                                : 'rgba(255, 255, 255, 0.05)'};"
                             >
-                              <svg
-                                width="6"
-                                height="5"
-                                viewBox="0 0 10 8"
-                                fill="none"
-                              >
-                                <path
-                                  d="M1 4L3.5 6.5L9 1"
-                                  stroke="white"
-                                  stroke-width="2"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                />
-                              </svg>
+                              <Monitor
+                                size={9}
+                                style="color: {currentMonitorIndex === idx
+                                  ? '#fff'
+                                  : 'rgba(255, 255, 255, 0.5)'};"
+                              />
                             </div>
-                          {/if}
-                        </button>
-                      {/each}
+
+                            <div class="flex-1 min-w-0">
+                              <span
+                                class="text-[10px] font-medium truncate block"
+                                style="color: {currentMonitorIndex === idx
+                                  ? '#fff'
+                                  : 'rgba(255, 255, 255, 0.75)'};"
+                              >
+                                {monitor.name}
+                              </span>
+                            </div>
+
+                            {#if currentMonitorIndex === idx}
+                              <div
+                                class="w-3 h-3 rounded-full bg-green-400 flex items-center justify-center flex-shrink-0"
+                              >
+                                <svg
+                                  width="6"
+                                  height="5"
+                                  viewBox="0 0 10 8"
+                                  fill="none"
+                                >
+                                  <path
+                                    d="M1 4L3.5 6.5L9 1"
+                                    stroke="white"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                  />
+                                </svg>
+                              </div>
+                            {/if}
+                          </button>
+                        {/each}
+                      </div>
                     </div>
                   </div>
-                </div>
-              {/if}
+                {/if}
+              </div>
             </div>
-          {/if}
-        </div>
+          </div>
 
-        <!-- 中部区域：播放控制按钮 -->
-        <div
-          class="flex-1 flex items-center justify-between"
-          style="margin-bottom: 10px;" /* 缩小底部间距 */
-        >
-          <!-- 设置按钮 - 可通过设置页面隐藏 -->
-          {#if !appSettings.hide_settings_button}
-            <Settings
-              size={18}
-              class="text-white/40 hover:text-white/90 transition-all duration-300 hover:scale-110 relative z-50 cursor-pointer media-button"
-              style="transform: translateZ(0); backface-visibility: hidden; margin-left: 8px;"
-              /* 添加左边距 */
-              data-stop-toggle
-              onclick={async (e) => {
-                e.stopPropagation();
-                console.log("点击了设置按钮");
-                const { emit } = await import("@tauri-apps/api/event");
-                await emit("navigate-to-settings");
-              }}
-            />
-          {/if}
-
+          <!-- 中部区域：播放控制按钮 -->
           <div
-            class="flex items-center justify-center"
-            style="
+            class="flex-1 flex items-center justify-between"
+            style="margin-bottom: 10px;" /* 缩小底部间距 */
+          >
+            <!-- 设置按钮 - 可通过设置页面隐藏 -->
+            <div
+              class="media-button-wrapper"
+              class:hidden={appSettings.hide_settings_button}
+            >
+              <Settings
+                size={18}
+                class="text-white/40 hover:text-white/90 transition-all duration-300 hover:scale-110 relative z-50 cursor-pointer media-button"
+                style="transform: translateZ(0); backface-visibility: hidden; margin-left: 8px;"
+                /* 添加左边距 */
+                data-stop-toggle
+                onclick={async (e) => {
+                  e.stopPropagation();
+                  console.log("点击了设置按钮");
+                  const { emit } = await import("@tauri-apps/api/event");
+                  await emit("navigate-to-settings");
+                }}
+              />
+            </div>
+
+            <div
+              class="flex items-center justify-center"
+              style="
               width: 130px;  /* 缩小宽度适应新按钮尺寸 */
               gap: 20px;    /* 缩小按钮间距 */
               will-change: auto;
@@ -2058,77 +2071,84 @@
               perspective: 1000px;
               flex-shrink: 0;
             "
-          >
-            <SkipBack
-              size={22}
-              fill="currentColor"
-              class="text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button"
-              data-stop-toggle
-              onclick={(e) => handleMediaAction("prev", e)}
-            />
-            {#if isPlaying}
-              <Pause
-                size={32}
+            >
+              <SkipBack
+                size={22}
                 fill="currentColor"
-                class="text-white hover:scale-110 active:scale-95 transition-all duration-300 relative z-50 cursor-pointer media-button"
+                class="text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button"
                 data-stop-toggle
-                onclick={(e) => handleMediaAction("play_pause", e)}
+                onclick={(e) => handleMediaAction("prev", e)}
               />
-            {:else}
-              <Play
-                size={32}
+              {#if isPlaying}
+                <Pause
+                  size={32}
+                  fill="currentColor"
+                  class="text-white hover:scale-110 active:scale-95 transition-all duration-300 relative z-50 cursor-pointer media-button"
+                  data-stop-toggle
+                  onclick={(e) => handleMediaAction("play_pause", e)}
+                />
+              {:else}
+                <Play
+                  size={32}
+                  fill="currentColor"
+                  class="text-white hover:scale-110 active:scale-95 transition-all duration-300 relative z-50 cursor-pointer media-button"
+                  data-stop-toggle
+                  onclick={(e) => handleMediaAction("play_pause", e)}
+                />
+              {/if}
+              <SkipForward
+                size={22}
                 fill="currentColor"
-                class="text-white hover:scale-110 active:scale-95 transition-all duration-300 relative z-50 cursor-pointer media-button"
+                class="text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button"
                 data-stop-toggle
-                onclick={(e) => handleMediaAction("play_pause", e)}
+                onclick={(e) => handleMediaAction("next", e)}
               />
-            {/if}
-            <SkipForward
-              size={22}
-              fill="currentColor"
-              class="text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button"
-              data-stop-toggle
-              onclick={(e) => handleMediaAction("next", e)}
-            />
-          </div>
+            </div>
 
-          <!-- 悬浮窗按钮 - 可通过设置页面隐藏 -->
-          {#if !appSettings.hide_floating_window}
-            <button
-              class="w-7 h-7 flex items-center justify-center rounded-xl border border-white/10 text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button hover:border-white/20"
-              style="transform: translateZ(0); backface-visibility: hidden; margin-right: 8px;"
-              /* 添加右边距 */
-              data-stop-toggle
-              aria-label={isFloatingWindowOpen
-                ? "Close floating window"
-                : "Open floating window"}
-              onclick={(e) => {
-                e.stopPropagation();
-                toggleFloatingWindow();
-              }}
-              onkeydown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
+            <!-- 悬浮窗按钮 - 可通过设置页面隐藏 -->
+            <div
+              class="media-button-wrapper"
+              class:hidden={appSettings.hide_floating_window}
+            >
+              <button
+                class="w-7 h-7 flex items-center justify-center rounded-xl border border-white/10 text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button hover:border-white/20"
+                style="transform: translateZ(0); backface-visibility: hidden; margin-right: 8px;"
+                /* 添加右边距 */
+                data-stop-toggle
+                aria-label={isFloatingWindowOpen
+                  ? "Close floating window"
+                  : "Open floating window"}
+                onclick={(e) => {
                   e.stopPropagation();
                   toggleFloatingWindow();
-                }
-              }}
-            >
-              <GalleryHorizontalEnd size={18} />
-            </button>
-          {/if}
-        </div>
-
-        <div class="spectrum-wrapper">
-          {#if appSettings.show_spectrum}
-            <div
-              class="spectrum-container-expanded"
-              style="--accent-color: {accentColor};"
-            >
-              {#each spectrumHeightsExpanded as h}
-                <div class="spectrum-bar-expanded" style="height: {h}px;"></div>
-              {/each}
+                }}
+                onkeydown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    toggleFloatingWindow();
+                  }
+                }}
+              >
+                <GalleryHorizontalEnd size={18} />
+              </button>
             </div>
-          {/if}
+          </div>
+
+          <div class="spectrum-wrapper">
+            {#if appSettings.show_spectrum}
+              <div
+                class="spectrum-container-expanded"
+                style="--accent-color: {accentColor}; --secondary-color: {secondaryColor};"
+              >
+                {#each spectrumHeightsExpanded as h}
+                  <div
+                    class="spectrum-bar-expanded"
+                    style="height: {h}px;"
+                  ></div>
+                {/each}
+              </div>
+            {/if}
+          </div>
         </div>
       </div>
     </div>
@@ -2192,16 +2212,30 @@
     height: 20px;
   }
 
+  .collapsed-content .spectrum-container {
+    height: 22px;
+    overflow: hidden;
+  }
+
   .spectrum-bar {
     width: 2px;
     min-height: 2px;
-    border-radius: 2px;
-    background: var(--accent-color, #fff);
+    border-radius: 1px;
+    background: linear-gradient(
+      to top,
+      var(--secondary-color, #888),
+      var(--accent-color, #fff)
+    );
+    background-clip: content-box;
     opacity: 0.95;
     will-change: height;
     transform: translateZ(0);
     backface-visibility: hidden;
     -webkit-font-smoothing: antialiased;
+  }
+
+  .collapsed-content .spectrum-bar {
+    transform-origin: center;
   }
 
   .spectrum-wrapper {
@@ -2216,7 +2250,7 @@
 
   .spectrum-container-expanded {
     display: flex;
-    align-items: flex-end !important;
+    align-items: center !important;
     justify-content: center;
     gap: 2px;
     height: 30px;
@@ -2227,12 +2261,17 @@
   .spectrum-bar-expanded {
     width: 2px;
     min-height: 2px;
-    border-radius: 2px 2px 0 0;
-    background: var(--accent-color, #fff);
+    border-radius: 1px;
+    background: linear-gradient(
+      to top,
+      var(--secondary-color, #888),
+      var(--accent-color, #fff)
+    );
+    background-clip: content-box;
     opacity: 0.95;
     will-change: height;
     transform: translateZ(0);
-    transform-origin: bottom;
+    transform-origin: center;
     backface-visibility: hidden;
     -webkit-font-smoothing: antialiased;
   }
@@ -2584,167 +2623,64 @@
     }
   }
 
-  /* 星空背景 */
-  .stars-bg {
-    position: absolute;
-    inset: 0;
-    background-image: radial-gradient(
-        1.5px 1.5px at 20px 30px,
-        rgba(255, 255, 255, 0.9),
-        transparent
-      ),
-      radial-gradient(
-        1px 1px at 40px 70px,
-        rgba(255, 255, 255, 0.7),
-        transparent
-      ),
-      radial-gradient(
-        1.5px 1.5px at 90px 40px,
-        rgba(255, 255, 255, 0.8),
-        transparent
-      ),
-      radial-gradient(
-        1px 1px at 160px 90px,
-        rgba(255, 255, 255, 0.6),
-        transparent
-      ),
-      radial-gradient(
-        1.5px 1.5px at 230px 50px,
-        rgba(255, 255, 255, 0.7),
-        transparent
-      ),
-      radial-gradient(
-        1px 1px at 280px 80px,
-        rgba(255, 255, 255, 0.8),
-        transparent
-      ),
-      radial-gradient(
-        1px 1px at 50px 120px,
-        rgba(255, 255, 255, 0.6),
-        transparent
-      ),
-      radial-gradient(
-        1.5px 1.5px at 120px 150px,
-        rgba(255, 255, 255, 0.7),
-        transparent
-      ),
-      radial-gradient(
-        1px 1px at 200px 20px,
-        rgba(255, 255, 255, 0.9),
-        transparent
-      ),
-      radial-gradient(
-        1px 1px at 320px 30px,
-        rgba(255, 255, 255, 0.6),
-        transparent
-      ),
-      radial-gradient(
-        1.5px 1.5px at 80px 10px,
-        rgba(255, 255, 255, 0.7),
-        transparent
-      ),
-      radial-gradient(
-        1px 1px at 250px 140px,
-        rgba(255, 255, 255, 0.8),
-        transparent
-      ),
-      radial-gradient(
-        1px 1px at 180px 60px,
-        rgba(255, 255, 255, 0.5),
-        transparent
-      ),
-      radial-gradient(
-        1.5px 1.5px at 300px 100px,
-        rgba(255, 255, 255, 0.7),
-        transparent
-      );
-    background-repeat: repeat-x;
-    background-size: 380px 180px;
-    opacity: 0.35;
-    pointer-events: none;
-    z-index: 1;
-    animation: stars-twinkle 4s ease-in-out infinite;
-  }
-
-  @keyframes stars-twinkle {
-    0%,
-    100% {
-      opacity: 0.25;
-      transform: translateY(0);
-    }
-    50% {
-      opacity: 0.45;
-      transform: translateY(-1px);
-    }
-  }
-
-  /* 毛玻璃主题：高级磨砂玻璃效果 */
-  /* 主容器样式 */
-  .glassmorphism-theme {
-    /* 强烈的背景模糊 + 高透明度 */
-    backdrop-filter: blur(80px) saturate(200%) brightness(1.15);
-    -webkit-backdrop-filter: blur(80px) saturate(200%) brightness(1.15);
-    background: rgba(255, 255, 255, 0.08) !important;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    /* 悬浮阴影：多层次柔和阴影，营造Z轴纵深感 */
+  /* ===== Liquid Glass - 稳定版（保留圆角 + 强效模糊） ===== */
+  .theme-liquid_glass {
+    position: relative;
+    background: rgba(255, 255, 255, 0.12) !important;
+    -webkit-backdrop-filter: blur(35px) saturate(200%) contrast(120%)
+      brightness(1.1) !important;
+    backdrop-filter: blur(35px) saturate(200%) contrast(120%) brightness(1.1) !important;
     box-shadow:
-      0 25px 60px rgba(0, 0, 0, 0.35),
-      0 15px 30px rgba(0, 0, 0, 0.25),
-      0 8px 15px rgba(0, 0, 0, 0.2),
-      inset 0 1px 0 rgba(255, 255, 255, 0.4),
-      inset 1px 0 0 rgba(255, 255, 255, 0.25),
-      inset -1px 0 0 rgba(255, 255, 255, 0.1),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+      inset 0 1px 2px rgba(255, 255, 255, 0.6),
+      inset 1px 0 2px rgba(255, 255, 255, 0.2),
+      inset -1px 0 2px rgba(255, 255, 255, 0.2),
+      inset 0 -2px 5px rgba(0, 0, 0, 0.15),
+      inset 0 0 20px rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    overflow: hidden !important;
+    mix-blend-mode: normal !important;
+    mask-image: none !important;
+    -webkit-mask-image: none !important;
+    contain: none !important;
   }
 
-  /* 边缘高光：顶部和左侧的反光线条 */
-  .glassmorphism-theme::before {
+  .theme-liquid_glass::after {
     content: "";
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: 
-      /* 顶部高光 */
-      linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.5) 0%,
-        rgba(255, 255, 255, 0.2) 1px,
-        transparent 3px
-      ),
-      /* 左侧高光 */
-        linear-gradient(
-          90deg,
-          rgba(255, 255, 255, 0.4) 0%,
-          rgba(255, 255, 255, 0.15) 1px,
-          transparent 3px
-        ),
-      /* 右下角暗部 */
-        linear-gradient(135deg, transparent 50%, rgba(0, 0, 0, 0.05) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.2) 0%,
+      transparent 40%,
+      transparent 60%,
+      rgba(0, 0, 0, 0.05) 100%
+    );
     pointer-events: none;
-    z-index: 100;
+    z-index: 0;
   }
 
-  /* 材质噪点：磨砂物理质感 */
-  .glassmorphism-theme::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-    opacity: 0.04;
-    pointer-events: none;
-    z-index: 101;
-    mix-blend-mode: overlay;
+  .theme-liquid_glass::before {
+    display: none !important;
   }
 
-  /* 背景流动动画 */
-  @keyframes bg-flow {
-    0% {
-      background-position: 0% 50%;
-    }
-    100% {
-      background-position: 400% 50%;
-    }
+  .dynamic-glass-text {
+    color: #ffffff;
+    text-shadow:
+      0 0 1px rgba(0, 0, 0, 0.4),
+      0 1px 4px rgba(0, 0, 0, 0.3);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .dynamic-glass-text-secondary {
+    color: rgba(255, 255, 255, 0.8);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .ui-content-layer {
+    position: relative;
+    z-index: 2;
   }
 
   /* ===== 调试信息覆盖层 ===== */
@@ -3081,7 +3017,6 @@
     pointer-events: auto; /* 修复：允许鼠标事件 */
     overflow: hidden;
     -webkit-app-region: no-drag;
-    backdrop-filter: none;
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
   }
@@ -3096,7 +3031,6 @@
     -webkit-font-smoothing: antialiased;
     transform: translate3d(0, 0, 0) !important;
     will-change: transform;
-    mask-image: radial-gradient(white, black);
     backface-visibility: hidden;
     perspective: 1000px;
     contain: layout style;
@@ -3125,6 +3059,15 @@
     will-change: auto;
     perspective: 1000px;
     contain: layout style;
+  }
+
+  .media-button-wrapper.hidden {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .media-button-wrapper.hidden > * {
+    visibility: hidden;
   }
 
   button:active {

@@ -58,3 +58,6 @@ base64 = "0.21"
 # 日期时间处理 - 用于时间戳计算和进度校准
 chrono = "0.4"
 
+# 系统级毛玻璃效果 (Windows Acrylic/Mica, macOS Vibrancy)
+window-vibrancy = "0.5"
+

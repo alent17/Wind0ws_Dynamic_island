@@ -709,11 +709,14 @@
       // 加载专辑封面设置
       enableHDCover = settings.enable_hd_cover ?? true;
       enablePixelArt = settings.enable_pixel_art ?? false;
+      halftoneOverlayVisible = settings.enable_halftone ?? false;
       console.log(
         "[专辑封面] 高清获取:",
         enableHDCover ? "开启" : "关闭",
         "| 像素化:",
         enablePixelArt ? "开启" : "关闭",
+        "| 网点效果:",
+        halftoneOverlayVisible ? "开启" : "关闭",
       );
 
       // 设置窗口是否可调整大小
@@ -790,6 +793,19 @@
       },
     );
     eventListeners.push(unlistenPixelArtChange);
+
+    // 监听网点效果设置变化事件
+    const unlistenHalftoneChange = await listen(
+      "halftone-changed",
+      (event: any) => {
+        halftoneOverlayVisible = event.payload.enableHalftone;
+        console.log(
+          "[网点效果] 设置已更新:",
+          halftoneOverlayVisible ? "开启" : "关闭",
+        );
+      },
+    );
+    eventListeners.push(unlistenHalftoneChange);
 
     const appWindow = getCurrentWindow();
     const size = await appWindow.innerSize();
@@ -1694,6 +1710,9 @@
           class:slide-in={slideDirection}
           draggable="false"
         ></canvas>
+        {#if halftoneOverlayVisible}
+          <div class="halftone-overlay"></div>
+        {/if}
       </div>
     {:else}
       <div class="album-placeholder">
@@ -2006,6 +2025,31 @@
     object-fit: cover;
     z-index: 10;
     border-radius: 10px;
+  }
+
+  /* 半色调网点效果样式 */
+  .halftone-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    pointer-events: none;
+    background-image: radial-gradient(
+      rgba(0, 0, 0, 0.45) 1.5px,
+      transparent 1.5px
+    );
+    background-size: 4px 4px;
+    border-radius: 10px;
+    mix-blend-mode: overlay;
+    opacity: 0.8;
+  }
+
+  .player.pixelated .halftone-overlay {
+    mix-blend-mode: hard-light;
+    background-image: radial-gradient(
+      rgba(0, 0, 0, 0.6) 1.5px,
+      transparent 1px
+    );
+    background-size: 3px 3px;
   }
 
   .album-art {
