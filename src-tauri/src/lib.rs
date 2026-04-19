@@ -17,6 +17,8 @@ use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSessionPlaybackStatus,
 };
 use windows::Storage::Streams::DataReader;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use rustfft::{FftPlanner, num_complex::Complex};
 
 const SHOW_MENU_ID: &str = "show";
 const SETTINGS_MENU_ID: &str = "settings";
@@ -852,6 +854,133 @@ fn start_media_listener(handle: AppHandle) {
         }
     });
 }
+
+#[derive(Clone, Serialize)]
+struct SpectrumPayload {
+    bands: Vec<f32>,
+    bands_expanded: Vec<f32>,
+}
+
+fn start_audio_visualizer(app: AppHandle) {
+    std::thread::spawn(move || {
+        let host = cpal::default_host();
+        let device = match host.default_output_device() {
+            Some(d) => d,
+            None => {
+                eprintln!("[音频] 未找到默认音频输出设备");
+                return;
+            }
+        };
+
+        let config = match device.default_output_config() {
+            Ok(c) => c.config(),
+            Err(e) => {
+                eprintln!("[音频] 获取音频配置失败: {}", e);
+                return;
+            }
+        };
+
+        let channels = config.channels as usize;
+        let sample_rate = config.sample_rate.0 as f32;
+
+        const FFT_SIZE: usize = 1024;
+        let mut planner = FftPlanner::new();
+        let fft = planner.plan_fft_forward(FFT_SIZE);
+        let mut sample_buffer: Vec<f32> = Vec::with_capacity(FFT_SIZE);
+
+        let stream = device.build_input_stream(
+            &config,
+            move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                for frame in data.chunks(channels) {
+                    let mono = frame.iter().sum::<f32>() / channels as f32;
+                    sample_buffer.push(mono);
+
+                    if sample_buffer.len() == FFT_SIZE {
+                        let mut buffer: Vec<Complex<f32>> = sample_buffer
+                            .iter()
+                            .enumerate()
+                            .map(|(i, &val)| {
+                                let window = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / (FFT_SIZE as f32 - 1.0)).cos());
+                                Complex { re: val * window, im: 0.0 }
+                            })
+                            .collect();
+
+                        fft.process(&mut buffer);
+
+                        let magnitudes: Vec<f32> = buffer.iter()
+                            .take(FFT_SIZE / 2)
+                            .map(|c| c.norm())
+                            .collect();
+
+                        let bands = calculate_bands(&magnitudes, 5, sample_rate, FFT_SIZE);
+                        let bands_expanded = calculate_bands(&magnitudes, 20, sample_rate, FFT_SIZE);
+
+                        let _ = app.emit("audio-spectrum", SpectrumPayload {
+                            bands,
+                            bands_expanded
+                        });
+
+                        sample_buffer.drain(0..FFT_SIZE / 2);
+                    }
+                }
+            },
+            |err| eprintln!("[音频] 捕获流错误: {}", err),
+            None
+        );
+
+        match stream {
+            Ok(s) => {
+                s.play().unwrap();
+                loop { std::thread::sleep(std::time::Duration::from_secs(1)); }
+            }
+            Err(e) => eprintln!("[音频] 构建捕获流失败: {}", e),
+        }
+    });
+}
+
+
+fn calculate_bands(magnitudes: &[f32], num_bands: usize, sample_rate: f32, fft_size: usize) -> Vec<f32> {
+    let mut bands = vec![0.0; num_bands];
+    let freq_resolution = sample_rate / fft_size as f32;
+
+    let min_freq: f32 = 80.0;
+    let max_freq: f32 = 8000.0;
+    let log_min = min_freq.log2();
+    let log_max = max_freq.log2();
+    let log_step = (log_max - log_min) / num_bands as f32;
+
+    for i in 0..num_bands {
+        let start_freq = 2.0_f32.powf(log_min + i as f32 * log_step);
+        let end_freq = 2.0_f32.powf(log_min + (i + 1) as f32 * log_step);
+
+        let mut start_bin = (start_freq / freq_resolution).round() as usize;
+        let mut end_bin = (end_freq / freq_resolution).round() as usize;
+
+        start_bin = start_bin.clamp(1, magnitudes.len() - 1);
+        end_bin = end_bin.clamp(start_bin + 1, magnitudes.len());
+
+        let mut sum = 0.0;
+        let mut count = 0.0;
+        for j in start_bin..end_bin {
+            let freq = j as f32 * freq_resolution;
+            let weight = (freq / 1000.0).powf(1.15).clamp(0.05, 10.0);
+            sum += magnitudes[j] * weight;
+            count += 1.0;
+        }
+
+        let avg = if count > 0.0 { sum / count } else { 0.0 };
+
+        let db = if avg > 0.0001 { 20.0 * avg.log10() } else { -100.0 };
+
+        let mut normalized = (db + 30.0) / 55.0;
+
+        if normalized < 0.15 { normalized = 0.0; }
+
+        bands[i] = normalized.clamp(0.0, 1.0).powf(0.85);
+    }
+    bands
+}
+
 
 #[tauri::command]
 fn show_main_window(app: AppHandle) -> Result<(), String> {
@@ -1807,6 +1936,7 @@ pub fn run() {
             let window = app.get_webview_window("main").unwrap();
             window.set_focus().unwrap();
             start_media_listener(app.handle().clone());
+            start_audio_visualizer(app.handle().clone());
 
             let menu = Menu::with_items(
                 app,

@@ -34,7 +34,6 @@
     hide_monitor_selector: boolean;
     hide_floating_window: boolean;
     expanded_corner_radius: number;
-    real_time_spectrum: boolean;
   }
 
   let settings = $state<AppSettings>({
@@ -59,7 +58,6 @@
     hide_monitor_selector: false,
     hide_floating_window: false,
     expanded_corner_radius: 16,
-    real_time_spectrum: false,
   });
 
   const appWindow = getCurrentWindow();
@@ -341,17 +339,6 @@
       <div class="ts-right toggles-container">
         <button
           class="retro-toggle"
-          onclick={() =>
-            saveSettings({ show_spectrum: !settings.show_spectrum })}
-        >
-          <span>频谱动画</span>
-          <div
-            class="retro-checkbox"
-            class:checked={settings.show_spectrum}
-          ></div>
-        </button>
-        <button
-          class="retro-toggle"
           onclick={() => saveSettings({ auto_hide: !settings.auto_hide })}
         >
           <span>自动隐藏</span>
@@ -476,19 +463,7 @@
             class:checked={settings.hide_floating_window}
           ></div>
         </button>
-        <button
-          class="retro-toggle"
-          onclick={() =>
-            saveSettings({
-              real_time_spectrum: !settings.real_time_spectrum,
-            })}
-        >
-          <span>实时频谱</span>
-          <div
-            class="retro-checkbox"
-            class:checked={settings.real_time_spectrum}
-          ></div>
-        </button>
+
         <div class="corner-radius-control">
           <span class="corner-label">展开圆角</span>
           <input

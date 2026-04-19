@@ -131,19 +131,25 @@
   let isPlaying = $state<boolean>(false);
 
   // iOS风格频谱动画系统
-  let spectrumPhase = $state(0); // 全局相位，用于驱动波浪
+  let spectrumPhase = $state(0);
   let spectrumHeights = $state([0.5, 0.5, 0.5, 0.5, 0.5]);
   let spectrumHeightsExpanded = $state(Array(20).fill(0.5));
-  let spectrumTimer: ReturnType<typeof setInterval> | null = null;
+  let targetSpectrumHeights = $state([0.5, 0.5, 0.5, 0.5, 0.5]);
+  let targetSpectrumHeightsExpanded = $state(Array(20).fill(0.5));
+  let spectrumTimer: number | null = null;
 
   // iOS风格收起态频谱配置（波浪式，低频更强）
-  const collapsedMaxHeights = [10, 8, 9, 7, 5];
-  const collapsedPhases = [0, 0.5, 1.0, 1.5, 0.8]; // 相位偏移，创造波浪
+  const baseCollapsedHeight = 20;
+  const iOSCollapsedEnvelope = [0.5, 0.85, 1.0, 0.85, 0.5];
+  const collapsedPhases = [0, 0.5, 1.0, 1.5, 0.8];
 
-  // iOS风格展开态频谱配置（波浪式，低频更活跃）
-  const expandedMaxHeights = [
-    24, 22, 26, 20, 18, 15, 13, 11, 9, 7, 15, 17, 13, 11, 9, 10, 8, 6, 4, 3,
+  const baseExpandedHeight = 30;
+
+  const iOSExpandedEnvelope = [
+    0.5, 0.7, 0.85, 0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+    1.0, 0.95, 0.85, 0.7, 0.5,
   ];
+
   const expandedPhases = [
     0, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 0.15, 0.45, 0.75, 1.05,
     1.35, 1.65, 1.95, 2.25, 2.55, 2.85,
@@ -151,42 +157,54 @@
 
   function startSpectrumAnimation() {
     if (spectrumTimer) return;
-    spectrumTimer = setInterval(() => {
-      spectrumPhase += 0.15; // iOS风格：平滑相位递进
+
+    function animate() {
+      spectrumTimer = requestAnimationFrame(animate);
 
       if (isPlaying) {
-        // iOS风格：使用正弦波生成平滑的频谱高度
-        spectrumHeights = collapsedMaxHeights.map((maxH, i) => {
-          const wave = Math.sin(
-            spectrumPhase + collapsedPhases[i] * Math.PI * 2,
-          );
-          const noise = Math.sin(spectrumPhase * 2.3 + i * 1.7) * 0.15;
-          return Math.max(2, (wave * 0.4 + 0.6 + noise) * maxH * 0.5);
+        spectrumHeights = spectrumHeights.map((current, i) => {
+          const target = targetSpectrumHeights[i] || 2;
+          const diff = target - current;
+          const tracking = diff > 0 ? 0.82 : 0.045;
+          return current + diff * tracking;
         });
-        spectrumHeightsExpanded = expandedMaxHeights.map((maxH, i) => {
-          const wave = Math.sin(
-            spectrumPhase + expandedPhases[i] * Math.PI * 2,
-          );
-          const noise = Math.sin(spectrumPhase * 1.7 + i * 2.1) * 0.12;
-          return Math.max(2, (wave * 0.4 + 0.6 + noise) * maxH * 0.5);
+
+        spectrumHeights = spectrumHeights.map((val, i, arr) => {
+          const left = arr[i - 1] !== undefined ? arr[i - 1] : val;
+          const right = arr[i + 1] !== undefined ? arr[i + 1] : val;
+          return val * 0.8 + left * 0.1 + right * 0.1;
+        });
+
+        const tempExpanded = spectrumHeightsExpanded.map((current, i) => {
+          const target = targetSpectrumHeightsExpanded[i] || 2;
+          const diff = target - current;
+          const tracking = diff > 0 ? 0.85 : 0.06;
+          return current + diff * tracking;
+        });
+
+        spectrumHeightsExpanded = tempExpanded.map((val, i, arr) => {
+          const left = arr[i - 1] !== undefined ? arr[i - 1] : val;
+          const right = arr[i + 1] !== undefined ? arr[i + 1] : val;
+          return val * 0.7 + left * 0.15 + right * 0.15;
         });
       } else {
-        // iOS风格：平滑衰减到最小
         spectrumHeights = spectrumHeights.map((h) => {
-          const newH = h * 0.92;
-          return newH < 2 ? 0.5 : newH;
+          const diff = 2 - h;
+          return h + diff * 0.08;
         });
         spectrumHeightsExpanded = spectrumHeightsExpanded.map((h) => {
-          const newH = h * 0.92;
-          return newH < 2 ? 0.5 : newH;
+          const diff = 2 - h;
+          return h + diff * 0.08;
         });
       }
-    }, 50); // iOS风格：更快的刷新率，平滑动画
+    }
+
+    spectrumTimer = requestAnimationFrame(animate);
   }
 
   function stopSpectrumAnimation() {
-    if (spectrumTimer) {
-      clearInterval(spectrumTimer);
+    if (spectrumTimer !== null) {
+      cancelAnimationFrame(spectrumTimer);
       spectrumTimer = null;
     }
   }
@@ -719,7 +737,7 @@
     precision: 0.01,
   });
 
-  let win;
+  let win: ReturnType<typeof getCurrentWindow>;
 
   // ========== 窗口同步优化 ==========
   let cachedScreenWidth = 0;
@@ -1277,6 +1295,11 @@
           reduce_animations: loadedSettings.reduce_animations ?? false,
           show_debug_info: loadedSettings.show_debug_info ?? false,
           window_opacity: loadedSettings.window_opacity ?? 255,
+          hide_settings_button: loadedSettings.hide_settings_button ?? false,
+          hide_monitor_selector: loadedSettings.hide_monitor_selector ?? false,
+          hide_floating_window: loadedSettings.hide_floating_window ?? false,
+          expanded_corner_radius: loadedSettings.expanded_corner_radius ?? 16,
+          real_time_spectrum: loadedSettings.real_time_spectrum ?? false,
         };
         console.log("[设置] 已加载:", appSettings);
       } catch (error) {
@@ -1483,16 +1506,8 @@
                 (w) => w.label === "settings-window",
               );
               if (existingWindow) {
-                await existingWindow.setSize({
-                  type: "Physical",
-                  width: 1000,
-                  height: 750,
-                });
-                await existingWindow.setMinSize({
-                  type: "Physical",
-                  width: 800,
-                  height: 600,
-                });
+                await existingWindow.setSize(new PhysicalSize(1000, 750));
+                await existingWindow.setMinSize(new PhysicalSize(800, 600));
                 await existingWindow.center();
                 await existingWindow.show();
                 await existingWindow.setFocus();
@@ -1608,6 +1623,32 @@
         }
       });
 
+      const unlistenAudioSpectrum = await listen(
+        "audio-spectrum",
+        (event: any) => {
+          if (!isPlaying) return;
+          const { bands, bands_expanded } = event.payload;
+
+          const sensitivity = 1.5;
+
+          targetSpectrumHeights = bands.map((val: number, i: number) => {
+            let compressedVal = Math.min(1.0, val * sensitivity * 1.2);
+            let mapped =
+              compressedVal * baseCollapsedHeight * iOSCollapsedEnvelope[i];
+            return Math.max(2, mapped);
+          });
+
+          targetSpectrumHeightsExpanded = bands_expanded.map(
+            (val: number, i: number) => {
+              let compressedVal = Math.min(1.0, val * sensitivity);
+              let mapped =
+                compressedVal * baseExpandedHeight * iOSExpandedEnvelope[i];
+              return Math.max(2, mapped);
+            },
+          );
+        },
+      );
+
       cleanup = unlistenMediaUpdate;
 
       return () => {
@@ -1620,6 +1661,7 @@
         unlistenCornerRadiusChanged();
         unlistenSpectrumModeChanged();
         unlistenFloatingWindowClosed();
+        unlistenAudioSpectrum();
         stopDebugFps();
       };
     })();
@@ -2076,8 +2118,7 @@
           {/if}
         </div>
 
-        <!-- 底部区域：频谱 -->
-        <div class="mt-auto" style="margin-bottom: 6px;">
+        <div class="spectrum-wrapper">
           {#if appSettings.show_spectrum}
             <div
               class="spectrum-container-expanded"
@@ -2147,32 +2188,53 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 1.5px;
-    height: 15px;
+    gap: 1px;
+    height: 20px;
   }
 
   .spectrum-bar {
     width: 2px;
     min-height: 2px;
-    border-radius: 1px;
+    border-radius: 2px;
     background: var(--accent-color, #fff);
-    transition: height 0.08s ease-out;
+    opacity: 0.95;
+    will-change: height;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .spectrum-wrapper {
+    margin-top: auto;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    height: 30px;
+    overflow: visible;
   }
 
   .spectrum-container-expanded {
     display: flex;
-    align-items: flex-end;
+    align-items: flex-end !important;
     justify-content: center;
     gap: 2px;
-    height: 24px;
+    height: 30px;
+    width: 78px;
+    flex-shrink: 0;
   }
 
   .spectrum-bar-expanded {
     width: 2px;
     min-height: 2px;
-    border-radius: 1px;
+    border-radius: 2px 2px 0 0;
     background: var(--accent-color, #fff);
-    transition: height 0.08s ease-out;
+    opacity: 0.95;
+    will-change: height;
+    transform: translateZ(0);
+    transform-origin: bottom;
+    backface-visibility: hidden;
+    -webkit-font-smoothing: antialiased;
   }
 
   /* iOS风格：使用JavaScript正弦波驱动频谱动画，无需CSS动画 */
@@ -2861,7 +2923,7 @@
     inset: 0;
     display: flex;
     flex-direction: column;
-    padding: 20px 24px 36px 24px;
+    padding: 16px 24px 12px 24px;
 
     transform: translateY(30px) scale(0.92) translateZ(0);
     will-change: transform, filter, opacity;

@@ -48,6 +48,10 @@ tokio = { version = "1", features = ["full"] }
 # HTTP 客户端 - 用于下载 MV 和封面图片
 reqwest = { version = "0.11", features = ["json", "blocking"] }
 
+# 音频处理依赖
+cpal = "0.15"       # 用于捕获 Windows 系统回放音频 (WASAPI Loopback)
+rustfft = "6.1"     # 用于高效的快速傅里叶变换 (FFT)
+
 # Base64 编码解码 - 用于处理图片数据
 base64 = "0.21"
 
