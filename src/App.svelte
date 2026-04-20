@@ -123,9 +123,11 @@
   // ========== 状态管理 ==========
   let expanded = $state(false);
   let hovering = $state(false);
+  let isAnimating = $state(false);
   let accentColor = $state<string>("#fe2c55");
   let secondaryColor = $state<string>("#fe2c55");
   let artworkUrl = $state<string>("");
+  let rawCoverUrl = "";
   let flipKey = $state(0);
   let trackTitle = $state<string>("");
   let artistName = $state<string>("");
@@ -138,6 +140,10 @@
   let targetSpectrumHeights = $state([0.5, 0.5, 0.5, 0.5, 0.5]);
   let targetSpectrumHeightsExpanded = $state(Array(20).fill(0.5));
   let spectrumTimer: number | null = null;
+
+  // 优化点二：预分配工作数组，避免每帧 GC
+  const workArray5 = new Float32Array(5);
+  const workArray20 = new Float32Array(20);
 
   // iOS风格收起态频谱配置（波浪式，低频更强）
   const baseCollapsedHeight = 20;
@@ -160,7 +166,7 @@
     if (spectrumTimer || !appSettings.show_spectrum) return;
 
     function animate() {
-      if (!appSettings.show_spectrum) {
+      if (!isPlaying || !appSettings.show_spectrum) {
         spectrumTimer = null;
         return;
       }
@@ -168,40 +174,49 @@
       spectrumTimer = requestAnimationFrame(animate);
 
       if (isPlaying) {
-        spectrumHeights = spectrumHeights.map((current, i) => {
+        for (let i = 0; i < 5; i++) {
           const target = targetSpectrumHeights[i] || 2;
+          const current = spectrumHeights[i] || 0.5;
           const diff = target - current;
           const tracking = diff > 0 ? 0.82 : 0.045;
-          return current + diff * tracking;
-        });
+          workArray5[i] = current + diff * tracking;
+        }
 
-        spectrumHeights = spectrumHeights.map((val, i, arr) => {
-          const left = arr[i - 1] !== undefined ? arr[i - 1] : val;
-          const right = arr[i + 1] !== undefined ? arr[i + 1] : val;
-          return val * 0.8 + left * 0.1 + right * 0.1;
-        });
+        for (let i = 0; i < 5; i++) {
+          const left = i > 0 ? workArray5[i - 1] : workArray5[i];
+          const right = i < 4 ? workArray5[i + 1] : workArray5[i];
+          workArray5[i] = workArray5[i] * 0.8 + left * 0.1 + right * 0.1;
+        }
 
-        const tempExpanded = spectrumHeightsExpanded.map((current, i) => {
+        for (let i = 0; i < 20; i++) {
           const target = targetSpectrumHeightsExpanded[i] || 2;
+          const current = spectrumHeightsExpanded[i] || 0.5;
           const diff = target - current;
           const tracking = diff > 0 ? 0.85 : 0.06;
-          return current + diff * tracking;
-        });
+          workArray20[i] = current + diff * tracking;
+        }
 
-        spectrumHeightsExpanded = tempExpanded.map((val, i, arr) => {
-          const left = arr[i - 1] !== undefined ? arr[i - 1] : val;
-          const right = arr[i + 1] !== undefined ? arr[i + 1] : val;
-          return val * 0.7 + left * 0.15 + right * 0.15;
-        });
+        for (let i = 0; i < 20; i++) {
+          const left = i > 0 ? workArray20[i - 1] : workArray20[i];
+          const right = i < 19 ? workArray20[i + 1] : workArray20[i];
+          workArray20[i] = workArray20[i] * 0.7 + left * 0.15 + right * 0.15;
+        }
+
+        spectrumHeights = Array.from(workArray5);
+        spectrumHeightsExpanded = Array.from(workArray20);
       } else {
-        spectrumHeights = spectrumHeights.map((h) => {
-          const diff = 2 - h;
-          return h + diff * 0.08;
-        });
-        spectrumHeightsExpanded = spectrumHeightsExpanded.map((h) => {
-          const diff = 2 - h;
-          return h + diff * 0.08;
-        });
+        for (let i = 0; i < 5; i++) {
+          const current = spectrumHeights[i] || 0.5;
+          const diff = 2 - current;
+          workArray5[i] = current + diff * 0.08;
+        }
+        for (let i = 0; i < 20; i++) {
+          const current = spectrumHeightsExpanded[i] || 0.5;
+          const diff = 2 - current;
+          workArray20[i] = current + diff * 0.08;
+        }
+        spectrumHeights = Array.from(workArray5);
+        spectrumHeightsExpanded = Array.from(workArray20);
       }
     }
 
@@ -215,20 +230,12 @@
     }
   }
 
-  // 监听播放状态和频谱开关变化
+  // 监听播放状态和设置
   $effect(() => {
     if (isPlaying && appSettings.show_spectrum) {
-      startSpectrumAnimation();
-    } else {
-      startSpectrumAnimation(); // 继续运行但做衰减动画
-      // 延迟停止，等衰减完成
-      setTimeout(() => {
-        if (!isPlaying) {
-          stopSpectrumAnimation();
-          spectrumHeights = [0.5, 0.5, 0.5, 0.5, 0.5];
-          spectrumHeightsExpanded = Array(20).fill(0.5);
-        }
-      }, 1200);
+      requestAnimationFrame(() => {
+        startSpectrumAnimation();
+      });
     }
   });
   let currentTimeMs = $state<number>(0);
@@ -535,7 +542,6 @@
     level: PerformanceLevel,
     refreshRate: number = 60,
   ) {
-    // 高帧率模式下的基础参数调整
     const frameMultiplier = refreshRate >= 120 ? 1.2 : 1.0;
 
     switch (level) {
@@ -544,30 +550,22 @@
           return {
             stiffness: 0.15,
             damping: 0.7,
-            precision: 0.005,
+            precision: 0.1,
           };
         } else {
           return {
             stiffness: 0.18,
             damping: 0.7,
-            precision: 0.01,
+            precision: 0.1,
           };
         }
       case "medium":
         return {
           stiffness: 0.2,
           damping: 0.75,
-          precision: 0.05,
-        };
-      case "low":
-        return {
-          stiffness: 0.25,
-          damping: 0.8,
           precision: 0.1,
         };
-
       case "low":
-        // 低性能：减少弹性，保证流畅
         return {
           stiffness: 0.25,
           damping: 0.85,
@@ -711,7 +709,11 @@
   let isLive = $derived(durationMs === 0);
 
   // --- 模拟进度核心 (Spring) ---
-  let progressSpring = spring(0, { stiffness: 0.15, damping: 0.8 });
+  let progressSpring = spring(0, {
+    stiffness: 0.15,
+    damping: 0.8,
+    precision: 0.5,
+  });
 
   const precisePosition = $derived(() => {
     return currentTimeMs;
@@ -726,12 +728,12 @@
   let widthSpring = spring(80, {
     stiffness: 0.2, // 适中的刚度，确保回弹有力
     damping: 0.85, // 较高阻尼，防止过多抖动
-    precision: 0.01,
+    precision: 0.1,
   });
   let heightSpring = spring(28, {
     stiffness: 0.2, // 适中的刚度，确保回弹有力
     damping: 0.85, // 较高阻尼，防止过多抖动
-    precision: 0.01,
+    precision: 0.1,
   });
   let contentOpacity = spring(0, {
     stiffness: 0.15, // 透明度动画稍快
@@ -989,6 +991,18 @@
         }
       }, 300);
     }
+  });
+
+  // 优化点四：will-change 按需启用管理
+  let animatingTimer: ReturnType<typeof setTimeout> | null = null;
+  $effect(() => {
+    const _ = expanded;
+    if (animatingTimer) clearTimeout(animatingTimer);
+    isAnimating = true;
+    animatingTimer = setTimeout(() => {
+      isAnimating = false;
+      animatingTimer = null;
+    }, 300);
   });
 
   let isPressed = $state(false);
@@ -1580,9 +1594,9 @@
         currentTimeMs = data.position_ms || 0;
         durationMs = data.duration_ms || 0;
 
-        // 检查是否有媒体信息变化
         const titleChanged = trackTitle !== data.title;
         const artistChanged = artistName !== data.artist;
+
         const newCover =
           data.album_art ||
           data.thumbnail ||
@@ -1590,7 +1604,8 @@
           data.api_cover_url ||
           data.image ||
           "";
-        const coverChanged = newCover !== artworkUrl;
+
+        const coverChanged = newCover !== rawCoverUrl;
 
         if (titleChanged || artistChanged || coverChanged) {
           if (titleChanged) {
@@ -1600,8 +1615,9 @@
             artistName = data.artist || "未知艺术家";
           }
 
-          // 封面变化时更新
           if (coverChanged) {
+            rawCoverUrl = newCover;
+
             if (
               newCover &&
               (newCover.startsWith("data:image") ||
@@ -1609,15 +1625,14 @@
                 newCover.startsWith("https://") ||
                 newCover.startsWith("file://"))
             ) {
-              flipKey += 1; // 触发翻转动画
               artworkUrl = newCover;
+              flipKey += 1;
             } else if (
               newCover &&
               (newCover.includes(":\\") || newCover.includes(":/"))
             ) {
-              // 本地文件路径，使用 convertFileSrc 转换
               artworkUrl = convertFileSrc(newCover);
-              flipKey += 1; // 触发翻转动画
+              flipKey += 1;
             } else {
               artworkUrl = "";
             }
@@ -1654,6 +1669,10 @@
               return Math.max(2, mapped);
             },
           );
+
+          if (!spectrumTimer && isPlaying && appSettings.show_spectrum) {
+            setTimeout(() => startSpectrumAnimation(), 50);
+          }
         },
       );
 
@@ -1696,8 +1715,8 @@
 
   // 全屏检测和鼠标移动监听
   onMount(() => {
-    // 降低全屏检测频率，从 2000ms 改为 5000ms
-    fullscreenCheckInterval = setInterval(checkFullscreenAndHide, 5000);
+    // 降低全屏检测频率，从 2000ms 改为 3000ms
+    fullscreenCheckInterval = setInterval(checkFullscreenAndHide, 3000);
     checkFullscreenAndHide();
 
     // 使用节流优化鼠标移动监听
@@ -1754,7 +1773,7 @@
       display: flex;
       flex-direction: column;
       transform: scale({isPressed ? 0.96 : 1}) translateZ(0);
-      will-change: transform; /* 优化：只声明必要的属性 */
+      {isAnimating ? 'will-change: transform, width, height;' : ''}
       transition:
         transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
         box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);

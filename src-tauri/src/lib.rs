@@ -449,6 +449,12 @@ fn set_auto_start(_app: AppHandle, enable: bool) -> Result<(), String> {
             .map_err(|e| format!("执行 reg delete 命令失败：{}", e))?;
 
         if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if !stderr.contains("系统找不到指定的注册表值")
+                && !stderr.contains("The system cannot find the registry key")
+            {
+                eprintln!("删除注册表项警告：{}", stderr);
+            }
         }
     }
 
@@ -877,10 +883,12 @@ fn start_audio_visualizer(app: AppHandle) {
         let mut planner = FftPlanner::new();
         let fft = planner.plan_fft_forward(FFT_SIZE);
         let mut sample_buffer: Vec<f32> = Vec::with_capacity(FFT_SIZE);
+        let mut frame_count: usize = 0;
 
         let stream = device.build_input_stream(
             &config,
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                frame_count += 1;
                 for frame in data.chunks(channels) {
                     let mono = frame.iter().sum::<f32>() / channels as f32;
                     sample_buffer.push(mono);
@@ -905,10 +913,12 @@ fn start_audio_visualizer(app: AppHandle) {
                         let bands = calculate_bands(&magnitudes, 5, sample_rate, FFT_SIZE);
                         let bands_expanded = calculate_bands(&magnitudes, 20, sample_rate, FFT_SIZE);
 
-                        let _ = app.emit("audio-spectrum", SpectrumPayload {
-                            bands,
-                            bands_expanded
-                        });
+                        if frame_count % 3 == 0 {
+                            let _ = app.emit("audio-spectrum", SpectrumPayload {
+                                bands,
+                                bands_expanded
+                            });
+                        }
 
                         sample_buffer.drain(0..FFT_SIZE / 2);
                     }
