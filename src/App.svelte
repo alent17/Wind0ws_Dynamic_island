@@ -1599,18 +1599,24 @@
         isPlaying = data.is_playing || false;
         currentTimeMs = data.position_ms || 0;
 
-        // 优先使用 SMTC 提供的时长，如果没有则尝试从网易云获取
-        if (data.duration_ms && data.duration_ms > 0) {
+        // 优先使用 SMTC 提供的时长，如果无效则尝试从网易云获取
+        // duration_ms < 1000 认为是无效时长（网易云有时返回 1ms）
+        if (data.duration_ms && data.duration_ms > 1000) {
           durationMs = data.duration_ms;
           console.log("[时长] 使用 SMTC 提供的时长:", durationMs, "ms");
-        } else if (!durationMs || durationMs === 0) {
-          // 时长为 0 时，尝试从网易云 API 获取
+        } else if (!durationMs || durationMs <= 1000) {
+          // 时长为 0 或小于 1 秒时，尝试从网易云 API 获取
           const songName = data.title || trackTitle;
           const artistName = data.artist || artistName;
 
-          console.log("[时长] SMTC 时长为 0，尝试从网易云 API 获取");
+          console.log(
+            "[时长] SMTC 时长无效（",
+            durationMs,
+            "ms），尝试从网易云 API 获取",
+          );
           console.log("[时长] 歌名:", songName, "歌手:", artistName);
           console.log("[时长] source:", data.source);
+          console.log("[时长] data.duration_ms:", data.duration_ms);
 
           if (
             songName &&
