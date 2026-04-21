@@ -1437,6 +1437,11 @@
               currentTheme = s.island_theme;
             }
 
+            // 同步显示器索引
+            if (s.monitor_index !== undefined) {
+              currentMonitorIndex = s.monitor_index;
+            }
+
             // auto_hide 关闭时立即显示窗口
             if (!appSettings.auto_hide && isHidden) {
               showWindow();
