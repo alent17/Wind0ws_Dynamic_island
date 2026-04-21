@@ -1598,7 +1598,22 @@
 
         if (data.source) currentSource = data.source;
         isPlaying = data.is_playing || false;
-        currentTimeMs = data.position_ms || 0;
+
+        // 仅当后端数值与前端本地累加数值偏差超过 2 秒时，才进行强制同步
+        // 这样可以避免每秒一次的细微数值覆盖导致的进度条抖动
+        if (Math.abs(currentTimeMs - data.position_ms) > 2000 || !isPlaying) {
+          currentTimeMs = data.position_ms || 0;
+          console.log(
+            "[进度同步] 强制同步进度:",
+            currentTimeMs,
+            "ms (偏差:",
+            Math.abs(currentTimeMs - data.position_ms),
+            "ms)",
+          );
+        } else {
+          // 小幅度更新，仅用于日志记录
+          // console.log("[进度同步] 跳过同步，当前偏差:", Math.abs(currentTimeMs - data.position_ms), "ms");
+        }
 
         // 检测歌曲是否变更
         const currentSongKey = `${data.title || ""}-${data.artist || ""}`;
