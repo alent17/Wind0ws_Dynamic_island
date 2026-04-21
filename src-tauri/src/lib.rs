@@ -1962,10 +1962,10 @@ async fn get_netease_song_info(song_name: String, artist_name: String) -> Option
                                                     if let Ok(mv_json) = serde_json::from_str::<Value>(&mv_text) {
                                                         // 尝试获取 MV 播放地址（可能有多个清晰度）
                                                         if let Some(data) = mv_json.get("data") {
-                                                            // 尝试获取 br=1080 的链接
-                                                            if let Some(b_rs) = data.get("brs").as_array() {
-                                                                for br in b_rs {
-                                                                    if let Some(url) = br.get("url").as_str() {
+                                                            // 尝试获取 brs 数组
+                                                            if let Some(brs) = data.get("brs").and_then(|v| v.as_array()) {
+                                                                for br in brs {
+                                                                    if let Some(url) = br.get("url").and_then(|v| v.as_str()) {
                                                                         println!("[网易云 API] ✓ 获取 MV 链接成功");
                                                                         mv_url = Some(url.to_string());
                                                                         break;
@@ -1974,7 +1974,7 @@ async fn get_netease_song_info(song_name: String, artist_name: String) -> Option
                                                             }
                                                             // 备用：尝试直接获取 url 字段
                                                             if mv_url.is_none() {
-                                                                if let Some(url) = data.get("url").as_str() {
+                                                                if let Some(url) = data.get("url").and_then(|v| v.as_str()) {
                                                                     println!("[网易云 API] ✓ 获取 MV 链接成功（备用）");
                                                                     mv_url = Some(url.to_string());
                                                                 }
