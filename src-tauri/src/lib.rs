@@ -1901,6 +1901,8 @@ fn set_expanded_corner_radius(app: AppHandle, radius: u32) -> Result<(), String>
 pub struct NeteaseSongInfo {
     pub duration: Option<u64>,
     pub album_pic: Option<String>,
+    pub mv_id: Option<i64>,
+    pub mv_url: Option<String>,
 }
 
 // 获取网易云音乐播放时长和专辑图片（通过 API 搜索）
@@ -1944,12 +1946,61 @@ async fn get_netease_song_info(song_name: String, artist_name: String) -> Option
                                         .as_str()
                                         .map(|s| s.to_string());
                                     
+                                    // 获取 MV ID
+                                    let mv_id = first_song["mv"].as_i64();
+                                    
+                                    // 如果存在 MV ID，获取 MV 播放链接
+                                    let mv_url = if let Some(id) = mv_id {
+                                        if id > 0 {
+                                            // 调用网易云 MV 详情 API
+                                            let mv_api_url = format!("https://music.163.com/api/mv/detail?id={}", id);
+                                            println!("[网易云 API] 获取 MV 详情：{}", mv_api_url);
+                                            
+                                            if let Ok(mv_response) = reqwest::get(&mv_api_url).await {
+                                                if let Ok(mv_text) = mv_response.text().await {
+                                                    if let Ok(mv_json) = serde_json::from_str::<Value>(&mv_text) {
+                                                        // 尝试获取 MV 播放地址（可能有多个清晰度）
+                                                        if let Some(data) = mv_json.get("data") {
+                                                            // 尝试获取 br=1080 的链接
+                                                            if let Some(b_rs) = data.get("brs").as_array() {
+                                                                for br in b_rs {
+                                                                    if let Some(url) = br.get("url").as_str() {
+                                                                        println!("[网易云 API] ✓ 获取 MV 链接成功");
+                                                                        return Some(NeteaseSongInfo {
+                                                                            duration,
+                                                                            album_pic,
+                                                                            mv_id: Some(id),
+                                                                            mv_url: Some(url.to_string()),
+                                                                        });
+                                                                    }
+                                                                }
+                                                            }
+                                                            // 备用：尝试直接获取 url 字段
+                                                            if let Some(url) = data.get("url").as_str() {
+                                                                println!("[网易云 API] ✓ 获取 MV 链接成功（备用）");
+                                                                return Some(NeteaseSongInfo {
+                                                                    duration,
+                                                                    album_pic,
+                                                                    mv_id: Some(id),
+                                                                    mv_url: Some(url.to_string()),
+                                                                });
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
                                     println!("[网易云 API] ✓ 时长：{:?}", duration);
                                     println!("[网易云 API] ✓ 专辑图片：{:?}", album_pic);
+                                    println!("[网易云 API] ✓ MV ID: {:?}", mv_id);
                                     
                                     return Some(NeteaseSongInfo {
                                         duration,
                                         album_pic,
+                                        mv_id,
+                                        mv_url: None,
                                     });
                                 } else {
                                     println!("[网易云 API] ✗ 歌曲列表为空");

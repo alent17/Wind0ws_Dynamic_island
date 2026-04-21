@@ -1678,6 +1678,21 @@
                       // 这里可以更新封面图片
                       // coverUrl = highQualityPic;
                     }
+                    // 处理 MV 信息
+                    if (songInfo.mv_id && songInfo.mv_id > 0) {
+                      console.log(
+                        "[网易云 API] ✓ 发现 MV，ID:",
+                        songInfo.mv_id,
+                      );
+                      if (songInfo.mv_url) {
+                        console.log(
+                          "[网易云 API] ✓ MV 播放链接:",
+                          songInfo.mv_url,
+                        );
+                        // 可以在这里存储 MV 链接，用于后续播放
+                        // mvUrl = songInfo.mv_url;
+                      }
+                    }
                   } else {
                     console.warn("[网易云 API] ✗ 未找到歌曲信息");
                   }
