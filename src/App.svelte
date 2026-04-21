@@ -256,6 +256,9 @@
   let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
   let currentTheme = $state("original");
 
+  // 记录当前歌曲后端能读取到的最大进度（用于判断后端是否真的能获取进度）
+  let maxBackendPosition = 0;
+
   // 时间显示功能
   let showTimeDisplay = $state(false);
   let currentTime = $state("");
@@ -1603,35 +1606,46 @@
         const currentSongKey = `${data.title || ""}-${data.artist || ""}`;
         const songChanged = lastSongKey !== currentSongKey;
 
+        // 【重要】如果是新歌，重置最大进度记录
+        if (songChanged) {
+          maxBackendPosition = 0;
+          lastSongKey = currentSongKey;
+        }
+
         const newPosition = data.position_ms || 0;
 
-        // 优化点：如果后端送来的是 0，且当前歌曲正在播放中，且本地进度已经跑起来了，则忽略这个 0
-        if (
-          newPosition === 0 &&
-          isPlaying &&
-          currentTimeMs > 500 &&
-          !songChanged
-        ) {
-          console.log("[进度同步] 检测到无效的 0 进度推送，已忽略以防止归零");
+        // 更新这首歌后端发来的历史最大进度
+        maxBackendPosition = Math.max(maxBackendPosition, newPosition);
+
+        // 【核心拦截逻辑】
+        // 1. 后端传来的值极小 (比如 < 1000ms)
+        // 2. 前端本地已经跑出去了 (比如 > 3000ms)
+        // 3. 这首歌后端【从来没有】发来过大于 1000ms 的正常进度 (说明 Windows 根本拿不到这个播放器的进度)
+        // 4. 不是切歌状态
+        const isBackendStuck =
+          newPosition < 1000 &&
+          currentTimeMs > 3000 &&
+          maxBackendPosition < 1000 &&
+          !songChanged;
+
+        if (isBackendStuck) {
+          // 后端完全拿不到进度，忽略覆盖，全靠前端自己计时
+          console.log(
+            `[进度同步] 拦截疑似无效进度：${newPosition}ms (前端：${currentTimeMs}ms, 后端最大：${maxBackendPosition}ms)`,
+          );
         } else {
-          // 仅在偏差过大（例如超过 3 秒）或歌曲切换时才同步
+          // 允许同步的条件：偏差大于 3 秒，或者切歌，或者暂停状态
           if (
             Math.abs(currentTimeMs - newPosition) > 3000 ||
             songChanged ||
             !isPlaying
           ) {
             console.log(
-              `[进度同步] 执行强制同步：${newPosition} ms (偏差：${Math.abs(currentTimeMs - newPosition)} ms)`,
+              `[进度同步] 执行强制同步 -> 后端值：${newPosition}ms (后端最大：${maxBackendPosition}ms)`,
             );
             currentTimeMs = newPosition;
-          } else {
-            // 小偏差不同步，保持前端流畅更新
-            // console.log(`[进度同步] 跳过同步：偏差 ${Math.abs(currentTimeMs - newPosition)} ms < 3000ms`);
           }
         }
-
-        // 检测歌曲是否变更
-        const currentSongKey = `${data.title || ""}-${data.artist || ""}`;
         const songChanged = lastSongKey !== currentSongKey;
 
         if (songChanged) {
