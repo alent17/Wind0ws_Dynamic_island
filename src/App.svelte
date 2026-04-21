@@ -1603,18 +1603,21 @@
         if (data.duration_ms && data.duration_ms > 0) {
           durationMs = data.duration_ms;
           console.log("[时长] 使用 SMTC 提供的时长:", durationMs, "ms");
-        } else if (
-          data.source === "netease" &&
-          (!durationMs || durationMs === 0)
-        ) {
-          // 网易云音乐且没有时长信息，调用 Rust 命令通过 API 搜索获取
+        } else if (!durationMs || durationMs === 0) {
+          // 时长为 0 时，尝试从网易云 API 获取
           const songName = data.title || trackTitle;
           const artistName = data.artist || artistName;
 
           console.log("[时长] SMTC 时长为 0，尝试从网易云 API 获取");
           console.log("[时长] 歌名:", songName, "歌手:", artistName);
+          console.log("[时长] source:", data.source);
 
-          if (songName && songName !== "未知曲目" && artistName) {
+          if (
+            songName &&
+            songName !== "未知曲目" &&
+            artistName &&
+            artistName !== "未知艺术家"
+          ) {
             console.log("[时长] 发起 API 调用...");
             invoke("get_netease_duration", {
               songName,
@@ -1633,15 +1636,10 @@
                 console.error("[网易云 API] 获取时长失败:", err);
               });
           } else {
-            console.warn("[时长] 歌名或歌手名为空，跳过 API 调用");
+            console.warn("[时长] 歌名或歌手名为空或为默认值，跳过 API 调用");
           }
         } else {
-          console.log(
-            "[时长] 条件不满足，source:",
-            data.source,
-            "durationMs:",
-            durationMs,
-          );
+          console.log("[时长] 条件不满足，durationMs:", durationMs);
         }
 
         const titleChanged = trackTitle !== data.title;
