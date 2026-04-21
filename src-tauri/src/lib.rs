@@ -1901,31 +1901,60 @@ fn set_expanded_corner_radius(app: AppHandle, radius: u32) -> Result<(), String>
 async fn get_netease_duration(song_name: String, artist_name: String) -> Option<u64> {
     // 构建搜索关键字，例如 "周杰伦 - 晴天"
     let keyword = format!("{} {}", artist_name, song_name);
+    println!("[网易云 API] 搜索关键字：{}", keyword);
     
     // URL 编码
     let encoded_keyword = urlencoding::encode(&keyword);
+    println!("[网易云 API] 编码后关键字：{}", encoded_keyword);
     
     // 网易云音乐的公开搜索 API
     let url = format!("https://music.163.com/api/search/get/?s={}&type=1&limit=1", encoded_keyword);
+    println!("[网易云 API] 请求 URL: {}", url);
 
     // 发起 HTTP 请求
-    if let Ok(response) = reqwest::get(&url).await {
-        if let Ok(text) = response.text().await {
-            // 解析返回的 JSON
-            if let Ok(json) = serde_json::from_str::<Value>(&text) {
-                // 提取结果中的第一首歌的时长 (duration)
-                if let Some(songs) = json["result"]["songs"].as_array() {
-                    if let Some(first_song) = songs.first() {
-                        if let Some(duration) = first_song["duration"].as_u64() {
-                            return Some(duration); // 返回时长 (毫秒)
+    match reqwest::get(&url).await {
+        Ok(response) => {
+            println!("[网易云 API] 响应状态：{:?}", response.status());
+            match response.text().await {
+                Ok(text) => {
+                    println!("[网易云 API] 响应内容：{}", text);
+                    // 解析返回的 JSON
+                    match serde_json::from_str::<Value>(&text) {
+                        Ok(json) => {
+                            println!("[网易云 API] JSON 解析成功");
+                            // 提取结果中的第一首歌的时长 (duration)
+                            if let Some(songs) = json["result"]["songs"].as_array() {
+                                if let Some(first_song) = songs.first() {
+                                    if let Some(duration) = first_song["duration"].as_u64() {
+                                        println!("[网易云 API] 获取时长成功：{} ms", duration);
+                                        return Some(duration); // 返回时长 (毫秒)
+                                    } else {
+                                        println!("[网易云 API] 未找到 duration 字段");
+                                    }
+                                } else {
+                                    println!("[网易云 API] 歌曲列表为空");
+                                }
+                            } else {
+                                println!("[网易云 API] 未找到 songs 数组");
+                            }
+                        }
+                        Err(e) => {
+                            println!("[网易云 API] JSON 解析失败：{}", e);
                         }
                     }
                 }
+                Err(e) => {
+                    println!("[网易云 API] 读取响应失败：{}", e);
+                }
             }
+        }
+        Err(e) => {
+            println!("[网易云 API] HTTP 请求失败：{}", e);
         }
     }
     
     // 如果找不到，返回 None
+    println!("[网易云 API] 返回 None");
     None
 }
 
