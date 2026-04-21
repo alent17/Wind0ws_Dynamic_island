@@ -1598,16 +1598,27 @@
           data.source === "netease" &&
           (!durationMs || durationMs === 0)
         ) {
-          // 网易云音乐且没有时长信息，调用 Rust 命令获取
-          invoke("get_netease_duration")
-            .then((duration: any) => {
-              if (duration && duration > 0) {
-                durationMs = duration;
-              }
+          // 网易云音乐且没有时长信息，调用 Rust 命令通过 API 搜索获取
+          const songName = data.title || trackTitle;
+          const artistName = data.artist || artistName;
+          
+          if (songName && songName !== "未知曲目" && artistName) {
+            invoke("get_netease_duration", { 
+              songName, 
+              artistName 
             })
-            .catch((err) => {
-              console.error("获取网易云时长失败:", err);
-            });
+              .then((duration: any) => {
+                if (duration && duration > 0) {
+                  durationMs = duration;
+                  console.log("[网易云 API] 获取时长成功:", duration, "ms");
+                } else {
+                  console.warn("[网易云 API] 未找到时长信息");
+                }
+              })
+              .catch((err) => {
+                console.error("[网易云 API] 获取时长失败:", err);
+              });
+          }
         }
 
         const titleChanged = trackTitle !== data.title;
@@ -2069,7 +2080,7 @@
               style="
               gap: 20px;
               will-change: auto;
-              transform: translate3d(0, 0, 0);
+              transform: translate3d(0, -2px, 0);
               backface-visibility: hidden;
               perspective: 1000px;
             "
@@ -2747,10 +2758,10 @@
 
   /* ========== 优化后的内容布局 ========== */
   .expanded-content {
-    padding: 12px 16px !important;
-    padding-top: 12px !important;
+    padding: 16px 20px !important;
+    padding-top: 16px !important;
     height: 160px !important;
-    gap: 8px !important;
+    gap: 12px !important;
   }
 
   .expanded-content .title {
@@ -2855,7 +2866,7 @@
     inset: 0;
     display: flex;
     flex-direction: column;
-    padding: 16px 24px 12px 24px;
+    padding: 20px 28px 16px 28px;
 
     transform: translateY(30px) scale(0.92) translateZ(0);
     will-change: transform, filter, opacity;

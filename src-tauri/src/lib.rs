@@ -1896,24 +1896,36 @@ fn set_expanded_corner_radius(app: AppHandle, radius: u32) -> Result<(), String>
     Ok(())
 }
 
-// 获取网易云音乐播放时长
+// 获取网易云音乐播放时长（通过 API 搜索）
 #[tauri::command]
-fn get_netease_duration() -> Option<u64> {
-    // 定位到网易云的元数据目录
-    let path = PathBuf::from(r"C:\Users\admin\AppData\Local\NetEase\CloudMusic\web_history");
+async fn get_netease_duration(song_name: String, artist_name: String) -> Option<u64> {
+    // 构建搜索关键字，例如 "周杰伦 - 晴天"
+    let keyword = format!("{} {}", artist_name, song_name);
     
-    if let Ok(content) = fs::read_to_string(&path) {
-        // 尝试解析 JSON
-        if let Ok(json) = serde_json::from_str::<Value>(&content) {
-            // 通常是一个数组，取最新（最后）的一条播放记录
-            if let Some(track) = json.as_array().and_then(|arr| arr.last()) {
-                // 提取 duration 字段 (毫秒)
-                if let Some(duration) = track.get("duration").and_then(|d| d.as_u64()) {
-                    return Some(duration);
+    // URL 编码
+    let encoded_keyword = urlencoding::encode(&keyword);
+    
+    // 网易云音乐的公开搜索 API
+    let url = format!("https://music.163.com/api/search/get/?s={}&type=1&limit=1", encoded_keyword);
+
+    // 发起 HTTP 请求
+    if let Ok(response) = reqwest::get(&url).await {
+        if let Ok(text) = response.text().await {
+            // 解析返回的 JSON
+            if let Ok(json) = serde_json::from_str::<Value>(&text) {
+                // 提取结果中的第一首歌的时长 (duration)
+                if let Some(songs) = json["result"]["songs"].as_array() {
+                    if let Some(first_song) = songs.first() {
+                        if let Some(duration) = first_song["duration"].as_u64() {
+                            return Some(duration); // 返回时长 (毫秒)
+                        }
+                    }
                 }
             }
         }
     }
+    
+    // 如果找不到，返回 None
     None
 }
 
