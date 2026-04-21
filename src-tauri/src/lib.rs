@@ -911,7 +911,7 @@ fn start_audio_visualizer(app: AppHandle) {
                             .collect();
 
                         let bands = calculate_bands(&magnitudes, 5, sample_rate, FFT_SIZE);
-                        let bands_expanded = calculate_bands(&magnitudes, 20, sample_rate, FFT_SIZE);
+                        let bands_expanded = calculate_bands(&magnitudes, 40, sample_rate, FFT_SIZE);
 
                         if frame_count % 3 == 0 {
                             let _ = app.emit("audio-spectrum", SpectrumPayload {
@@ -972,11 +972,11 @@ fn calculate_bands(magnitudes: &[f32], num_bands: usize, sample_rate: f32, fft_s
 
         let db = if avg > 0.0001 { 20.0 * avg.log10() } else { -100.0 };
 
-        let mut normalized = (db + 30.0) / 55.0;
+        let mut normalized = (db + 35.0) / 50.0;
 
-        if normalized < 0.15 { normalized = 0.0; }
+        if normalized < 0.12 { normalized = 0.0; }
 
-        bands[i] = normalized.clamp(0.0, 1.0).powf(0.85);
+        bands[i] = normalized.clamp(0.0, 1.0).powf(1.8);
     }
     bands
 }
@@ -1006,7 +1006,7 @@ fn show_settings_window(app: AppHandle) -> Result<(), String> {
     let _ = tauri::WebviewWindowBuilder::new(
         &app,
         "settings-window",
-        tauri::WebviewUrl::App("/settings.html".into()),
+        tauri::WebviewUrl::App("/settings".into()),
     )
     .title("Isle - 设置")
     .inner_size(1000.0, 750.0)
@@ -1114,9 +1114,8 @@ fn check_fullscreen_app(
 ) -> Result<bool, String> {
     use windows::Win32::Foundation::RECT;
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowLongPtrW, GetWindowRect,
-        GetSystemMetrics, GWL_STYLE, WS_CAPTION, WS_POPUP, WS_THICKFRAME,
-        SM_CXSCREEN, SM_CYSCREEN,
+        GetForegroundWindow, GetWindowLongPtrW, GetWindowRect, GetClassNameW,
+        GWL_STYLE, WS_CAPTION,
     };
 
     unsafe {
@@ -1124,14 +1123,21 @@ fn check_fullscreen_app(
         if hwnd.0 == 0 {
             return Ok(false);
         }
+
+        let mut class_name = [0u16; 256];
+        let len = GetClassNameW(hwnd, &mut class_name);
+        if len > 0 {
+            let class_str = String::from_utf16_lossy(&class_name[..len as usize]);
+            if class_str == "WorkerW" || class_str == "Progman" || class_str == "Shell_TrayWnd" {
+                return Ok(false);
+            }
+        }
+
         let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
         let mut rect = RECT::default();
         if GetWindowRect(hwnd, &mut rect).is_ok() {
             let width = rect.right - rect.left;
             let height = rect.bottom - rect.top;
-
-            let screen_w = GetSystemMetrics(SM_CXSCREEN);
-            let screen_h = GetSystemMetrics(SM_CYSCREEN);
 
             let is_on_target_monitor =
                 rect.left <= monitor_x + monitor_width &&
@@ -1143,20 +1149,15 @@ fn check_fullscreen_app(
                 return Ok(false);
             }
 
-            let no_border = (style & WS_POPUP.0 as isize) != 0
-                && (style & WS_CAPTION.0 as isize) == 0
-                && (style & WS_THICKFRAME.0 as isize) == 0;
+            let covers_screen = width >= monitor_width - 2 && height >= monitor_height - 2;
 
-            let at_monitor_origin = rect.left <= monitor_x && rect.top <= monitor_y;
+            if !covers_screen {
+                return Ok(false);
+            }
 
-            let near_fs = width >= monitor_width - 10 && height >= monitor_height - 10;
+            let no_caption = (style & WS_CAPTION.0 as isize) == 0;
 
-            let strict_fs = rect.left <= monitor_x &&
-                rect.top <= monitor_y &&
-                rect.right >= monitor_x + monitor_width &&
-                rect.bottom >= monitor_y + monitor_height;
-
-            return Ok(no_border || near_fs || strict_fs);
+            return Ok(no_caption);
         }
         Ok(false)
     }

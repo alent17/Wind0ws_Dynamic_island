@@ -135,15 +135,17 @@
 
   // iOS风格频谱动画系统
   let spectrumPhase = $state(0);
-  let spectrumHeights = $state([0.5, 0.5, 0.5, 0.5, 0.5]);
-  let spectrumHeightsExpanded = $state(Array(20).fill(0.5));
   let targetSpectrumHeights = $state([0.5, 0.5, 0.5, 0.5, 0.5]);
-  let targetSpectrumHeightsExpanded = $state(Array(20).fill(0.5));
+  let targetSpectrumHeightsExpanded = $state(Array(40).fill(0.5));
   let spectrumTimer: number | null = null;
 
   // 优化点二：预分配工作数组，避免每帧 GC
   const workArray5 = new Float32Array(5);
-  const workArray20 = new Float32Array(20);
+  const workArray40 = new Float32Array(40);
+
+  // DOM 元素引用数组（用于直接操作 DOM）
+  let collapsedBars: HTMLDivElement[] = [];
+  let expandedBars: HTMLDivElement[] = [];
 
   // iOS风格收起态频谱配置（波浪式，低频更强）
   const baseCollapsedHeight = 20;
@@ -153,8 +155,9 @@
   const baseExpandedHeight = 30;
 
   const iOSExpandedEnvelope = [
-    0.5, 0.7, 0.85, 0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-    1.0, 0.95, 0.85, 0.7, 0.5,
+    0.3, 0.4, 0.6, 0.8, 1.0, 1.15, 1.1, 1.0, 0.85, 0.75, 0.65, 0.6, 0.65, 0.75,
+    0.85, 0.95, 1.0, 1.05, 1.05, 1.0, 1.0, 1.05, 1.05, 1.0, 0.95, 0.85, 0.75,
+    0.65, 0.6, 0.65, 0.75, 0.85, 1.0, 1.1, 1.15, 1.0, 0.8, 0.6, 0.4, 0.3,
   ];
 
   const expandedPhases = [
@@ -176,7 +179,7 @@
       if (isPlaying) {
         for (let i = 0; i < 5; i++) {
           const target = targetSpectrumHeights[i] || 2;
-          const current = spectrumHeights[i] || 0.5;
+          const current = workArray5[i] || 0.5;
           const diff = target - current;
           const tracking = diff > 0 ? 0.82 : 0.045;
           workArray5[i] = current + diff * tracking;
@@ -188,35 +191,45 @@
           workArray5[i] = workArray5[i] * 0.8 + left * 0.1 + right * 0.1;
         }
 
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 40; i++) {
           const target = targetSpectrumHeightsExpanded[i] || 2;
-          const current = spectrumHeightsExpanded[i] || 0.5;
+          const current = workArray40[i] || 0.5;
           const diff = target - current;
-          const tracking = diff > 0 ? 0.85 : 0.06;
-          workArray20[i] = current + diff * tracking;
+          const tracking = diff > 0 ? 0.9 : 0.035;
+          workArray40[i] = current + diff * tracking;
         }
 
-        for (let i = 0; i < 20; i++) {
-          const left = i > 0 ? workArray20[i - 1] : workArray20[i];
-          const right = i < 19 ? workArray20[i + 1] : workArray20[i];
-          workArray20[i] = workArray20[i] * 0.7 + left * 0.15 + right * 0.15;
+        for (let i = 0; i < 40; i++) {
+          const left = i > 0 ? workArray40[i - 1] : workArray40[i];
+          const right = i < 39 ? workArray40[i + 1] : workArray40[i];
+          workArray40[i] = workArray40[i] * 0.92 + left * 0.04 + right * 0.04;
         }
-
-        spectrumHeights = Array.from(workArray5);
-        spectrumHeightsExpanded = Array.from(workArray20);
       } else {
         for (let i = 0; i < 5; i++) {
-          const current = spectrumHeights[i] || 0.5;
+          const current = workArray5[i] || 0.5;
           const diff = 2 - current;
           workArray5[i] = current + diff * 0.08;
         }
-        for (let i = 0; i < 20; i++) {
-          const current = spectrumHeightsExpanded[i] || 0.5;
+        for (let i = 0; i < 40; i++) {
+          const current = workArray40[i] || 0.5;
           const diff = 2 - current;
-          workArray20[i] = current + diff * 0.08;
+          workArray40[i] = current + diff * 0.08;
         }
-        spectrumHeights = Array.from(workArray5);
-        spectrumHeightsExpanded = Array.from(workArray20);
+      }
+
+      // 直接操作 DOM，使用 GPU 加速的 transform
+      for (let i = 0; i < 5; i++) {
+        if (collapsedBars[i]) {
+          collapsedBars[i].style.transform =
+            `scaleY(${workArray5[i]}) translateZ(0)`;
+        }
+      }
+
+      for (let i = 0; i < 40; i++) {
+        if (expandedBars[i]) {
+          expandedBars[i].style.transform =
+            `scaleY(${workArray40[i]}) translateZ(0)`;
+        }
       }
     }
 
@@ -1503,70 +1516,6 @@
         },
       );
 
-      // 监听导航到设置页面的事件
-      const unlistenNavigate = await listen(
-        "navigate-to-settings",
-        async () => {
-          console.log("[App.svelte] 收到 navigate-to-settings 事件");
-
-          try {
-            const { WebviewWindow } = await import(
-              "@tauri-apps/api/webviewWindow"
-            );
-            const { getAllWindows } = await import("@tauri-apps/api/window");
-            console.log("[App.svelte] 导入 WebviewWindow 成功");
-
-            // 获取所有窗口
-            const windows = await getAllWindows();
-            const windowLabels = windows.map((w) => w.label);
-            console.log("[设置窗口] 当前窗口标签:", windowLabels);
-
-            // 检查设置窗口是否已存在
-            if (windowLabels.includes("settings-window")) {
-              console.log("[设置窗口] 窗口已存在，调整大小并显示");
-              const existingWindow = windows.find(
-                (w) => w.label === "settings-window",
-              );
-              if (existingWindow) {
-                await existingWindow.setSize(new PhysicalSize(1000, 750));
-                await existingWindow.setMinSize(new PhysicalSize(800, 600));
-                await existingWindow.center();
-                await existingWindow.show();
-                await existingWindow.setFocus();
-              }
-              return;
-            }
-
-            console.log("[App.svelte] 创建设置窗口");
-            const webview = new WebviewWindow("settings-window", {
-              url: "/settings.html",
-              title: "Isle - 设置",
-              width: 1000,
-              height: 750,
-              minWidth: 800,
-              minHeight: 600,
-              resizable: true,
-              decorations: false,
-              transparent: true,
-              alwaysOnTop: false,
-              center: true,
-            });
-
-            webview.once("tauri://created", () => {
-              console.log("[设置窗口] 窗口创建成功");
-            });
-
-            webview.once("tauri://error", (e) => {
-              console.error("[设置窗口] 创建失败:", e);
-            });
-          } catch (error) {
-            console.error("[App.svelte] 打开设置窗口失败:", error);
-          }
-        },
-      );
-
-      console.log("[App.svelte] 事件监听器已注册");
-
       // 监听主题变化
       const unlistenTheme = await listen("theme-changed", (event: any) => {
         const { islandTheme } = event.payload;
@@ -1682,7 +1631,6 @@
         if (cleanup) cleanup();
         stopAutoClose();
         unlistenTheme();
-        unlistenNavigate();
         unlistenSettings();
         unlistenSettingsChanged();
         unlistenCornerRadiusChanged();
@@ -1872,8 +1820,8 @@
                 class="spectrum-container"
                 style="--accent-color: {accentColor}; --secondary-color: {secondaryColor};"
               >
-                {#each spectrumHeights as h}
-                  <div class="spectrum-bar" style="height: {h}px;"></div>
+                {#each Array(5) as _, i}
+                  <div class="spectrum-bar" bind:this={collapsedBars[i]}></div>
                 {/each}
               </div>
             {:else}
@@ -2057,33 +2005,37 @@
           <!-- 中部区域：播放控制按钮 -->
           <div
             class="flex-1 flex items-center justify-between"
-            style="margin-bottom: 10px;" /* 缩小底部间距 */
+            style="margin-bottom: 10px;"
           >
-            <!-- 设置按钮 - 可通过设置页面隐藏 -->
-            <div
-              class="media-button-wrapper"
-              class:hidden={appSettings.hide_settings_button}
-            >
-              <Settings
-                size={18}
-                class="text-white/40 hover:text-white/90 transition-all duration-300 hover:scale-110 relative z-50 cursor-pointer media-button"
-                style="transform: translateZ(0); backface-visibility: hidden; margin-left: 8px;"
-                /* 添加左边距 */
-                data-stop-toggle
-                onclick={async (e) => {
-                  e.stopPropagation();
-                  console.log("点击了设置按钮");
-                  const { emit } = await import("@tauri-apps/api/event");
-                  await emit("navigate-to-settings");
-                }}
-              />
+            <div class="flex-1 flex justify-start">
+              <div
+                class="media-button-wrapper transition-opacity duration-300"
+                class:opacity-0={appSettings.hide_settings_button}
+                class:invisible={appSettings.hide_settings_button}
+              >
+                <Settings
+                  size={18}
+                  class="text-white/40 hover:text-white/90 transition-all duration-300 hover:scale-110 relative z-50 cursor-pointer media-button"
+                  style="transform: translateZ(0); backface-visibility: hidden; margin-left: 8px;"
+                  data-stop-toggle
+                  onclick={async (e) => {
+                    e.stopPropagation();
+                    console.log("点击了设置按钮");
+                    try {
+                      await invoke("show_settings_window");
+                    } catch (err) {
+                      console.error("打开设置窗口失败:", err);
+                    }
+                  }}
+                />
+              </div>
             </div>
 
             <div
               class="flex items-center justify-center"
               style="
-              width: 130px;  /* 缩小宽度适应新按钮尺寸 */
-              gap: 20px;    /* 缩小按钮间距 */
+              width: 130px;
+              gap: 20px;
               will-change: auto;
               transform: translate3d(0, 0, 0);
               backface-visibility: hidden;
@@ -2124,32 +2076,33 @@
               />
             </div>
 
-            <!-- 悬浮窗按钮 - 可通过设置页面隐藏 -->
-            <div
-              class="media-button-wrapper"
-              class:hidden={appSettings.hide_floating_window}
-            >
-              <button
-                class="w-7 h-7 flex items-center justify-center rounded-xl border border-white/10 text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button hover:border-white/20"
-                style="transform: translateZ(0); backface-visibility: hidden; margin-right: 8px;"
-                /* 添加右边距 */
-                data-stop-toggle
-                aria-label={isFloatingWindowOpen
-                  ? "Close floating window"
-                  : "Open floating window"}
-                onclick={(e) => {
-                  e.stopPropagation();
-                  toggleFloatingWindow();
-                }}
-                onkeydown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
+            <div class="flex-1 flex justify-end">
+              <div
+                class="media-button-wrapper transition-opacity duration-300"
+                class:opacity-0={appSettings.hide_floating_window}
+                class:invisible={appSettings.hide_floating_window}
+              >
+                <button
+                  class="w-7 h-7 flex items-center justify-center rounded-xl border border-white/10 text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button hover:border-white/20"
+                  style="transform: translateZ(0); backface-visibility: hidden; margin-right: 8px;"
+                  data-stop-toggle
+                  aria-label={isFloatingWindowOpen
+                    ? "Close floating window"
+                    : "Open floating window"}
+                  onclick={(e) => {
                     e.stopPropagation();
                     toggleFloatingWindow();
-                  }
-                }}
-              >
-                <GalleryHorizontalEnd size={18} />
-              </button>
+                  }}
+                  onkeydown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.stopPropagation();
+                      toggleFloatingWindow();
+                    }
+                  }}
+                >
+                  <GalleryHorizontalEnd size={18} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2159,10 +2112,10 @@
                 class="spectrum-container-expanded"
                 style="--accent-color: {accentColor}; --secondary-color: {secondaryColor};"
               >
-                {#each spectrumHeightsExpanded as h}
+                {#each Array(40) as _, i}
                   <div
                     class="spectrum-bar-expanded"
-                    style="height: {h}px;"
+                    bind:this={expandedBars[i]}
                   ></div>
                 {/each}
               </div>
@@ -2238,7 +2191,7 @@
 
   .spectrum-bar {
     width: 2px;
-    min-height: 2px;
+    height: 1px;
     border-radius: 1px;
     background: linear-gradient(
       to top,
@@ -2247,10 +2200,10 @@
     );
     background-clip: content-box;
     opacity: 0.95;
-    will-change: height;
-    transform: translateZ(0);
+    will-change: transform;
+    transform: scaleY(0.5) translateZ(0);
+    transform-origin: center;
     backface-visibility: hidden;
-    -webkit-font-smoothing: antialiased;
   }
 
   .collapsed-content .spectrum-bar {
@@ -2271,15 +2224,15 @@
     display: flex;
     align-items: center !important;
     justify-content: center;
-    gap: 2px;
+    gap: 1px;
     height: 30px;
-    width: 78px;
+    width: 120px;
     flex-shrink: 0;
   }
 
   .spectrum-bar-expanded {
     width: 2px;
-    min-height: 2px;
+    height: 1px;
     border-radius: 1px;
     background: linear-gradient(
       to top,
@@ -2288,11 +2241,10 @@
     );
     background-clip: content-box;
     opacity: 0.95;
-    will-change: height;
-    transform: translateZ(0);
+    will-change: transform;
+    transform: scaleY(0.5) translateZ(0);
     transform-origin: center;
     backface-visibility: hidden;
-    -webkit-font-smoothing: antialiased;
   }
 
   /* iOS风格：使用JavaScript正弦波驱动频谱动画，无需CSS动画 */
@@ -2787,17 +2739,19 @@
 
   /* ========== 优化后的内容布局 ========== */
   .expanded-content {
-    padding: 6px 10px; /* 缩小内边距 */
-    gap: 4px; /* 缩小元素间距 */
+    padding: 12px 16px !important;
+    padding-top: 12px !important;
+    height: 160px !important;
+    gap: 8px !important;
   }
 
   .expanded-content .title {
-    font-size: 13px; /* 缩小标题字体 */
+    font-size: 13px;
     line-height: 1.2;
   }
 
   .expanded-content .artist {
-    font-size: 11px; /* 缩小艺术家字体 */
+    font-size: 11px;
     line-height: 1.1;
   }
 

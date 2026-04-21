@@ -492,7 +492,7 @@
           <input
             type="range"
             min="0"
-            max="32"
+            max="48"
             value={settings.expanded_corner_radius}
             oninput={(e) => {
               const value = parseInt(e.currentTarget.value);
