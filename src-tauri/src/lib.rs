@@ -1922,31 +1922,47 @@ async fn get_netease_duration(song_name: String, artist_name: String) -> Option<
                     match serde_json::from_str::<Value>(&text) {
                         Ok(json) => {
                             println!("[网易云 API] JSON 解析成功");
-                            // 提取结果中的第一首歌的时长 (duration)
+                            println!("[网易云 API] 完整 result: {}", json["result"]);
+                            
+                            // 提取结果中的第一首歌的时长 (duration 或 dt)
                             if let Some(songs) = json["result"]["songs"].as_array() {
+                                println!("[网易云 API] songs 数组长度：{}", songs.len());
                                 if let Some(first_song) = songs.first() {
+                                    println!("[网易云 API] 第一首歌完整数据：{}", first_song);
+                                    
+                                    // 打印所有可能的时长字段
+                                    println!("[网易云 API] 检查所有可能的时长字段:");
+                                    println!("[网易云 API]   - dt: {:?}", first_song.get("dt"));
+                                    println!("[网易云 API]   - duration: {:?}", first_song.get("duration"));
+                                    println!("[网易云 API]   - dur: {:?}", first_song.get("dur"));
+                                    println!("[网易云 API]   - time: {:?}", first_song.get("time"));
+                                    
                                     // 同时尝试获取 duration 和 dt 字段
                                     let duration = first_song["duration"].as_u64();
                                     let dt = first_song["dt"].as_u64();
                                     
-                                    println!("[网易云 API] duration 字段：{:?}", duration);
-                                    println!("[网易云 API] dt 字段：{:?}", dt);
+                                    println!("[网易云 API] duration 字段值：{:?}", duration);
+                                    println!("[网易云 API] dt 字段值：{:?}", dt);
                                     
                                     // 优先使用 dt 字段，如果不存在则使用 duration
                                     if let Some(dt_val) = dt {
-                                        println!("[网易云 API] 使用 dt 字段：{} ms", dt_val);
+                                        println!("[网易云 API] ✓ 使用 dt 字段：{} ms", dt_val);
                                         return Some(dt_val);
                                     } else if let Some(dur_val) = duration {
-                                        println!("[网易云 API] 使用 duration 字段：{} ms", dur_val);
+                                        println!("[网易云 API] ✓ 使用 duration 字段：{} ms", dur_val);
                                         return Some(dur_val);
                                     } else {
-                                        println!("[网易云 API] 未找到 duration 或 dt 字段");
+                                        println!("[网易云 API] ✗ 未找到 duration 或 dt 字段");
                                     }
                                 } else {
-                                    println!("[网易云 API] 歌曲列表为空");
+                                    println!("[网易云 API] ✗ 歌曲列表为空");
                                 }
                             } else {
-                                println!("[网易云 API] 未找到 songs 数组");
+                                println!("[网易云 API] ✗ 未找到 songs 数组");
+                                // 检查是否有错误信息
+                                if let Some(code) = json.get("code") {
+                                    println!("[网易云 API] API 返回码：{}", code);
+                                }
                             }
                         }
                         Err(e) => {
