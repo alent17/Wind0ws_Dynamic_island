@@ -1457,14 +1457,28 @@
           const settingName = event.payload;
           console.log("[设置] 单项变更:", settingName);
 
-          // 重新加载完整设置以保持同步
-          invoke("get_settings")
-            .then((s: any) => {
-              if (s) {
-                appSettings = { ...appSettings, ...s };
-              }
-            })
-            .catch(console.error);
+          // 根据变更的设置项直接更新对应值
+          if (settingName === "monitor_index") {
+            const idx = appSettings.monitor_index;
+            currentMonitorIndex = idx;
+            // 立即移动到新显示器
+            if (monitors[idx]) {
+              moveToMonitor(monitors[idx]).catch(console.error);
+            }
+          } else if (settingName === "island_theme") {
+            currentTheme = appSettings.island_theme;
+          } else if (settingName === "always_on_top") {
+            // 由后端处理置顶
+          } else {
+            // 其他设置项，重新加载完整设置
+            invoke("get_settings")
+              .then((s: any) => {
+                if (s) {
+                  appSettings = { ...appSettings, ...s };
+                }
+              })
+              .catch(console.error);
+          }
         },
       );
 
