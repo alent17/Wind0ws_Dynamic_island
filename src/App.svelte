@@ -1590,7 +1590,25 @@
         if (data.source) currentSource = data.source;
         isPlaying = data.is_playing || false;
         currentTimeMs = data.position_ms || 0;
-        durationMs = data.duration_ms || 0;
+
+        // 优先使用 SMTC 提供的时长，如果没有则尝试从网易云获取
+        if (data.duration_ms && data.duration_ms > 0) {
+          durationMs = data.duration_ms;
+        } else if (
+          data.source === "netease" &&
+          (!durationMs || durationMs === 0)
+        ) {
+          // 网易云音乐且没有时长信息，调用 Rust 命令获取
+          invoke("get_netease_duration")
+            .then((duration: any) => {
+              if (duration && duration > 0) {
+                durationMs = duration;
+              }
+            })
+            .catch((err) => {
+              console.error("获取网易云时长失败:", err);
+            });
+        }
 
         const titleChanged = trackTitle !== data.title;
         const artistChanged = artistName !== data.artist;
@@ -1725,9 +1743,42 @@
     win = getCurrentWindow();
     console.log("[App.svelte] 窗口对象已初始化");
 
+    // 进度条平滑更新定时器（每 100ms 更新一次）
+    let progressInterval: ReturnType<typeof setInterval> | null = null;
+
+    const startProgressUpdate = () => {
+      if (progressInterval) return;
+
+      progressInterval = setInterval(() => {
+        if (isPlaying && durationMs > 0 && currentTimeMs < durationMs) {
+          currentTimeMs += 100; // 增加 100ms
+          if (currentTimeMs > durationMs) {
+            currentTimeMs = durationMs;
+          }
+        }
+      }, 100);
+    };
+
+    const stopProgressUpdate = () => {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+      }
+    };
+
+    // 监听播放状态变化，自动启动/停止进度更新
+    $effect(() => {
+      if (isPlaying) {
+        startProgressUpdate();
+      } else {
+        stopProgressUpdate();
+      }
+    });
+
     document.addEventListener("click", handleGlobalClick);
     return () => {
       document.removeEventListener("click", handleGlobalClick);
+      stopProgressUpdate();
     };
   });
 
@@ -1915,9 +1966,9 @@
         style="opacity: {$contentOpacity};"
       >
         <div class="ui-content-layer">
-          <!-- 顶部区域：封面 + 标题 + 显示器按钮 -->
+          <!-- 顶部区域：封面 + 标题 + 频谱 -->
           <div
-            class="flex items-center"
+            class="flex items-center justify-between"
             style="gap: 12px; margin-bottom: 12px;"
           >
             {#if artworkUrl}
@@ -1965,6 +2016,46 @@
               >
                 {artistName}
               </p>
+            </div>
+
+            <!-- 右上角频谱 -->
+            {#if appSettings.show_spectrum}
+              <div
+                class="spectrum-container-expanded"
+                style="--accent-color: {accentColor}; --secondary-color: {secondaryColor};"
+              >
+                {#each Array(10) as _, i}
+                  <div
+                    class="spectrum-bar-expanded"
+                    bind:this={expandedBars[i]}
+                  ></div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
+          <!-- 中部区域：进度条 -->
+          <div
+            class="relative flex items-center justify-center"
+            style="margin-bottom: 10px; width: 100%;"
+          >
+            <div class="w-full">
+              <div class="progress-bar">
+                <div
+                  class="progress-fill"
+                  style="width: {durationMs > 0
+                    ? (currentTimeMs / durationMs) * 100
+                    : 0}%"
+                ></div>
+              </div>
+              <div class="flex justify-between mt-1">
+                <span class="text-[10px] text-white/60"
+                  >{formatTime(currentTimeMs)}</span
+                >
+                <span class="text-[10px] text-white/60"
+                  >-{formatTime(durationMs - currentTimeMs)}</span
+                >
+              </div>
             </div>
           </div>
 
@@ -2037,22 +2128,6 @@
                 <GalleryHorizontalEnd size={18} />
               </button>
             </div>
-          </div>
-
-          <div class="spectrum-wrapper">
-            {#if appSettings.show_spectrum}
-              <div
-                class="spectrum-container-expanded"
-                style="--accent-color: {accentColor}; --secondary-color: {secondaryColor};"
-              >
-                {#each Array(40) as _, i}
-                  <div
-                    class="spectrum-bar-expanded"
-                    bind:this={expandedBars[i]}
-                  ></div>
-                {/each}
-              </div>
-            {/if}
           </div>
         </div>
       </div>
@@ -2156,17 +2231,17 @@
   .spectrum-container-expanded {
     display: flex;
     align-items: center !important;
-    justify-content: center;
+    justify-content: flex-end;
     gap: 1px;
-    height: 30px;
-    width: 120px;
+    height: 24px;
+    width: auto;
     flex-shrink: 0;
   }
 
   .spectrum-bar-expanded {
     width: 2px;
     height: 1px;
-    border-radius: 1px;
+    border-radius: 2px;
     background: linear-gradient(
       to top,
       var(--secondary-color, #888),
@@ -2693,7 +2768,22 @@
   }
 
   .expanded-content .progress-bar {
-    height: 3px; /* 缩小进度条高度 */
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .expanded-content .progress-fill {
+    height: 100%;
+    background: linear-gradient(
+      to right,
+      var(--accent-color, #fff),
+      var(--secondary-color, #fff)
+    );
+    border-radius: 2px;
+    transition: width 0.1s linear;
   }
 
   /* 水滴状自动显示动画 */

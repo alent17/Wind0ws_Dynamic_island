@@ -2,6 +2,7 @@ use base64::{engine::general_purpose, Engine as _};
 use color_quant::NeuQuant;
 use image::{imageops::FilterType, DynamicImage, GenericImageView, Rgba, RgbaImage};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::fs;
@@ -1895,6 +1896,27 @@ fn set_expanded_corner_radius(app: AppHandle, radius: u32) -> Result<(), String>
     Ok(())
 }
 
+// 获取网易云音乐播放时长
+#[tauri::command]
+fn get_netease_duration() -> Option<u64> {
+    // 定位到网易云的元数据目录
+    let path = PathBuf::from(r"C:\Users\admin\AppData\Local\NetEase\CloudMusic\web_history");
+    
+    if let Ok(content) = fs::read_to_string(&path) {
+        // 尝试解析 JSON
+        if let Ok(json) = serde_json::from_str::<Value>(&content) {
+            // 通常是一个数组，取最新（最后）的一条播放记录
+            if let Some(track) = json.as_array().and_then(|arr| arr.last()) {
+                // 提取 duration 字段 (毫秒)
+                if let Some(duration) = track.get("duration").and_then(|d| d.as_u64()) {
+                    return Some(duration);
+                }
+            }
+        }
+    }
+    None
+}
+
 // Tauri 命令：应用/移除系统毛玻璃效果
 #[tauri::command]
 fn set_window_vibrancy(window: tauri::Window, enable: bool) -> Result<(), String> {
@@ -2015,6 +2037,8 @@ pub fn run() {
             set_current_monitor_index,
             // 系统毛玻璃 API
             set_window_vibrancy,
+            // 网易云音乐时长获取 API
+            get_netease_duration,
         ])
         .setup(|app| {
             // 初始化缓存系统
