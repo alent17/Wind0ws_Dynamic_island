@@ -527,7 +527,7 @@ pub struct MediaState {
     pub source_display: String,
 }
 
-async fn get_media_info_internal(app: &AppHandle) -> Result<MediaState, String> {
+fn get_media_info_internal(app: &AppHandle) -> Result<MediaState, String> {
     let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
         .map_err(|e| format!("RequestAsync failed: {:?}", e))?
         .get()
@@ -747,7 +747,13 @@ async fn get_media_info_internal(app: &AppHandle) -> Result<MediaState, String> 
 }
 
 #[tauri::command]
-async fn control_media(app: AppHandle, action: String) -> Result<(), String> {
+fn control_media(app: AppHandle, action: String) -> Result<(), String> {
+    unsafe {
+        windows::Win32::System::Com::CoInitializeEx(
+            None,
+            windows::Win32::System::Com::COINIT_MULTITHREADED,
+        ).ok();
+    }
     let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
         .map_err(|e| format!("RequestAsync failed: {:?}", e))?
         .get()
@@ -815,12 +821,17 @@ async fn control_media(app: AppHandle, action: String) -> Result<(), String> {
             let _ = session
                 .TryTogglePlayPauseAsync()
                 .map_err(|e| format!("TogglePlayPause failed: {:?}", e))?;
-            
-            // 延迟 100ms 后主动获取一次媒体状态，确保播放状态更新
+
             let app_clone = app.clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                if let Ok(info) = get_media_info_internal(&app_clone).await {
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                unsafe {
+                    windows::Win32::System::Com::CoInitializeEx(
+                        None,
+                        windows::Win32::System::Com::COINIT_MULTITHREADED,
+                    ).ok();
+                }
+                if let Ok(info) = get_media_info_internal(&app_clone) {
                     let _ = app_clone.emit("media-update", info);
                 }
             });
@@ -841,12 +852,19 @@ async fn control_media(app: AppHandle, action: String) -> Result<(), String> {
 }
 
 fn start_media_listener(handle: AppHandle) {
-    tauri::async_runtime::spawn(async move {
+    std::thread::spawn(move || {
+        unsafe {
+            windows::Win32::System::Com::CoInitializeEx(
+                None,
+                windows::Win32::System::Com::COINIT_MULTITHREADED,
+            ).ok();
+        }
+
         loop {
-            if let Ok(info) = get_media_info_internal(&handle).await {
+            if let Ok(info) = get_media_info_internal(&handle) {
                 let _ = handle.emit("media-update", info);
             }
-            tokio::time::sleep(Duration::from_millis(1000)).await;
+            std::thread::sleep(std::time::Duration::from_millis(1000));
         }
     });
 }

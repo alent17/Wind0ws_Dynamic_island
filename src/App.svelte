@@ -1853,7 +1853,7 @@
             {#if artworkUrl}
               {#key flipKey}
                 <div
-                  class="w-[50px] h-[50px] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
+                  class="w-[72px] h-[72px] rounded-[40px] overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
                   data-stop-toggle
                   onclick={(e) => {
                     e.stopPropagation();
