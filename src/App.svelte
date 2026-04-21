@@ -1588,13 +1588,13 @@
       const unlistenMediaUpdate = await listen("media-update", (event: any) => {
         const data = event.payload;
 
-        console.log("[media-update] 收到数据:", {
-          source: data.source,
-          title: data.title,
-          artist: data.artist,
-          duration_ms: data.duration_ms,
-          is_playing: data.is_playing,
-        });
+        // console.log("[media-update] 收到数据:", {
+        //   source: data.source,
+        //   title: data.title,
+        //   artist: data.artist,
+        //   duration_ms: data.duration_ms,
+        //   is_playing: data.is_playing,
+        // });
 
         if (data.source) currentSource = data.source;
         isPlaying = data.is_playing || false;
