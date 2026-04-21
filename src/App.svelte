@@ -1630,9 +1630,9 @@
 
         if (isBackendStuck) {
           // 后端完全拿不到进度，忽略覆盖，全靠前端自己计时
-          console.log(
-            `[进度同步] 拦截疑似无效进度：${newPosition}ms (前端：${currentTimeMs}ms, 后端最大：${maxBackendPosition}ms)`,
-          );
+          // console.log(
+          //   `[进度同步] 拦截疑似无效进度：${newPosition}ms (前端：${currentTimeMs}ms, 后端最大：${maxBackendPosition}ms)`,
+          // );
         } else {
           // 允许同步的条件：偏差大于 3 秒，或者切歌，或者暂停状态
           if (
@@ -1640,9 +1640,9 @@
             songChanged ||
             !isPlaying
           ) {
-            console.log(
-              `[进度同步] 执行强制同步 -> 后端值：${newPosition}ms (后端最大：${maxBackendPosition}ms)`,
-            );
+            // console.log(
+            //   `[进度同步] 执行强制同步 -> 后端值：${newPosition}ms (后端最大：${maxBackendPosition}ms)`,
+            // );
             currentTimeMs = newPosition;
           }
         }
