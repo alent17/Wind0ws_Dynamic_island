@@ -436,24 +436,34 @@ fn set_auto_start(_app: AppHandle, enable: bool) -> Result<(), String> {
             ));
         }
     } else {
-        // 删除注册表项
-        let output = Command::new("reg")
+        // 先检查注册表项是否存在
+        let check_output = Command::new("reg")
             .args(&[
-                "delete",
+                "query",
                 "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
                 "/v",
                 "Wind0wsDynamicIsland",
-                "/f",
             ])
-            .output()
-            .map_err(|e| format!("执行 reg delete 命令失败：{}", e))?;
+            .output();
+        
+        // 只有当注册表项存在时才删除
+        if let Ok(check) = check_output {
+            if check.status.success() {
+                let output = Command::new("reg")
+                    .args(&[
+                        "delete",
+                        "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+                        "/v",
+                        "Wind0wsDynamicIsland",
+                        "/f",
+                    ])
+                    .output()
+                    .map_err(|e| format!("执行 reg delete 命令失败：{}", e))?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            if !stderr.contains("系统找不到指定的注册表值")
-                && !stderr.contains("The system cannot find the registry key")
-            {
-                eprintln!("删除注册表项警告：{}", stderr);
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    eprintln!("删除注册表项失败：{}", stderr);
+                }
             }
         }
     }
@@ -748,106 +758,73 @@ fn get_media_info_internal(app: &AppHandle) -> Result<MediaState, String> {
 
 #[tauri::command]
 fn control_media(app: AppHandle, action: String) -> Result<(), String> {
-    unsafe {
-        windows::Win32::System::Com::CoInitializeEx(
-            None,
-            windows::Win32::System::Com::COINIT_MULTITHREADED,
-        ).ok();
-    }
-    let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
-        .map_err(|e| format!("RequestAsync failed: {:?}", e))?
-        .get()
-        .map_err(|e| format!("Await failed: {:?}", e))?;
+    std::thread::spawn(move || {
+        unsafe {
+            let _ = windows::Win32::System::Com::CoInitializeEx(
+                None,
+                windows::Win32::System::Com::COINIT_MULTITHREADED,
+            );
+        }
 
-    // 获取所有会话
-    let sessions = manager
-        .GetSessions()
-        .map_err(|e| format!("GetSessions failed: {:?}", e))?;
-    
-    let session_count = sessions.Size().unwrap_or(0) as usize;
-    
-    if session_count == 0 {
-        return Err("No active media session found".to_string());
-    }
+        let manager_res = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+            .and_then(|op| op.get());
 
-    // 获取权重设置
-    let weights = {
-        let state = app.state::<AppState>();
-        let settings = state.settings.lock().map_err(|_| "Failed to lock settings")?;
-        settings.player_weights.clone()
-    };
+        if let Ok(manager) = manager_res {
+            if let Ok(sessions) = manager.GetSessions() {
+                let session_count = sessions.Size().unwrap_or(0) as usize;
+                if session_count == 0 { return; }
 
-    // 根据权重选择会话：与 get_media_info_internal 使用相同逻辑
-    let mut best_session: Option<GlobalSystemMediaTransportControlsSession> = None;
-    let mut best_weight = 0u32;
+                let weights = {
+                    let state = app.state::<AppState>();
+                    let guard = state.settings.lock().ok();
+                    guard.map(|g| g.player_weights.clone())
+                }.unwrap_or_default();
 
-    for i in 0..session_count {
-        if let Ok(session) = sessions.GetAt(i as u32) {
-            let raw_id: String = session
-                .SourceAppUserModelId()
-                .unwrap_or_default()
-                .to_string();
-            let app_id_lower = raw_id.to_lowercase();
+                let mut best_session = None;
+                let mut best_weight = 0u32;
 
-            let source_type = if app_id_lower.contains("cloudmusic") {
-                "netease"
-            } else if app_id_lower.contains("spotify") {
-                "spotify"
-            } else if app_id_lower.contains("bilibili") {
-                "bilibili"
-            } else if app_id_lower.contains("qqmusic") {
-                "qqmusic"
-            } else if app_id_lower.contains("apple") && app_id_lower.contains("music") {
-                "apple"
-            } else {
-                "generic"
-            };
+                for i in 0..session_count {
+                    if let Ok(session) = sessions.GetAt(i as u32) {
+                        let raw_id = session.SourceAppUserModelId().unwrap_or_default().to_string();
+                        let app_id_lower = raw_id.to_lowercase();
 
-            let weight = weights.get(&source_type[..]).copied().unwrap_or(10);
+                        let source_type = if app_id_lower.contains("cloudmusic") { "netease" }
+                            else if app_id_lower.contains("spotify") { "spotify" }
+                            else if app_id_lower.contains("bilibili") { "bilibili" }
+                            else if app_id_lower.contains("qqmusic") { "qqmusic" }
+                            else if app_id_lower.contains("apple") && app_id_lower.contains("music") { "apple" }
+                            else { "generic" };
 
-            // 选择权重最高的会话
-            if weight > best_weight {
-                best_weight = weight;
-                best_session = Some(session);
+                        let weight = weights.get(source_type).copied().unwrap_or(10);
+                        if weight > best_weight {
+                            best_weight = weight;
+                            best_session = Some(session);
+                        }
+                    }
+                }
+
+                if let Some(session) = best_session {
+                    match action.as_str() {
+                        "play_pause" => {
+                            let _ = session.TryTogglePlayPauseAsync();
+                            let app_clone = app.clone();
+                            std::thread::spawn(move || {
+                                std::thread::sleep(std::time::Duration::from_millis(150));
+                                unsafe { let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED); }
+                                if let Ok(info) = get_media_info_internal(&app_clone) {
+                                    let _ = app_clone.emit("media-update", info);
+                                }
+                            });
+                        }
+                        "next" => { let _ = session.TrySkipNextAsync(); }
+                        "prev" => { let _ = session.TrySkipPreviousAsync(); }
+                        _ => {}
+                    }
+                }
             }
         }
-    }
+    });
 
-    let session = best_session
-        .ok_or_else(|| "No valid session found".to_string())?;
-
-    match action.as_str() {
-        "play_pause" => {
-            let _ = session
-                .TryTogglePlayPauseAsync()
-                .map_err(|e| format!("TogglePlayPause failed: {:?}", e))?;
-
-            let app_clone = app.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                unsafe {
-                    windows::Win32::System::Com::CoInitializeEx(
-                        None,
-                        windows::Win32::System::Com::COINIT_MULTITHREADED,
-                    ).ok();
-                }
-                if let Ok(info) = get_media_info_internal(&app_clone) {
-                    let _ = app_clone.emit("media-update", info);
-                }
-            });
-        }
-        "next" => {
-            let _ = session
-                .TrySkipNextAsync()
-                .map_err(|e| format!("SkipNext failed: {:?}", e))?;
-        }
-        "prev" => {
-            let _ = session
-                .TrySkipPreviousAsync()
-                .map_err(|e| format!("SkipPrevious failed: {:?}", e))?;
-        }
-        _ => return Err(format!("Unknown action: {}", action)),
-    }
     Ok(())
 }
 
@@ -1024,7 +1001,7 @@ fn show_settings_window(app: AppHandle) -> Result<(), String> {
     let _ = tauri::WebviewWindowBuilder::new(
         &app,
         "settings-window",
-        tauri::WebviewUrl::App("/settings".into()),
+        tauri::WebviewUrl::App("settings.html".into()),
     )
     .title("Isle - 设置")
     .inner_size(1000.0, 750.0)
@@ -1032,7 +1009,7 @@ fn show_settings_window(app: AppHandle) -> Result<(), String> {
     .resizable(true)
     .center()
     .decorations(false)
-    .transparent(true)
+    .transparent(false)
     .build()
     .map_err(|e| format!("创建设置窗口失败: {}", e))?;
 
@@ -1832,6 +1809,55 @@ fn set_hide_monitor_selector(app: AppHandle, enable: bool) -> Result<(), String>
     Ok(())
 }
 
+// 获取所有可用显示器
+#[tauri::command]
+async fn get_available_monitors(app: AppHandle) -> Result<Vec<String>, String> {
+    let window = app.get_webview_window("main")
+        .or_else(|| app.get_webview_window("floating"))
+        .ok_or("Failed to get window")?;
+    
+    let monitors = window.available_monitors()
+        .map_err(|e| format!("Failed to get monitors: {}", e))?;
+    
+    let monitor_names: Vec<String> = monitors
+        .iter()
+        .enumerate()
+        .map(|(idx, m)| {
+            m.name()
+                .map(|n| n.to_string())
+                .unwrap_or_else(|| format!("显示器 {}", idx + 1))
+        })
+        .collect();
+    
+    Ok(monitor_names)
+}
+
+// 获取当前显示器索引
+#[tauri::command]
+async fn get_current_monitor_index(app: AppHandle) -> Result<u32, String> {
+    let state = app.state::<AppState>();
+    let settings = state.settings.lock().map_err(|_| "Failed to lock settings")?;
+    Ok(settings.monitor_index)
+}
+
+// 设置当前显示器索引
+#[tauri::command]
+fn set_current_monitor_index(app: AppHandle, index: u32) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut settings = state.settings.lock().map_err(|_| "Failed to lock settings")?;
+    settings.monitor_index = index;
+    
+    // 保存设置到文件
+    write_settings_file(&app, &settings)?;
+    
+    // 发送事件通知前端更新 UI
+    if let Err(e) = app.emit("settings-changed", "monitor_index") {
+        eprintln!("发送设置变更事件失败：{}", e);
+    }
+    
+    Ok(())
+}
+
 // 设置隐藏悬浮窗按钮
 #[tauri::command]
 fn set_hide_floating_window(app: AppHandle, enable: bool) -> Result<(), String> {
@@ -1983,6 +2009,10 @@ pub fn run() {
             set_hide_monitor_selector,
             set_hide_floating_window,
             set_expanded_corner_radius,
+            // 显示器管理 API
+            get_available_monitors,
+            get_current_monitor_index,
+            set_current_monitor_index,
             // 系统毛玻璃 API
             set_window_vibrancy,
         ])
@@ -1994,15 +2024,30 @@ pub fn run() {
             let saved_settings = read_settings_file(&app.handle());
             let initial_settings = saved_settings.unwrap_or_else(AppSettings::default);
             
+            // 根据保存的显示器设置初始化窗口位置
+            let monitor_index = initial_settings.monitor_index;
+            
             // 更新应用状态
             let state = app.state::<AppState>();
             let mut state_settings = state
                 .settings
                 .lock()
                 .map_err(|_| "Failed to lock settings")?;
-            *state_settings = initial_settings;
+            *state_settings = initial_settings.clone();
             
             let window = app.get_webview_window("main").unwrap();
+            
+            if let Ok(all_monitors) = window.available_monitors() {
+                if monitor_index < all_monitors.len() as u32 {
+                    let target_monitor = &all_monitors[monitor_index as usize];
+                    let position = target_monitor.position();
+                    let size = target_monitor.size();
+                    let x = position.x + (size.width as i32 / 2) - 190;
+                    let y = position.y + 20;
+                    let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+                }
+            }
+            
             window.set_focus().unwrap();
 
             start_media_listener(app.handle().clone());
