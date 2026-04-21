@@ -54,6 +54,7 @@
   const themes = [
     { id: "original", name: "经典黑", color: "#333" },
     { id: "liquid_glass", name: "液体玻璃", color: "#1a1a2e" },
+    { id: "retro", name: "复古卡通", color: "#ff66a3" },
   ];
 
   const playerNames: Record<string, string> = {

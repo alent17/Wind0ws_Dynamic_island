@@ -1,0 +1,295 @@
+1. 容器主体 .theme-liquid_glass
+
+css
+css
+.theme-liquid_glass {
+  position: relative;
+  /* 从几乎无色改为带轻微蓝紫调的半透明底，让毛玻璃效果更可感知 */
+  background: rgba(200, 210, 230, 0.12) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(180%) contrast(108%) !important;
+  backdrop-filter: blur(40px) saturate(180%) contrast(108%) !important;
+
+  /* 分层边框：上亮下暗，模拟玻璃边缘折射 */
+  border: 0.5px solid rgba(255, 255, 255, 0.25) !important;
+  border-bottom-color: rgba(0, 0, 0, 0.15) !important;
+
+  box-shadow:
+    /* 外部柔和辉光 */
+    0 8px 32px rgba(0, 0, 0, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    /* 内部上边缘高光 — 玻璃折射效果 */
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    /* 内部左边缘微光 */
+    inset 1px 0 0 rgba(255, 255, 255, 0.08),
+    /* 内部右边缘微光 */
+    inset -1px 0 0 rgba(255, 255, 255, 0.08),
+    /* 内部下边缘暗影 — 增加厚度感 */
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    /* 内部整体柔光 */
+    inset 0 0 40px rgba(255, 255, 255, 0.03) !important;
+
+  overflow: hidden !important;
+  mix-blend-mode: normal !important;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+  contain: none !important;
+
+  /* 悬浮时增强光感 */
+  transition:
+    box-shadow 0.4s ease,
+    background 0.4s ease,
+    border-color 0.4s ease,
+    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.theme-liquid_glass:hover {
+  background: rgba(210, 220, 240, 0.18) !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 4px 12px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 1px 0 0 rgba(255, 255, 255, 0.12),
+    inset -1px 0 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+    inset 0 0 50px rgba(255, 255, 255, 0.05) !important;
+}
+
+2. 高光扫描层 ::after（替换旧的渐变）
+
+css
+css
+/* 高光扫描 — 模拟光线在玻璃表面的反射 */
+.theme-liquid_glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.06) 25%,
+    transparent 50%,
+    transparent 75%,
+    rgba(0, 0, 0, 0.04) 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.3s ease;
+}
+
+.theme-liquid_glass:hover::after {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.25) 0%,
+    rgba(255, 255, 255, 0.1) 25%,
+    transparent 50%,
+    transparent 75%,
+    rgba(0, 0, 0, 0.03) 100%
+  );
+}
+
+3. 微噪点纹理层 ::before（新增）
+
+css
+css
+/* 微噪点纹理 — 模拟真实玻璃的细微质感 */
+.theme-liquid_glass::before {
+  content: "" !important;
+  display: block !important;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: overlay;
+}
+
+4. 文字样式
+
+css
+css
+/* 文字：轻微发光效果，模拟玻璃内嵌文字 */
+.theme-liquid_glass :global(.dynamic-glass-text) {
+  color: rgba(255, 255, 255, 0.95) !important;
+  text-shadow:
+    0 0 20px rgba(255, 255, 255, 0.15),
+    0 1px 2px rgba(0, 0, 0, 0.2) !important;
+}
+
+.theme-liquid_glass :global(.dynamic-glass-text-secondary) {
+  color: rgba(255, 255, 255, 0.65) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* 时间显示 */
+.theme-liquid_glass :global(.time-display span) {
+  color: rgba(255, 255, 255, 0.85) !important;
+  text-shadow: 0 0 15px rgba(255, 255, 255, 0.1) !important;
+}
+
+5. 频谱条
+
+css
+css
+/* 收起态频谱：半透明发光条 */
+.theme-liquid_glass :global(.spectrum-bar) {
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.7)
+  ) !important;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.15) !important;
+  border-radius: 2px !important;
+  opacity: 1 !important;
+}
+
+/* 展开态频谱：更亮 + 发光 */
+.theme-liquid_glass :global(.spectrum-bar-expanded) {
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0.65)
+  ) !important;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.12) !important;
+  border-radius: 2px !important;
+  opacity: 1 !important;
+}
+
+6. 进度条
+
+css
+css
+/* 进度条轨道：深色半透明 */
+.theme-liquid_glass :global(.progress-bar) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 999px !important;
+  height: 3px !important;
+  overflow: hidden !important;
+}
+
+/* 进度条填充：白光渐变 + 发光 */
+.theme-liquid_glass :global(.progress-fill) {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.4),
+    rgba(255, 255, 255, 0.8)
+  ) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.2) !important;
+  transition: width 0.15s linear !important;
+}
+
+/* 时间文字 */
+.theme-liquid_glass :global(.text-white\/60) {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+7. 按钮
+
+css
+css
+/* 播放控制按钮 */
+.theme-liquid_glass :global(.media-button) {
+  color: rgba(255, 255, 255, 0.85) !important;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+.theme-liquid_glass :global(.media-button:hover) {
+  color: rgba(255, 255, 255, 1) !important;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3)) !important;
+}
+
+/* 悬浮窗按钮：毛玻璃胶囊 */
+.theme-liquid_glass :global(button) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border-radius: 10px !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+  transition: all 0.25s ease !important;
+}
+
+.theme-liquid_glass :global(button:hover) {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 0 12px rgba(255, 255, 255, 0.05) !important;
+}
+
+.theme-liquid_glass :global(button:active) {
+  background: rgba(255, 255, 255, 0.06) !important;
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.2),
+    inset 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+8. 专辑封面
+
+css
+css
+/* 展开态封面：毛玻璃边框 + 发光 */
+.theme-liquid_glass :global(.w-$$64px$$) {
+  border: 0.5px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 14px !important;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(255, 255, 255, 0.03) !important;
+}
+
+.theme-liquid_glass :global(.w-$$64px$$:hover) {
+  box-shadow:
+    0 6px 24px rgba(0, 0, 0, 0.35),
+    0 0 30px rgba(255, 255, 255, 0.06) !important;
+}
+
+/* 收起态封面 */
+.theme-liquid_glass :global(.collapsed-content .w-5) {
+  border-radius: 6px !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+9. 展开动画
+
+css
+css
+/* 柔和展开动画 */
+.theme-liquid_glass :global(.expanded-content.is-visible) {
+  animation: glass-expand 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards !important;
+}
+
+@keyframes glass-expand {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95) translateZ(0);
+    filter: blur(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) translateZ(0);
+    filter: blur(0);
+  }
+}
+
+10. 调试面板
+
+css
+css
+.theme-liquid_glass :global(.debug-overlay) {
+  background: rgba(0, 0, 0, 0.5) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 10px !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+}

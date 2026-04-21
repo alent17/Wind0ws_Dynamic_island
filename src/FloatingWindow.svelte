@@ -1056,23 +1056,42 @@
       }, 50); // 50ms 防抖
     });
 
-    // 进度更新使用 requestAnimationFrame 代替 setInterval
-    let lastPosition = 0;
-    const updateProgress = () => {
+    // 进度更新使用 setInterval（与灵动岛一致，每 100ms 更新一次）
+    progressInterval = setInterval(() => {
       if (
         mediaState.is_playing &&
         mediaState.duration_ms > 0 &&
         mediaState.position_ms < mediaState.duration_ms
       ) {
-        const now = Date.now();
-        if (now - lastPosition >= 1000) {
-          mediaState.position_ms += 1000;
-          lastPosition = now;
+        mediaState.position_ms += 100;
+        if (mediaState.position_ms > mediaState.duration_ms) {
+          mediaState.position_ms = mediaState.duration_ms;
         }
       }
-      requestAnimationFrame(updateProgress);
-    };
-    requestAnimationFrame(updateProgress);
+    }, 100);
+  });
+
+  // 监听播放状态变化，自动启动/停止进度更新
+  $effect(() => {
+    if (progressInterval) {
+      if (!mediaState.is_playing) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+      }
+    } else if (mediaState.is_playing) {
+      progressInterval = setInterval(() => {
+        if (
+          mediaState.is_playing &&
+          mediaState.duration_ms > 0 &&
+          mediaState.position_ms < mediaState.duration_ms
+        ) {
+          mediaState.position_ms += 100;
+          if (mediaState.position_ms > mediaState.duration_ms) {
+            mediaState.position_ms = mediaState.duration_ms;
+          }
+        }
+      }, 100);
+    }
   });
 
   onDestroy(() => {
@@ -1102,7 +1121,10 @@
     oldCanvasRef = null;
 
     if (savePositionTimeout) clearTimeout(savePositionTimeout);
-    if (progressInterval) clearInterval(progressInterval);
+    if (progressInterval) {
+      clearInterval(progressInterval);
+      progressInterval = null;
+    }
   });
 
   function formatTime(ms: number): string {
@@ -1733,7 +1755,27 @@
     <div class="resize-handle"></div>
   </div>
 
-  {#if mediaState.source !== "netease"}
+  <!-- 进度条层 - 网易云使用灵动岛样式，其他来源使用普通样式 -->
+  {#if mediaState.source === "netease"}
+    <div class="progress-layer">
+      <div class="progress-container-netease">
+        <div class="progress-bar-netease">
+          <div
+            class="progress-fill-netease"
+            style="width: {progressPercent}%"
+          ></div>
+        </div>
+        <div class="time-row-netease">
+          <span class="time-netease">{formatTime(mediaState.position_ms)}</span>
+          <span class="time-netease"
+            >-{formatTime(
+              mediaState.duration_ms - mediaState.position_ms,
+            )}</span
+          >
+        </div>
+      </div>
+    </div>
+  {:else}
     <div class="progress-layer">
       <div class="progress-container">
         <div class="progress-row">
@@ -2321,6 +2363,47 @@
     border-radius: 5px;
     transition: width 1s linear;
     box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
+  }
+
+  /* 网易云进度条样式（与灵动岛一致） */
+  .progress-container-netease {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0 16px;
+    box-sizing: border-box;
+    margin-bottom: 56px;
+  }
+
+  .progress-bar-netease {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+
+  .progress-fill-netease {
+    height: 100%;
+    background: #fff;
+    border-radius: 2px;
+    transition: width 0.1s linear;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
+  }
+
+  .time-row-netease {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .time-netease {
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   }
 
   /* 控制按钮遮罩层 */

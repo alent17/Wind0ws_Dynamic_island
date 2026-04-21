@@ -48,10 +48,8 @@
     generic: "#ffffff",
   };
 
-  // 生产环境禁用调试日志
   const isDev = import.meta.env?.DEV ?? false;
 
-  // 优化的日志系统
   const logger = {
     log: (...args: any[]) => isDev && console.log("[App]", ...args),
     error: (...args: any[]) => console.error("[App]", ...args),
@@ -59,7 +57,6 @@
     debug: (...args: any[]) => isDev && console.debug("[App]", ...args),
   };
 
-  // 性能优化的节流函数
   const throttle = (fn: Function, delay: number) => {
     let lastCall = 0;
     return (...args: any[]) => {
@@ -71,7 +68,6 @@
     };
   };
 
-  // 防抖函数
   const debounce = (fn: Function, delay: number) => {
     let timeoutId: ReturnType<typeof setTimeout>;
     return (...args: any[]) => {
@@ -138,15 +134,12 @@
   let targetSpectrumHeightsExpanded = $state(Array(40).fill(0.5));
   let spectrumTimer: number | null = null;
 
-  // 优化点二：预分配工作数组，避免每帧 GC
   const workArray5 = new Float32Array(5);
   const workArray40 = new Float32Array(40);
 
-  // DOM 元素引用数组（用于直接操作 DOM）
   let collapsedBars: HTMLDivElement[] = [];
   let expandedBars: HTMLDivElement[] = [];
 
-  // iOS风格收起态频谱配置（波浪式，低频更强）
   const baseCollapsedHeight = 20;
   const iOSCollapsedEnvelope = [0.5, 0.85, 1.0, 0.85, 0.5];
   const collapsedPhases = [0, 0.5, 1.0, 1.5, 0.8];
@@ -216,7 +209,6 @@
         }
       }
 
-      // 直接操作 DOM，使用 GPU 加速的 transform
       for (let i = 0; i < 5; i++) {
         if (collapsedBars[i]) {
           collapsedBars[i].style.transform =
@@ -242,7 +234,6 @@
     }
   }
 
-  // 监听播放状态和设置
   $effect(() => {
     if (isPlaying && appSettings.show_spectrum) {
       requestAnimationFrame(() => {
@@ -256,33 +247,26 @@
   let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
   let currentTheme = $state("original");
 
-  // 记录当前歌曲后端能读取到的最大进度（用于判断后端是否真的能获取进度）
   let maxBackendPosition = 0;
 
-  // 时间显示功能
   let showTimeDisplay = $state(false);
   let currentTime = $state("");
   let pausedStartTime = $state<number>(0);
 
-  // 更新时间显示
   function updateTimeDisplay() {
     const now = new Date();
     currentTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
   }
 
-  // 监听播放状态，暂停5分钟后显示时间
   $effect(() => {
     if (!isPlaying) {
-      // 暂停时记录开始时间
       pausedStartTime = Date.now();
       showTimeDisplay = false;
     } else {
-      // 播放时隐藏时间
       showTimeDisplay = false;
     }
   });
 
-  // 检查是否暂停超过5分钟
   onMount(() => {
     updateTimeDisplay();
     const checkInterval = setInterval(() => {
@@ -298,7 +282,6 @@
     return () => clearInterval(checkInterval);
   });
 
-  // 播放器应用路径映射
   const playerApps: Record<string, string> = {
     netease: "NeteaseCloudMusic",
     spotify: "Spotify",
@@ -308,7 +291,6 @@
     generic: "",
   };
 
-  // 打开当前音乐播放器
   async function openCurrentPlayer() {
     try {
       const appName = playerApps[currentSource] || "";
@@ -340,6 +322,7 @@
       forest:
         "linear-gradient(90deg, #1a2a25, #1c3028, #1f3a2a, #1c3530, #1a2a25)",
       liquid_glass: "rgba(255, 255, 255, 0.07)",
+      retro: "#FFE5EC",
     };
     return backgrounds[theme] || backgrounds.original;
   }
@@ -365,6 +348,7 @@
       sunset: "none",
       forest: "none",
       liquid_glass: "blur(20px) saturate(150%) contrast(110%)",
+      retro: "none",
     };
     return filters[theme] || filters.original;
   }
@@ -380,11 +364,11 @@
       sunset: "none",
       forest: "none",
       liquid_glass: "none",
+      retro: "3.5px solid #1a1a1a",
     };
     return borders[theme] || borders.original;
   }
 
-  // 根据当前高度动态计算 border-radius，确保与尺寸动画同步
   function getDynamicBorderRadius(currentHeight: number): string {
     const minHeight = 28;
     const maxHeight = 160;
@@ -424,11 +408,12 @@
       sunset: "none",
       forest: "none",
       liquid_glass: "none",
+      retro: expanded ? "6px 6px 0 #1a1a1a" : "none",
     };
     return shadows[theme] || shadows.original;
   }
 
-  // ===== 新增：应用设置（从设置页面同步） =====
+  // ===== 新增：应用设置 =====
   let appSettings = $state({
     auto_hide: true,
     show_spectrum: true,
@@ -442,7 +427,6 @@
     expanded_corner_radius: 16,
     always_show_top_bar: true,
     always_on_top: true,
-    // 播放器权重
     player_weights: {
       netease: 50,
       spotify: 50,
@@ -451,17 +435,12 @@
       apple: 50,
       generic: 10,
     },
-    // 显示器设置
     monitor_index: 0,
-    // 专辑封面设置
     enable_hd_cover: true,
     enable_pixel_art: false,
     enable_halftone: false,
-    // MV 播放
     enable_mv_playback: true,
-    // 悬浮窗锁定
     lock_floating_window: false,
-    // 开机启动
     auto_start: false,
   });
 
@@ -471,10 +450,9 @@
   let currentFps = $state(60);
   let fpsHistory: number[] = [];
   let performanceCheckInterval: number | null = null;
-  let displayRefreshRate = $state(60); // 显示器刷新率
-  let highFrameRateMode = $state(false); // 高帧率模式
+  let displayRefreshRate = $state(60);
+  let highFrameRateMode = $state(false);
 
-  // 检测显示器刷新率
   async function detectDisplayRefreshRate(): Promise<number> {
     return new Promise((resolve) => {
       const frames: number[] = [];
@@ -485,11 +463,9 @@
         frameCount++;
         frames.push(currentTime);
 
-        // 测量60帧来计算刷新率
         if (frameCount < 60) {
           requestAnimationFrame(measureFrame);
         } else {
-          // 计算平均帧间隔
           const intervals = [];
           for (let i = 1; i < frames.length; i++) {
             intervals.push(frames[i] - frames[i - 1]);
@@ -508,50 +484,34 @@
     });
   }
 
-  // 性能检测：评估设备性能等级
   function detectPerformanceLevel(): PerformanceLevel {
-    // 检测硬件并发数（CPU 核心数）
     const cores = navigator.hardwareConcurrency || 4;
-
-    // 检测设备内存（如果可用）
     const memory = (navigator as any).deviceMemory || 8;
-
-    // 检测是否为移动设备
     const isMobile =
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
         navigator.userAgent,
       );
-
-    // 检测是否支持硬件加速
     const hasHardwareAcceleration = checkHardwareAcceleration();
 
-    // 综合评估性能等级
     let score = 0;
-
-    // CPU 核心数评分
     if (cores >= 8) score += 3;
     else if (cores >= 4) score += 2;
     else score += 1;
 
-    // 内存评分
     if (memory >= 8) score += 3;
     else if (memory >= 4) score += 2;
     else score += 1;
 
-    // 硬件加速评分
     if (hasHardwareAcceleration) score += 2;
     else score += 0;
 
-    // 移动设备降级
     if (isMobile) score -= 2;
 
-    // 根据总分确定性能等级
     if (score >= 7) return "high";
     else if (score >= 4) return "medium";
     else return "low";
   }
 
-  // 检测硬件加速是否可用
   function checkHardwareAcceleration(): boolean {
     try {
       const canvas = document.createElement("canvas");
@@ -561,20 +521,18 @@
         const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
         if (debugInfo) {
           const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-          // 如果是软件渲染器，则没有硬件加速
           return (
             !renderer.toLowerCase().includes("swiftshader") &&
             !renderer.toLowerCase().includes("llvmpipe")
           );
         }
       }
-      return true; // 默认假设有硬件加速
+      return true;
     } catch (e) {
       return false;
     }
   }
 
-  // 根据性能等级和刷新率获取优化的 Spring 参数
   function getOptimizedSpringParams(
     level: PerformanceLevel,
     refreshRate: number = 60,
@@ -611,7 +569,6 @@
     }
   }
 
-  // 实时帧率监控
   function startFpsMonitoring() {
     let lastTime = performance.now();
     let frames = 0;
@@ -623,13 +580,11 @@
       if (currentTime - lastTime >= 1000) {
         currentFps = Math.round((frames * 1000) / (currentTime - lastTime));
 
-        // 记录 FPS 历史
         fpsHistory.push(currentFps);
         if (fpsHistory.length > 10) {
           fpsHistory.shift();
         }
 
-        // 动态调整性能等级
         adjustPerformanceBasedOnFps();
 
         frames = 0;
@@ -642,13 +597,11 @@
     requestAnimationFrame(measureFps);
   }
 
-  // 根据帧率动态调整性能等级
   function adjustPerformanceBasedOnFps() {
     if (fpsHistory.length < 5) return;
 
     const avgFps = fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length;
 
-    // 如果平均帧率低于阈值，降低性能等级
     if (avgFps < 30 && performanceLevel !== "low") {
       console.log("[性能] 帧率过低，降低性能等级");
       performanceLevel = "low";
@@ -664,19 +617,16 @@
     }
   }
 
-  // 更新 Spring 参数（通过重新创建 Spring 实例）
   function updateSpringParams() {
     const params = getOptimizedSpringParams(
       performanceLevel,
       displayRefreshRate,
     );
 
-    // 获取当前值
     const currentWidth = $widthSpring;
     const currentHeight = $heightSpring;
     const currentOpacity = $contentOpacity;
 
-    // 重新创建 Spring 实例并设置新参数
     widthSpring = spring(currentWidth, {
       stiffness: params.stiffness,
       damping: params.damping,
@@ -695,7 +645,6 @@
       precision: params.precision,
     });
 
-    // 更新高帧率模式状态
     highFrameRateMode = displayRefreshRate >= 120;
 
     console.log(
@@ -704,48 +653,39 @@
     );
   }
 
-  // 全屏检测和自动隐藏相关状态
   let isFullscreenApp = $state(false);
   let isMouseAtTop = $state(false);
   let isHidden = $state(false);
   let autoHideEnabled = $state(true);
 
-  // 显示器选择相关状态
   let showMonitorMenu = $state(false);
   let monitors: Array<{ name: string; index: number }> = $state([]);
   let currentMonitorIndex = $state(0);
 
-  // 悬浮窗状态
   let isFloatingWindowOpen = $state(false);
 
-  // 调试信息状态
   let fps = $state(0);
   let frameCount = 0;
   let lastFpsTime = 0;
   let debugRafId: number | null = null;
 
-  // 当前显示的图标路径
   const currentIcon = $derived(
     platformIcons[currentSource as keyof typeof platformIcons] ||
       platformIcons.generic,
   );
 
-  // 当前播放器颜色
   const currentColor = $derived(
     playerColors[currentSource as keyof typeof playerColors] ||
       playerColors.generic,
   );
 
-  // 获取当前播放器配置
   const currentConfig = $derived(
     playerConfigs[currentSource as keyof typeof playerConfigs] ||
       playerConfigs.generic,
   );
 
-  // 判定直播逻辑
   let isLive = $derived(durationMs === 0);
 
-  // --- 模拟进度核心 (Spring) ---
   let progressSpring = spring(0, {
     stiffness: 0.15,
     damping: 0.8,
@@ -760,27 +700,24 @@
     durationMs > 0 ? (precisePosition() / durationMs) * 100 : 0,
   );
 
-  // ========== 优化的 Spring 参数（极致流畅） ==========
-  // ========== Spring 动画实例（可动态调整参数） ==========
   let widthSpring = spring(80, {
-    stiffness: 0.2, // 适中的刚度，确保回弹有力
-    damping: 0.85, // 较高阻尼，防止过多抖动
+    stiffness: 0.2,
+    damping: 0.85,
     precision: 0.1,
   });
   let heightSpring = spring(28, {
-    stiffness: 0.2, // 适中的刚度，确保回弹有力
-    damping: 0.85, // 较高阻尼，防止过多抖动
+    stiffness: 0.2,
+    damping: 0.85,
     precision: 0.1,
   });
   let contentOpacity = spring(0, {
-    stiffness: 0.15, // 透明度动画稍快
+    stiffness: 0.15,
     damping: 0.8,
     precision: 0.01,
   });
 
   let win: ReturnType<typeof getCurrentWindow>;
 
-  // ========== 窗口同步优化 ==========
   let cachedScreenWidth = 0;
   let cachedScreenHeight = 0;
   let isSyncing = false;
@@ -862,11 +799,9 @@
     if (expanded && !hovering) {
       const delay = appSettings.enable_animations ? 5000 : 3000;
       logger.log(`开始自动收起计时器: ${delay}ms`);
-      // 使用弱引用避免内存泄漏
       autoCloseTimer = setTimeout(() => {
         logger.log("自动收起计时器触发");
         expanded = false;
-        // 清理计时器引用
         autoCloseTimer = null;
       }, delay);
     }
@@ -875,7 +810,7 @@
   function stopAutoClose() {
     if (autoCloseTimer) {
       clearTimeout(autoCloseTimer);
-      autoCloseTimer = null; // 立即释放引用
+      autoCloseTimer = null;
     }
   }
 
@@ -904,11 +839,9 @@
   async function toggleFloatingWindow() {
     try {
       if (isFloatingWindowOpen) {
-        // 关闭悬浮窗
         await invoke("close_floating_window");
         isFloatingWindowOpen = false;
       } else {
-        // 打开悬浮窗
         await invoke("open_floating_window");
         isFloatingWindowOpen = true;
       }
@@ -917,7 +850,6 @@
     }
   }
 
-  // 替换原本的 extractDominantColor 函数 - 提取两个面积最大的颜色
   async function extractDominantColor(imgSrc: string) {
     if (!imgSrc) {
       accentColor = currentColor;
@@ -985,56 +917,46 @@
     }
   }
 
-  // ===== 新增：监听封面变化自动取色 =====
   $effect(() => {
     if (artworkUrl) {
-      // 每次 artworkUrl 更新时，自动触发取色
       extractDominantColor(artworkUrl);
     } else {
-      // 如果没有封面，同步恢复为当前播放器的颜色
       accentColor = currentColor;
       secondaryColor = currentColor;
     }
   });
 
-  // ===== 优化的展开/收起动画（修复时序和同步） =====
   $effect(() => {
     const isExp = expanded;
     const isHov = hovering;
     const reduced = appSettings.reduce_animations;
     const animEnabled = appSettings.enable_animations;
 
-    // 使用双帧延迟确保动画同步
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (isExp) {
-          // 展开动画：先设置尺寸，再显示内容
-          widthSpring.set(300); // 恢复展开宽度
-          heightSpring.set(160); // 调整展开高度，确保所有内容可见
+          widthSpring.set(300);
+          heightSpring.set(160);
 
           if (!animEnabled) {
             contentOpacity.set(1);
           } else if (reduced) {
             contentOpacity.set(1);
           } else {
-            // 优化延迟：与尺寸动画完美同步
             setTimeout(() => contentOpacity.set(1), 80);
           }
         } else {
-          // 收起动画：先隐藏内容，再缩小尺寸
           contentOpacity.set(0);
 
-          // 延迟尺寸变化，避免视觉冲突
           setTimeout(() => {
-            widthSpring.set(isHov ? 90 : 80); // 调整收起宽度
-            heightSpring.set(isHov ? 30 : 28); // 调整收起高度
+            widthSpring.set(isHov ? 90 : 80);
+            heightSpring.set(isHov ? 30 : 28);
           }, 60);
         }
       });
     });
   });
 
-  // 优化点四：will-change 按需启用管理
   let animatingTimer: ReturnType<typeof setTimeout> | null = null;
   $effect(() => {
     const _ = expanded;
@@ -1063,18 +985,15 @@
     expanded = !expanded;
   }
 
-  // ========== 媒体控制指令 ==========
   async function handleMediaAction(action: string, e: MouseEvent) {
     e.stopPropagation();
     try {
       await invoke("control_media", { action });
-      // 不手动更新状态，等待后端的 media-update 事件同步
     } catch (err) {
       console.error("媒体控制失败:", err);
     }
   }
 
-  // ========== 格式化时间 ==========
   function formatTime(ms: number): string {
     if (ms <= 0) return "00:00";
     const s = Math.floor(ms / 1000);
@@ -1083,16 +1002,13 @@
     return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
   }
 
-  // ========== 全屏检测和自动隐藏（响应 auto_hide 开关） ==========
   let fullscreenCheckInterval: ReturnType<typeof setInterval> | null = null;
   let hideTimeout: ReturnType<typeof setTimeout> | null = null;
 
   async function checkFullscreenAndHide() {
-    // ===== 检查 auto_hide 开关 =====
     if (!autoHideEnabled || !appSettings.auto_hide) return;
 
     try {
-      // 获取当前显示器信息
       const allMonitors = await availableMonitors();
 
       let monitorX = 0;
@@ -1107,7 +1023,6 @@
         monitorWidth = targetMonitor.size.width;
         monitorHeight = targetMonitor.size.height;
       } else if (allMonitors.length > 0) {
-        // 如果索引无效，使用第一个显示器
         const targetMonitor = allMonitors[0];
         monitorX = targetMonitor.position.x;
         monitorY = targetMonitor.position.y;
@@ -1143,7 +1058,6 @@
   }
 
   async function hideWindowToTop() {
-    // ===== 检查 auto_hide 开关 =====
     if (!appSettings.auto_hide) return;
 
     try {
@@ -1165,12 +1079,6 @@
         );
         isHidden = true;
         console.log("[自动隐藏] 窗口已隐藏到顶部中间，留 2px 可见边");
-        console.log(
-          "[自动隐藏] 显示器:",
-          targetMonitor.name,
-          "中心 X:",
-          windowCenterX,
-        );
       } else {
         const targetY = Math.round(-currentSize.height + 2);
         await appWindow.setPosition(new PhysicalPosition(0, targetY));
@@ -1203,12 +1111,6 @@
         );
         isHidden = false;
         console.log("[自动显示] 窗口已显示在顶部中间");
-        console.log(
-          "[自动显示] 显示器:",
-          targetMonitor.name,
-          "中心 X:",
-          windowCenterX,
-        );
       } else {
         const targetY = Math.round(22 * dpr);
         await appWindow.setPosition(new PhysicalPosition(0, targetY));
@@ -1250,7 +1152,6 @@
     }
   }
 
-  // ========== 显示器选择功能 ==========
   async function switchMonitor(index: number) {
     try {
       const allMonitors = await availableMonitors();
@@ -1276,7 +1177,6 @@
       currentMonitorIndex = index;
       showMonitorMenu = false;
 
-      // 保存显示器索引到设置
       try {
         const savedSettings = await invoke<any>("get_settings");
         await invoke("save_settings", {
@@ -1302,7 +1202,6 @@
     }
   }
 
-  // 响应 monitor_index 变化
   let lastMonitorIndex = -1;
   $effect(() => {
     const idx = appSettings.monitor_index;
@@ -1328,7 +1227,6 @@
     showMonitorMenu = false;
   }
 
-  // ===== 调试信息 FPS 计算 =====
   function startDebugFps() {
     if (debugRafId) return;
     lastFpsTime = performance.now();
@@ -1361,12 +1259,10 @@
     }
   });
 
-  // ========== onMount ==========
   onMount(() => {
     (async () => {
       console.log("[App.svelte] onMount 开始监听事件");
 
-      // 读取设置并应用置顶状态
       try {
         const savedSettings = await invoke<any>("get_settings");
         const appWindow = getCurrentWindow();
@@ -1376,7 +1272,6 @@
         console.error("[置顶设置] 读取失败:", error);
       }
 
-      // ===== 加载应用设置 =====
       try {
         const loadedSettings = await invoke<any>("get_settings");
         appSettings = {
@@ -1397,55 +1292,43 @@
         console.error("[设置] 读取失败:", error);
       }
 
-      // ===== 初始化性能检测系统 =====
       try {
-        // 检测显示器刷新率
         displayRefreshRate = await detectDisplayRefreshRate();
         console.log(`[性能] 显示器刷新率: ${displayRefreshRate}Hz`);
 
-        // 检测设备性能等级
         performanceLevel = detectPerformanceLevel();
         console.log(`[性能] 设备性能等级: ${performanceLevel}`);
 
-        // 根据性能等级和刷新率初始化 Spring 参数
         updateSpringParams();
 
-        // 启动帧率监控
         startFpsMonitoring();
         console.log("[性能] 帧率监控已启动");
 
-        // 显示高帧率模式状态
         if (highFrameRateMode) {
           console.log(`[性能] 🚀 高帧率模式已启用 (${displayRefreshRate}Hz)`);
         }
       } catch (error) {
         console.error("[性能] 初始化失败:", error);
-        // 使用默认高性能设置
         performanceLevel = "high";
         displayRefreshRate = 60;
       }
 
-      // ===== 监听设置变更事件 =====
       const unlistenSettings = await listen(
         "settings-updated",
         (event: any) => {
           const s = event.payload;
           if (s) {
-            // 核心：直接用完整对象覆盖，Svelte 的响应式会自动触发 UI 更新
             appSettings = s;
             console.log("[设置] 实时更新:", appSettings);
 
-            // 同步主题
             if (s.island_theme) {
               currentTheme = s.island_theme;
             }
 
-            // 同步显示器索引
             if (s.monitor_index !== undefined) {
               currentMonitorIndex = s.monitor_index;
             }
 
-            // auto_hide 关闭时立即显示窗口
             if (!appSettings.auto_hide && isHidden) {
               showWindow();
             }
@@ -1453,18 +1336,15 @@
         },
       );
 
-      // 监听单独的设置变更事件（用于实时响应）
       const unlistenSettingsChanged = await listen(
         "settings-changed",
         (event: any) => {
           const settingName = event.payload;
           console.log("[设置] 单项变更:", settingName);
 
-          // 根据变更的设置项直接更新对应值
           if (settingName === "monitor_index") {
             const idx = appSettings.monitor_index;
             currentMonitorIndex = idx;
-            // 立即移动到新显示器
             if (monitors[idx]) {
               moveToMonitor(monitors[idx]).catch(console.error);
             }
@@ -1473,7 +1353,6 @@
           } else if (settingName === "always_on_top") {
             // 由后端处理置顶
           } else {
-            // 其他设置项，重新加载完整设置
             invoke("get_settings")
               .then((s: any) => {
                 if (s) {
@@ -1485,7 +1364,6 @@
         },
       );
 
-      // 监听圆角变更事件
       const unlistenCornerRadiusChanged = await listen(
         "corner-radius-changed",
         (event: any) => {
@@ -1495,21 +1373,17 @@
         },
       );
 
-      // 初始化显示器列表
       try {
         const allMonitors = await availableMonitors();
         monitors = allMonitors.map((m, idx) => {
           let name = m.name || `显示器 ${idx + 1}`;
-          // 提取简短名称
           name = name.replace(/^\\\\\.\\DISPLAY/, "");
           name = name.replace(/^DISPLAY/, "");
           name = name.replace(/\\Device\\Video.*$/, "");
-          // 如果还很长，只取最后一段
           const parts = name.split(/[\\/]/);
           if (parts.length > 1) {
             name = parts[parts.length - 1];
           }
-          // 限制长度
           if (name.length > 12) {
             name = name.substring(0, 12) + "...";
           }
@@ -1519,11 +1393,9 @@
           };
         });
 
-        // 从设置中读取上次选择的显示器索引
         const savedSettings = await invoke<any>("get_settings");
         const savedMonitorIndex = savedSettings.monitor_index ?? 0;
 
-        // 验证索引是否有效，如果无效则使用当前显示器
         if (savedMonitorIndex >= 0 && savedMonitorIndex < allMonitors.length) {
           currentMonitorIndex = savedMonitorIndex;
           const savedMonitor = allMonitors[savedMonitorIndex];
@@ -1537,7 +1409,6 @@
             monitors[currentMonitorIndex]?.name,
           );
         } else {
-          // 如果保存的索引无效，使用当前显示器
           const activeMonitor = await currentMonitor();
           currentMonitorIndex = activeMonitor
             ? allMonitors.findIndex((m) => m.name === activeMonitor.name)
@@ -1559,7 +1430,6 @@
         console.error("[显示器] 初始化失败:", error);
       }
 
-      // 监听悬浮窗关闭事件
       const unlistenFloatingWindowClosed = await listen(
         "floating-window-closed",
         () => {
@@ -1568,14 +1438,12 @@
         },
       );
 
-      // 监听主题变化
       const unlistenTheme = await listen("theme-changed", (event: any) => {
         const { islandTheme } = event.payload;
         currentTheme = islandTheme || "original";
         console.log("[主题切换] 切换到:", currentTheme);
       });
 
-      // 从设置中加载保存的主题
       try {
         const savedSettings = await invoke<any>("get_settings");
         currentTheme = savedSettings.island_theme || "original";
@@ -1584,29 +1452,18 @@
         console.error("[主题加载] 失败:", e);
       }
 
-      // 监听 SMTC 推送
       let cleanup: (() => void) | undefined;
-      let lastSongKey: string | null = null; // 用于检测歌曲变更
+      let lastSongKey: string | null = null;
 
       const unlistenMediaUpdate = await listen("media-update", (event: any) => {
         const data = event.payload;
 
-        // console.log("[media-update] 收到数据:", {
-        //   source: data.source,
-        //   title: data.title,
-        //   artist: data.artist,
-        //   duration_ms: data.duration_ms,
-        //   is_playing: data.is_playing,
-        // });
-
         if (data.source) currentSource = data.source;
         isPlaying = data.is_playing || false;
 
-        // 检测歌曲是否变更
         const currentSongKey = `${data.title || ""}-${data.artist || ""}`;
         const songChanged = lastSongKey !== currentSongKey;
 
-        // 【重要】如果是新歌，重置最大进度记录
         if (songChanged) {
           maxBackendPosition = 0;
           lastSongKey = currentSongKey;
@@ -1614,14 +1471,8 @@
 
         const newPosition = data.position_ms || 0;
 
-        // 更新这首歌后端发来的历史最大进度
         maxBackendPosition = Math.max(maxBackendPosition, newPosition);
 
-        // 【核心拦截逻辑】
-        // 1. 后端传来的值极小 (比如 < 1000ms)
-        // 2. 前端本地已经跑出去了 (比如 > 3000ms)
-        // 3. 这首歌后端【从来没有】发来过大于 1000ms 的正常进度 (说明 Windows 根本拿不到这个播放器的进度)
-        // 4. 不是切歌状态
         const isBackendStuck =
           newPosition < 1000 &&
           currentTimeMs > 3000 &&
@@ -1630,56 +1481,26 @@
 
         if (isBackendStuck) {
           // 后端完全拿不到进度，忽略覆盖，全靠前端自己计时
-          // console.log(
-          //   `[进度同步] 拦截疑似无效进度：${newPosition}ms (前端：${currentTimeMs}ms, 后端最大：${maxBackendPosition}ms)`,
-          // );
         } else {
-          // 允许同步的条件：偏差大于 3 秒，或者切歌，或者暂停状态
           if (
             Math.abs(currentTimeMs - newPosition) > 3000 ||
             songChanged ||
             !isPlaying
           ) {
-            // console.log(
-            //   `[进度同步] 执行强制同步 -> 后端值：${newPosition}ms (后端最大：${maxBackendPosition}ms)`,
-            // );
             currentTimeMs = newPosition;
           }
         }
 
         if (songChanged) {
           console.log("[歌曲变更] 检测到新歌:", data.title, "-", data.artist);
-          console.log(
-            "[歌曲变更] lastSongKey:",
-            lastSongKey,
-            "currentSongKey:",
-            currentSongKey,
-          );
           lastSongKey = currentSongKey;
-
-          // 歌曲变更时，优先使用 SMTC 提供的时长，如果无效则尝试从网易云获取
-          // duration_ms < 1000 认为是无效时长（网易云有时返回 1ms）
-          console.log(
-            "[时长检查] data.duration_ms:",
-            data.duration_ms,
-            "条件 1:",
-            data.duration_ms && data.duration_ms > 1000,
-          );
 
           if (data.duration_ms && data.duration_ms > 1000) {
             durationMs = data.duration_ms;
             console.log("[时长] ✓ 使用 SMTC 提供的有效时长:", durationMs, "ms");
           } else {
-            // 时长为 0 或小于 1 秒时，尝试从网易云 API 获取
             const songName = data.title || trackTitle;
             const artistName = data.artist || artistName;
-
-            console.log(
-              "[时长] ✗ SMTC 时长无效（",
-              data.duration_ms,
-              "ms），尝试从网易云 API 获取",
-            );
-            console.log("[时长] 歌名:", songName, "歌手:", artistName);
 
             if (
               songName &&
@@ -1687,15 +1508,12 @@
               artistName &&
               artistName !== "未知艺术家"
             ) {
-              console.log("[时长] 发起 API 调用...");
               invoke("get_netease_song_info", {
                 songName,
                 artistName,
               })
                 .then((songInfo: any) => {
-                  console.log("[网易云 API] 返回歌曲信息:", songInfo);
                   if (songInfo) {
-                    // 更新时长
                     if (songInfo.duration && songInfo.duration > 0) {
                       durationMs = songInfo.duration;
                       console.log(
@@ -1704,12 +1522,10 @@
                         "ms",
                       );
                     }
-                    // 更新专辑图片（如果 SMTC 没有提供图片）
                     if (
                       songInfo.album_pic &&
                       (!rawCoverUrl || rawCoverUrl === "")
                     ) {
-                      // 将图片 URL 转换为高质量版本
                       const highQualityPic = songInfo.album_pic.replace(
                         /(\d+)x(\d+)\.jpg/,
                         "1024y1024.jpg",
@@ -1718,10 +1534,7 @@
                         "[网易云 API] ✓ 获取专辑图片:",
                         highQualityPic,
                       );
-                      // 这里可以更新封面图片
-                      // coverUrl = highQualityPic;
                     }
-                    // 处理 MV 信息
                     if (songInfo.mv_id && songInfo.mv_id > 0) {
                       console.log(
                         "[网易云 API] ✓ 发现 MV，ID:",
@@ -1732,8 +1545,6 @@
                           "[网易云 API] ✓ MV 播放链接:",
                           songInfo.mv_url,
                         );
-                        // 可以在这里存储 MV 链接，用于后续播放
-                        // mvUrl = songInfo.mv_url;
                       }
                     }
                   } else {
@@ -1743,12 +1554,8 @@
                 .catch((err) => {
                   console.error("[网易云 API] ✗ 获取歌曲信息失败:", err);
                 });
-            } else {
-              console.warn("[时长] 歌名或歌手名为空或为默认值，跳过 API 调用");
             }
           }
-        } else {
-          console.log("[歌曲未变更] 跳过时长获取");
         }
 
         const titleChanged = trackTitle !== data.title;
@@ -1767,7 +1574,6 @@
         if (titleChanged || artistChanged || coverChanged) {
           if (titleChanged) {
             trackTitle = data.title || "未知曲目";
-            // 检测歌名是否需要滚动
             setTimeout(() => {
               const titleEl = document.querySelector(
                 ".marquee-text",
@@ -1776,11 +1582,9 @@
                 ".marquee-wrapper",
               ) as HTMLElement;
               if (titleEl && wrapperEl) {
-                // 重置动画
                 titleEl.classList.remove("marquee-active");
                 titleEl.style.transform = "";
 
-                // 等待下一帧检查宽度
                 requestAnimationFrame(() => {
                   if (titleEl.scrollWidth > titleEl.clientWidth) {
                     titleEl.classList.add("marquee-active");
@@ -1863,7 +1667,6 @@
         unlistenSettings();
         unlistenSettingsChanged();
         unlistenCornerRadiusChanged();
-        unlistenSpectrumModeChanged();
         unlistenFloatingWindowClosed();
         unlistenAudioSpectrum();
         stopDebugFps();
@@ -1871,7 +1674,6 @@
     })();
   });
 
-  // 全局点击事件：关闭显示器菜单
   function handleGlobalClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
     if (showMonitorMenu && !target.closest(".relative")) {
@@ -1880,11 +1682,9 @@
   }
 
   onMount(() => {
-    // 初始化窗口对象
     win = getCurrentWindow();
     console.log("[App.svelte] 窗口对象已初始化");
 
-    // 进度条平滑更新定时器（每 100ms 更新一次）
     let progressInterval: ReturnType<typeof setInterval> | null = null;
 
     const startProgressUpdate = () => {
@@ -1892,7 +1692,7 @@
 
       progressInterval = setInterval(() => {
         if (isPlaying && durationMs > 0 && currentTimeMs < durationMs) {
-          currentTimeMs += 100; // 增加 100ms
+          currentTimeMs += 100;
           if (currentTimeMs > durationMs) {
             currentTimeMs = durationMs;
           }
@@ -1907,7 +1707,6 @@
       }
     };
 
-    // 监听播放状态变化，自动启动/停止进度更新
     $effect(() => {
       if (isPlaying) {
         startProgressUpdate();
@@ -1923,13 +1722,10 @@
     };
   });
 
-  // 全屏检测和鼠标移动监听
   onMount(() => {
-    // 降低全屏检测频率，从 2000ms 改为 3000ms
     fullscreenCheckInterval = setInterval(checkFullscreenAndHide, 3000);
     checkFullscreenAndHide();
 
-    // 使用节流优化鼠标移动监听
     let mouseMoveTimeout: ReturnType<typeof setTimeout> | null = null;
     const handleMouseMoveThrottled = (e: MouseEvent) => {
       if (mouseMoveTimeout) {
@@ -1937,7 +1733,7 @@
       }
       mouseMoveTimeout = setTimeout(() => {
         handleMouseMove(e);
-      }, 100); // 100ms 节流
+      }, 100);
     };
 
     document.addEventListener("mousemove", handleMouseMoveThrottled);
@@ -1968,6 +1764,7 @@
     class:island-drop-animation={isMouseAtTop && isHidden}
     class:island-visible-edge={isHidden && isMouseAtTop}
     class:theme-liquid_glass={currentTheme === "liquid_glass"}
+    class:theme-retro={currentTheme === "retro"}
     style="
       width: {$widthSpring}px;
       height: {$heightSpring}px;
@@ -1987,7 +1784,6 @@
       transition:
         transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
         box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-        /* 移除 border-radius 过渡，使用 Spring 动画同步 */
     "
     onmouseenter={handleMouseEnter}
     onmouseleave={handleMouseLeave}
@@ -2028,7 +1824,6 @@
         style="opacity: {1 - $contentOpacity};"
       >
         {#if showTimeDisplay}
-          <!-- 时间显示模式：居中显示，隐藏频谱和封面 -->
           <div
             class="h-full w-full flex items-center justify-center select-none"
           >
@@ -2037,7 +1832,6 @@
             </div>
           </div>
         {:else}
-          <!-- 正常模式：封面 + 频谱 -->
           <div
             class="h-full w-full flex items-center justify-between select-none"
           >
@@ -2076,7 +1870,6 @@
               </div>
             {/if}
 
-            <!-- ===== 频谱：iOS灵动岛风格 ===== -->
             {#if appSettings.show_spectrum}
               <div
                 class="spectrum-container"
@@ -2115,7 +1908,7 @@
             {#if artworkUrl}
               {#key flipKey}
                 <div
-                  class="w-[64px] h-[64px] rounded-[12px] overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
+                  class="w-[52px] h-[52px] rounded-[12px] overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
                   data-stop-toggle
                   onclick={(e) => {
                     e.stopPropagation();
@@ -2159,7 +1952,6 @@
               </p>
             </div>
 
-            <!-- 右上角频谱 -->
             {#if appSettings.show_spectrum}
               <div
                 class="spectrum-container-expanded"
@@ -2248,7 +2040,7 @@
               />
             </div>
 
-            <!-- 悬浮窗按钮 - 绝对定位到右侧 -->
+            <!-- 悬浮窗按钮 -->
             <div class="absolute right-0" style="transform: translateZ(0);">
               <button
                 class="w-7 h-7 flex items-center justify-center rounded-xl border border-white/10 text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button hover:border-white/20"
@@ -2277,7 +2069,7 @@
 </div>
 
 <style>
-  /* 性能优化的 CSS 变量和基础样式 */
+  /* ========== 全局基础样式 ========== */
   :global(*) {
     box-sizing: border-box;
   }
@@ -2396,312 +2188,11 @@
     backface-visibility: hidden;
   }
 
-  /* iOS风格：使用JavaScript正弦波驱动频谱动画，无需CSS动画 */
-
-  /* 中低频 */
-  @keyframes sp-e5 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    20% {
-      height: 10px;
-    }
-    40% {
-      height: 5px;
-    }
-    60% {
-      height: 14px;
-    }
-    80% {
-      height: 3px;
-    }
-  }
-  @keyframes sp-e6 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    15% {
-      height: 12px;
-    }
-    45% {
-      height: 4px;
-    }
-    75% {
-      height: 16px;
-    }
-    95% {
-      height: 2px;
-    }
-  }
-  @keyframes sp-e7 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    30% {
-      height: 8px;
-    }
-    55% {
-      height: 6px;
-    }
-    80% {
-      height: 13px;
-    }
-  }
-  @keyframes sp-e8 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    10% {
-      height: 14px;
-    }
-    35% {
-      height: 3px;
-    }
-    65% {
-      height: 10px;
-    }
-    90% {
-      height: 1px;
-    }
-  }
-
-  /* 中频 - 最活跃 */
-  @keyframes sp-e9 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    12% {
-      height: 16px;
-    }
-    28% {
-      height: 5px;
-    }
-    44% {
-      height: 20px;
-    }
-    60% {
-      height: 8px;
-    }
-    76% {
-      height: 12px;
-    }
-    92% {
-      height: 3px;
-    }
-  }
-  @keyframes sp-e10 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    18% {
-      height: 12px;
-    }
-    36% {
-      height: 7px;
-    }
-    54% {
-      height: 18px;
-    }
-    72% {
-      height: 4px;
-    }
-    88% {
-      height: 10px;
-    }
-  }
-  @keyframes sp-e11 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    22% {
-      height: 14px;
-    }
-    44% {
-      height: 3px;
-    }
-    66% {
-      height: 16px;
-    }
-    88% {
-      height: 6px;
-    }
-  }
-  @keyframes sp-e12 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    8% {
-      height: 10px;
-    }
-    24% {
-      height: 6px;
-    }
-    40% {
-      height: 15px;
-    }
-    56% {
-      height: 2px;
-    }
-    72% {
-      height: 11px;
-    }
-    90% {
-      height: 4px;
-    }
-  }
-
-  /* 中高频 */
-  @keyframes sp-e13 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    20% {
-      height: 8px;
-    }
-    45% {
-      height: 3px;
-    }
-    70% {
-      height: 10px;
-    }
-    90% {
-      height: 1px;
-    }
-  }
-  @keyframes sp-e14 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    15% {
-      height: 10px;
-    }
-    40% {
-      height: 4px;
-    }
-    65% {
-      height: 12px;
-    }
-    85% {
-      height: 2px;
-    }
-  }
-  @keyframes sp-e15 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    25% {
-      height: 7px;
-    }
-    50% {
-      height: 5px;
-    }
-    75% {
-      height: 9px;
-    }
-  }
-  @keyframes sp-e16 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    10% {
-      height: 11px;
-    }
-    35% {
-      height: 2px;
-    }
-    60% {
-      height: 8px;
-    }
-    85% {
-      height: 4px;
-    }
-  }
-
-  /* 高频 - 小幅度 */
-  @keyframes sp-e17 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    20% {
-      height: 6px;
-    }
-    50% {
-      height: 2px;
-    }
-    80% {
-      height: 7px;
-    }
-  }
-  @keyframes sp-e18 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    15% {
-      height: 8px;
-    }
-    40% {
-      height: 3px;
-    }
-    65% {
-      height: 5px;
-    }
-    90% {
-      height: 1px;
-    }
-  }
-  @keyframes sp-e19 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    25% {
-      height: 5px;
-    }
-    55% {
-      height: 4px;
-    }
-    80% {
-      height: 6px;
-    }
-  }
-  @keyframes sp-e20 {
-    0%,
-    100% {
-      height: 0.5px;
-    }
-    12% {
-      height: 7px;
-    }
-    38% {
-      height: 2px;
-    }
-    62% {
-      height: 9px;
-    }
-    88% {
-      height: 3px;
-    }
-  }
-
-  /* 优化的显示器选择菜单动画 */
+  /* 显示器选择菜单动画 */
   .monitor-menu.menu-open {
     animation: menuSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     will-change: transform, opacity;
-    transform: translateZ(0); /* GPU 加速 */
+    transform: translateZ(0);
   }
 
   @keyframes menuSlideIn {
@@ -2715,7 +2206,6 @@
     }
   }
 
-  /* 优化的显示器选项悬停效果 */
   .monitor-menu button:hover {
     transform: translateX(4px) translateZ(0);
     transition: transform 0.15s ease-out;
@@ -2726,7 +2216,6 @@
     transition: transform 0.1s ease-out;
   }
 
-  /* 优化的显示器选择菜单关闭动画 */
   .monitor-menu:not(.menu-open) {
     animation: menuSlideOut 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     will-change: transform, opacity;
@@ -2743,25 +2232,210 @@
     }
   }
 
-  /* ===== Liquid Glass - 稳定版（保留圆角 + 强效模糊） ===== */
+  /* ================================================================
+ * Liquid Glass — 修复圆角阴影 + 增强玻璃质感
+ * ================================================================
+ *
+ * 关键修复：
+ *   1. 所有阴影改用 filter: drop-shadow()（跟随 border-radius）
+ *   2. ::before 从 position: fixed 改为 absolute（可被 overflow: hidden 裁切）
+ *   3. 删除原始 display: none !important 的冲突
+ * ================================================================ */
+
+  /* ── 容器：去除 box-shadow，改用 drop-shadow ── */
   .theme-liquid_glass {
     position: relative;
-    background: rgba(255, 255, 255, 0.12) !important;
-    -webkit-backdrop-filter: blur(35px) saturate(200%) contrast(120%)
-      brightness(1.1) !important;
-    backdrop-filter: blur(35px) saturate(200%) contrast(120%) brightness(1.1) !important;
-    box-shadow:
-      inset 0 1px 2px rgba(255, 255, 255, 0.6),
-      inset 1px 0 2px rgba(255, 255, 255, 0.2),
-      inset -1px 0 2px rgba(255, 255, 255, 0.2),
-      inset 0 -2px 5px rgba(0, 0, 0, 0.15),
-      inset 0 0 20px rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    background: rgba(200, 210, 230, 0.1) !important;
+    border: 0.5px solid rgba(255, 255, 255, 0.18) !important;
     overflow: hidden !important;
     mix-blend-mode: normal !important;
     mask-image: none !important;
     -webkit-mask-image: none !important;
     contain: none !important;
+
+    /* ★ 核心修复：drop-shadow 跟随圆角轮廓 */
+    filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.45))
+      drop-shadow(0 2px 6px rgba(0, 0, 0, 0.2)) !important;
+
+    transition:
+      filter 0.3s ease,
+      background 0.3s ease,
+      border-color 0.3s ease,
+      transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  }
+
+  .theme-liquid_glass:hover {
+    background: rgba(210, 220, 240, 0.16) !important;
+    border-color: rgba(255, 255, 255, 0.28) !important;
+    filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.5))
+      drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25)) !important;
+  }
+
+  /* ── ::after：内侧高光层 ── */
+  .theme-liquid_glass::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.2) 0%,
+      rgba(255, 255, 255, 0.05) 30%,
+      transparent 55%,
+      rgba(0, 0, 0, 0.03) 100%
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── ::before：内侧明暗 + 噪点纹理 ── */
+  /* 注意：这里必须用 !important 覆盖原始的 display: none !important */
+  .theme-liquid_glass::before {
+    content: "" !important;
+    display: block !important;
+    position: absolute !important;
+    inset: 0 !important;
+    border-radius: inherit !important;
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.12) 0%,
+        transparent 35%,
+        transparent 65%,
+        rgba(0, 0, 0, 0.08) 100%
+      ),
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E") !important;
+    background-size:
+      100% 100%,
+      150px 150px !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+    mix-blend-mode: overlay !important;
+    opacity: 0.8 !important;
+  }
+
+  /* ── 文字：微发光 ── */
+  .theme-liquid_glass :global(.dynamic-glass-text) {
+    color: rgba(255, 255, 255, 0.95) !important;
+    text-shadow:
+      0 0 20px rgba(255, 255, 255, 0.12),
+      0 1px 2px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  .theme-liquid_glass :global(.dynamic-glass-text-secondary) {
+    color: rgba(255, 255, 255, 0.6) !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  .theme-liquid_glass :global(.time-display span) {
+    color: rgba(255, 255, 255, 0.85) !important;
+    text-shadow: 0 0 12px rgba(255, 255, 255, 0.08) !important;
+  }
+
+  /* ── 频谱条：白光渐变 ── */
+  .theme-liquid_glass :global(.spectrum-bar) {
+    background: linear-gradient(
+      to top,
+      rgba(255, 255, 255, 0.15),
+      rgba(255, 255, 255, 0.65)
+    ) !important;
+    box-shadow: 0 0 3px rgba(255, 255, 255, 0.1) !important;
+    border-radius: 2px !important;
+  }
+
+  .theme-liquid_glass :global(.spectrum-bar-expanded) {
+    background: linear-gradient(
+      to top,
+      rgba(255, 255, 255, 0.1),
+      rgba(255, 255, 255, 0.6)
+    ) !important;
+    box-shadow: 0 0 3px rgba(255, 255, 255, 0.08) !important;
+    border-radius: 2px !important;
+  }
+
+  /* ── 进度条：半透明白光 ── */
+  .theme-liquid_glass :global(.progress-bar) {
+    background: rgba(255, 255, 255, 0.07) !important;
+    border: 0.5px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 999px !important;
+    height: 3px !important;
+  }
+
+  .theme-liquid_glass :global(.progress-fill) {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.35),
+      rgba(255, 255, 255, 0.75)
+    ) !important;
+    border-radius: 999px !important;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.15) !important;
+  }
+
+  .theme-liquid_glass :global(.text-white\/60) {
+    color: rgba(255, 255, 255, 0.4) !important;
+  }
+
+  /* ── 按钮：毛玻璃胶囊 ── */
+  .theme-liquid_glass :global(.media-button) {
+    color: rgba(255, 255, 255, 0.8) !important;
+    transition: all 0.25s ease !important;
+  }
+
+  .theme-liquid_glass :global(.media-button:hover) {
+    color: rgba(255, 255, 255, 1) !important;
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.25)) !important;
+  }
+
+  .theme-liquid_glass :global(button) {
+    background: rgba(255, 255, 255, 0.07) !important;
+    border: 0.5px solid rgba(255, 255, 255, 0.12) !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    border-radius: 10px !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      0 2px 6px rgba(0, 0, 0, 0.15) !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .theme-liquid_glass :global(button:hover) {
+    background: rgba(255, 255, 255, 0.14) !important;
+    border-color: rgba(255, 255, 255, 0.22) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.15),
+      0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  .theme-liquid_glass :global(button:active) {
+    background: rgba(255, 255, 255, 0.04) !important;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15) !important;
+  }
+
+  /* ── 专辑封面 ── */
+  .theme-liquid_glass :global(.w-16) {
+    border: 0.5px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  .theme-liquid_glass :global(.w-16:hover) {
+    box-shadow:
+      0 6px 24px rgba(0, 0, 0, 0.35),
+      0 0 20px rgba(255, 255, 255, 0.04) !important;
+  }
+
+  .theme-liquid_glass :global(.collapsed-content .w-5) {
+    border-radius: 6px !important;
+  }
+
+  /* ── 调试面板 ── */
+  .theme-liquid_glass :global(.debug-overlay) {
+    background: rgba(0, 0, 0, 0.45) !important;
+    border: 0.5px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 10px !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    color: rgba(255, 255, 255, 0.75) !important;
   }
 
   .theme-liquid_glass::after {
@@ -2784,6 +2458,337 @@
     display: none !important;
   }
 
+  /* ================================================================
+   * ===== RETRO POP ART — 复古波普卡通风格（全面改造） =====
+   * ================================================================
+   *
+   * 灵感来源：60年代波普艺术 × 90年代漫画书 × 复古卡通
+   *
+   * 特色：
+   *   - 暖米色背景 + 半色调网点纹理
+   *   - 粗黑描边 + 偏移投影（漫画书风格）
+   *   - 彩虹渐变频谱条
+   *   - 波普风格进度条
+   *   - 弹跳式展开/收起动画
+   *   - 按钮悬浮波普高光
+   * ================================================================ */
+
+  /* ── 容器主体 ── */
+  .theme-retro {
+    position: relative;
+    background: #ffe5ec !important;
+    border: 3px solid #1a1a1a !important;
+    border-radius: 18px !important;
+    overflow: hidden !important;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    /* 修复边框圆角渲染问题 */
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+    mask-image: -webkit-radial-gradient(white, black);
+  }
+
+  /* ── 半色调网点纹理叠加层 ── */
+  .theme-retro::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-image: radial-gradient(circle, #d4a0b0 1px, transparent 1px);
+    background-size: 5px 5px;
+    opacity: 0.13;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ── 收起态文字 ── */
+  .theme-retro :global(.dynamic-glass-text) {
+    color: #1a1a1a !important;
+    text-shadow: none !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.02em !important;
+  }
+
+  .theme-retro :global(.dynamic-glass-text-secondary) {
+    color: #555 !important;
+    text-shadow: none !important;
+    font-weight: 600 !important;
+  }
+
+  /* ── 时间显示 ── */
+  .theme-retro :global(.time-display span) {
+    color: #1a1a1a !important;
+    font-weight: 900 !important;
+    font-size: 14px !important;
+    letter-spacing: 0.08em !important;
+  }
+
+  /* ── 收起态频谱条：双色糖果渐变 ── */
+  .theme-retro :global(.spectrum-bar) {
+    background: linear-gradient(to top, #ffd700, #ff1493) !important;
+    border: 1.5px solid #1a1a1a !important;
+    border-radius: 2px !important;
+    opacity: 1 !important;
+  }
+
+  /* ── 展开态频谱条：彩虹渐变 ── */
+  .theme-retro :global(.spectrum-bar-expanded) {
+    background: linear-gradient(
+      to top,
+      #ff6b6b,
+      #ffa94d,
+      #ffd43b,
+      #69db7c,
+      #4ecdc4,
+      #5c7cfa
+    ) !important;
+    border: 1.5px solid #1a1a1a !important;
+    border-radius: 2px !important;
+    opacity: 1 !important;
+  }
+
+  /* ── 进度条：波普漫画风格 ── */
+  .theme-retro :global(.progress-bar) {
+    background: #fff !important;
+    border: 2.5px solid #1a1a1a !important;
+    border-radius: 999px !important;
+    height: 7px !important;
+    overflow: hidden !important;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.15) !important;
+  }
+
+  .theme-retro :global(.progress-fill) {
+    background: linear-gradient(
+      90deg,
+      #ffd700,
+      #ff6b6b,
+      #ff1493,
+      #5c7cfa
+    ) !important;
+    border-radius: 999px !important;
+    transition: width 0.15s linear !important;
+  }
+
+  /* ── 进度条时间文字 ── */
+  .theme-retro :global(.text-white\/60) {
+    color: #777 !important;
+    font-weight: 800 !important;
+    font-size: 10px !important;
+    letter-spacing: 0.04em !important;
+  }
+
+  /* ── 播放控制按钮 ── */
+  .theme-retro :global(.media-button) {
+    color: #1a1a1a !important;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    filter: none !important;
+  }
+
+  .theme-retro :global(.media-button:hover) {
+    color: #ff1493 !important;
+    transform: scale(1.2) translateZ(0) !important;
+    filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.2)) !important;
+  }
+
+  .theme-retro :global(.media-button:active) {
+    transform: scale(0.88) translateZ(0) !important;
+  }
+
+  /* ── 悬浮窗按钮 ── */
+  .theme-retro :global(button) {
+    background: #ffd700 !important;
+    border: 2.5px solid #1a1a1a !important;
+    color: #1a1a1a !important;
+    border-radius: 10px !important;
+    box-shadow: 2px 2px 0 #1a1a1a !important;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    font-weight: 800 !important;
+  }
+
+  .theme-retro :global(button:hover) {
+    background: #4ecdc4 !important;
+    transform: translate(-1px, -1px) translateZ(0) !important;
+    box-shadow: 3px 3px 0 #1a1a1a !important;
+  }
+
+  .theme-retro :global(button:active) {
+    transform: translate(2px, 2px) translateZ(0) !important;
+    box-shadow: 0 0 0 #1a1a1a !important;
+  }
+
+  /* ── 展开态内容面板 ── */
+  .theme-retro :global(.expanded-content) {
+    padding: 16px 20px !important;
+    border-radius: 18px !important;
+  }
+
+  /* ── 专辑封面：波普风格描边 ── */
+  .theme-retro :global(.w-16) {
+    width: 52px !important;
+    height: 52px !important;
+    border: 3px solid #1a1a1a !important;
+    border-radius: 14px !important;
+    overflow: hidden !important;
+  }
+
+  /* 展开态专辑封面阴影 - 已移除 */
+
+  .theme-retro :global(.w-16:hover) {
+    transform: scale(1.06) rotate(-2deg) translateZ(0) !important;
+  }
+
+  /* ── 收起态封面 ── */
+  .theme-retro :global(.collapsed-content .w-5) {
+    border: 2px solid #1a1a1a !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+  }
+
+  /* ── 展开态弹跳入场动画 ── */
+  .theme-retro :global(.expanded-content) {
+    transition: none !important;
+  }
+
+  .theme-retro :global(.expanded-content.is-visible) {
+    animation: retro-pop-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
+  }
+
+  @keyframes retro-pop-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.5) translateY(20px) translateZ(0);
+      filter: blur(4px);
+    }
+    50% {
+      opacity: 0.85;
+      transform: scale(1.04) translateY(-4px) translateZ(0);
+      filter: blur(0);
+    }
+    70% {
+      transform: scale(0.98) translateY(2px) translateZ(0);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) translateY(0) translateZ(0);
+      filter: blur(0);
+    }
+  }
+
+  /* ── 收起态弹跳退出动画 ── */
+  .theme-retro :global(.collapsed-content.is-hidden) {
+    animation: retro-pop-out 0.3s cubic-bezier(0.55, 0, 1, 0.45) forwards !important;
+  }
+
+  @keyframes retro-pop-out {
+    0% {
+      opacity: 1;
+      transform: scale(1) translateZ(0);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(0.7) translateY(-15px) translateZ(0);
+    }
+  }
+
+  /* ── 收起态内容入场 ── */
+  .theme-retro :global(.collapsed-content) {
+    transition: none !important;
+    box-shadow: none !important;
+  }
+
+  .theme-retro :global(.collapsed-content:not(.is-hidden)) {
+    animation: retro-collapsed-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)
+      forwards !important;
+    box-shadow: none !important;
+  }
+
+  /* 收起态所有元素无阴影 */
+  .theme-retro :global(.collapsed-content *) {
+    box-shadow: none !important;
+  }
+
+  @keyframes retro-collapsed-in {
+    0% {
+      opacity: 0;
+      transform: scale(0.85) translateZ(0);
+    }
+    60% {
+      transform: scale(1.05) translateZ(0);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) translateZ(0);
+    }
+  }
+
+  /* ── 按钮波普弹跳入场 ── */
+  .theme-retro :global(.expanded-content.is-visible .media-button) {
+    animation: retro-btn-bounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
+  }
+
+  .theme-retro
+    :global(.expanded-content.is-visible .media-button:nth-child(1)) {
+    animation-delay: 0.1s !important;
+  }
+
+  .theme-retro
+    :global(.expanded-content.is-visible .media-button:nth-child(2)) {
+    animation-delay: 0.18s !important;
+  }
+
+  .theme-retro
+    :global(.expanded-content.is-visible .media-button:nth-child(3)) {
+    animation-delay: 0.26s !important;
+  }
+
+  @keyframes retro-btn-bounce {
+    0% {
+      opacity: 0;
+      transform: translateY(-30px) scale(0.3) rotate(-15deg) translateZ(0);
+    }
+    60% {
+      opacity: 1;
+      transform: translateY(4px) scale(1.1) rotate(3deg) translateZ(0);
+    }
+    80% {
+      transform: translateY(-2px) scale(0.97) rotate(-1deg) translateZ(0);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1) rotate(0deg) translateZ(0);
+    }
+  }
+
+  /* ── 封面翻转进入：复古旋转 ── */
+  .theme-retro :global(.flip-enter) {
+    animation: retro-flip 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  }
+
+  @keyframes retro-flip {
+    0% {
+      transform: perspective(600px) rotateY(-120deg) scale(0.7);
+      opacity: 0;
+    }
+    50% {
+      transform: perspective(600px) rotateY(10deg) scale(1.05);
+      opacity: 0.8;
+    }
+    75% {
+      transform: perspective(600px) rotateY(-5deg) scale(0.98);
+    }
+    100% {
+      transform: perspective(600px) rotateY(0deg) scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* ── 调试面板适配 ── */
+  .theme-retro :global(.debug-overlay) {
+    background: rgba(0, 0, 0, 0.85) !important;
+    border: 2px solid #ffd700 !important;
+    border-radius: 8px !important;
+    color: #ffd700 !important;
+  }
+
+  /* ===== 通用文本样式 ===== */
   .dynamic-glass-text {
     color: #ffffff;
     text-shadow:
@@ -2830,12 +2835,10 @@
     white-space: nowrap;
   }
 
-  /* 显示器选择菜单选中状态 */
   button.selected {
     background-color: rgba(255, 255, 255, 0.15);
   }
 
-  /* 显示器选择菜单动画 */
   .monitor-menu {
     animation: menu-slide-down 0.15s cubic-bezier(0.32, 0.72, 0, 1) forwards;
     transform-origin: top right;
@@ -2853,21 +2856,20 @@
     }
   }
 
-  /* ========== 优化后的按钮布局 ========== */
+  /* ========== 展开态内容布局 ========== */
   .expanded-content .media-buttons {
-    gap: 6px; /* 缩小按钮间距 */
-    justify-content: space-between; /* 添加均匀分布 */
-    align-items: center; /* 垂直居中 */
+    gap: 6px;
+    justify-content: space-between;
+    align-items: center;
   }
 
   .expanded-content .media-button {
-    width: 24px; /* 缩小按钮尺寸 */
+    width: 24px;
     height: 24px;
     font-size: 11px;
-    flex-shrink: 0; /* 防止按钮被压缩 */
+    flex-shrink: 0;
   }
 
-  /* 播放控制按钮组特殊样式 */
   .expanded-content .media-button-group {
     display: flex;
     align-items: center;
@@ -2877,16 +2879,14 @@
     flex-shrink: 0;
   }
 
-  /* 左右两侧按钮特殊样式 */
   .expanded-content .media-button:first-child {
-    margin-left: 8px; /* 左侧按钮左边距 */
+    margin-left: 8px;
   }
 
   .expanded-content .media-button:last-child {
-    margin-right: 8px; /* 右侧按钮右边距 */
+    margin-right: 8px;
   }
 
-  /* ========== 优化后的内容布局 ========== */
   .expanded-content {
     padding: 16px 20px !important;
     padding-top: 16px !important;
@@ -2905,7 +2905,7 @@
   }
 
   .expanded-content .progress-container {
-    margin-top: 4px; /* 缩小进度条间距 */
+    margin-top: 4px;
   }
 
   .expanded-content .progress-bar {
@@ -2954,7 +2954,6 @@
     }
   }
 
-  /* 隐藏状态的窗口 */
   .island-hidden {
     transition:
       transform 0.35s cubic-bezier(0.32, 0.72, 0, 1),
@@ -2965,7 +2964,6 @@
     will-change: transform, opacity;
   }
 
-  /* 隐藏时可见的顶部边缘 */
   .island-visible-edge {
     box-shadow:
       0 2px 15px rgba(255, 255, 255, 0.3),
@@ -3019,7 +3017,6 @@
     pointer-events: auto;
   }
 
-  /* 收起态内容容器 */
   .collapsed-content {
     position: absolute;
     inset: 0;
@@ -3044,7 +3041,6 @@
     pointer-events: none;
   }
 
-  /* 按钮入场动画 */
   .expanded-content.is-visible .flex-1 {
     animation: button-drop-in 0.4s cubic-bezier(0.32, 0.72, 0, 1) forwards;
     opacity: 0;
@@ -3074,7 +3070,6 @@
     }
   }
 
-  /* 翻转进入动画 */
   .flip-enter {
     animation: flip-enter 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     transform-origin: center;
@@ -3115,7 +3110,6 @@
     }
   }
 
-  /* 呼吸横线动画 */
   @keyframes breath {
     0%,
     100% {
@@ -3151,7 +3145,7 @@
     padding: 0;
     width: 100vw;
     height: 100vh;
-    pointer-events: auto; /* 修复：允许鼠标事件 */
+    pointer-events: auto;
     overflow: hidden;
     -webkit-app-region: no-drag;
     -webkit-backface-visibility: hidden;
@@ -3163,7 +3157,6 @@
     background: transparent !important;
   }
 
-  /* ========== 优化的 GPU 加速规则 ========== */
   .pointer-events-auto {
     -webkit-font-smoothing: antialiased;
     transform: translate3d(0, 0, 0) !important;
@@ -3173,7 +3166,6 @@
     contain: layout style;
   }
 
-  /* 移除焦点时的默认边框 */
   :global(*:focus) {
     outline: none !important;
     box-shadow: none !important;
@@ -3186,7 +3178,6 @@
     border: none !important;
   }
 
-  /* 优化的GPU加速按钮 */
   button,
   [data-stop-toggle],
   .media-button {
@@ -3212,7 +3203,6 @@
     transition: transform 0.1s ease !important;
   }
 
-  /* 播放控制按钮：独立的下落动画 */
   .expanded-content.is-visible .media-button {
     animation: button-icon-bounce 0.2s cubic-bezier(0.32, 0.72, 0, 1) forwards;
     opacity: 0;
