@@ -1599,20 +1599,35 @@
         if (data.source) currentSource = data.source;
         isPlaying = data.is_playing || false;
 
-        // 仅当后端数值与前端本地累加数值偏差超过 2 秒时，才进行强制同步
-        // 这样可以避免每秒一次的细微数值覆盖导致的进度条抖动
-        if (Math.abs(currentTimeMs - data.position_ms) > 2000 || !isPlaying) {
-          currentTimeMs = data.position_ms || 0;
-          console.log(
-            "[进度同步] 强制同步进度:",
-            currentTimeMs,
-            "ms (偏差:",
-            Math.abs(currentTimeMs - data.position_ms),
-            "ms)",
-          );
+        // 检测歌曲是否变更
+        const currentSongKey = `${data.title || ""}-${data.artist || ""}`;
+        const songChanged = lastSongKey !== currentSongKey;
+
+        const newPosition = data.position_ms || 0;
+
+        // 优化点：如果后端送来的是 0，且当前歌曲正在播放中，且本地进度已经跑起来了，则忽略这个 0
+        if (
+          newPosition === 0 &&
+          isPlaying &&
+          currentTimeMs > 500 &&
+          !songChanged
+        ) {
+          console.log("[进度同步] 检测到无效的 0 进度推送，已忽略以防止归零");
         } else {
-          // 小幅度更新，仅用于日志记录
-          // console.log("[进度同步] 跳过同步，当前偏差:", Math.abs(currentTimeMs - data.position_ms), "ms");
+          // 仅在偏差过大（例如超过 3 秒）或歌曲切换时才同步
+          if (
+            Math.abs(currentTimeMs - newPosition) > 3000 ||
+            songChanged ||
+            !isPlaying
+          ) {
+            console.log(
+              `[进度同步] 执行强制同步：${newPosition} ms (偏差：${Math.abs(currentTimeMs - newPosition)} ms)`,
+            );
+            currentTimeMs = newPosition;
+          } else {
+            // 小偏差不同步，保持前端流畅更新
+            // console.log(`[进度同步] 跳过同步：偏差 ${Math.abs(currentTimeMs - newPosition)} ms < 3000ms`);
+          }
         }
 
         // 检测歌曲是否变更
