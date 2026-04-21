@@ -777,33 +777,16 @@
 
   let win: ReturnType<typeof getCurrentWindow>;
 
-  // --- 基于 spring 动画的窗口大小同步 ---
-  $effect(() => {
-    const w = $widthSpring;
-    const h = $heightSpring;
-
-    // 使用 requestAnimationFrame 在每帧同步窗口大小
-    requestAnimationFrame(() => {
-      if (win) {
-        const dpr = window.devicePixelRatio || 1;
-        const physW = Math.round(w * dpr);
-        const physH = Math.round(h * dpr);
-        win.setSize(new PhysicalSize(physW, physH)).catch(() => {});
-      }
-    });
-  });
-
   // ========== 窗口同步优化 ==========
   let cachedScreenWidth = 0;
   let cachedScreenHeight = 0;
   let isSyncing = false;
+  let pendingW = 0;
   let pendingH = 0;
   let hasPendingSync = false;
 
   let monitorAnchorX = 0;
   let monitorAnchorY = 0;
-
-  const MAX_PHYSICAL_WIDTH = 380;
 
   async function processSyncQueue() {
     if (isSyncing || !hasPendingSync) return;
@@ -811,10 +794,9 @@
     isSyncing = true;
     hasPendingSync = false;
 
+    const w = pendingW;
     const h = pendingH;
     const dpr = window.devicePixelRatio || 1;
-
-    console.log("[窗口同步] 开始同步，高度:", h, "DPR:", dpr);
 
     try {
       if (!cachedScreenWidth) {
@@ -824,48 +806,20 @@
           cachedScreenHeight = monitor.size.height;
           monitorAnchorX = monitor.position.x + monitor.size.width / 2;
           monitorAnchorY = monitor.position.y;
-          console.log("[窗口同步] 显示器信息:", monitorAnchorX, monitorAnchorY);
         }
       }
 
-      const physW = Math.round(MAX_PHYSICAL_WIDTH * dpr);
+      const physW = Math.round(w * dpr);
       const physH = Math.round(h * dpr);
       const centerX = Math.round(monitorAnchorX - physW / 2);
       const targetY = Math.round(monitorAnchorY + 22 * dpr);
 
-      console.log(
-        "[窗口同步] 设置窗口大小 (物理像素):",
-        physW,
-        physH,
-        "DPR:",
-        dpr,
-      );
-      console.log("[窗口同步] 设置窗口位置:", centerX, targetY);
-
-      try {
-        await win.setSize(new PhysicalSize(physW, physH));
-        // 验证设置后的大小
-        const newSize = await win.innerSize();
-        console.log(
-          "[窗口同步] 设置后实际大小:",
-          newSize.width,
-          newSize.height,
-        );
-        console.log("[窗口同步] 大小设置成功");
-      } catch (sizeErr) {
-        console.error("[窗口同步] 设置大小失败:", sizeErr);
-      }
-
-      try {
-        await win.setPosition(new PhysicalPosition(centerX, targetY));
-        console.log("[窗口同步] 位置设置成功");
-      } catch (posErr) {
-        console.error("[窗口同步] 设置位置失败:", posErr);
-      }
-
-      console.log("[窗口同步] 同步完成");
+      await Promise.all([
+        win.setSize(new PhysicalSize(physW, physH)),
+        win.setPosition(new PhysicalPosition(centerX, targetY)),
+      ]);
     } catch (err) {
-      console.log("[窗口同步] 已安全中断 (可能正在关闭)", err);
+      logger.error("窗口同步失败:", err);
     } finally {
       isSyncing = false;
       if (hasPendingSync) {
@@ -874,7 +828,32 @@
     }
   }
 
-  // ===== 优化的自动收起管理（内存优化） =====
+  let lastW = 0;
+  let lastH = 0;
+
+  $effect(() => {
+    const currentW = $widthSpring;
+    const currentH = $heightSpring;
+
+    const syncThreshold = highFrameRateMode ? 0.5 : 0.8;
+
+    if (
+      Math.abs(currentW - lastW) > syncThreshold ||
+      Math.abs(currentH - lastH) > syncThreshold
+    ) {
+      pendingW = currentW;
+      pendingH = currentH;
+      hasPendingSync = true;
+
+      if (!isSyncing) {
+        requestAnimationFrame(processSyncQueue);
+      }
+
+      lastW = currentW;
+      lastH = currentH;
+    }
+  });
+
   function startAutoClose() {
     stopAutoClose();
     if (expanded && !hovering) {
