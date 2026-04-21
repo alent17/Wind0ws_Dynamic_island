@@ -1950,7 +1950,8 @@ async fn get_netease_song_info(song_name: String, artist_name: String) -> Option
                                     let mv_id = first_song["mv"].as_i64();
                                     
                                     // 如果存在 MV ID，获取 MV 播放链接
-                                    let mv_url = if let Some(id) = mv_id {
+                                    let mut mv_url: Option<String> = None;
+                                    if let Some(id) = mv_id {
                                         if id > 0 {
                                             // 调用网易云 MV 详情 API
                                             let mv_api_url = format!("https://music.163.com/api/mv/detail?id={}", id);
@@ -1966,24 +1967,17 @@ async fn get_netease_song_info(song_name: String, artist_name: String) -> Option
                                                                 for br in b_rs {
                                                                     if let Some(url) = br.get("url").as_str() {
                                                                         println!("[网易云 API] ✓ 获取 MV 链接成功");
-                                                                        return Some(NeteaseSongInfo {
-                                                                            duration,
-                                                                            album_pic,
-                                                                            mv_id: Some(id),
-                                                                            mv_url: Some(url.to_string()),
-                                                                        });
+                                                                        mv_url = Some(url.to_string());
+                                                                        break;
                                                                     }
                                                                 }
                                                             }
                                                             // 备用：尝试直接获取 url 字段
-                                                            if let Some(url) = data.get("url").as_str() {
-                                                                println!("[网易云 API] ✓ 获取 MV 链接成功（备用）");
-                                                                return Some(NeteaseSongInfo {
-                                                                    duration,
-                                                                    album_pic,
-                                                                    mv_id: Some(id),
-                                                                    mv_url: Some(url.to_string()),
-                                                                });
+                                                            if mv_url.is_none() {
+                                                                if let Some(url) = data.get("url").as_str() {
+                                                                    println!("[网易云 API] ✓ 获取 MV 链接成功（备用）");
+                                                                    mv_url = Some(url.to_string());
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -1995,12 +1989,13 @@ async fn get_netease_song_info(song_name: String, artist_name: String) -> Option
                                     println!("[网易云 API] ✓ 时长：{:?}", duration);
                                     println!("[网易云 API] ✓ 专辑图片：{:?}", album_pic);
                                     println!("[网易云 API] ✓ MV ID: {:?}", mv_id);
+                                    println!("[网易云 API] ✓ MV URL: {:?}", mv_url);
                                     
                                     return Some(NeteaseSongInfo {
                                         duration,
                                         album_pic,
                                         mv_id,
-                                        mv_url: None,
+                                        mv_url,
                                     });
                                 } else {
                                     println!("[网易云 API] ✗ 歌曲列表为空");
