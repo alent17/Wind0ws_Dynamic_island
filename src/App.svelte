@@ -1606,20 +1606,33 @@
 
         if (songChanged) {
           console.log("[歌曲变更] 检测到新歌:", data.title, "-", data.artist);
+          console.log(
+            "[歌曲变更] lastSongKey:",
+            lastSongKey,
+            "currentSongKey:",
+            currentSongKey,
+          );
           lastSongKey = currentSongKey;
 
           // 歌曲变更时，优先使用 SMTC 提供的时长，如果无效则尝试从网易云获取
           // duration_ms < 1000 认为是无效时长（网易云有时返回 1ms）
+          console.log(
+            "[时长检查] data.duration_ms:",
+            data.duration_ms,
+            "条件 1:",
+            data.duration_ms && data.duration_ms > 1000,
+          );
+
           if (data.duration_ms && data.duration_ms > 1000) {
             durationMs = data.duration_ms;
-            console.log("[时长] 使用 SMTC 提供的时长:", durationMs, "ms");
+            console.log("[时长] ✓ 使用 SMTC 提供的有效时长:", durationMs, "ms");
           } else {
             // 时长为 0 或小于 1 秒时，尝试从网易云 API 获取
             const songName = data.title || trackTitle;
             const artistName = data.artist || artistName;
 
             console.log(
-              "[时长] SMTC 时长无效（",
+              "[时长] ✗ SMTC 时长无效（",
               data.duration_ms,
               "ms），尝试从网易云 API 获取",
             );
@@ -1640,18 +1653,20 @@
                   console.log("[时长] API 返回:", duration);
                   if (duration && duration > 0) {
                     durationMs = duration;
-                    console.log("[网易云 API] 获取时长成功:", duration, "ms");
+                    console.log("[网易云 API] ✓ 获取时长成功:", duration, "ms");
                   } else {
-                    console.warn("[网易云 API] 未找到时长信息");
+                    console.warn("[网易云 API] ✗ 未找到时长信息");
                   }
                 })
                 .catch((err) => {
-                  console.error("[网易云 API] 获取时长失败:", err);
+                  console.error("[网易云 API] ✗ 获取时长失败:", err);
                 });
             } else {
               console.warn("[时长] 歌名或歌手名为空或为默认值，跳过 API 调用");
             }
           }
+        } else {
+          console.log("[歌曲未变更] 跳过时长获取");
         }
 
         const titleChanged = trackTitle !== data.title;
