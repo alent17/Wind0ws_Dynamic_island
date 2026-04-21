@@ -1299,6 +1299,24 @@
     }
   }
 
+  // 响应 monitor_index 变化
+  let lastMonitorIndex = -1;
+  $effect(() => {
+    const idx = appSettings.monitor_index;
+    if (
+      idx !== undefined &&
+      win &&
+      monitors.length > 0 &&
+      idx !== lastMonitorIndex
+    ) {
+      lastMonitorIndex = idx;
+      const targetMonitor = monitors[idx];
+      if (targetMonitor) {
+        moveToMonitor(targetMonitor).catch(console.error);
+      }
+    }
+  });
+
   function toggleMonitorMenu() {
     showMonitorMenu = !showMonitorMenu;
   }
@@ -1413,6 +1431,11 @@
             // 核心：直接用完整对象覆盖，Svelte 的响应式会自动触发 UI 更新
             appSettings = s;
             console.log("[设置] 实时更新:", appSettings);
+
+            // 同步主题
+            if (s.island_theme) {
+              currentTheme = s.island_theme;
+            }
 
             // auto_hide 关闭时立即显示窗口
             if (!appSettings.auto_hide && isHidden) {
