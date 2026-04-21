@@ -438,6 +438,28 @@
     hide_floating_window: false,
     expanded_corner_radius: 16,
     always_show_top_bar: true,
+    always_on_top: true,
+    // 播放器权重
+    player_weights: {
+      netease: 50,
+      spotify: 50,
+      bilibili: 50,
+      qqmusic: 50,
+      apple: 50,
+      generic: 10,
+    },
+    // 显示器设置
+    monitor_index: 0,
+    // 专辑封面设置
+    enable_hd_cover: true,
+    enable_pixel_art: false,
+    enable_halftone: false,
+    // MV 播放
+    enable_mv_playback: true,
+    // 悬浮窗锁定
+    lock_floating_window: false,
+    // 开机启动
+    auto_start: false,
   });
 
   // ========== 性能检测和自适应系统 ==========
@@ -755,6 +777,22 @@
 
   let win: ReturnType<typeof getCurrentWindow>;
 
+  // --- 基于 spring 动画的窗口大小同步 ---
+  $effect(() => {
+    const w = $widthSpring;
+    const h = $heightSpring;
+
+    // 使用 requestAnimationFrame 在每帧同步窗口大小
+    requestAnimationFrame(() => {
+      if (win) {
+        const dpr = window.devicePixelRatio || 1;
+        const physW = Math.round(w * dpr);
+        const physH = Math.round(h * dpr);
+        win.setSize(new PhysicalSize(physW, physH)).catch(() => {});
+      }
+    });
+  });
+
   // ========== 窗口同步优化 ==========
   let cachedScreenWidth = 0;
   let cachedScreenHeight = 0;
@@ -776,6 +814,8 @@
     const h = pendingH;
     const dpr = window.devicePixelRatio || 1;
 
+    console.log("[窗口同步] 开始同步，高度:", h, "DPR:", dpr);
+
     try {
       if (!cachedScreenWidth) {
         const monitor = await currentMonitor();
@@ -784,6 +824,7 @@
           cachedScreenHeight = monitor.size.height;
           monitorAnchorX = monitor.position.x + monitor.size.width / 2;
           monitorAnchorY = monitor.position.y;
+          console.log("[窗口同步] 显示器信息:", monitorAnchorX, monitorAnchorY);
         }
       }
 
@@ -792,12 +833,39 @@
       const centerX = Math.round(monitorAnchorX - physW / 2);
       const targetY = Math.round(monitorAnchorY + 22 * dpr);
 
-      await Promise.all([
-        win.setSize(new PhysicalSize(physW, physH)),
-        win.setPosition(new PhysicalPosition(centerX, targetY)),
-      ]);
+      console.log(
+        "[窗口同步] 设置窗口大小 (物理像素):",
+        physW,
+        physH,
+        "DPR:",
+        dpr,
+      );
+      console.log("[窗口同步] 设置窗口位置:", centerX, targetY);
+
+      try {
+        await win.setSize(new PhysicalSize(physW, physH));
+        // 验证设置后的大小
+        const newSize = await win.innerSize();
+        console.log(
+          "[窗口同步] 设置后实际大小:",
+          newSize.width,
+          newSize.height,
+        );
+        console.log("[窗口同步] 大小设置成功");
+      } catch (sizeErr) {
+        console.error("[窗口同步] 设置大小失败:", sizeErr);
+      }
+
+      try {
+        await win.setPosition(new PhysicalPosition(centerX, targetY));
+        console.log("[窗口同步] 位置设置成功");
+      } catch (posErr) {
+        console.error("[窗口同步] 设置位置失败:", posErr);
+      }
+
+      console.log("[窗口同步] 同步完成");
     } catch (err) {
-      console.log("[窗口同步] 已安全中断 (可能正在关闭)");
+      console.log("[窗口同步] 已安全中断 (可能正在关闭)", err);
     } finally {
       isSyncing = false;
       if (hasPendingSync) {
@@ -982,27 +1050,6 @@
         }
       });
     });
-  });
-
-  // --- 基于状态的低频窗口尺寸控制 ---
-  $effect(() => {
-    const isExp = expanded;
-
-    const targetPhysicalHeight = isExp ? 200 : 60;
-
-    if (isExp) {
-      pendingH = targetPhysicalHeight;
-      hasPendingSync = true;
-      if (!isSyncing) processSyncQueue();
-    } else {
-      setTimeout(() => {
-        if (!expanded) {
-          pendingH = targetPhysicalHeight;
-          hasPendingSync = true;
-          if (!isSyncing) processSyncQueue();
-        }
-      }, 300);
-    }
   });
 
   // 优化点四：will-change 按需启用管理
@@ -1384,26 +1431,8 @@
         (event: any) => {
           const s = event.payload;
           if (s) {
-            appSettings = {
-              auto_hide: s.auto_hide ?? appSettings.auto_hide,
-              show_spectrum: s.show_spectrum ?? appSettings.show_spectrum,
-              enable_animations:
-                s.enable_animations ?? appSettings.enable_animations,
-              reduce_animations:
-                s.reduce_animations ?? appSettings.reduce_animations,
-              show_debug_info: s.show_debug_info ?? appSettings.show_debug_info,
-              window_opacity: s.window_opacity ?? appSettings.window_opacity,
-              hide_settings_button:
-                s.hide_settings_button ?? appSettings.hide_settings_button,
-              hide_monitor_selector:
-                s.hide_monitor_selector ?? appSettings.hide_monitor_selector,
-              hide_floating_window:
-                s.hide_floating_window ?? appSettings.hide_floating_window,
-              expanded_corner_radius:
-                s.expanded_corner_radius ?? appSettings.expanded_corner_radius,
-              always_show_top_bar:
-                s.always_show_top_bar ?? appSettings.always_show_top_bar,
-            };
+            // 核心：直接用完整对象覆盖，Svelte 的响应式会自动触发 UI 更新
+            appSettings = s;
             console.log("[设置] 实时更新:", appSettings);
 
             // auto_hide 关闭时立即显示窗口
@@ -1558,6 +1587,27 @@
         if (titleChanged || artistChanged || coverChanged) {
           if (titleChanged) {
             trackTitle = data.title || "未知曲目";
+            // 检测歌名是否需要滚动
+            setTimeout(() => {
+              const titleEl = document.querySelector(
+                ".marquee-text",
+              ) as HTMLElement;
+              const wrapperEl = document.querySelector(
+                ".marquee-wrapper",
+              ) as HTMLElement;
+              if (titleEl && wrapperEl) {
+                // 重置动画
+                titleEl.classList.remove("marquee-active");
+                titleEl.style.transform = "";
+
+                // 等待下一帧检查宽度
+                requestAnimationFrame(() => {
+                  if (titleEl.scrollWidth > titleEl.clientWidth) {
+                    titleEl.classList.add("marquee-active");
+                  }
+                });
+              }
+            }, 100);
           }
           if (artistChanged) {
             artistName = data.artist || "未知艺术家";
@@ -1879,12 +1929,15 @@
             {/if}
 
             <div class="flex-1 min-w-0">
-              <h2
-                class="truncate dynamic-glass-text select-none leading-tight mb-1"
-                style="font-size: clamp(12px, 4vw, 18px); font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.03em;"
-              >
-                {trackTitle}
-              </h2>
+              <div class="marquee-wrapper relative overflow-hidden">
+                <h2
+                  class="marquee-text dynamic-glass-text select-none leading-tight mb-1 whitespace-nowrap"
+                  style="font-size: clamp(12px, 4vw, 18px); font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.03em;"
+                  data-full-title={trackTitle}
+                >
+                  {trackTitle}
+                </h2>
+              </div>
               <p
                 class="truncate dynamic-glass-text-secondary select-none leading-tight"
                 style="font-size: clamp(10px, 3vw, 14px); font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 500; letter-spacing: -0.01em;"
@@ -2937,5 +2990,34 @@
       opacity: 1;
       transform: translateY(0) scale(1);
     }
+  }
+
+  /* ─── Marquee 滚动效果 ─── */
+  .marquee-wrapper {
+    position: relative;
+  }
+  .marquee-text {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .marquee-text.marquee-active {
+    animation: marquee-scroll 8s linear infinite;
+    padding-right: 50px;
+  }
+  @keyframes marquee-scroll {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+  .marquee-text::after {
+    content: attr(data-full-title);
+    position: absolute;
+    left: 100%;
+    white-space: nowrap;
   }
 </style>
