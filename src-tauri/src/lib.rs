@@ -1896,9 +1896,16 @@ fn set_expanded_corner_radius(app: AppHandle, radius: u32) -> Result<(), String>
     Ok(())
 }
 
-// 获取网易云音乐播放时长（通过 API 搜索）
+// 网易云音乐歌曲信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NeteaseSongInfo {
+    pub duration: Option<u64>,
+    pub album_pic: Option<String>,
+}
+
+// 获取网易云音乐播放时长和专辑图片（通过 API 搜索）
 #[tauri::command]
-async fn get_netease_duration(song_name: String, artist_name: String) -> Option<u64> {
+async fn get_netease_song_info(song_name: String, artist_name: String) -> Option<NeteaseSongInfo> {
     // 构建搜索关键字，例如 "周杰伦 - 晴天"
     let keyword = format!("{} {}", artist_name, song_name);
     println!("[网易云 API] 搜索关键字：{}", keyword);
@@ -1923,26 +1930,27 @@ async fn get_netease_duration(song_name: String, artist_name: String) -> Option<
                         Ok(json) => {
                             println!("[网易云 API] JSON 解析成功");
                             
-                            // 提取结果中的第一首歌的时长 (duration)
+                            // 提取结果中的第一首歌的信息
                             if let Some(songs) = json["result"]["songs"].as_array() {
                                 println!("[网易云 API] songs 数组长度：{}", songs.len());
                                 if let Some(first_song) = songs.first() {
                                     println!("[网易云 API] 第一首歌数据：{}", first_song);
                                     
-                                    // 获取 duration 字段
-                                    if let Some(duration) = first_song["duration"].as_u64() {
-                                        println!("[网易云 API] ✓ 获取时长成功：{} ms", duration);
-                                        return Some(duration);
-                                    } else {
-                                        println!("[网易云 API] ✗ 未找到 duration 字段");
-                                        // 打印所有可用字段
-                                        println!("[网易云 API] 可用的字段：");
-                                        if let Some(obj) = first_song.as_object() {
-                                            for key in obj.keys() {
-                                                println!("  - {}", key);
-                                            }
-                                        }
-                                    }
+                                    // 获取时长
+                                    let duration = first_song["duration"].as_u64();
+                                    
+                                    // 获取专辑图片（优先获取 album.picUrl）
+                                    let album_pic = first_song["album"]["picUrl"]
+                                        .as_str()
+                                        .map(|s| s.to_string());
+                                    
+                                    println!("[网易云 API] ✓ 时长：{:?}", duration);
+                                    println!("[网易云 API] ✓ 专辑图片：{:?}", album_pic);
+                                    
+                                    return Some(NeteaseSongInfo {
+                                        duration,
+                                        album_pic,
+                                    });
                                 } else {
                                     println!("[网易云 API] ✗ 歌曲列表为空");
                                 }
@@ -2094,8 +2102,8 @@ pub fn run() {
             set_current_monitor_index,
             // 系统毛玻璃 API
             set_window_vibrancy,
-            // 网易云音乐时长获取 API
-            get_netease_duration,
+            // 网易云音乐歌曲信息获取 API（时长 + 专辑图片）
+            get_netease_song_info,
         ])
         .setup(|app| {
             // 初始化缓存系统

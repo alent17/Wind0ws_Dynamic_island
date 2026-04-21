@@ -1645,21 +1645,45 @@
               artistName !== "未知艺术家"
             ) {
               console.log("[时长] 发起 API 调用...");
-              invoke("get_netease_duration", {
+              invoke("get_netease_song_info", {
                 songName,
                 artistName,
               })
-                .then((duration: any) => {
-                  console.log("[时长] API 返回:", duration);
-                  if (duration && duration > 0) {
-                    durationMs = duration;
-                    console.log("[网易云 API] ✓ 获取时长成功:", duration, "ms");
+                .then((songInfo: any) => {
+                  console.log("[网易云 API] 返回歌曲信息:", songInfo);
+                  if (songInfo) {
+                    // 更新时长
+                    if (songInfo.duration && songInfo.duration > 0) {
+                      durationMs = songInfo.duration;
+                      console.log(
+                        "[网易云 API] ✓ 获取时长成功:",
+                        songInfo.duration,
+                        "ms",
+                      );
+                    }
+                    // 更新专辑图片（如果 SMTC 没有提供图片）
+                    if (
+                      songInfo.album_pic &&
+                      (!rawCoverUrl || rawCoverUrl === "")
+                    ) {
+                      // 将图片 URL 转换为高质量版本
+                      const highQualityPic = songInfo.album_pic.replace(
+                        /(\d+)x(\d+)\.jpg/,
+                        "1024y1024.jpg",
+                      );
+                      console.log(
+                        "[网易云 API] ✓ 获取专辑图片:",
+                        highQualityPic,
+                      );
+                      // 这里可以更新封面图片
+                      // coverUrl = highQualityPic;
+                    }
                   } else {
-                    console.warn("[网易云 API] ✗ 未找到时长信息");
+                    console.warn("[网易云 API] ✗ 未找到歌曲信息");
                   }
                 })
                 .catch((err) => {
-                  console.error("[网易云 API] ✗ 获取时长失败:", err);
+                  console.error("[网易云 API] ✗ 获取歌曲信息失败:", err);
                 });
             } else {
               console.warn("[时长] 歌名或歌手名为空或为默认值，跳过 API 调用");
