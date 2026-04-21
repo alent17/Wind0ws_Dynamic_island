@@ -754,7 +754,7 @@
   });
 
   const progressPercent = $derived(
-    durationMs > 0 ? (precisePosition() / durationMs) * 100 : $progressSpring,
+    durationMs > 0 ? (precisePosition() / durationMs) * 100 : 0,
   );
 
   // ========== 优化的 Spring 参数（极致流畅） ==========
