@@ -1646,7 +1646,6 @@
             currentTimeMs = newPosition;
           }
         }
-        const songChanged = lastSongKey !== currentSongKey;
 
         if (songChanged) {
           console.log("[歌曲变更] 检测到新歌:", data.title, "-", data.artist);
