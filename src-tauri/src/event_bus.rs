@@ -102,6 +102,12 @@ pub const EVENT_HALFTONE_CHANGED: &str = "halftone-changed";
 /// MV 播放状态变更事件
 pub const EVENT_MV_PLAYBACK_CHANGED: &str = "mv-playback-changed";
 
+/// 全屏状态变更事件
+///
+/// 当系统全屏状态发生变化时触发
+/// 节流间隔：1000ms（避免频繁切换）
+pub const EVENT_FULLSCREEN_CHANGED: &str = "fullscreen-changed";
+
 // ============================================================================
 // 事件优先级
 // ============================================================================
@@ -516,4 +522,22 @@ pub fn emit_settings_changed(setting_name: &str) -> Result<(), String> {
 /// - `payload`: 主题数据
 pub fn emit_theme_changed<T: Serialize + Clone>(payload: T) -> Result<(), String> {
     EVENT_BUS.emit(EVENT_THEME_CHANGED, payload)
+}
+
+/// 发送全屏状态变更事件
+///
+/// 使用 1000ms 节流，避免频繁切换
+///
+/// # 参数
+///
+/// - `is_fullscreen`: 是否全屏
+pub fn emit_fullscreen_changed(is_fullscreen: bool) -> Result<(), String> {
+    EVENT_BUS.emit_with_options(
+        EVENT_FULLSCREEN_CHANGED,
+        is_fullscreen,
+        Some(ThrottleConfig {
+            interval_ms: 1000,
+            priority: EventPriority::High,
+        }),
+    )
 }

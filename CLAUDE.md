@@ -75,13 +75,13 @@ Svelte 组件 → `$lib/api/*.ts` → Tauri invoke → Rust command → Rust ser
 
 ### 命名
 
-| 类型          | 风格                 | 示例            |
-| :------------ | :------------------- | :-------------- |
-| 文件 / 模块   | snake_case           | `file_ops.rs`   |
-| 结构体 / 枚举 | PascalCase           | `FileEntry`     |
-| 函数 / 方法   | snake_case           | `list_files`    |
-| 常量          | SCREAMING_SNAKE      | `MAX_PATH_LEN`  |
-| Tauri command | snake_case, 动词开头 | `get_file_list` |
+| 类型            | 风格                | 示例              |
+| :------------ | :---------------- | :-------------- |
+| 文件 / 模块       | snake\_case       | `file_ops.rs`   |
+| 结构体 / 枚举      | PascalCase        | `FileEntry`     |
+| 函数 / 方法       | snake\_case       | `list_files`    |
+| 常量            | SCREAMING\_SNAKE  | `MAX_PATH_LEN`  |
+| Tauri command | snake\_case, 动词开头 | `get_file_list` |
 
 ### Tauri Command
 
@@ -184,15 +184,15 @@ panic = "abort"
 
 ### 命名
 
-| 类型        | 风格              | 示例              |
-| :---------- | :---------------- | :---------------- |
+| 类型      | 风格                | 示例                |
+| :------ | :---------------- | :---------------- |
 | 组件文件    | PascalCase.svelte | `FileList.svelte` |
-| TS 文件     | camelCase.ts      | `fileStore.ts`    |
-| 接口        | PascalCase        | `FileEntry`       |
+| TS 文件   | camelCase.ts      | `fileStore.ts`    |
+| 接口      | PascalCase        | `FileEntry`       |
 | 变量 / 函数 | camelCase         | `getFileList`     |
-| 常量        | SCREAMING_SNAKE   | `DEFAULT_THEME`   |
-| CSS 类名    | kebab-case        | `file-list__item` |
-| CSS 变量    | kebab-case        | `--color-primary` |
+| 常量      | SCREAMING\_SNAKE  | `DEFAULT_THEME`   |
+| CSS 类名  | kebab-case        | `file-list__item` |
+| CSS 变量  | kebab-case        | `--color-primary` |
 
 ### Svelte 5 Runes（强制使用）
 
@@ -292,10 +292,10 @@ export const settings = createSettingsStore();
 - 事件名 kebab-case：`file-changed`、`settings-updated`
 - 监听必须在 `onDestroy` 中调用 `unlisten()` 取消
 
-| Rust command (snake_case) | TS 函数 (camelCase) | 事件 (kebab-case)  |
-| :------------------------ | :------------------ | :----------------- |
-| `get_file_list`           | `getFileList()`     | —                  |
-| `update_settings`         | `updateSettings()`  | `settings-updated` |
+| Rust command (snake\_case) | TS 函数 (camelCase)  | 事件 (kebab-case)    |
+| :------------------------- | :----------------- | :----------------- |
+| `get_file_list`            | `getFileList()`    | —                  |
+| `update_settings`          | `updateSettings()` | `settings-updated` |
 
 ## 安全
 
@@ -311,16 +311,16 @@ export const settings = createSettingsStore();
 
 `<type>(<scope>): <简短描述>`
 
-| type     | 含义        | scope | 含义        |
-| :------- | :---------- | :---- | :---------- |
-| feat     | 新功能      | rust  | Rust 后端   |
-| fix      | 修复        | ui    | Svelte 前端 |
-| refactor | 重构        | ipc   | IPC 接口    |
-| style    | 样式 / 格式 | build | 构建配置    |
-| docs     | 文档        | deps  | 依赖        |
-| test     | 测试        |       |             |
-| chore    | 构建 / 依赖 |       |             |
-| perf     | 性能        |       |             |
+| type     | 含义      | scope  | 含义        |
+| :------- | :------ | :----- | :-------- |
+| feat     | 新功能     | rust   | Rust 后端   |
+| fix      | 修复      | ui     | Svelte 前端 |
+| refactor | 重构      | ipc    | IPC 接口    |
+| style    | 样式 / 格式 | build  | 构建配置      |
+| docs     | 文档      | deps   | 依赖        |
+| test     | 测试      | <br /> | <br />    |
+| chore    | 构建 / 依赖 | <br /> | <br />    |
+| perf     | 性能      | <br /> | <br />    |
 
 _示例：`feat(rust): 添加文件监听 service`、`fix(ui): 修复深色主题滚动条不可见`_
 
@@ -396,3 +396,4 @@ panic = "deny"
 - 先提出方案和取舍理由，确认后再实现。
 - IPC 接口变更时同时列出 Rust 和 TypeScript 两侧改动。
 - 权限变更时说明安全影响。
+

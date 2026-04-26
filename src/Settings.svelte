@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  // ✅ 引入你写好的标准 API 接口，不再直接写容易出错的 invoke
+  import { settingsApi } from "$lib/api/settings";
   import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { X, Minus, Monitor, ChevronUp, ChevronDown } from "lucide-svelte";
@@ -68,20 +70,22 @@
 
   let playerOrder = $state<string[]>([]);
   let cacheSize = $state("0 MB");
-
   let monitors = $state<Array<{ name: string; id: number }>>([]);
   let currentMonitorIndex = $state(0);
 
   onMount(async () => {
     try {
-      const saved = await invoke<AppSettings>("get_settings");
+      // ✅ 1. 统一使用封装好的 API 获取设置
+      const saved = await settingsApi.getSettings();
       settings = { ...settings, ...saved };
       if (saved.player_weights) settings.player_weights = saved.player_weights;
+
       try {
-        settings.auto_start = await invoke<boolean>("get_auto_start");
+        settings.auto_start = await settingsApi.getAutoStart();
       } catch (e) {
         console.error("加载开机启动状态失败", e);
       }
+
       playerOrder = Object.keys(settings.player_weights);
       loadCacheStats();
       await loadMonitors();
@@ -93,7 +97,10 @@
   async function saveSettings(newSettings: Partial<AppSettings>) {
     try {
       settings = { ...settings, ...newSettings };
-      await invoke("save_settings", { settings });
+
+      // ✅ 2. 核心修复：使用 $state.snapshot 把 Proxy 对象转为普通对象，否则 Rust 后端接收不到！
+      const rawSettings = $state.snapshot(settings);
+      await settingsApi.saveSettings(rawSettings);
     } catch (e) {
       console.error("保存设置失败", e);
     }
@@ -102,7 +109,8 @@
   async function toggleAutoStart() {
     try {
       const s = !settings.auto_start;
-      await invoke("set_auto_start", { enable: s });
+      // ✅ 3. 核心修复：使用正确的封装命令
+      await settingsApi.setAutoStart(s);
       settings.auto_start = s;
     } catch (e) {
       console.error("切换开机启动失败", e);
@@ -293,7 +301,8 @@
                 oninput={(e) => {
                   const v = parseInt(e.currentTarget.value);
                   settings.expanded_corner_radius = v;
-                  invoke("set_expanded_corner_radius", { radius: v });
+                  // ✅ 使用 settingsApi 而不是直接 invoke
+                  settingsApi.setExpandedCornerRadius(v);
                 }}
               />
               <span class="slider-num">{settings.expanded_corner_radius}px</span

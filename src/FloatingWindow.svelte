@@ -903,10 +903,10 @@
         mediaState = {
           title: PLACEHOLDER_TITLE,
           artist: PLACEHOLDER_ARTIST,
-          album_art: "",
-          is_playing: false,
-          position_ms: 0,
-          duration_ms: 0,
+          albumArt: "",
+          isPlaying: false,
+          positionMs: 0,
+          durationMs: 0,
         };
         displayCover = "";
         isPlayingMV = false;
@@ -917,9 +917,9 @@
 
         // 使用 SMTC 提供的图片作为基础
         const smtcCover =
-          payload.album_art || payload.thumbnail || payload.cover_url || "";
+          payload.albumArt || payload.thumbnail || payload.coverUrl || "";
 
-        mediaState = { ...mediaState, ...payload, album_art: smtcCover };
+        mediaState = { ...mediaState, ...payload, albumArt: smtcCover };
 
         // 判断是否是音乐播放器
         const isMusicPlayer =
@@ -996,8 +996,8 @@
         }
       } else {
         // 播放状态变化
-        const wasPlaying = mediaState.is_playing;
-        const isPlaying = payload.is_playing;
+        const wasPlaying = mediaState.isPlaying;
+        const isPlaying = payload.isPlaying;
 
         console.log(
           "[播放状态] 变化:",
@@ -1006,9 +1006,9 @@
           isPlaying ? "播放中" : "已暂停",
         );
 
-        mediaState.is_playing = isPlaying;
-        mediaState.position_ms = payload.position_ms;
-        mediaState.duration_ms = payload.duration_ms;
+        mediaState.isPlaying = isPlaying;
+        mediaState.positionMs = payload.positionMs;
+        mediaState.durationMs = payload.durationMs;
 
         // 根据播放状态控制 MV
         if (isPlayingMV && mvUrl) {
@@ -1049,16 +1049,16 @@
 
   // 监听播放状态变化，自动启动/停止进度更新
   $effect(() => {
-    if (mediaState.is_playing && mediaState.duration_ms > 0) {
+    if (mediaState.isPlaying && mediaState.durationMs > 0) {
       const interval = setInterval(() => {
         if (
-          mediaState.is_playing &&
-          mediaState.duration_ms > 0 &&
-          mediaState.position_ms < mediaState.duration_ms
+          mediaState.isPlaying &&
+          mediaState.durationMs > 0 &&
+          mediaState.positionMs < mediaState.durationMs
         ) {
-          mediaState.position_ms += 100;
-          if (mediaState.position_ms > mediaState.duration_ms) {
-            mediaState.position_ms = mediaState.duration_ms;
+          mediaState.positionMs += 100;
+          if (mediaState.positionMs > mediaState.durationMs) {
+            mediaState.positionMs = mediaState.durationMs;
           }
         }
       }, 100);
@@ -1117,8 +1117,8 @@
   }
 
   let progressPercent = $derived(
-    mediaState.duration_ms > 0
-      ? (mediaState.position_ms / mediaState.duration_ms) * 100
+    mediaState.durationMs > 0
+      ? (mediaState.positionMs / mediaState.durationMs) * 100
       : 0,
   );
 
@@ -1673,8 +1673,8 @@
   {/if}
 
   <div class="album-stage">
-    {#if displayCover}
-      <div class="album-wrapper">
+    <div class="album-wrapper">
+      {#if displayCover}
         <!-- MV 视频播放 -->
         {#if isPlayingMV && mvUrl}
           <video
@@ -1720,12 +1720,23 @@
         {#if halftoneOverlayVisible}
           <div class="halftone-overlay"></div>
         {/if}
-      </div>
-    {:else}
-      <div class="album-placeholder">
-        <Play size={40} strokeWidth={1} color="rgba(255,255,255,0.15)" />
-      </div>
-    {/if}
+      {:else}
+        <div
+          class="album-art album-art-new"
+          style="display: flex; align-items: center; justify-content: center; background-color: rgba(255, 255, 255, 0.05);"
+        >
+          <svg
+            class="w-16 h-16 text-white/10"
+            fill="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"
+            />
+          </svg>
+        </div>
+      {/if}
+    </div>
   </div>
 
   <!-- 歌曲信息层 - 贴在渐变背景上 -->
@@ -1751,11 +1762,9 @@
           ></div>
         </div>
         <div class="time-row-netease">
-          <span class="time-netease">{formatTime(mediaState.position_ms)}</span>
+          <span class="time-netease">{formatTime(mediaState.positionMs)}</span>
           <span class="time-netease"
-            >-{formatTime(
-              mediaState.duration_ms - mediaState.position_ms,
-            )}</span
+            >-{formatTime(mediaState.durationMs - mediaState.positionMs)}</span
           >
         </div>
       </div>
@@ -1764,11 +1773,11 @@
     <div class="progress-layer">
       <div class="progress-container">
         <div class="progress-row">
-          <span class="time">{formatTime(mediaState.position_ms)}</span>
+          <span class="time">{formatTime(mediaState.positionMs)}</span>
           <div class="progress-track">
             <div class="progress-fill" style="width: {progressPercent}%"></div>
           </div>
-          <span class="time">{formatTime(mediaState.duration_ms)}</span>
+          <span class="time">{formatTime(mediaState.durationMs)}</span>
         </div>
       </div>
     </div>
@@ -1791,9 +1800,9 @@
       <button
         class="play-btn"
         onclick={togglePlay}
-        aria-label={mediaState.is_playing ? "暂停" : "播放"}
+        aria-label={mediaState.isPlaying ? "暂停" : "播放"}
       >
-        {#if mediaState.is_playing}
+        {#if mediaState.isPlaying}
           <Pause size={24} fill="black" color="black" />
         {:else}
           <Play size={24} fill="black" color="black" style="margin-left:2px" />

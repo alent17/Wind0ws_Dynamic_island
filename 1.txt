@@ -1,295 +1,222 @@
-1. 容器主体 .theme-liquid_glass
+终极修复方案
+请打开你的 src/Settings.svelte，把最上面 <script lang="ts"> 到 </script> 之间的代码，完整替换为以下内容。
 
-css
-css
-.theme-liquid_glass {
-  position: relative;
-  /* 从几乎无色改为带轻微蓝紫调的半透明底，让毛玻璃效果更可感知 */
-  background: rgba(200, 210, 230, 0.12) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(180%) contrast(108%) !important;
-  backdrop-filter: blur(40px) saturate(180%) contrast(108%) !important;
+核心改动：
 
-  /* 分层边框：上亮下暗，模拟玻璃边缘折射 */
-  border: 0.5px solid rgba(255, 255, 255, 0.25) !important;
-  border-bottom-color: rgba(0, 0, 0, 0.15) !important;
+引入并使用了你写好的 settingsApi。
 
-  box-shadow:
-    /* 外部柔和辉光 */
-    0 8px 32px rgba(0, 0, 0, 0.35),
-    0 2px 8px rgba(0, 0, 0, 0.2),
-    /* 内部上边缘高光 — 玻璃折射效果 */
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    /* 内部左边缘微光 */
-    inset 1px 0 0 rgba(255, 255, 255, 0.08),
-    /* 内部右边缘微光 */
-    inset -1px 0 0 rgba(255, 255, 255, 0.08),
-    /* 内部下边缘暗影 — 增加厚度感 */
-    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
-    /* 内部整体柔光 */
-    inset 0 0 40px rgba(255, 255, 255, 0.03) !important;
+使用 Svelte 5 的 $state.snapshot() 将 Proxy 解包为纯 JSON 对象，让 Tauri 能顺利接收。
 
-  overflow: hidden !important;
-  mix-blend-mode: normal !important;
-  mask-image: none !important;
-  -webkit-mask-image: none !important;
-  contain: none !important;
+Svelte
+<script lang="ts">
+  import { onMount } from "svelte";
+  // ✅ 引入你写好的标准 API 接口，不再直接写容易出错的 invoke
+  import { settingsApi } from "$lib/api/settings";
+  import { invoke } from "@tauri-apps/api/core";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { X, Minus, Monitor, ChevronUp, ChevronDown } from "lucide-svelte";
 
-  /* 悬浮时增强光感 */
-  transition:
-    box-shadow 0.4s ease,
-    background 0.4s ease,
-    border-color 0.4s ease,
-    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
-}
-
-.theme-liquid_glass:hover {
-  background: rgba(210, 220, 240, 0.18) !important;
-  border-color: rgba(255, 255, 255, 0.35) !important;
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.4),
-    0 4px 12px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    inset 1px 0 0 rgba(255, 255, 255, 0.12),
-    inset -1px 0 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.1),
-    inset 0 0 50px rgba(255, 255, 255, 0.05) !important;
-}
-
-2. 高光扫描层 ::after（替换旧的渐变）
-
-css
-css
-/* 高光扫描 — 模拟光线在玻璃表面的反射 */
-.theme-liquid_glass::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.18) 0%,
-    rgba(255, 255, 255, 0.06) 25%,
-    transparent 50%,
-    transparent 75%,
-    rgba(0, 0, 0, 0.04) 100%
-  );
-  pointer-events: none;
-  z-index: 0;
-  transition: opacity 0.3s ease;
-}
-
-.theme-liquid_glass:hover::after {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.25) 0%,
-    rgba(255, 255, 255, 0.1) 25%,
-    transparent 50%,
-    transparent 75%,
-    rgba(0, 0, 0, 0.03) 100%
-  );
-}
-
-3. 微噪点纹理层 ::before（新增）
-
-css
-css
-/* 微噪点纹理 — 模拟真实玻璃的细微质感 */
-.theme-liquid_glass::before {
-  content: "" !important;
-  display: block !important;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-  background-size: 200px 200px;
-  opacity: 0.5;
-  pointer-events: none;
-  z-index: 1;
-  mix-blend-mode: overlay;
-}
-
-4. 文字样式
-
-css
-css
-/* 文字：轻微发光效果，模拟玻璃内嵌文字 */
-.theme-liquid_glass :global(.dynamic-glass-text) {
-  color: rgba(255, 255, 255, 0.95) !important;
-  text-shadow:
-    0 0 20px rgba(255, 255, 255, 0.15),
-    0 1px 2px rgba(0, 0, 0, 0.2) !important;
-}
-
-.theme-liquid_glass :global(.dynamic-glass-text-secondary) {
-  color: rgba(255, 255, 255, 0.65) !important;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
-}
-
-/* 时间显示 */
-.theme-liquid_glass :global(.time-display span) {
-  color: rgba(255, 255, 255, 0.85) !important;
-  text-shadow: 0 0 15px rgba(255, 255, 255, 0.1) !important;
-}
-
-5. 频谱条
-
-css
-css
-/* 收起态频谱：半透明发光条 */
-.theme-liquid_glass :global(.spectrum-bar) {
-  background: linear-gradient(
-    to top,
-    rgba(255, 255, 255, 0.2),
-    rgba(255, 255, 255, 0.7)
-  ) !important;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.15) !important;
-  border-radius: 2px !important;
-  opacity: 1 !important;
-}
-
-/* 展开态频谱：更亮 + 发光 */
-.theme-liquid_glass :global(.spectrum-bar-expanded) {
-  background: linear-gradient(
-    to top,
-    rgba(255, 255, 255, 0.15),
-    rgba(255, 255, 255, 0.65)
-  ) !important;
-  box-shadow: 0 0 3px rgba(255, 255, 255, 0.12) !important;
-  border-radius: 2px !important;
-  opacity: 1 !important;
-}
-
-6. 进度条
-
-css
-css
-/* 进度条轨道：深色半透明 */
-.theme-liquid_glass :global(.progress-bar) {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 0.5px solid rgba(255, 255, 255, 0.1) !important;
-  border-radius: 999px !important;
-  height: 3px !important;
-  overflow: hidden !important;
-}
-
-/* 进度条填充：白光渐变 + 发光 */
-.theme-liquid_glass :global(.progress-fill) {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.4),
-    rgba(255, 255, 255, 0.8)
-  ) !important;
-  border-radius: 999px !important;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.2) !important;
-  transition: width 0.15s linear !important;
-}
-
-/* 时间文字 */
-.theme-liquid_glass :global(.text-white\/60) {
-  color: rgba(255, 255, 255, 0.45) !important;
-}
-
-7. 按钮
-
-css
-css
-/* 播放控制按钮 */
-.theme-liquid_glass :global(.media-button) {
-  color: rgba(255, 255, 255, 0.85) !important;
-  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
-}
-
-.theme-liquid_glass :global(.media-button:hover) {
-  color: rgba(255, 255, 255, 1) !important;
-  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3)) !important;
-}
-
-/* 悬浮窗按钮：毛玻璃胶囊 */
-.theme-liquid_glass :global(button) {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 0.5px solid rgba(255, 255, 255, 0.15) !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-  border-radius: 10px !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
-  transition: all 0.25s ease !important;
-}
-
-.theme-liquid_glass :global(button:hover) {
-  background: rgba(255, 255, 255, 0.15) !important;
-  border-color: rgba(255, 255, 255, 0.25) !important;
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    0 0 12px rgba(255, 255, 255, 0.05) !important;
-}
-
-.theme-liquid_glass :global(button:active) {
-  background: rgba(255, 255, 255, 0.06) !important;
-  box-shadow:
-    0 1px 4px rgba(0, 0, 0, 0.2),
-    inset 0 1px 3px rgba(0, 0, 0, 0.1) !important;
-}
-
-8. 专辑封面
-
-css
-css
-/* 展开态封面：毛玻璃边框 + 发光 */
-.theme-liquid_glass :global(.w-$$64px$$) {
-  border: 0.5px solid rgba(255, 255, 255, 0.15) !important;
-  border-radius: 14px !important;
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.3),
-    0 0 20px rgba(255, 255, 255, 0.03) !important;
-}
-
-.theme-liquid_glass :global(.w-$$64px$$:hover) {
-  box-shadow:
-    0 6px 24px rgba(0, 0, 0, 0.35),
-    0 0 30px rgba(255, 255, 255, 0.06) !important;
-}
-
-/* 收起态封面 */
-.theme-liquid_glass :global(.collapsed-content .w-5) {
-  border-radius: 6px !important;
-  border: 0.5px solid rgba(255, 255, 255, 0.12) !important;
-}
-
-9. 展开动画
-
-css
-css
-/* 柔和展开动画 */
-.theme-liquid_glass :global(.expanded-content.is-visible) {
-  animation: glass-expand 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards !important;
-}
-
-@keyframes glass-expand {
-  0% {
-    opacity: 0;
-    transform: translateY(20px) scale(0.95) translateZ(0);
-    filter: blur(12px);
+  interface AppSettings {
+    island_theme: string;
+    auto_hide: boolean;
+    show_spectrum: boolean;
+    always_on_top: boolean;
+    player_weights: Record<string, number>;
+    enable_mv_playback: boolean;
+    lock_floating_window: boolean;
+    enable_hd_cover: boolean;
+    enable_pixel_art: boolean;
+    enable_halftone: boolean;
+    auto_start: boolean;
+    hide_settings_button: boolean;
+    hide_monitor_selector: boolean;
+    hide_floating_window: boolean;
+    expanded_corner_radius: number;
+    always_show_top_bar: boolean;
   }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1) translateZ(0);
-    filter: blur(0);
+
+  let settings = $state<AppSettings>({
+    island_theme: "original",
+    auto_hide: true,
+    show_spectrum: true,
+    always_on_top: true,
+    player_weights: {
+      netease: 50,
+      spotify: 50,
+      bilibili: 50,
+      qqmusic: 50,
+      apple: 50,
+      generic: 10,
+    },
+    enable_mv_playback: false,
+    lock_floating_window: false,
+    enable_hd_cover: true,
+    enable_pixel_art: false,
+    enable_halftone: false,
+    auto_start: false,
+    hide_settings_button: false,
+    hide_monitor_selector: false,
+    hide_floating_window: false,
+    expanded_corner_radius: 16,
+    always_show_top_bar: true,
+  });
+
+  const appWindow = getCurrentWindow();
+
+  const themes = [
+    { id: "original", name: "经典黑", color: "#333" },
+    { id: "liquid_glass", name: "液体玻璃", color: "#1a1a2e" },
+    { id: "retro", name: "复古卡通", color: "#ff66a3" },
+  ];
+
+  const playerNames: Record<string, string> = {
+    netease: "网易云音乐",
+    spotify: "Spotify",
+    bilibili: "Bilibili",
+    qqmusic: "QQ 音乐",
+    apple: "Apple Music",
+    generic: "其他",
+  };
+
+  let playerOrder = $state<string[]>([]);
+  let cacheSize = $state("0 MB");
+  let monitors = $state<Array<{ name: string; id: number }>>([]);
+  let currentMonitorIndex = $state(0);
+
+  onMount(async () => {
+    try {
+      // ✅ 1. 统一使用封装好的 API 获取设置
+      const saved = await settingsApi.getSettings();
+      settings = { ...settings, ...saved };
+      if (saved.player_weights) settings.player_weights = saved.player_weights;
+      
+      try {
+        settings.auto_start = await settingsApi.getAutoStart();
+      } catch (e) {
+        console.error("加载开机启动状态失败", e);
+      }
+      
+      playerOrder = Object.keys(settings.player_weights);
+      loadCacheStats();
+      await loadMonitors();
+    } catch (e) {
+      console.error("无法读取设置", e);
+    }
+  });
+
+  async function saveSettings(newSettings: Partial<AppSettings>) {
+    try {
+      settings = { ...settings, ...newSettings };
+      
+      // ✅ 2. 核心修复：使用 $state.snapshot 把 Proxy 对象转为普通对象，否则 Rust 后端接收不到！
+      const rawSettings = $state.snapshot(settings);
+      await settingsApi.saveSettings(rawSettings);
+      
+    } catch (e) {
+      console.error("保存设置失败", e);
+    }
   }
-}
 
-10. 调试面板
+  async function toggleAutoStart() {
+    try {
+      const s = !settings.auto_start;
+      // ✅ 3. 核心修复：使用了正确的封装命令 (修复了 set_auto_start_cmd 的拼写错误)
+      await settingsApi.setAutoStart(s);
+      settings.auto_start = s;
+    } catch (e) {
+      console.error("切换开机启动失败", e);
+    }
+  }
 
-css
-css
-.theme-liquid_glass :global(.debug-overlay) {
-  background: rgba(0, 0, 0, 0.5) !important;
-  border: 0.5px solid rgba(255, 255, 255, 0.12) !important;
-  border-radius: 10px !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-  color: rgba(255, 255, 255, 0.8) !important;
-}
+  async function loadCacheStats() {
+    try {
+      const result = await invoke("get_cache_stats");
+      const stats = result as any;
+      if (stats && typeof stats?.totalSizeMb === "number" && !isNaN(stats.totalSizeMb)) {
+        cacheSize = `${stats.totalSizeMb.toFixed(2)} MB`;
+      } else {
+        cacheSize = "0.00 MB";
+      }
+    } catch (e) {
+      console.error("加载缓存统计失败", e);
+      cacheSize = "0.00 MB";
+    }
+  }
+
+  async function loadMonitors() {
+    try {
+      const allMonitors = await invoke<any[]>("get_available_monitors");
+      monitors = allMonitors.map((m, idx) => ({
+        name: m.name || `显示器 ${idx + 1}`,
+        id: idx,
+      }));
+      currentMonitorIndex = await invoke<number>("get_current_monitor_index");
+    } catch (e) {
+      console.error("加载显示器列表失败", e);
+    }
+  }
+
+  async function switchMonitor(index: number) {
+    try {
+      await invoke("set_current_monitor_index", { index });
+      currentMonitorIndex = index;
+    } catch (e) {
+      console.error("切换显示器失败", e);
+    }
+  }
+
+  async function pickCacheDir() {
+    try {
+      await invoke("pick_cache_directory");
+    } catch (e) {
+      console.error("选择缓存目录失败", e);
+    }
+  }
+
+  async function clearCache() {
+    if (!confirm("确定要清除所有缓存吗？")) return;
+    try {
+      await invoke("clear_cache");
+      await loadCacheStats();
+    } catch (e) {
+      console.error("清除缓存失败", e);
+    }
+  }
+
+  function movePlayer(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= playerOrder.length) return;
+    const o = [...playerOrder];
+    [o[index], o[target]] = [o[target], o[index]];
+    playerOrder = o;
+    const w: Record<string, number> = {};
+    o.forEach((p) => (w[p] = settings.player_weights[p] ?? 50));
+    saveSettings({ player_weights: w });
+  }
+
+  function togglePlayer(player: string) {
+    const w = settings.player_weights[player] ?? 50;
+    const nw = w === 0 ? 50 : 0;
+    saveSettings({
+      player_weights: { ...settings.player_weights, [player]: nw },
+    });
+  }
+</script>
+最后还有一处小修改（针对灵动岛圆角的拖拽进度条）：
+向下拉到 HTML 模板部分，找到 expanded_corner_radius 的拉条事件（大约第 201 行），将原本的直接 invoke 也改为 settingsApi：
+
+Svelte
+<input
+  type="range"
+  min="0"
+  max="32"
+  value={settings.expanded_corner_radius}
+  oninput={(e) => {
+    const v = parseInt(e.currentTarget.value);
+    settings.expanded_corner_radius = v;
+    // ❌ 改掉这句： invoke("set_expanded_corner_radius", { radius: v });
+    // ✅ 换成这句：
+    settingsApi.setExpandedCornerRadius(v);
+  }}
+/>
+替换完成后重启前端，你的开关状态、参数设置就能顺利存进后台了！这也验证了我们刚才得出的结论：规范使用 src/lib/api/ 进行 API 统一隔离，是避免此类 BUG 的绝佳手段。

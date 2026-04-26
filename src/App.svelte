@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { spring } from "svelte/motion";
+  import { invoke } from "@tauri-apps/api/core";
   import { convertFileSrc } from "@tauri-apps/api/core";
   import {
     eventManager,
@@ -8,7 +9,7 @@
     onAudioSpectrum,
   } from "./utils/eventManager";
   import { Events } from "./utils/eventConstants";
-  import { getNeteaseSongInfo } from "$lib/api/media";
+  import { mediaApi } from "$lib/api/media";
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
   import {
@@ -135,6 +136,7 @@
   let trackTitle = $state<string>("");
   let artistName = $state<string>("");
   let isPlaying = $state<boolean>(false);
+  let lastSongKey: string | null = null;
 
   // iOS 风格频谱动画系统
   let spectrumPhase = $state(0);
@@ -203,21 +205,21 @@
           const diff = 2 - current;
           workArray5[i] = current + diff * 0.08;
         }
-        for (let i = 0; i < 40; i++) {
+        for (let i = 0; i < 6; i++) {
           const current = workArray40[i] || 0.5;
           const diff = 2 - current;
           workArray40[i] = current + diff * 0.08;
         }
       }
 
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 6; i++) {
         if (collapsedBars[i]) {
           collapsedBars[i].style.transform =
             `scaleY(${workArray5[i]}) translateZ(0)`;
         }
       }
 
-      for (let i = 0; i < 40; i++) {
+      for (let i = 0; i < 6; i++) {
         if (expandedBars[i]) {
           expandedBars[i].style.transform =
             `scaleY(${workArray40[i]}) translateZ(0)`;
@@ -988,10 +990,17 @@
 
   async function handleMediaAction(action: string, e: MouseEvent) {
     e.stopPropagation();
+
+    if (action === "play_pause") {
+      isPlaying = !isPlaying;
+    }
+
     try {
-      const { controlMedia } = await import("$lib/api/media");
-      await controlMedia(action as "play_pause" | "next" | "prev");
+      await mediaApi.controlMedia(action as "play_pause" | "next" | "prev");
     } catch (err) {
+      if (action === "play_pause") {
+        isPlaying = !isPlaying;
+      }
       console.error("媒体控制失败:", err);
     }
   }
@@ -1007,55 +1016,22 @@
   let fullscreenCheckInterval: ReturnType<typeof setInterval> | null = null;
   let hideTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  async function checkFullscreenAndHide() {
+  // 处理全屏状态变化
+  function handleFullscreenChange(isFullscreen: boolean) {
     if (!autoHideEnabled || !appSettings.auto_hide) return;
 
-    try {
-      const allMonitors = await availableMonitors();
+    if (isFullscreen !== isFullscreenApp) {
+      isFullscreenApp = isFullscreen;
+      console.log(
+        "[全屏检测] 状态变化:",
+        isFullscreen ? "检测到全屏应用" : "全屏应用已关闭",
+      );
 
-      let monitorX = 0;
-      let monitorY = 0;
-      let monitorWidth = 0;
-      let monitorHeight = 0;
-
-      if (allMonitors.length > 0 && currentMonitorIndex < allMonitors.length) {
-        const targetMonitor = allMonitors[currentMonitorIndex];
-        monitorX = targetMonitor.position.x;
-        monitorY = targetMonitor.position.y;
-        monitorWidth = targetMonitor.size.width;
-        monitorHeight = targetMonitor.size.height;
-      } else if (allMonitors.length > 0) {
-        const targetMonitor = allMonitors[0];
-        monitorX = targetMonitor.position.x;
-        monitorY = targetMonitor.position.y;
-        monitorWidth = targetMonitor.size.width;
-        monitorHeight = targetMonitor.size.height;
+      if (isFullscreen) {
+        hideWindowToTop();
+      } else {
+        showWindow();
       }
-
-      const isFullscreen = await invoke<boolean>("check_fullscreen_app", {
-        monitorX,
-        monitorY,
-        monitorWidth,
-        monitorHeight,
-      });
-
-      if (isFullscreen !== isFullscreenApp) {
-        isFullscreenApp = isFullscreen;
-        console.log(
-          "[全屏检测] 状态变化:",
-          isFullscreen ? "检测到全屏应用" : "全屏应用已关闭",
-          "显示器:",
-          `X:${monitorX}, Y:${monitorY}, W:${monitorWidth}, H:${monitorHeight}`,
-        );
-
-        if (isFullscreen) {
-          hideWindowToTop();
-        } else {
-          showWindow();
-        }
-      }
-    } catch (error) {
-      console.error("[全屏检测] 失败:", error);
     }
   }
 
@@ -1477,9 +1453,8 @@
 
       const unlistenMediaUpdate = await onMediaUpdate((data: any) => {
         if (data.source) currentSource = data.source;
-        isPlaying = data.is_playing || false;
+        isPlaying = data.isPlaying || false;
 
-        let lastSongKey: string | null = null;
         const currentSongKey = `${data.title || ""}-${data.artist || ""}`;
         const songChanged = lastSongKey !== currentSongKey;
 
@@ -1488,7 +1463,7 @@
           lastSongKey = currentSongKey;
         }
 
-        const newPosition = data.position_ms || 0;
+        const newPosition = data.positionMs || 0;
 
         maxBackendPosition = Math.max(maxBackendPosition, newPosition);
 
@@ -1514,8 +1489,8 @@
           console.log("[歌曲变更] 检测到新歌:", data.title, "-", data.artist);
           lastSongKey = currentSongKey;
 
-          if (data.duration_ms && data.duration_ms > 1000) {
-            durationMs = data.duration_ms;
+          if (data.durationMs && data.durationMs > 1000) {
+            durationMs = data.durationMs;
             console.log("[时长] ✓ 使用 SMTC 提供的有效时长:", durationMs, "ms");
           } else {
             const songName = data.title || trackTitle;
@@ -1527,7 +1502,8 @@
               artistName &&
               artistName !== "未知艺术家"
             ) {
-              getNeteaseSongInfo(songName, artistName)
+              mediaApi
+                .getNeteaseSongInfo(songName, artistName)
                 .then((songInfo) => {
                   if (songInfo) {
                     if (songInfo.duration && songInfo.duration > 0) {
@@ -1539,10 +1515,10 @@
                       );
                     }
                     if (
-                      songInfo.album_pic &&
+                      songInfo.albumPic &&
                       (!rawCoverUrl || rawCoverUrl === "")
                     ) {
-                      const highQualityPic = songInfo.album_pic.replace(
+                      const highQualityPic = songInfo.albumPic.replace(
                         /(\d+)x(\d+)\.jpg/,
                         "1024y1024.jpg",
                       );
@@ -1551,15 +1527,12 @@
                         highQualityPic,
                       );
                     }
-                    if (songInfo.mv_id && songInfo.mv_id > 0) {
-                      console.log(
-                        "[网易云 API] ✓ 发现 MV，ID:",
-                        songInfo.mv_id,
-                      );
-                      if (songInfo.mv_url) {
+                    if (songInfo.mvId && songInfo.mvId > 0) {
+                      console.log("[网易云 API] ✓ 发现 MV，ID:", songInfo.mvId);
+                      if (songInfo.mvUrl) {
                         console.log(
                           "[网易云 API] ✓ MV 播放链接:",
-                          songInfo.mv_url,
+                          songInfo.mvUrl,
                         );
                       }
                     }
@@ -1578,9 +1551,9 @@
         const artistChanged = artistName !== data.artist;
 
         const newCover =
-          data.album_art ||
+          data.albumArt ||
           data.thumbnail ||
-          data.cover_url ||
+          data.coverUrl ||
           data.api_cover_url ||
           data.image ||
           "";
@@ -1734,8 +1707,13 @@
   });
 
   onMount(() => {
-    fullscreenCheckInterval = setInterval(checkFullscreenAndHide, 3000);
-    checkFullscreenAndHide();
+    // 监听后端推送的全屏状态变化事件
+    const unlistenFullscreen = eventManager.on(
+      "fullscreen-changed",
+      (event) => {
+        handleFullscreenChange(event.payload);
+      },
+    );
 
     let mouseMoveTimeout: ReturnType<typeof setTimeout> | null = null;
     const handleMouseMoveThrottled = (e: MouseEvent) => {
@@ -1750,9 +1728,9 @@
     document.addEventListener("mousemove", handleMouseMoveThrottled);
 
     return () => {
-      if (fullscreenCheckInterval) {
-        clearInterval(fullscreenCheckInterval);
-      }
+      // 清理全屏监听
+      unlistenFullscreen.then((unlisten) => unlisten());
+
       if (hideTimeout) {
         clearTimeout(hideTimeout);
       }
@@ -1846,16 +1824,17 @@
           <div
             class="h-full w-full flex items-center justify-between select-none"
           >
-            {#if artworkUrl}
-              {#key flipKey}
-                <div
-                  class="w-5 h-5 rounded overflow-hidden flex-shrink-0 select-none cursor-pointer"
-                  data-stop-toggle
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    openCurrentPlayer();
-                  }}
-                >
+            <div
+              class="w-5 h-5 rounded overflow-hidden flex-shrink-0 select-none cursor-pointer"
+              style="background-color: rgba(255, 255, 255, 0.05);"
+              data-stop-toggle
+              onclick={(e) => {
+                e.stopPropagation();
+                openCurrentPlayer();
+              }}
+            >
+              {#if artworkUrl}
+                {#key flipKey}
                   <img
                     src={artworkUrl}
                     alt=""
@@ -1867,19 +1846,21 @@
                         "none";
                     }}
                   />
+                {/key}
+              {:else}
+                <div class="w-full h-full flex items-center justify-center">
+                  <svg
+                    class="w-3 h-3 text-white/20"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"
+                    />
+                  </svg>
                 </div>
-              {/key}
-            {:else}
-              <div
-                class="w-5 h-5 rounded overflow-hidden flex-shrink-0 select-none"
-              >
-                <img
-                  src={currentIcon}
-                  alt=""
-                  class="w-full h-full object-cover"
-                />
-              </div>
-            {/if}
+              {/if}
+            </div>
 
             {#if appSettings.show_spectrum}
               <div
@@ -1916,16 +1897,17 @@
             class="flex items-center justify-between"
             style="gap: 12px; margin-bottom: 12px;"
           >
-            {#if artworkUrl}
-              {#key flipKey}
-                <div
-                  class="w-[52px] h-[52px] rounded-[12px] overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
-                  data-stop-toggle
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    openCurrentPlayer();
-                  }}
-                >
+            <div
+              class="w-[52px] h-[52px] rounded-[12px] overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
+              style="background-color: rgba(255, 255, 255, 0.05);"
+              data-stop-toggle
+              onclick={(e) => {
+                e.stopPropagation();
+                openCurrentPlayer();
+              }}
+            >
+              {#if artworkUrl}
+                {#key flipKey}
                   <img
                     src={artworkUrl}
                     alt="cover"
@@ -1941,9 +1923,21 @@
                         "none";
                     }}
                   />
+                {/key}
+              {:else}
+                <div class="w-full h-full flex items-center justify-center">
+                  <svg
+                    class="w-8 h-8 text-white/20"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"
+                    />
+                  </svg>
                 </div>
-              {/key}
-            {/if}
+              {/if}
+            </div>
 
             <div class="flex-1 min-w-0">
               <div class="marquee-wrapper relative overflow-hidden">
@@ -2011,44 +2005,43 @@
             <div
               class="flex items-center justify-center"
               style="
-              gap: 20px;
-              will-change: auto;
-              transform: translate3d(0, -2px, 0);
-              backface-visibility: hidden;
-              perspective: 1000px;
-            "
+                gap: 20px;
+                will-change: auto;
+                transform: translate3d(0, 0, 0);
+                backface-visibility: hidden;
+                perspective: 1000px;
+              "
             >
-              <SkipBack
-                size={22}
-                fill="currentColor"
-                class="text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button"
+              <button
+                class="flex items-center justify-center text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button bg-transparent border-none p-0"
+                style="width: 32px; height: 32px;"
                 data-stop-toggle
                 onclick={(e) => handleMediaAction("prev", e)}
-              />
-              {#if isPlaying}
-                <Pause
-                  size={32}
-                  fill="currentColor"
-                  class="text-white hover:scale-110 active:scale-95 transition-all duration-300 relative z-50 cursor-pointer media-button"
-                  data-stop-toggle
-                  onclick={(e) => handleMediaAction("play_pause", e)}
-                />
-              {:else}
-                <Play
-                  size={32}
-                  fill="currentColor"
-                  class="text-white hover:scale-110 active:scale-95 transition-all duration-300 relative z-50 cursor-pointer media-button"
-                  data-stop-toggle
-                  onclick={(e) => handleMediaAction("play_pause", e)}
-                />
-              {/if}
-              <SkipForward
-                size={22}
-                fill="currentColor"
-                class="text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button"
+              >
+                <SkipBack size={22} fill="currentColor" />
+              </button>
+
+              <button
+                class="flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all duration-300 relative z-50 cursor-pointer media-button bg-transparent border-none p-0"
+                style="width: 40px; height: 40px;"
+                data-stop-toggle
+                onclick={(e) => handleMediaAction("play_pause", e)}
+              >
+                {#if isPlaying}
+                  <Pause size={32} fill="currentColor" />
+                {:else}
+                  <Play size={32} fill="currentColor" />
+                {/if}
+              </button>
+
+              <button
+                class="flex items-center justify-center text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button bg-transparent border-none p-0"
+                style="width: 32px; height: 32px;"
                 data-stop-toggle
                 onclick={(e) => handleMediaAction("next", e)}
-              />
+              >
+                <SkipForward size={22} fill="currentColor" />
+              </button>
             </div>
 
             <!-- 悬浮窗按钮 -->

@@ -2,7 +2,7 @@
  * Player Store - 播放器状态管理 (Svelte 5 Runes 语法 + 工厂模式)
  * 遵循 CLAUDE.md 规范：使用工厂函数 createPlayerStore()，隐藏原始 set/update 逻辑
  */
-import { getNeteaseDuration } from '$lib/api/media';
+import { mediaApi } from '$lib/api/media';
 
 /**
  * 创建播放器 Store 的工厂函数
@@ -154,7 +154,7 @@ function createPlayerStore() {
     // 获取网易云缓存中的时长（走 API 层）
     async fetchDuration() {
       try {
-        const durationMs = await getNeteaseDuration();
+        const durationMs = await mediaApi.getNeteaseDuration();
         if (durationMs) {
           state.duration = durationMs / 1000;
           return durationMs / 1000;

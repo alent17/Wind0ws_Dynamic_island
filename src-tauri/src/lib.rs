@@ -148,6 +148,101 @@ fn start_media_listener(handle: AppHandle) {
     });
 }
 
+/// 启动全屏状态监控器
+///
+/// 在后台线程中持续监控全屏状态，
+/// 只有状态改变时才通知前端。
+///
+/// ## 工作流程
+///
+/// 1. 每 500ms 检测一次全屏状态
+/// 2. 只有状态变化时才发送事件
+/// 3. 避免高频轮询造成的性能浪费
+fn start_fullscreen_monitor(handle: AppHandle) {
+    std::thread::spawn(move || {
+        let mut was_fullscreen = false;
+        
+        loop {
+            // 获取当前显示器和窗口信息
+            if let Some(window) = handle.get_webview_window("main") {
+                if let Ok(all_monitors) = window.available_monitors() {
+                    if let Ok(current_monitor) = window.current_monitor() {
+                        // 获取当前窗口所在的显示器
+                        let target_monitor = current_monitor.or_else(|| all_monitors.first().cloned());
+                        
+                        if let Some(monitor) = target_monitor {
+                            let position = monitor.position();
+                            let size = monitor.size();
+                            
+                            // 调用全屏检测逻辑
+                            let is_fullscreen = unsafe {
+                                use windows::Win32::Foundation::RECT;
+                                use windows::Win32::UI::WindowsAndMessaging::{
+                                    GetForegroundWindow, GetWindowLongPtrW, GetWindowRect,
+                                    GWL_STYLE, WS_CAPTION,
+                                };
+                                
+                                let hwnd = GetForegroundWindow();
+                                if hwnd.0 != 0 {
+                                    let mut rect = RECT::default();
+                                    if GetWindowRect(hwnd, &mut rect).is_ok() {
+                                        let width = rect.right - rect.left;
+                                        let height = rect.bottom - rect.top;
+                                        
+                                        if width > 0 && height > 0 {
+                                            let is_on_target_monitor =
+                                                rect.left <= position.x + size.width as i32 &&
+                                                rect.right >= position.x &&
+                                                rect.top <= position.y + size.height as i32 &&
+                                                rect.bottom >= position.y;
+                                            
+                                            if is_on_target_monitor {
+                                                let covers_screen = width >= size.width as i32 - 2 && height >= size.height as i32 - 2;
+                                                
+                                                if covers_screen {
+                                                    let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+                                                    (style & WS_CAPTION.0 as isize) == 0
+                                                } else {
+                                                    false
+                                                }
+                                            } else {
+                                                false
+                                            }
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                }
+                            };
+                            
+                            // 只有状态变化时才发送事件
+                            if is_fullscreen != was_fullscreen {
+                                if let Err(e) = event_bus::emit_fullscreen_changed(is_fullscreen) {
+                                    eprintln!("[全屏监控] 发送事件失败：{}", e);
+                                } else {
+                                    println!(
+                                        "[全屏监控] 状态变化：{} -> {}",
+                                        if was_fullscreen { "全屏" } else { "非全屏" },
+                                        if is_fullscreen { "全屏" } else { "非全屏" }
+                                    );
+                                }
+                                was_fullscreen = is_fullscreen;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 每 500ms 检测一次
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    });
+}
+
 // ============================================================================
 // 音频可视化
 // ============================================================================
@@ -504,6 +599,7 @@ pub fn run() {
             // 启动后台服务
             start_media_listener(app.handle().clone());
             start_audio_visualizer(app.handle().clone());
+            start_fullscreen_monitor(app.handle().clone());
 
             // 创建托盘菜单
             let menu = Menu::with_items(
