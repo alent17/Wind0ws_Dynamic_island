@@ -14,6 +14,10 @@ export const mediaApi = {
     return invoke<NeteaseSong | null>("get_netease_song_info_cmd", { songName, artist });
   },
 
+  async getNeteaseDuration(): Promise<number | null> {
+    return invoke<number | null>("get_netease_duration_cmd");
+  },
+
   async getNeteaseMvUrl(mvId: number): Promise<string | null> {
     return invoke<string | null>("get_netease_mv_url_cmd", { mvId });
   },

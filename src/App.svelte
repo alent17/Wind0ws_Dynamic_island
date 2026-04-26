@@ -1,13 +1,16 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { spring } from "svelte/motion";
-  import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+  import { convertFileSrc } from "@tauri-apps/api/core";
   import {
     eventManager,
     onMediaUpdate,
     onAudioSpectrum,
   } from "./utils/eventManager";
   import { Events } from "./utils/eventConstants";
+  import { getNeteaseSongInfo } from "$lib/api/media";
+  import { windowApi } from "$lib/api/window";
+  import { settingsApi } from "$lib/api/settings";
   import {
     getCurrentWindow,
     PhysicalSize,
@@ -133,32 +136,31 @@
   let artistName = $state<string>("");
   let isPlaying = $state<boolean>(false);
 
-  // iOS风格频谱动画系统
+  // iOS 风格频谱动画系统
   let spectrumPhase = $state(0);
-  let targetSpectrumHeights = $state([0.5, 0.5, 0.5, 0.5, 0.5]);
-  let targetSpectrumHeightsExpanded = $state(Array(40).fill(0.5));
+  let targetSpectrumHeights = $state([0.5, 0.5, 0.5, 0.5, 0.5, 0.5]);
+  let targetSpectrumHeightsExpanded = $state([0.5, 0.5, 0.5, 0.5, 0.5, 0.5]);
   let spectrumTimer: number | null = null;
 
-  const workArray5 = new Float32Array(5);
-  const workArray40 = new Float32Array(40);
+  const workArray5 = new Float32Array(6);
+  const workArray40 = new Float32Array(6);
 
   let collapsedBars: HTMLDivElement[] = [];
   let expandedBars: HTMLDivElement[] = [];
 
   const baseCollapsedHeight = 20;
-  const iOSCollapsedEnvelope = [0.5, 0.85, 1.0, 0.85, 0.5];
-  const collapsedPhases = [0, 0.5, 1.0, 1.5, 0.8];
+  const iOSCollapsedEnvelope = [0.5, 0.85, 1.0, 1.0, 0.85, 0.5];
+  const collapsedPhases = [0, 0.5, 1.0, 1.5, 1.0, 0.5];
 
   const baseExpandedHeight = 30;
 
   const iOSExpandedEnvelope = [
-    0.3, 0.4, 0.6, 0.8, 1.0, 1.15, 1.1, 1.0, 0.85, 0.75, 0.65, 0.6, 0.65, 0.75,
-    0.85, 0.95, 1.0, 1.05, 1.05, 1.0, 1.0, 1.05, 1.05, 1.0, 0.95, 0.85, 0.75,
-    0.65, 0.6, 0.65, 0.75, 0.85, 1.0, 1.1, 1.15, 1.0, 0.8, 0.6, 0.4, 0.3,
+    0.5, 0.85, 1.0, 1.0, 0.85, 0.5,
   ];
 
   const expandedPhases = [
-    0, 0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 0.15, 0.45, 0.75, 1.05,
+    0, 0.5, 1.0, 1.5, 1.0, 0.5,
+  ];
     1.35, 1.65, 1.95, 2.25, 2.55, 2.85,
   ];
 
@@ -174,7 +176,7 @@
       spectrumTimer = requestAnimationFrame(animate);
 
       if (isPlaying) {
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 6; i++) {
           const target = targetSpectrumHeights[i] || 2;
           const current = workArray5[i] || 0.5;
           const diff = target - current;
@@ -182,13 +184,13 @@
           workArray5[i] = current + diff * tracking;
         }
 
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 6; i++) {
           const left = i > 0 ? workArray5[i - 1] : workArray5[i];
-          const right = i < 4 ? workArray5[i + 1] : workArray5[i];
+          const right = i < 5 ? workArray5[i + 1] : workArray5[i];
           workArray5[i] = workArray5[i] * 0.8 + left * 0.1 + right * 0.1;
         }
 
-        for (let i = 0; i < 40; i++) {
+        for (let i = 0; i < 6; i++) {
           const target = targetSpectrumHeightsExpanded[i] || 2;
           const current = workArray40[i] || 0.5;
           const diff = target - current;
@@ -196,13 +198,13 @@
           workArray40[i] = current + diff * tracking;
         }
 
-        for (let i = 0; i < 40; i++) {
+        for (let i = 0; i < 6; i++) {
           const left = i > 0 ? workArray40[i - 1] : workArray40[i];
-          const right = i < 39 ? workArray40[i + 1] : workArray40[i];
+          const right = i < 5 ? workArray40[i + 1] : workArray40[i];
           workArray40[i] = workArray40[i] * 0.92 + left * 0.04 + right * 0.04;
         }
       } else {
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 6; i++) {
           const current = workArray5[i] || 0.5;
           const diff = 2 - current;
           workArray5[i] = current + diff * 0.08;
@@ -300,7 +302,7 @@
     try {
       const appName = playerApps[currentSource] || "";
       if (appName) {
-        await invoke("open_application", { name: appName });
+        await windowApi.openApplication(appName);
         console.log(`[播放器] 已尝试打开 ${appName}`);
       } else {
         console.warn(`[播放器] 未找到 ${currentSource} 的应用映射`);
@@ -844,10 +846,10 @@
   async function toggleFloatingWindow() {
     try {
       if (isFloatingWindowOpen) {
-        await invoke("close_floating_window");
+        await windowApi.closeFloatingWindow();
         isFloatingWindowOpen = false;
       } else {
-        await invoke("open_floating_window");
+        await windowApi.openFloatingWindow();
         isFloatingWindowOpen = true;
       }
     } catch (error) {
@@ -993,7 +995,8 @@
   async function handleMediaAction(action: string, e: MouseEvent) {
     e.stopPropagation();
     try {
-      await invoke("control_media", { action });
+      const { controlMedia } = await import("$lib/api/media");
+      await controlMedia(action as "play_pause" | "next" | "prev");
     } catch (err) {
       console.error("媒体控制失败:", err);
     }
@@ -1173,12 +1176,10 @@
       showMonitorMenu = false;
 
       try {
-        const savedSettings = await invoke<any>("get_settings");
-        await invoke("save_settings", {
-          settings: {
-            ...savedSettings,
-            monitor_index: index,
-          },
+        const savedSettings = await settingsApi.getSettings();
+        await settingsApi.saveSettings({
+          ...savedSettings,
+          monitor_index: index,
         });
         console.log("[显示器] 已保存选择到设置，索引:", index);
       } catch (saveError) {
@@ -1278,11 +1279,13 @@
   });
 
   onMount(() => {
+    let cleanups: Array<() => void> = [];
+
     (async () => {
       console.log("[App.svelte] onMount 开始监听事件");
 
       try {
-        const savedSettings = await invoke<any>("get_settings");
+        const savedSettings = await settingsApi.getSettings();
         const appWindow = getCurrentWindow();
         await appWindow.setAlwaysOnTop(savedSettings.always_on_top ?? true);
         console.log("[置顶设置] 已应用:", savedSettings.always_on_top);
@@ -1291,7 +1294,7 @@
       }
 
       try {
-        const loadedSettings = await invoke<any>("get_settings");
+        const loadedSettings = await settingsApi.getSettings();
         appSettings = {
           auto_hide: loadedSettings.auto_hide ?? true,
           show_spectrum: loadedSettings.show_spectrum ?? true,
@@ -1352,6 +1355,7 @@
           }
         },
       );
+      cleanups.push(unlistenSettings);
 
       const unlistenSettingsChanged = await eventManager.on(
         Events.SETTINGS_CHANGED,
@@ -1359,8 +1363,8 @@
           console.log("[设置] 单项变更:", settingName);
 
           if (settingName === "monitor_index") {
-            // 先从后端获取最新的显示器索引
-            invoke<number>("get_current_monitor_index")
+            windowApi
+              .getCurrentMonitorIndex()
               .then((idx: number) => {
                 currentMonitorIndex = idx;
                 if (monitors[idx]) {
@@ -1371,10 +1375,10 @@
           } else if (settingName === "island_theme") {
             currentTheme = appSettings.island_theme;
           } else if (settingName === "always_on_top") {
-            // 由后端处理置顶
           } else {
-            invoke("get_settings")
-              .then((s: any) => {
+            settingsApi
+              .getSettings()
+              .then((s) => {
                 if (s) {
                   appSettings = { ...appSettings, ...s };
                 }
@@ -1383,6 +1387,7 @@
           }
         },
       );
+      cleanups.push(unlistenSettingsChanged);
 
       const unlistenCornerRadiusChanged = await eventManager.on(
         Events.CORNER_RADIUS_CHANGED,
@@ -1391,6 +1396,7 @@
           appSettings.expanded_corner_radius = radius;
         },
       );
+      cleanups.push(unlistenCornerRadiusChanged);
 
       try {
         const allMonitors = await availableMonitors();
@@ -1412,7 +1418,7 @@
           };
         });
 
-        const savedSettings = await invoke<any>("get_settings");
+        const savedSettings = await settingsApi.getSettings();
         const savedMonitorIndex = savedSettings.monitor_index ?? 0;
 
         if (savedMonitorIndex >= 0 && savedMonitorIndex < allMonitors.length) {
@@ -1456,6 +1462,7 @@
           console.log("[悬浮窗] 已关闭，更新状态");
         },
       );
+      cleanups.push(unlistenFloatingWindowClosed);
 
       const unlistenTheme = await eventManager.on(
         Events.THEME_CHANGED,
@@ -1464,22 +1471,21 @@
           console.log("[主题切换] 切换到:", currentTheme);
         },
       );
+      cleanups.push(unlistenTheme);
 
       try {
-        const savedSettings = await invoke<any>("get_settings");
+        const savedSettings = await settingsApi.getSettings();
         currentTheme = savedSettings.island_theme || "original";
         console.log("[主题加载] 从设置加载主题:", currentTheme);
       } catch (e) {
         console.error("[主题加载] 失败:", e);
       }
 
-      let cleanup: (() => void) | undefined;
-      let lastSongKey: string | null = null;
-
       const unlistenMediaUpdate = await onMediaUpdate((data: any) => {
         if (data.source) currentSource = data.source;
         isPlaying = data.is_playing || false;
 
+        let lastSongKey: string | null = null;
         const currentSongKey = `${data.title || ""}-${data.artist || ""}`;
         const songChanged = lastSongKey !== currentSongKey;
 
@@ -1527,11 +1533,8 @@
               artistName &&
               artistName !== "未知艺术家"
             ) {
-              invoke("get_netease_song_info_cmd", {
-                songName,
-                artist: artistName,
-              })
-                .then((songInfo: any) => {
+              getNeteaseSongInfo(songName, artistName)
+                .then((songInfo) => {
                   if (songInfo) {
                     if (songInfo.duration && songInfo.duration > 0) {
                       durationMs = songInfo.duration;
@@ -1646,6 +1649,7 @@
           progressSpring.set((currentTimeMs / durationMs) * 100);
         }
       });
+      cleanups.push(unlistenMediaUpdate);
 
       const unlistenAudioSpectrum = await onAudioSpectrum(
         ({ bands, bands_expanded }: any) => {
@@ -1674,21 +1678,17 @@
           }
         },
       );
-
-      cleanup = unlistenMediaUpdate;
-
-      return () => {
-        if (cleanup) cleanup();
-        stopAutoClose();
-        unlistenTheme();
-        unlistenSettings();
-        unlistenSettingsChanged();
-        unlistenCornerRadiusChanged();
-        unlistenFloatingWindowClosed();
-        unlistenAudioSpectrum();
-        stopDebugFps();
-      };
+      cleanups.push(unlistenAudioSpectrum);
     })();
+
+    return () => {
+      cleanups.forEach((fn) => fn && fn());
+    };
+  });
+
+  onDestroy(() => {
+    stopAutoClose();
+    stopDebugFps();
   });
 
   function handleGlobalClick(event: MouseEvent) {
@@ -1892,7 +1892,7 @@
                 class="spectrum-container"
                 style="--accent-color: {accentColor}; --secondary-color: {secondaryColor};"
               >
-                {#each Array.from({ length: 5 }) as _, i}
+                {#each Array.from({ length: 6 }) as _, i (i)}
                   <div class="spectrum-bar" bind:this={collapsedBars[i]}></div>
                 {/each}
               </div>
@@ -1974,7 +1974,7 @@
                 class="spectrum-container-expanded"
                 style="--accent-color: {accentColor}; --secondary-color: {secondaryColor};"
               >
-                {#each Array.from({ length: 40 }) as _, i}
+                {#each Array.from({ length: 6 }) as _, i (i)}
                   <div
                     class="spectrum-bar-expanded"
                     bind:this={expandedBars[i]}
