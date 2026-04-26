@@ -632,19 +632,19 @@
     const currentHeight = $heightSpring;
     const currentOpacity = $contentOpacity;
 
-    widthSpring = spring(currentWidth, {
+    Object.assign(widthSpring, {
       stiffness: params.stiffness,
       damping: params.damping,
       precision: params.precision,
     });
 
-    heightSpring = spring(currentHeight, {
+    Object.assign(heightSpring, {
       stiffness: params.stiffness,
       damping: params.damping,
       precision: params.precision,
     });
 
-    contentOpacity = spring(currentOpacity, {
+    Object.assign(contentOpacity, {
       stiffness: params.stiffness * 1.2,
       damping: params.damping * 1.2,
       precision: params.precision,

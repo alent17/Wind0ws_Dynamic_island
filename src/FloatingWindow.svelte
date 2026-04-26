@@ -948,8 +948,9 @@
                 if (
                   hdCover.startsWith("http") &&
                   !hdCover.includes("asset.localhost")
-                )
+                ) {
                   img.crossOrigin = "Anonymous";
+                }
                 img.onload = () => {
                   if (currentTrackKey === newTrackKey) {
                     transitionCover(hdCover, "left");
@@ -1047,31 +1048,12 @@
         }
       }
     });
-
-    // 进度更新使用 setInterval（与灵动岛一致，每 100ms 更新一次）
-    progressInterval = setInterval(() => {
-      if (
-        mediaState.is_playing &&
-        mediaState.duration_ms > 0 &&
-        mediaState.position_ms < mediaState.duration_ms
-      ) {
-        mediaState.position_ms += 100;
-        if (mediaState.position_ms > mediaState.duration_ms) {
-          mediaState.position_ms = mediaState.duration_ms;
-        }
-      }
-    }, 100);
   });
 
   // 监听播放状态变化，自动启动/停止进度更新
   $effect(() => {
-    if (progressInterval) {
-      if (!mediaState.is_playing) {
-        clearInterval(progressInterval);
-        progressInterval = null;
-      }
-    } else if (mediaState.is_playing) {
-      progressInterval = setInterval(() => {
+    if (mediaState.is_playing && mediaState.duration_ms > 0) {
+      const interval = setInterval(() => {
         if (
           mediaState.is_playing &&
           mediaState.duration_ms > 0 &&
@@ -1083,6 +1065,16 @@
           }
         }
       }, 100);
+
+      return () => {
+        clearInterval(interval);
+        progressInterval = null;
+      };
+    }
+
+    if (progressInterval) {
+      clearInterval(progressInterval);
+      progressInterval = null;
     }
   });
 
@@ -1268,6 +1260,12 @@
 
       // 加载处理后的图片
       const img = new Image();
+      if (
+        processedUrl.startsWith("http") &&
+        !processedUrl.includes("asset.localhost")
+      ) {
+        img.crossOrigin = "Anonymous";
+      }
       img.onload = () => {
         // 设置 Canvas 尺寸
         canvas.width = img.width;
