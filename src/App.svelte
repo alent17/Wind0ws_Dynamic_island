@@ -1527,9 +1527,9 @@
               artistName &&
               artistName !== "未知艺术家"
             ) {
-              invoke("get_netease_song_info", {
+              invoke("get_netease_song_info_cmd", {
                 songName,
-                artistName,
+                artist: artistName,
               })
                 .then((songInfo: any) => {
                   if (songInfo) {
@@ -1892,7 +1892,7 @@
                 class="spectrum-container"
                 style="--accent-color: {accentColor}; --secondary-color: {secondaryColor};"
               >
-                {#each Array(5) as _, i}
+                {#each Array.from({ length: 5 }) as _, i}
                   <div class="spectrum-bar" bind:this={collapsedBars[i]}></div>
                 {/each}
               </div>
@@ -1974,7 +1974,7 @@
                 class="spectrum-container-expanded"
                 style="--accent-color: {accentColor}; --secondary-color: {secondaryColor};"
               >
-                {#each Array(10) as _, i}
+                {#each Array.from({ length: 40 }) as _, i}
                   <div
                     class="spectrum-bar-expanded"
                     bind:this={expandedBars[i]}
