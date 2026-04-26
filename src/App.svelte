@@ -154,15 +154,9 @@
 
   const baseExpandedHeight = 30;
 
-  const iOSExpandedEnvelope = [
-    0.5, 0.85, 1.0, 1.0, 0.85, 0.5,
-  ];
+  const iOSExpandedEnvelope = [0.5, 0.85, 1.0, 1.0, 0.85, 0.5];
 
-  const expandedPhases = [
-    0, 0.5, 1.0, 1.5, 1.0, 0.5,
-  ];
-    1.35, 1.65, 1.95, 2.25, 2.55, 2.85,
-  ];
+  const expandedPhases = [0, 0.5, 1.0, 1.5, 1.0, 0.5];
 
   function startSpectrumAnimation() {
     if (spectrumTimer || !appSettings.show_spectrum) return;
