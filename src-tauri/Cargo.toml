@@ -65,3 +65,6 @@ chrono = "0.4"
 # 系统级毛玻璃效果 (Windows Acrylic/Mica, macOS Vibrancy)
 window-vibrancy = "0.5"
 
+# 全局静态变量支持
+lazy_static = "1.4"
+

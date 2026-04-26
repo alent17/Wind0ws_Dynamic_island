@@ -111,10 +111,20 @@
 
   async function loadCacheStats() {
     try {
-      const stats: any = await invoke("get_cache_stats");
-      cacheSize = `${stats.total_size_mb.toFixed(2)} MB`;
+      const result = await invoke("get_cache_stats");
+      const stats = result as any;
+      if (
+        stats &&
+        typeof stats?.totalSizeMb === "number" &&
+        !isNaN(stats.totalSizeMb)
+      ) {
+        cacheSize = `${stats.totalSizeMb.toFixed(2)} MB`;
+      } else {
+        cacheSize = "0.00 MB";
+      }
     } catch (e) {
       console.error("加载缓存统计失败", e);
+      cacheSize = "0.00 MB";
     }
   }
 

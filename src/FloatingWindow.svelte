@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
-  import { listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { convertFileSrc } from "@tauri-apps/api/core";
+  import { eventManager, onMediaUpdate } from "./utils/eventManager";
+  import { Events } from "./utils/eventConstants";
   import {
     Play,
     Pause,
@@ -733,10 +734,10 @@
     eventListeners = [];
 
     // 监听 MV 播放设置变化事件
-    const unlistenMVChange = await listen(
-      "mv-playback-changed",
-      (event: any) => {
-        isMVPlaybackEnabled = event.payload.enable;
+    const unlistenMVChange = await eventManager.on(
+      Events.MV_PLAYBACK_CHANGED,
+      ({ enable }: any) => {
+        isMVPlaybackEnabled = enable;
         console.log(
           "[MV 播放] 设置已更新:",
           isMVPlaybackEnabled ? "已启用" : "已禁用",
@@ -752,10 +753,10 @@
     eventListeners.push(unlistenMVChange);
 
     // 监听锁定悬浮窗设置变化事件
-    const unlistenLockChange = await listen(
-      "lock-floating-window-changed",
-      (event: any) => {
-        isFloatingWindowLocked = event.payload.lock;
+    const unlistenLockChange = await eventManager.on(
+      Events.LOCK_FLOATING_WINDOW_CHANGED,
+      ({ lock }: any) => {
+        isFloatingWindowLocked = lock;
         console.log(
           "[锁定悬浮窗] 设置已更新:",
           isFloatingWindowLocked ? "锁定" : "解锁",
@@ -772,20 +773,20 @@
     eventListeners.push(unlistenLockChange);
 
     // 监听高清封面获取设置变化事件
-    const unlistenHDCoverChange = await listen(
-      "hd-cover-changed",
-      (event: any) => {
-        enableHDCover = event.payload.enableHDCover;
+    const unlistenHDCoverChange = await eventManager.on(
+      Events.HD_COVER_CHANGED,
+      ({ enableHDCover: enabled }: any) => {
+        enableHDCover = enabled;
         console.log("[高清封面] 设置已更新:", enableHDCover ? "开启" : "关闭");
       },
     );
     eventListeners.push(unlistenHDCoverChange);
 
     // 监听像素化封面设置变化事件
-    const unlistenPixelArtChange = await listen(
-      "pixel-art-changed",
-      (event: any) => {
-        enablePixelArt = event.payload.enablePixelArt;
+    const unlistenPixelArtChange = await eventManager.on(
+      Events.PIXEL_ART_CHANGED,
+      ({ enablePixelArt: enabled }: any) => {
+        enablePixelArt = enabled;
         console.log(
           "[像素化封面] 设置已更新:",
           enablePixelArt ? "开启" : "关闭",
@@ -795,10 +796,10 @@
     eventListeners.push(unlistenPixelArtChange);
 
     // 监听网点效果设置变化事件
-    const unlistenHalftoneChange = await listen(
-      "halftone-changed",
-      (event: any) => {
-        halftoneOverlayVisible = event.payload.enableHalftone;
+    const unlistenHalftoneChange = await eventManager.on(
+      Events.HALFTONE_CHANGED,
+      ({ enableHalftone: enabled }: any) => {
+        halftoneOverlayVisible = enabled;
         console.log(
           "[网点效果] 设置已更新:",
           halftoneOverlayVisible ? "开启" : "关闭",
@@ -889,171 +890,162 @@
     // 保存移动监听器引用
     (window as any).__unlistenMoved = unlistenMoved;
 
-    // 监听媒体更新事件（带防抖）
-    let mediaUpdateTimeout: ReturnType<typeof setTimeout> | null = null;
-    unlisten = await listen("media-update", (event: any) => {
-      // 防抖处理，避免频繁更新
-      if (mediaUpdateTimeout) {
-        clearTimeout(mediaUpdateTimeout);
-      }
+    // 监听媒体更新事件（已内置节流）
+    unlisten = await onMediaUpdate((payload: any) => {
+      const newTrackKey = `${payload.title}-${payload.artist}`;
 
-      mediaUpdateTimeout = setTimeout(() => {
-        const payload = event.payload;
-        const newTrackKey = `${payload.title}-${payload.artist}`;
+      // 检查是否是空状态（播放器关闭或无媒体）
+      const isEmptyState =
+        !payload.title ||
+        payload.title === "" ||
+        payload.title === "等待播放...";
 
-        // 检查是否是空状态（播放器关闭或无媒体）
-        const isEmptyState =
-          !payload.title ||
-          payload.title === "" ||
-          payload.title === "等待播放...";
+      if (isEmptyState) {
+        // 播放器退出，重置为等待状态
+        currentTrackKey = "";
+        mediaState = {
+          title: PLACEHOLDER_TITLE,
+          artist: PLACEHOLDER_ARTIST,
+          album_art: "",
+          is_playing: false,
+          position_ms: 0,
+          duration_ms: 0,
+        };
+        displayCover = "";
+        isPlayingMV = false;
+        mvUrl = "";
+        console.log("[媒体更新] 播放器已退出，重置状态");
+      } else if (newTrackKey !== currentTrackKey) {
+        currentTrackKey = newTrackKey;
 
-        if (isEmptyState) {
-          // 播放器退出，重置为等待状态
-          currentTrackKey = "";
-          mediaState = {
-            title: PLACEHOLDER_TITLE,
-            artist: PLACEHOLDER_ARTIST,
-            album_art: "",
-            is_playing: false,
-            position_ms: 0,
-            duration_ms: 0,
-          };
-          displayCover = "";
+        // 使用 SMTC 提供的图片作为基础
+        const smtcCover =
+          payload.album_art || payload.thumbnail || payload.cover_url || "";
+
+        mediaState = { ...mediaState, ...payload, album_art: smtcCover };
+
+        // 判断是否是音乐播放器
+        const isMusicPlayer =
+          payload.source &&
+          (payload.source === "netease" ||
+            payload.source === "qqmusic" ||
+            payload.source === "spotify" ||
+            payload.source === "apple_music" ||
+            payload.source === "local");
+
+        // 网页播放时只获取歌手图片，音乐播放器获取专辑封面
+        if (isMusicPlayer) {
+          // 停止当前播放的 MV
           isPlayingMV = false;
           mvUrl = "";
-          console.log("[媒体更新] 播放器已退出，重置状态");
-        } else if (newTrackKey !== currentTrackKey) {
-          currentTrackKey = newTrackKey;
 
-          // 使用 SMTC 提供的图片作为基础
-          const smtcCover =
-            payload.album_art || payload.thumbnail || payload.cover_url || "";
-
-          mediaState = { ...mediaState, ...payload, album_art: smtcCover };
-
-          // 判断是否是音乐播放器
-          const isMusicPlayer =
-            payload.source &&
-            (payload.source === "netease" ||
-              payload.source === "qqmusic" ||
-              payload.source === "spotify" ||
-              payload.source === "apple_music" ||
-              payload.source === "local");
-
-          // 网页播放时只获取歌手图片，音乐播放器获取专辑封面
-          if (isMusicPlayer) {
-            // 停止当前播放的 MV
-            isPlayingMV = false;
-            mvUrl = "";
-
-            // 根据设置决定是否获取高清图
-            if (enableHDCover) {
-              // 获取专辑封面高清图
-              fetchHighResCover(payload.title, payload.artist, smtcCover)
-                .then((hdCover) => {
-                  const img = new Image();
-                  if (
-                    hdCover.startsWith("http") &&
-                    !hdCover.includes("asset.localhost")
-                  )
-                    img.crossOrigin = "Anonymous";
-                  img.onload = () => {
-                    if (currentTrackKey === newTrackKey) {
-                      transitionCover(hdCover, "left");
-                    }
-                  };
-                  img.onerror = () => {
-                    if (currentTrackKey === newTrackKey) {
-                      transitionCover(smtcCover, "left");
-                    }
-                  };
-                  img.src = hdCover;
-                })
-                .catch(() => {
+          // 根据设置决定是否获取高清图
+          if (enableHDCover) {
+            // 获取专辑封面高清图
+            fetchHighResCover(payload.title, payload.artist, smtcCover)
+              .then((hdCover) => {
+                const img = new Image();
+                if (
+                  hdCover.startsWith("http") &&
+                  !hdCover.includes("asset.localhost")
+                )
+                  img.crossOrigin = "Anonymous";
+                img.onload = () => {
+                  if (currentTrackKey === newTrackKey) {
+                    transitionCover(hdCover, "left");
+                  }
+                };
+                img.onerror = () => {
                   if (currentTrackKey === newTrackKey) {
                     transitionCover(smtcCover, "left");
                   }
-                });
-            } else {
-              // 不获取高清图，直接使用 SMTC 图片
-              if (currentTrackKey === newTrackKey) {
-                transitionCover(smtcCover, "left");
-              }
-            }
-
-            // 如果启用了 MV 播放，尝试获取 MV（在专辑封面加载完成后）
-            if (isMVPlaybackEnabled) {
-              fetchMVFromAppleMusic(payload.title, payload.artist).then(
-                (mvLink) => {
-                  if (mvLink && currentTrackKey === newTrackKey) {
-                    setTimeout(() => {
-                      if (currentTrackKey === newTrackKey) {
-                        mvUrl = mvLink;
-                        isPlayingMV = true;
-                        console.log("[MV] 切换到新 MV:", mvLink);
-                      }
-                    }, 450);
-                  }
-                },
-              );
-            }
+                };
+                img.src = hdCover;
+              })
+              .catch(() => {
+                if (currentTrackKey === newTrackKey) {
+                  transitionCover(smtcCover, "left");
+                }
+              });
           } else {
-            // 网页或其他来源，直接使用 SMTC 图片
+            // 不获取高清图，直接使用 SMTC 图片
             if (currentTrackKey === newTrackKey) {
               transitionCover(smtcCover, "left");
             }
           }
+
+          // 如果启用了 MV 播放，尝试获取 MV（在专辑封面加载完成后）
+          if (isMVPlaybackEnabled) {
+            fetchMVFromAppleMusic(payload.title, payload.artist).then(
+              (mvLink) => {
+                if (mvLink && currentTrackKey === newTrackKey) {
+                  setTimeout(() => {
+                    if (currentTrackKey === newTrackKey) {
+                      mvUrl = mvLink;
+                      isPlayingMV = true;
+                      console.log("[MV] 切换到新 MV:", mvLink);
+                    }
+                  }, 450);
+                }
+              },
+            );
+          }
         } else {
-          // 播放状态变化
-          const wasPlaying = mediaState.is_playing;
-          const isPlaying = payload.is_playing;
-
-          console.log(
-            "[播放状态] 变化:",
-            wasPlaying ? "播放中" : "已暂停",
-            "→",
-            isPlaying ? "播放中" : "已暂停",
-          );
-
-          mediaState.is_playing = isPlaying;
-          mediaState.position_ms = payload.position_ms;
-          mediaState.duration_ms = payload.duration_ms;
-
-          // 根据播放状态控制 MV
-          if (isPlayingMV && mvUrl) {
-            const videoElement = document.querySelector(
-              ".mv-player",
-            ) as HTMLVideoElement;
-            if (videoElement) {
-              if (!isPlaying && wasPlaying) {
-                // 歌曲暂停，MV 也暂停
-                videoElement.pause();
-                console.log(
-                  "[MV] 暂停 (时间：" +
-                    videoElement.currentTime.toFixed(2) +
-                    "s, paused=" +
-                    videoElement.paused +
-                    ")",
-                );
-              } else if (isPlaying && !wasPlaying) {
-                // 歌曲从暂停恢复播放，MV 也恢复播放
-                videoElement.play().catch((err) => {
-                  console.error("[MV] 恢复播放失败:", err);
-                });
-                console.log(
-                  "[MV] 恢复播放 (时间：" +
-                    videoElement.currentTime.toFixed(2) +
-                    "s, paused=" +
-                    videoElement.paused +
-                    ")",
-                );
-              }
-            } else {
-              console.warn("[MV] 未找到视频元素");
-            }
+          // 网页或其他来源，直接使用 SMTC 图片
+          if (currentTrackKey === newTrackKey) {
+            transitionCover(smtcCover, "left");
           }
         }
-      }, 50); // 50ms 防抖
+      } else {
+        // 播放状态变化
+        const wasPlaying = mediaState.is_playing;
+        const isPlaying = payload.is_playing;
+
+        console.log(
+          "[播放状态] 变化:",
+          wasPlaying ? "播放中" : "已暂停",
+          "→",
+          isPlaying ? "播放中" : "已暂停",
+        );
+
+        mediaState.is_playing = isPlaying;
+        mediaState.position_ms = payload.position_ms;
+        mediaState.duration_ms = payload.duration_ms;
+
+        // 根据播放状态控制 MV
+        if (isPlayingMV && mvUrl) {
+          const videoElement = document.querySelector(
+            ".mv-player",
+          ) as HTMLVideoElement;
+          if (videoElement) {
+            if (!isPlaying && wasPlaying) {
+              // 歌曲暂停，MV 也暂停
+              videoElement.pause();
+              console.log(
+                "[MV] 暂停 (时间：" +
+                  videoElement.currentTime.toFixed(2) +
+                  "s, paused=" +
+                  videoElement.paused +
+                  ")",
+              );
+            } else if (isPlaying && !wasPlaying) {
+              // 歌曲从暂停恢复播放，MV 也恢复播放
+              videoElement.play().catch((err) => {
+                console.error("[MV] 恢复播放失败:", err);
+              });
+              console.log(
+                "[MV] 恢复播放 (时间：" +
+                  videoElement.currentTime.toFixed(2) +
+                  "s, paused=" +
+                  videoElement.paused +
+                  ")",
+              );
+            }
+          } else {
+            console.warn("[MV] 未找到视频元素");
+          }
+        }
+      }
     });
 
     // 进度更新使用 setInterval（与灵动岛一致，每 100ms 更新一次）

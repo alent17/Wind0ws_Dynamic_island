@@ -1,8 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { spring } from "svelte/motion";
-  import { listen } from "@tauri-apps/api/event";
   import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+  import {
+    eventManager,
+    onMediaUpdate,
+    onAudioSpectrum,
+  } from "./utils/eventManager";
+  import { Events } from "./utils/eventConstants";
   import {
     getCurrentWindow,
     PhysicalSize,
@@ -1162,18 +1167,8 @@
         return;
       }
 
-      monitorAnchorX = targetMonitor.position.x + targetMonitor.size.width / 2;
-      monitorAnchorY = targetMonitor.position.y;
-      cachedScreenWidth = targetMonitor.size.width;
-      cachedScreenHeight = targetMonitor.size.height;
+      await moveToMonitor(targetMonitor);
 
-      const appWindow = getCurrentWindow();
-      const currentSize = await appWindow.innerSize();
-
-      const targetX = Math.round(monitorAnchorX - currentSize.width / 2);
-      const targetY = Math.round(monitorAnchorY + 22);
-
-      await appWindow.setPosition(new PhysicalPosition(targetX, targetY));
       currentMonitorIndex = index;
       showMonitorMenu = false;
 
@@ -1200,6 +1195,29 @@
     } catch (error) {
       console.error("[显示器] 切换失败:", error);
     }
+  }
+
+  async function moveToMonitor(targetMonitor: any) {
+    monitorAnchorX = targetMonitor.position.x + targetMonitor.size.width / 2;
+    monitorAnchorY = targetMonitor.position.y;
+    cachedScreenWidth = targetMonitor.size.width;
+    cachedScreenHeight = targetMonitor.size.height;
+
+    const appWindow = getCurrentWindow();
+    const currentSize = await appWindow.innerSize();
+
+    const targetX = Math.round(monitorAnchorX - currentSize.width / 2);
+    const targetY = Math.round(monitorAnchorY + 22);
+
+    await appWindow.setPosition(new PhysicalPosition(targetX, targetY));
+
+    console.log(
+      "[显示器] 已移动到:",
+      targetMonitor.name || `显示器`,
+      "位置:",
+      targetX,
+      targetY,
+    );
   }
 
   let lastMonitorIndex = -1;
@@ -1313,10 +1331,9 @@
         displayRefreshRate = 60;
       }
 
-      const unlistenSettings = await listen(
-        "settings-updated",
-        (event: any) => {
-          const s = event.payload;
+      const unlistenSettings = await eventManager.on(
+        Events.SETTINGS_UPDATED,
+        (s: any) => {
           if (s) {
             appSettings = s;
             console.log("[设置] 实时更新:", appSettings);
@@ -1336,18 +1353,21 @@
         },
       );
 
-      const unlistenSettingsChanged = await listen(
-        "settings-changed",
-        (event: any) => {
-          const settingName = event.payload;
+      const unlistenSettingsChanged = await eventManager.on(
+        Events.SETTINGS_CHANGED,
+        (settingName: any) => {
           console.log("[设置] 单项变更:", settingName);
 
           if (settingName === "monitor_index") {
-            const idx = appSettings.monitor_index;
-            currentMonitorIndex = idx;
-            if (monitors[idx]) {
-              moveToMonitor(monitors[idx]).catch(console.error);
-            }
+            // 先从后端获取最新的显示器索引
+            invoke<number>("get_current_monitor_index")
+              .then((idx: number) => {
+                currentMonitorIndex = idx;
+                if (monitors[idx]) {
+                  moveToMonitor(monitors[idx]).catch(console.error);
+                }
+              })
+              .catch(console.error);
           } else if (settingName === "island_theme") {
             currentTheme = appSettings.island_theme;
           } else if (settingName === "always_on_top") {
@@ -1364,10 +1384,9 @@
         },
       );
 
-      const unlistenCornerRadiusChanged = await listen(
-        "corner-radius-changed",
-        (event: any) => {
-          const radius = event.payload;
+      const unlistenCornerRadiusChanged = await eventManager.on(
+        Events.CORNER_RADIUS_CHANGED,
+        (radius: any) => {
           console.log("[设置] 圆角变更:", radius);
           appSettings.expanded_corner_radius = radius;
         },
@@ -1430,19 +1449,21 @@
         console.error("[显示器] 初始化失败:", error);
       }
 
-      const unlistenFloatingWindowClosed = await listen(
-        "floating-window-closed",
+      const unlistenFloatingWindowClosed = await eventManager.on(
+        Events.FLOATING_WINDOW_CLOSED,
         () => {
           isFloatingWindowOpen = false;
           console.log("[悬浮窗] 已关闭，更新状态");
         },
       );
 
-      const unlistenTheme = await listen("theme-changed", (event: any) => {
-        const { islandTheme } = event.payload;
-        currentTheme = islandTheme || "original";
-        console.log("[主题切换] 切换到:", currentTheme);
-      });
+      const unlistenTheme = await eventManager.on(
+        Events.THEME_CHANGED,
+        ({ islandTheme }: any) => {
+          currentTheme = islandTheme || "original";
+          console.log("[主题切换] 切换到:", currentTheme);
+        },
+      );
 
       try {
         const savedSettings = await invoke<any>("get_settings");
@@ -1455,9 +1476,7 @@
       let cleanup: (() => void) | undefined;
       let lastSongKey: string | null = null;
 
-      const unlistenMediaUpdate = await listen("media-update", (event: any) => {
-        const data = event.payload;
-
+      const unlistenMediaUpdate = await onMediaUpdate((data: any) => {
         if (data.source) currentSource = data.source;
         isPlaying = data.is_playing || false;
 
@@ -1628,11 +1647,9 @@
         }
       });
 
-      const unlistenAudioSpectrum = await listen(
-        "audio-spectrum",
-        (event: any) => {
+      const unlistenAudioSpectrum = await onAudioSpectrum(
+        ({ bands, bands_expanded }: any) => {
           if (!isPlaying) return;
-          const { bands, bands_expanded } = event.payload;
 
           const sensitivity = 1.2;
 
@@ -2136,8 +2153,8 @@
     border-radius: 1px;
     background: linear-gradient(
       to top,
-      var(--secondary-color, #888),
-      var(--accent-color, #fff)
+      var(--accent-color, #fff),
+      var(--secondary-color, #888)
     );
     background-clip: content-box;
     opacity: 0.95;
@@ -2331,26 +2348,7 @@
     text-shadow: 0 0 12px rgba(255, 255, 255, 0.08) !important;
   }
 
-  /* ── 频谱条：白光渐变 ── */
-  .theme-liquid_glass :global(.spectrum-bar) {
-    background: linear-gradient(
-      to top,
-      rgba(255, 255, 255, 0.15),
-      rgba(255, 255, 255, 0.65)
-    ) !important;
-    box-shadow: 0 0 3px rgba(255, 255, 255, 0.1) !important;
-    border-radius: 2px !important;
-  }
-
-  .theme-liquid_glass :global(.spectrum-bar-expanded) {
-    background: linear-gradient(
-      to top,
-      rgba(255, 255, 255, 0.1),
-      rgba(255, 255, 255, 0.6)
-    ) !important;
-    box-shadow: 0 0 3px rgba(255, 255, 255, 0.08) !important;
-    border-radius: 2px !important;
-  }
+  /* ── 频谱条：使用经典黑主题默认样式 ── */
 
   /* ── 进度条：半透明白光 ── */
   .theme-liquid_glass :global(.progress-bar) {
@@ -2521,29 +2519,9 @@
     letter-spacing: 0.08em !important;
   }
 
-  /* ── 收起态频谱条：双色糖果渐变 ── */
-  .theme-retro :global(.spectrum-bar) {
-    background: linear-gradient(to top, #ffd700, #ff1493) !important;
-    border: 1.5px solid #1a1a1a !important;
-    border-radius: 2px !important;
-    opacity: 1 !important;
-  }
+  /* ── 收起态频谱条：使用经典黑主题默认样式 ── */
 
-  /* ── 展开态频谱条：彩虹渐变 ── */
-  .theme-retro :global(.spectrum-bar-expanded) {
-    background: linear-gradient(
-      to top,
-      #ff6b6b,
-      #ffa94d,
-      #ffd43b,
-      #69db7c,
-      #4ecdc4,
-      #5c7cfa
-    ) !important;
-    border: 1.5px solid #1a1a1a !important;
-    border-radius: 2px !important;
-    opacity: 1 !important;
-  }
+  /* ── 展开态频谱条：使用经典黑主题默认样式 ── */
 
   /* ── 进度条：波普漫画风格 ── */
   .theme-retro :global(.progress-bar) {
