@@ -26,6 +26,10 @@ export const windowApi = {
     return invoke("set_floating_window_resizable", { resizable });
   },
 
+  async saveFloatingWindowPosition(x: number, y: number): Promise<void> {
+    return invoke("save_floating_window_position", { x, y });
+  },
+
   async openApplication(name: string): Promise<void> {
     return invoke("open_application", { name });
   },

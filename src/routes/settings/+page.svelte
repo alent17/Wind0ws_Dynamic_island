@@ -17,12 +17,12 @@
     Monitor,
     ChevronRight,
   } from "lucide-svelte";
-  
-  import Button from '../../components/common/Button.svelte';
-  import Card from '../../components/common/Card.svelte';
-  import Toggle from '../../components/common/Toggle.svelte';
-  import { settingsStore, settingsActions } from '../../stores/settings';
-  import { windowCommands, settingsCommands } from '../../utils/tauri';
+
+  import Button from "../../components/common/Button.svelte";
+  import Card from "../../components/common/Card.svelte";
+  import Toggle from "../../components/common/Toggle.svelte";
+  import { settings } from "../../stores/settings";
+  import { windowCommands, settingsCommands } from "../../utils/tauri";
 
   interface AppSettings {
     island_theme: string;
@@ -155,7 +155,7 @@
   async function clearCache() {
     try {
       await settingsCommands.clearCache();
-      settingsActions.clearCache();
+      settings.clearCache();
       alert("缓存已清除");
     } catch (e) {
       console.error("清除缓存失败", e);
@@ -172,7 +172,11 @@
         <button class="icon-btn" aria-label="最小化">
           <Minus size={20} />
         </button>
-        <button class="icon-btn close" aria-label="关闭" on:click={() => appWindow.close()}>
+        <button
+          class="icon-btn close"
+          aria-label="关闭"
+          on:click={() => appWindow.close()}
+        >
           <X size={20} />
         </button>
       </div>
@@ -234,7 +238,7 @@
 
     <section class="settings-section">
       <h2 class="section-title">常规设置</h2>
-      
+
       <Card variant="default" padding="none" class="setting-card">
         <div class="setting-row">
           <div class="setting-icon">
@@ -247,7 +251,9 @@
           <div class="theme-selector">
             {#each themes as theme}
               <button
-                class="theme-option {settings.island_theme === theme.id ? 'active' : ''}"
+                class="theme-option {settings.island_theme === theme.id
+                  ? 'active'
+                  : ''}"
                 on:click={() => updateSetting("island_theme", theme.id)}
               >
                 <div class="theme-icon-wrapper">
@@ -267,7 +273,7 @@
             <div class="setting-label">自动隐藏</div>
             <div class="setting-hint">鼠标移开时自动隐藏灵动岛</div>
           </div>
-          <Toggle 
+          <Toggle
             checked={settings.auto_hide}
             on:change={(e) => updateSetting("auto_hide", e.detail.checked)}
           />
@@ -281,7 +287,7 @@
             <div class="setting-label">显示频谱</div>
             <div class="setting-hint">显示音乐频谱动画效果</div>
           </div>
-          <Toggle 
+          <Toggle
             checked={settings.show_spectrum}
             on:change={(e) => updateSetting("show_spectrum", e.detail.checked)}
           />
@@ -295,7 +301,7 @@
             <div class="setting-label">始终置顶</div>
             <div class="setting-hint">保持灵动岛在所有窗口之上</div>
           </div>
-          <Toggle 
+          <Toggle
             checked={settings.always_on_top}
             on:change={(e) => updateSetting("always_on_top", e.detail.checked)}
           />
@@ -305,7 +311,7 @@
 
     <section class="settings-section">
       <h2 class="section-title">播放器管理</h2>
-      
+
       <Card variant="default" padding="none" class="setting-card">
         <div class="setting-row">
           <div class="setting-info">
@@ -313,30 +319,32 @@
             <div class="setting-hint">拖拽调整播放器检测优先级</div>
           </div>
         </div>
-        
+
         <div class="player-list">
           {#each playerOrder as player, index}
             <div
-              class="player-item {isDragging && index === dragIndex ? 'dragging' : ''}"
+              class="player-item {isDragging && index === dragIndex
+                ? 'dragging'
+                : ''}"
               draggable="true"
               on:dragstart={() => handlePlayerDragStart(index)}
               on:dragend={handlePlayerDrop}
               on:dragover|preventDefault
-              on:dragenter={() => overIndex = index}
+              on:dragenter={() => (overIndex = index)}
             >
               <div class="drag-handle">
                 <GripVertical size={20} />
               </div>
               <div class="player-icon">
-                {#if player === 'netease'}
+                {#if player === "netease"}
                   <Music size={20} />
-                {:else if player === 'spotify'}
+                {:else if player === "spotify"}
                   <Music size={20} />
-                {:else if player === 'bilibili'}
+                {:else if player === "bilibili"}
                   <Music size={20} />
-                {:else if player === 'qqmusic'}
+                {:else if player === "qqmusic"}
                   <Music size={20} />
-                {:else if player === 'apple'}
+                {:else if player === "apple"}
                   <Music size={20} />
                 {:else}
                   <Music size={20} />
@@ -354,7 +362,7 @@
 
     <section class="settings-section">
       <h2 class="section-title">缓存管理</h2>
-      
+
       <Card variant="default" padding="none" class="setting-card">
         <div class="setting-row danger">
           <div class="setting-icon danger">
@@ -364,9 +372,7 @@
             <div class="setting-label">清除缓存</div>
             <div class="setting-hint">清除所有本地缓存数据</div>
           </div>
-          <Button variant="danger" size="sm" on:click={clearCache}>
-            清除
-          </Button>
+          <Button variant="danger" size="sm" on:click={clearCache}>清除</Button>
         </div>
       </Card>
     </section>
@@ -374,8 +380,8 @@
 </div>
 
 <style>
-  @import '../../styles/variables.css';
-  
+  @import "../../styles/variables.css";
+
   .settings-container {
     display: flex;
     flex-direction: column;
@@ -384,20 +390,20 @@
     color: var(--text-base);
     font-family: var(--font-family-ui);
   }
-  
+
   .header {
     background: var(--base-dark);
     padding: var(--spacing-md) var(--spacing-xl);
     -webkit-app-region: drag;
     border-bottom: 1px solid var(--border-gray);
   }
-  
+
   .header-content {
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
-  
+
   .title {
     font-size: var(--text-2xl);
     font-weight: var(--font-bold);
@@ -405,13 +411,13 @@
     font-family: var(--font-family-title);
     margin: 0;
   }
-  
+
   .window-controls {
     display: flex;
     gap: var(--spacing-sm);
     -webkit-app-region: no-drag;
   }
-  
+
   .icon-btn {
     width: 32px;
     height: 32px;
@@ -425,16 +431,16 @@
     justify-content: center;
     transition: all var(--transition-base);
   }
-  
+
   .icon-btn:hover {
     background: var(--base-card);
     transform: scale(1.05);
   }
-  
+
   .icon-btn.close:hover {
     background: var(--text-negative);
   }
-  
+
   .content {
     flex: 1;
     overflow-y: hidden;
@@ -443,17 +449,17 @@
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
-  
+
   .content::-webkit-scrollbar {
     display: none;
   }
-  
+
   .preview-section {
     padding: var(--spacing-xxl);
     background: var(--base-dark-gray);
     border-bottom: 1px solid var(--border-gray);
   }
-  
+
   .preview-title {
     font-size: var(--text-md);
     font-weight: var(--font-bold);
@@ -463,7 +469,7 @@
     margin-bottom: var(--spacing-lg);
     font-family: var(--font-family-ui);
   }
-  
+
   .preview-container {
     display: flex;
     flex-direction: column;
@@ -472,7 +478,7 @@
     width: 100%;
     align-items: flex-start;
   }
-  
+
   .island-preview {
     width: 340px;
     border-radius: var(--radius-xl);
@@ -484,16 +490,16 @@
     box-shadow: var(--shadow-heavy);
     flex-shrink: 0;
   }
-  
+
   .island-preview.collapsed {
     height: 84px;
   }
-  
+
   .island-preview.expanded {
     height: 220px;
     padding: var(--spacing-lg);
   }
-  
+
   .island-content {
     display: flex;
     flex-direction: row;
@@ -502,19 +508,19 @@
     gap: var(--spacing-md);
     height: 100%;
   }
-  
+
   .island-content.expanded {
     flex-direction: column;
     gap: var(--spacing-sm);
   }
-  
+
   .top-section {
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
     width: 100%;
   }
-  
+
   .album-art-preview {
     width: 64px;
     height: 64px;
@@ -525,7 +531,7 @@
     overflow: hidden;
     box-shadow: var(--shadow-medium);
   }
-  
+
   .album-art-preview.expanded {
     width: 50px;
     height: 50px;
@@ -533,7 +539,7 @@
     box-shadow: var(--shadow-medium);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-  
+
   .album-art-inner {
     width: 100%;
     height: 100%;
@@ -545,14 +551,14 @@
     );
     position: relative;
   }
-  
+
   .track-info-preview {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
     flex: 1;
   }
-  
+
   .track-name {
     font-size: var(--text-md);
     font-weight: var(--font-bold);
@@ -561,7 +567,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  
+
   .artist-name {
     font-size: var(--text-sm);
     font-weight: var(--font-normal);
@@ -570,19 +576,19 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  
+
   .playback-controls {
     display: flex;
     gap: var(--spacing-sm);
   }
-  
+
   .playback-controls-expanded {
     display: flex;
     gap: var(--spacing-md);
     width: 100%;
     justify-content: center;
   }
-  
+
   .control-btn-preview {
     width: 32px;
     height: 32px;
@@ -596,12 +602,12 @@
     justify-content: center;
     transition: all var(--transition-base);
   }
-  
+
   .control-btn-preview:hover {
     background: var(--base-card);
     transform: scale(1.05);
   }
-  
+
   .progress-bar-preview {
     width: 100%;
     height: 3px;
@@ -609,19 +615,19 @@
     border-radius: var(--radius-pill);
     overflow: hidden;
   }
-  
+
   .progress-fill-preview {
     width: 30%;
     height: 100%;
     background: var(--accent-green);
     border-radius: var(--radius-pill);
   }
-  
+
   .settings-section {
     padding: var(--spacing-xl);
     background: var(--base-dark);
   }
-  
+
   .section-title {
     font-size: var(--text-md);
     font-weight: var(--font-bold);
@@ -631,11 +637,11 @@
     margin-bottom: var(--spacing-lg);
     font-family: var(--font-family-ui);
   }
-  
+
   .setting-card {
     margin-bottom: var(--spacing-xl);
   }
-  
+
   .setting-row {
     display: flex;
     align-items: center;
@@ -644,19 +650,19 @@
     border-bottom: 1px solid var(--border-gray);
     transition: background var(--transition-base);
   }
-  
+
   .setting-row:last-child {
     border-bottom: none;
   }
-  
+
   .setting-row:hover {
     background: var(--base-mid-gray);
   }
-  
+
   .setting-row.danger:hover {
     background: rgba(243, 114, 127, 0.1);
   }
-  
+
   .setting-icon {
     width: 32px;
     height: 32px;
@@ -668,12 +674,12 @@
     color: var(--text-secondary);
     flex-shrink: 0;
   }
-  
+
   .setting-icon.danger {
     background: rgba(243, 114, 127, 0.1);
     color: var(--text-negative);
   }
-  
+
   .setting-info {
     flex: 1;
     display: flex;
@@ -681,24 +687,24 @@
     gap: var(--spacing-xs);
     min-width: 0;
   }
-  
+
   .setting-label {
     font-size: var(--text-lg);
     font-weight: var(--font-bold);
     color: var(--text-base);
     font-family: var(--font-family-ui);
   }
-  
+
   .setting-hint {
     font-size: var(--text-md);
     color: var(--text-secondary);
   }
-  
+
   .theme-selector {
     display: flex;
     gap: var(--spacing-sm);
   }
-  
+
   .theme-option {
     flex: 1;
     display: flex;
@@ -719,16 +725,16 @@
     letter-spacing: var(--tracking-wide);
     color: var(--text-secondary);
   }
-  
+
   .theme-option:hover {
     background: var(--base-mid-gray);
   }
-  
+
   .theme-option.active {
     background: var(--accent-green);
     color: var(--base-dark);
   }
-  
+
   .theme-icon-wrapper {
     width: 20px;
     height: 20px;
@@ -737,21 +743,21 @@
     justify-content: center;
     color: var(--text-base);
   }
-  
+
   .theme-option.active .theme-icon-wrapper {
     color: var(--base-dark);
   }
-  
+
   .theme-label {
     font-size: var(--text-md);
     font-weight: var(--font-bold);
     color: var(--text-base);
   }
-  
+
   .theme-option.active .theme-label {
     color: var(--base-dark);
   }
-  
+
   .player-list {
     display: flex;
     flex-direction: column;
@@ -761,7 +767,7 @@
     overflow: hidden;
     box-shadow: var(--shadow-medium);
   }
-  
+
   .player-item {
     display: flex;
     align-items: center;
@@ -772,20 +778,20 @@
     cursor: grab;
     transition: all var(--transition-base);
   }
-  
+
   .player-item:last-child {
     border-bottom: none;
   }
-  
+
   .player-item:hover {
     background: var(--base-mid-gray);
   }
-  
+
   .player-item.dragging {
     opacity: 0.5;
     background: var(--base-card);
   }
-  
+
   .drag-handle {
     color: var(--text-secondary);
     cursor: grab;
@@ -793,7 +799,7 @@
     align-items: center;
     justify-content: center;
   }
-  
+
   .player-icon {
     width: 32px;
     height: 32px;
@@ -804,14 +810,14 @@
     border-radius: var(--radius-circle);
     color: var(--text-base);
   }
-  
+
   .player-name {
     flex: 1;
     font-size: var(--text-md);
     font-weight: var(--font-bold);
     color: var(--text-base);
   }
-  
+
   .priority-badge {
     font-size: var(--text-xs);
     font-weight: var(--font-bold);
@@ -822,7 +828,7 @@
     background: rgba(30, 215, 96, 0.1);
     border-radius: var(--radius-pill);
   }
-  
+
   .danger-text {
     color: var(--text-negative);
   }

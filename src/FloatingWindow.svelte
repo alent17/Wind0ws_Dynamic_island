@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { convertFileSrc } from "@tauri-apps/api/core";
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
   import { Events } from "./utils/eventConstants";
+  import { mediaApi } from "$lib/api/media";
+  import { windowApi } from "$lib/api/window";
+  import { settingsApi } from "$lib/api/settings";
   import {
     Play,
     Pause,
@@ -721,9 +723,7 @@
       );
 
       // 设置窗口是否可调整大小
-      await invoke("set_floating_window_resizable", {
-        resizable: !isFloatingWindowLocked,
-      });
+      await windowApi.setFloatingWindowResizable(!isFloatingWindowLocked);
     } catch (error) {
       console.error("[设置] 读取失败:", error);
       isMVPlaybackEnabled = false;
@@ -763,11 +763,11 @@
         );
 
         // 同时设置窗口是否可调整大小
-        invoke("set_floating_window_resizable", {
-          resizable: !isFloatingWindowLocked,
-        }).catch((err) => {
-          console.error("[锁定] 设置窗口可调整大小失败:", err);
-        });
+        windowApi
+          .setFloatingWindowResizable(!isFloatingWindowLocked)
+          .catch((err) => {
+            console.error("[锁定] 设置窗口可调整大小失败:", err);
+          });
       },
     );
     eventListeners.push(unlistenLockChange);
@@ -827,12 +827,10 @@
       savePositionTimeout = setTimeout(async () => {
         try {
           const position = await appWindow.outerPosition();
-          await invoke("save_floating_window_position", {
-            x: Math.round(position.x),
-            y: Math.round(position.y),
-            width: payload.width,
-            height: payload.height,
-          });
+          await windowApi.saveFloatingWindowPosition(
+            Math.round(position.x),
+            Math.round(position.y),
+          );
           console.log("[悬浮窗] 位置和大小已保存");
         } catch (error) {
           console.error("[悬浮窗] 保存位置失败:", error);
@@ -846,12 +844,11 @@
       if (savePositionTimeout) clearTimeout(savePositionTimeout);
       savePositionTimeout = setTimeout(async () => {
         try {
-          await invoke("save_floating_window_position", {
-            x: Math.round(payload.x),
-            y: Math.round(payload.y),
-            width: windowSize.width,
-            height: windowSize.height,
-          });
+          const position = await appWindow.outerPosition();
+          await windowApi.saveFloatingWindowPosition(
+            Math.round(position.x),
+            Math.round(position.y),
+          );
           console.log("[悬浮窗] 位置已保存");
         } catch (error) {
           console.error("[悬浮窗] 保存位置失败:", error);
@@ -1588,7 +1585,7 @@
 
   async function togglePlay(e: MouseEvent) {
     e.stopPropagation();
-    await invoke("control_media", { action: "play_pause" });
+    await mediaApi.controlMedia("play_pause");
     // 不手动更新状态，等待后端的 media-update 事件同步
   }
 
@@ -1602,9 +1599,7 @@
 
     // 保存设置
     try {
-      await invoke("save_settings", {
-        settings: { always_on_top: isAlwaysOnTop },
-      });
+      await settingsApi.saveSettings({ always_on_top: isAlwaysOnTop });
     } catch (error) {
       console.error("[置顶] 保存设置失败:", error);
     }
@@ -1786,7 +1781,7 @@
         class="ctrl-btn"
         onclick={(e) => {
           e.stopPropagation();
-          invoke("control_media", { action: "prev" });
+          mediaApi.controlMedia("prev");
         }}
         aria-label="上一首"
       >
@@ -1809,7 +1804,7 @@
         class="ctrl-btn"
         onclick={(e) => {
           e.stopPropagation();
-          invoke("control_media", { action: "next" });
+          mediaApi.controlMedia("next");
         }}
         aria-label="下一首"
       >
