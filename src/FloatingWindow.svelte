@@ -2259,10 +2259,6 @@
     border-radius: 0 !important;
   }
 
-  .player.pixelated .control-mask {
-    border-radius: 0 !important;
-  }
-
   .player.pixelated .control-btn {
     border-radius: 0 !important;
   }

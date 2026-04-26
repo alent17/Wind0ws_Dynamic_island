@@ -10,6 +10,13 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [svelte(), tailwindcss()],
 
+  // Vite 路径别名配置，让 $lib 指向 src/lib
+  resolve: {
+    alias: {
+      $lib: resolve(__dirname, "./src/lib"),
+    },
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

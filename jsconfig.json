@@ -13,7 +13,13 @@
     "target": "es2022",
     "types": ["vite/client", "@tauri-apps/api"],
     "lib": ["es2022", "dom", "dom.iterable"],
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+
+    // 路径别名配置，让编辑器和类型检查认识 $lib
+    "baseUrl": ".",
+    "paths": {
+      "$lib/*": ["src/lib/*"]
+    }
   },
   "include": ["src/**/*", "src/**/*.svelte"],
   "exclude": ["node_modules"]
