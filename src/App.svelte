@@ -1756,7 +1756,7 @@
 
             {#if appSettings.showSpectrum}
               <div class="spectrum-wrapper">
-                <Spectrum topColor={spectrumTopColor} bottomColor={spectrumBottomColor} />
+                <Spectrum />
               </div>
             {:else}
               <div class="flex items-center h-4 gap-[3px]">
@@ -1854,7 +1854,7 @@
 
             {#if appSettings.showSpectrum}
               <div class="spectrum-wrapper-expanded">
-                <Spectrum topColor={spectrumTopColor} bottomColor={spectrumBottomColor} />
+                <Spectrum />
               </div>
             {/if}
           </div>

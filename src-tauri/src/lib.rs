@@ -93,11 +93,11 @@ const QUIT_MENU_ID: &str = "quit";
 // 数据结构
 // ============================================================================
 
-struct AudioState(Mutex<audio::AudioCapture>);
+struct SpectrumState(Mutex<audio::SpectrumCapture>);
 
 #[tauri::command]
-fn start_spectrum(state: State<AudioState>, app: tauri::AppHandle) -> Result<(), String> {
-    let mut capture = state
+fn start_spectrum(state: State<SpectrumState>, app: tauri::AppHandle) -> Result<(), String> {
+    let capture = state
         .inner()
         .0
         .lock()
@@ -106,8 +106,8 @@ fn start_spectrum(state: State<AudioState>, app: tauri::AppHandle) -> Result<(),
 }
 
 #[tauri::command]
-fn stop_spectrum(state: State<AudioState>) -> Result<(), String> {
-    let mut capture = state
+fn stop_spectrum(state: State<SpectrumState>) -> Result<(), String> {
+    let capture = state
         .inner()
         .0
         .lock()
@@ -338,7 +338,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         // 注册状态
         .manage(state::AppState::default())
-        .manage(AudioState(Mutex::new(audio::AudioCapture::new())))
+        .manage(SpectrumState(Mutex::new(audio::SpectrumCapture::new())))
         // 注册 IPC 命令
         .invoke_handler(tauri::generate_handler![
             // 设置相关命令
