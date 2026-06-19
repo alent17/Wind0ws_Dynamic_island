@@ -76,7 +76,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hide_settings_button: false,
   hide_monitor_selector: false,
   hide_floating_window: false,
-  expanded_corner_radius: 16,
+  expanded_corner_radius: 45,
 };
 
 export const PLAYER_NAMES: Record<string, string> = {

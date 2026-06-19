@@ -176,92 +176,104 @@ fn start_fullscreen_monitor(handle: AppHandle) {
         let mut was_fullscreen = false;
 
         loop {
-            // 获取当前显示器和窗口信息
-            if let Some(window) = handle.get_webview_window("main") {
-                if let Ok(all_monitors) = window.available_monitors() {
-                    if let Ok(current_monitor) = window.current_monitor() {
-                        // 获取当前窗口所在的显示器
-                        let target_monitor =
-                            current_monitor.or_else(|| all_monitors.first().cloned());
-
-                        if let Some(monitor) = target_monitor {
-                            let position = monitor.position();
-                            let size = monitor.size();
-
-                            // 调用全屏检测逻辑
-                            // SAFETY: Win32 API calls for fullscreen detection. All FFI calls check return values
-                            // and handle null/zero cases safely.
-                            let is_fullscreen = unsafe {
-                                use windows::Win32::Foundation::RECT;
-                                use windows::Win32::UI::WindowsAndMessaging::{
-                                    GetForegroundWindow, GetWindowLongPtrW, GetWindowRect,
-                                    GWL_STYLE, WS_CAPTION,
-                                };
-
-                                let hwnd = GetForegroundWindow();
-                                if hwnd.0 != 0 {
-                                    let mut rect = RECT::default();
-                                    if GetWindowRect(hwnd, &mut rect).is_ok() {
-                                        let width = rect.right - rect.left;
-                                        let height = rect.bottom - rect.top;
-
-                                        if width > 0 && height > 0 {
-                                            let is_on_target_monitor = rect.left
-                                                <= position.x + size.width as i32
-                                                && rect.right >= position.x
-                                                && rect.top <= position.y + size.height as i32
-                                                && rect.bottom >= position.y;
-
-                                            if is_on_target_monitor {
-                                                let covers_screen = width >= size.width as i32 - 2
-                                                    && height >= size.height as i32 - 2;
-
-                                                if covers_screen {
-                                                    let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
-                                                    (style & WS_CAPTION.0 as isize) == 0
-                                                } else {
-                                                    false
-                                                }
-                                            } else {
-                                                false
-                                            }
-                                        } else {
-                                            false
-                                        }
-                                    } else {
-                                        false
-                                    }
-                                } else {
-                                    false
-                                }
-                            };
-
-                            // 只有状态变化时才发送事件
-                            if is_fullscreen != was_fullscreen {
-                                if let Err(e) = event_bus::emit_fullscreen_changed(is_fullscreen) {
-                                    tracing::error!("[全屏监控] 发送事件失败：{}", e);
-                                } else {
-                                    tracing::info!(
-                                        "[全屏监控] 状态变化：{} -> {}",
-                                        if was_fullscreen {
-                                            "全屏"
-                                        } else {
-                                            "非全屏"
-                                        },
-                                        if is_fullscreen { "全屏" } else { "非全屏" }
-                                    );
-                                }
-                                was_fullscreen = is_fullscreen;
-                            }
-                        }
-                    }
+            let is_fullscreen = detect_fullscreen_app(&handle);
+            if is_fullscreen != was_fullscreen {
+                if let Err(e) = event_bus::emit_fullscreen_changed(is_fullscreen) {
+                    tracing::error!("[全屏监控] 发送事件失败：{}", e);
+                } else {
+                    tracing::info!(
+                        "[全屏监控] 状态变化：{} -> {}",
+                        if was_fullscreen { "全屏" } else { "非全屏" },
+                        if is_fullscreen { "全屏" } else { "非全屏" }
+                    );
                 }
+                was_fullscreen = is_fullscreen;
             }
 
-            // 每 500ms 检测一次
             std::thread::sleep(std::time::Duration::from_millis(500));
         }
     });
+}
+
+fn detect_fullscreen_app(_handle: &AppHandle) -> bool {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITOR_DEFAULTTONEAREST, MONITORINFO,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetForegroundWindow, GetWindowLongPtrW, GetWindowRect,
+        IsWindowVisible, GWL_STYLE, WS_CAPTION,
+    };
+
+    let our_hwnd = unsafe { GetForegroundWindow() };
+
+    struct EnumCtx {
+        found: AtomicBool,
+        our_hwnd: HWND,
+    }
+
+    unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let ctx = &*(lparam.0 as *const EnumCtx);
+
+        if hwnd.0 == ctx.our_hwnd.0 {
+            return BOOL::from(true);
+        }
+
+        if !IsWindowVisible(hwnd).as_bool() {
+            return BOOL::from(true);
+        }
+
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        if (style & WS_CAPTION.0 as isize) != 0 {
+            return BOOL::from(true);
+        }
+
+        let mut rect = RECT::default();
+        if GetWindowRect(hwnd, &mut rect).is_err() {
+            return BOOL::from(true);
+        }
+
+        let win_w = rect.right - rect.left;
+        let win_h = rect.bottom - rect.top;
+        if win_w <= 0 || win_h <= 0 {
+            return BOOL::from(true);
+        }
+
+        let hmon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if hmon.0 == 0 {
+            return BOOL::from(true);
+        }
+
+        let mut mi = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..MONITORINFO::default()
+        };
+        if !GetMonitorInfoW(hmon, &mut mi).as_bool() {
+            return BOOL::from(true);
+        }
+
+        let mon_w = mi.rcMonitor.right - mi.rcMonitor.left;
+        let mon_h = mi.rcMonitor.bottom - mi.rcMonitor.top;
+
+        if win_w >= mon_w - 10 && win_h >= mon_h - 10 {
+            ctx.found.store(true, Ordering::Relaxed);
+            return BOOL::from(false);
+        }
+
+        BOOL::from(true)
+    }
+
+    let mut ctx = EnumCtx {
+        found: AtomicBool::new(false),
+        our_hwnd,
+    };
+
+    unsafe {
+        let _ = EnumWindows(Some(enum_callback), LPARAM(&mut ctx as *mut EnumCtx as isize));
+    }
+
+    ctx.found.load(Ordering::Relaxed)
 }
 
 // ============================================================================

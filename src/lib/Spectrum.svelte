@@ -3,17 +3,26 @@
   import { invoke } from '@tauri-apps/api/core';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
-  let { topColor = '#ffffff', bottomColor = '#888888' }: { topColor?: string; bottomColor?: string } = $props();
+  let {
+    topColor = '#ffffff',
+    bottomColor = '#888888',
+    scale = 1,
+  }: { topColor?: string; bottomColor?: string; scale?: number } = $props();
 
   const NUM_BARS    = 6;
-  const BAR_WIDTH   = 3;
-  const BAR_GAP     = 2;
-  const MAX_HEIGHT  = 32;
-  const MIN_HEIGHT  = 3;
-  const CORNER_R    = 1.5;
-  const CANVAS_H    = 40;
+  const BASE_BAR_W  = 2;
+  const BASE_BAR_GAP = 1.5;
+  const BASE_MAX_H  = 14;
+  const MIN_HEIGHT  = 2;
+  const BASE_CORNER_R = 1;
+  const BASE_CANVAS_H = 18;
 
-  const CANVAS_W = NUM_BARS * (BAR_WIDTH + BAR_GAP) - BAR_GAP;
+  const BAR_WIDTH   = BASE_BAR_W * scale;
+  const BAR_GAP     = BASE_BAR_GAP * (1 + (scale - 1) * 0.4);
+  const MAX_HEIGHT  = BASE_MAX_H * scale;
+  const CORNER_R    = BASE_CORNER_R * scale;
+  const CANVAS_H    = BASE_CANVAS_H * scale;
+  const CANVAS_W    = NUM_BARS * (BAR_WIDTH + BAR_GAP) - BAR_GAP;
 
   let canvasEl: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D;
@@ -23,8 +32,12 @@
   let bars = $state<Float32Array>(new Float32Array(NUM_BARS));
   let latestBars = new Float32Array(NUM_BARS);
 
-  function parseColor(hex: string): [number, number, number] {
-    const h = hex.replace('#', '');
+  function parseColor(color: string): [number, number, number] {
+    const rgbMatch = color.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+    if (rgbMatch) {
+      return [+rgbMatch[1], +rgbMatch[2], +rgbMatch[3]];
+    }
+    const h = color.replace('#', '');
     return [
       parseInt(h.substring(0, 2), 16),
       parseInt(h.substring(2, 4), 16),
@@ -97,15 +110,6 @@
       ctx.beginPath();
       ctx.roundRect(x, y, BAR_WIDTH, barH, CORNER_R);
       ctx.fill();
-
-      if (value > 0.6) {
-        const dotOpacity = (value - 0.6) / 0.4;
-        ctx.globalAlpha = dotOpacity * 0.8;
-        ctx.fillStyle = `rgb(${tr}, ${tg}, ${tb})`;
-        ctx.beginPath();
-        ctx.arc(x + BAR_WIDTH / 2, y - 2, 1.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
     }
     ctx.globalAlpha = 1;
   }

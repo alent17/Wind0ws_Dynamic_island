@@ -20,18 +20,18 @@ const FREQ_BANDS: [(f32, f32); NUM_BARS] = [
 ];
 
 const BAND_GAINS: [f32; NUM_BARS] = [
-    1.5,
+    1.2,
+    1.8,
     2.5,
-    3.0,
     4.0,
-    6.0,
-    10.0,
+    7.0,
+    12.0,
 ];
 
 const SMOOTH_ATTACK: f32  = 0.3;
 const SMOOTH_RELEASE: f32 = 0.75;
 
-const MIN_DB: f32 = -55.0;
+const MIN_DB: f32 = -85.0;
 const MAX_DB: f32 = -5.0;
 
 pub struct SpectrumCapture {
@@ -151,7 +151,8 @@ impl SpectrumCapture {
                                         / n)
                                         .sqrt();
 
-                                    (rms * BAND_GAINS[idx]).min(1.0)
+                                    let v = (rms * BAND_GAINS[idx]).min(1.0);
+                                    v.sqrt()
                                 })
                                 .collect();
 

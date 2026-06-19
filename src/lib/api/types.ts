@@ -103,7 +103,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hideSettingsButton: false,
   hideMonitorSelector: false,
   hideFloatingWindow: false,
-  expandedCornerRadius: 16,
+  expandedCornerRadius: 45,
   alwaysShowTopBar: true,
 };
 

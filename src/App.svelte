@@ -237,7 +237,7 @@
     const minHeight = 28;
     const maxHeight = 160;
     const minRadius = 24;
-    const maxRadius = appSettings.expandedCornerRadius || 42;
+    const maxRadius = appSettings.expandedCornerRadius || 45;
 
     const clampedHeight = Math.max(
       minHeight,
@@ -553,11 +553,15 @@
   let monitorAnchorX = 0;
   let monitorAnchorY = 0;
 
+  let lastSyncTime = 0;
+  const SYNC_COOLDOWN_MS = 16;
+
   async function processSyncQueue() {
     if (isSyncing || !hasPendingSync) return;
 
     isSyncing = true;
     hasPendingSync = false;
+    lastSyncTime = performance.now();
 
     const w = pendingW;
     const h = pendingH;
@@ -588,7 +592,12 @@
     } finally {
       isSyncing = false;
       if (hasPendingSync) {
-        requestAnimationFrame(processSyncQueue);
+        const elapsed = performance.now() - lastSyncTime;
+        if (elapsed < SYNC_COOLDOWN_MS) {
+          setTimeout(processSyncQueue, SYNC_COOLDOWN_MS - elapsed);
+        } else {
+          requestAnimationFrame(processSyncQueue);
+        }
       }
     }
   }
@@ -596,11 +605,18 @@
   let lastW = 0;
   let lastH = 0;
 
+  function isNearTarget(current: number, ...targets: number[]): boolean {
+    return targets.some((t) => Math.abs(current - t) < 2);
+  }
+
   $effect(() => {
     const currentW = $widthSpring;
     const currentH = $heightSpring;
 
-    const syncThreshold = highFrameRateMode ? 0.5 : 0.8;
+    const nearTarget =
+      isNearTarget(currentW, 80, 90, 300) &&
+      isNearTarget(currentH, 28, 30, 160);
+    const syncThreshold = nearTarget ? 0.5 : 1.5;
 
     if (
       Math.abs(currentW - lastW) > syncThreshold ||
@@ -842,27 +858,25 @@
     const animEnabled = appSettings.enableAnimations;
 
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (isExp) {
-          widthSpring.set(300);
-          heightSpring.set(160);
+      if (isExp) {
+        widthSpring.set(300);
+        heightSpring.set(160);
 
-          if (!animEnabled) {
-            contentOpacity.set(1);
-          } else if (reduced) {
-            contentOpacity.set(1);
-          } else {
-            setTimeout(() => contentOpacity.set(1), 80);
-          }
+        if (!animEnabled) {
+          contentOpacity.set(1);
+        } else if (reduced) {
+          contentOpacity.set(1);
         } else {
-          contentOpacity.set(0);
-
-          setTimeout(() => {
-            widthSpring.set(isHov ? 90 : 80);
-            heightSpring.set(isHov ? 30 : 28);
-          }, 60);
+          setTimeout(() => contentOpacity.set(1), 80);
         }
-      });
+      } else {
+        contentOpacity.set(0);
+
+        setTimeout(() => {
+          widthSpring.set(isHov ? 90 : 80);
+          heightSpring.set(isHov ? 30 : 28);
+        }, 60);
+      }
     });
   });
 
@@ -1756,7 +1770,7 @@
 
             {#if appSettings.showSpectrum}
               <div class="spectrum-wrapper">
-                <Spectrum topColor={spectrumTopColor} bottomColor={spectrumBottomColor} />
+                <Spectrum topColor={spectrumBottomColor} bottomColor={spectrumTopColor} />
               </div>
             {:else}
               <div class="flex items-center h-4 gap-[3px]">
@@ -1854,7 +1868,7 @@
 
             {#if appSettings.showSpectrum}
               <div class="spectrum-wrapper-expanded">
-                <Spectrum topColor={spectrumTopColor} bottomColor={spectrumBottomColor} />
+                <Spectrum topColor={spectrumBottomColor} bottomColor={spectrumTopColor} scale={1.5} />
               </div>
             {/if}
           </div>
@@ -2012,11 +2026,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 36px;
+    height: 28px;
   }
 
   .collapsed-content .spectrum-wrapper {
-    height: 20px;
+    height: 18px;
     overflow: hidden;
   }
 
@@ -2024,7 +2038,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    height: 36px;
+    height: 40px;
     flex-shrink: 0;
   }
 
@@ -2108,12 +2122,12 @@
     }
     70% {
       transform: translateY(-5%) scale(0.98, 1.02);
-      border-radius: 42% 42% 38% 38%;
+      border-radius: 45% 45% 40% 40%;
     }
     100% {
       opacity: 1;
       transform: translateY(0) scale(1, 1);
-      border-radius: 42px;
+      border-radius: 45px;
     }
   }
 
