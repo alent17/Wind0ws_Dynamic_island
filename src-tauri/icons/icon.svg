@@ -1,0 +1,21 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="128" fill="#0F172A"/>
+  <!-- 灵动岛圆角矩形 -->
+  <rect x="96" y="184" width="320" height="144" rx="72" fill="url(#gradIsland)"/>
+  <defs>
+    <linearGradient id="gradIsland" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#2D3E5F"/>
+      <stop offset="1" stop-color="#1E2A3A"/>
+    </linearGradient>
+  </defs>
+  <!-- 声波涟漪（从灵动岛扩散到悬浮窗） -->
+  <circle cx="256" cy="256" r="80" stroke="#5EE0FA" stroke-width="3" fill="none" stroke-dasharray="4 6"/>
+  <circle cx="256" cy="256" r="110" stroke="#5EE0FA" stroke-width="2" fill="none" stroke-dasharray="4 8"/>
+  <circle cx="256" cy="256" r="140" stroke="#5EE0FA" stroke-width="1.5" fill="none" stroke-dasharray="6 10"/>
+  <!-- 悬浮窗（回声点） -->
+  <rect x="340" y="120" width="96" height="96" rx="28" fill="#5EE0FA" opacity="0.9"/>
+  <path d="M388 168 L396 160 L404 168 L396 176 Z" fill="#0F172A"/>
+  <circle cx="396" cy="168" r="8" fill="#0F172A"/>
+  <!-- 灵动岛内音符点缀 -->
+  <path d="M200 256 L208 248 L216 264 L224 248 L232 264" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" fill="none"/>
+</svg>
