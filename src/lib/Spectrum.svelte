@@ -3,13 +3,15 @@
   import { invoke } from '@tauri-apps/api/core';
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
+  let { topColor = '#ffffff', bottomColor = '#888888' }: { topColor?: string; bottomColor?: string } = $props();
+
   const NUM_BARS    = 6;
-  const BAR_WIDTH   = 4;
-  const BAR_GAP     = 3;
-  const MAX_HEIGHT  = 30;
-  const MIN_HEIGHT  = 2;
-  const CORNER_R    = 2;
-  const CANVAS_H    = 38;
+  const BAR_WIDTH   = 3;
+  const BAR_GAP     = 2;
+  const MAX_HEIGHT  = 32;
+  const MIN_HEIGHT  = 3;
+  const CORNER_R    = 1.5;
+  const CANVAS_H    = 40;
 
   const CANVAS_W = NUM_BARS * (BAR_WIDTH + BAR_GAP) - BAR_GAP;
 
@@ -19,8 +21,16 @@
   let unlisten: UnlistenFn | undefined;
 
   let bars = $state<Float32Array>(new Float32Array(NUM_BARS));
-
   let latestBars = new Float32Array(NUM_BARS);
+
+  function parseColor(hex: string): [number, number, number] {
+    const h = hex.replace('#', '');
+    return [
+      parseInt(h.substring(0, 2), 16),
+      parseInt(h.substring(2, 4), 16),
+      parseInt(h.substring(4, 6), 16),
+    ];
+  }
 
   onMount(async () => {
     const dpr = window.devicePixelRatio || 1;
@@ -68,34 +78,36 @@
   function draw() {
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
+    const [tr, tg, tb] = parseColor(topColor);
+    const [br, bg, bb] = parseColor(bottomColor);
+
     for (let i = 0; i < NUM_BARS; i++) {
       const value = latestBars[i] ?? 0;
-
       const barH = MIN_HEIGHT + value * (MAX_HEIGHT - MIN_HEIGHT);
-      const x    = i * (BAR_WIDTH + BAR_GAP);
-      const y    = (CANVAS_H - barH) / 2;
+      const x = i * (BAR_WIDTH + BAR_GAP);
+      const y = (CANVAS_H - barH) / 2;
 
-      const alpha = 0.45 + value * 0.55;
-      ctx.fillStyle = `rgba(255, 255, 255, ${alpha.toFixed(2)})`;
+      const gradient = ctx.createLinearGradient(x, y + barH, x, y);
+      gradient.addColorStop(0, `rgba(${br}, ${bg}, ${bb}, 0.9)`);
+      gradient.addColorStop(1, `rgba(${tr}, ${tg}, ${tb}, 1.0)`);
 
+      const alpha = 0.6 + value * 0.4;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.roundRect(x, y, BAR_WIDTH, barH, CORNER_R);
       ctx.fill();
 
-      if (value > 0.65) {
-        const dotOpacity = (value - 0.65) / 0.35;
-        ctx.fillStyle = `rgba(255, 255, 255, ${(dotOpacity * 0.9).toFixed(2)})`;
+      if (value > 0.6) {
+        const dotOpacity = (value - 0.6) / 0.4;
+        ctx.globalAlpha = dotOpacity * 0.8;
+        ctx.fillStyle = `rgb(${tr}, ${tg}, ${tb})`;
         ctx.beginPath();
-        ctx.arc(
-          x + BAR_WIDTH / 2,
-          y - 2.5,
-          1.5,
-          0,
-          Math.PI * 2
-        );
+        ctx.arc(x + BAR_WIDTH / 2, y - 2, 1.2, 0, Math.PI * 2);
         ctx.fill();
       }
     }
+    ctx.globalAlpha = 1;
   }
 </script>
 
