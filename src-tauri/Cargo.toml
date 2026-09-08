@@ -1,0 +1,82 @@
+[package]
+name = "isle"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "isle_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "protocol-asset"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+image = "0.25"
+
+# Windows API 绑定 - 用于访问 Windows 原生功能
+windows = { version = "0.52", features = [
+    "Media_Control",        # 全局系统媒体控制（GSMTC）- 获取音乐播放信息
+    "Storage_Streams",      # 存储流 - 读取专辑封面图片数据
+    "Graphics_Imaging",     # 图形成像 - 图像处理（提取封面主色）
+    "Foundation",           # Windows 基础类型（时间戳、GUID 等）
+    "Foundation_Collections", # Windows 集合类型
+    "Win32_Foundation",     # Win32 基础类型（窗口句柄等）
+    "Win32_UI_WindowsAndMessaging",  # Win32 UI 窗口消息（窗口样式、位置等）
+    "Win32_Graphics_Gdi",    # Win32 GDI（获取屏幕分辨率）
+    "Win32_System",          # Win32 系统服务
+    "Win32_System_Com",      # Win32 COM（CoInitializeEx）
+    "Win32_System_SystemServices"  # Win32 系统服务常量
+] }
+
+# 异步运行时 - 用于后台任务和网络请求
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+
+# HTTP 客户端 - 用于下载 MV 和封面图片
+reqwest = { version = "0.11", features = ["json", "blocking"] }
+
+# 音频处理依赖
+cpal = "0.15"       # 用于捕获 Windows 系统回放音频 (WASAPI Loopback)
+rustfft = "6.1"     # 用于高效的快速傅里叶变换 (FFT)
+
+# Base64 编码解码 - 用于处理图片数据
+base64 = "0.21"
+
+# URL 编码 - 用于 API 请求参数编码
+urlencoding = "2.1"
+
+# 日期时间处理 - 用于时间戳计算和进度校准
+chrono = "0.4"
+
+# 系统级毛玻璃效果 (Windows Acrylic/Mica, macOS Vibrancy)
+window-vibrancy = "0.5"
+
+# 全局静态变量支持
+lazy_static = "1.4"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = "s"
+panic = "abort"
+
+[lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "deny"
+

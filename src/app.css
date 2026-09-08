@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+
+/* ============================================================================
+   主题系统 - CSS 变量定义
+   ============================================================================ */
+
+/* 1. 默认：经典黑 (Original) */
+:root, .theme-original {
+  --island-bg: #000000;
+  --island-border: rgba(255, 255, 255, 0.1);
+  --accent-color: #ffffff;
+  --glass-blur: 20px;
+  --island-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================================
+   基础样式
+   ============================================================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  overflow: hidden;
+  background: transparent;
+}

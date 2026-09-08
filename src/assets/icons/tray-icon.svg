@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="trayGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#a78bfa;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c4b5fd;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="trayGradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6d28d9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect x="0" y="0" width="512" height="512" rx="128" fill="url(#trayGradDark)"/>
+  
+  <circle cx="256" cy="256" r="160" fill="url(#trayGrad)"/>
+  
+  <g fill="#ffffff">
+    <rect x="168" y="200" width="64" height="112" rx="8"/>
+    <rect x="216" y="240" width="128" height="32" rx="4"/>
+    <circle cx="188" cy="232" r="12" fill="#c4b5fd"/>
+    <circle cx="296" cy="220" r="8" fill="#a78bfa"/>
+    <circle cx="320" cy="256" r="6" fill="#8b5cf6"/>
+  </g>
+</svg>

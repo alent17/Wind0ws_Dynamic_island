@@ -1,0 +1,38 @@
+.DS_Store
+node_modules
+/build
+/.svelte-kit
+/package
+.env
+.env.*
+!.env.example
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Logs
+*.log
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Build artifacts
+dist/
+
+# Temporary files
+1.txt
+temp_app.svelte
+*.txt
+
+# Trae AI working directory
+.trae/
+
+# Tauri build
+src-tauri/target
+src-tauri/gen

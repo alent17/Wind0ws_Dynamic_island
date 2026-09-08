@@ -1,0 +1,256 @@
+/**
+ * Base Styles - 基础样式重置和全局样式
+ */
+
+@import './variables.css';
+
+/* ========== Font Face Definitions ========== */
+@font-face {
+  font-family: 'SpotifyMixUI';
+  src: url('/fonts/fusion-pixel-12px-monospaced-latin.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SpotifyMixUI';
+  src: url('/fonts/fusion-pixel-12px-monospaced-latin.ttf') format('truetype');
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SpotifyMixUI';
+  src: url('/fonts/fusion-pixel-12px-monospaced-latin.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SpotifyMixUITitle';
+  src: url('/fonts/fusion-pixel-12px-monospaced-latin.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+
+/* ========== Base Element Styles ========== */
+:global(body) {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: var(--base-dark);
+  color: var(--text-base);
+  font-family: var(--font-family-body);
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:global(html) {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+:global(*),
+:global(*::before),
+:global(*::after) {
+  box-sizing: border-box;
+}
+
+/* ========== Typography ========== */
+:global(h1) {
+  font-family: var(--font-family-title);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  margin: 0 0 var(--spacing-lg) 0;
+  line-height: var(--leading-normal);
+}
+
+:global(h2) {
+  font-family: var(--font-family-title);
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  margin: 0 0 var(--spacing-md) 0;
+  line-height: var(--leading-normal);
+}
+
+:global(h3) {
+  font-family: var(--font-family-ui);
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  margin: 0 0 var(--spacing-sm) 0;
+  line-height: var(--leading-normal);
+}
+
+:global(p) {
+  font-family: var(--font-family-ui);
+  font-size: var(--text-md);
+  font-weight: var(--font-normal);
+  margin: 0 0 var(--spacing-md) 0;
+  line-height: var(--leading-relaxed);
+}
+
+:global(small) {
+  font-size: var(--text-sm);
+}
+
+:global(strong) {
+  font-weight: var(--font-bold);
+}
+
+:global(em) {
+  font-style: italic;
+}
+
+:global(a) {
+  color: var(--accent-green);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+:global(a:hover) {
+  color: var(--accent-green-dark);
+  text-decoration: underline;
+}
+
+/* ========== Button Base ========== */
+:global(button) {
+  font-family: var(--font-family-ui);
+  font-size: var(--text-md);
+  font-weight: var(--font-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+:global(button:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========== Input Base ========== */
+:global(input),
+:global(textarea),
+:global(select) {
+  font-family: var(--font-family-ui);
+  font-size: var(--text-md);
+  background: var(--base-mid-gray);
+  border: 1px solid var(--border-gray);
+  color: var(--text-base);
+  padding: var(--spacing-md);
+  transition: all var(--transition-base);
+}
+
+:global(input:focus),
+:global(textarea:focus),
+:global(select:focus) {
+  outline: none;
+  border-color: var(--accent-green);
+  box-shadow: var(--inset-border);
+}
+
+/* ========== Scrollbar Styles ========== */
+:global(::-webkit-scrollbar) {
+  width: 12px;
+  height: 12px;
+}
+
+:global(::-webkit-scrollbar-track) {
+  background: var(--base-dark);
+}
+
+:global(::-webkit-scrollbar-thumb) {
+  background: var(--border-gray);
+  border-radius: var(--radius-pill);
+}
+
+:global(::-webkit-scrollbar-thumb:hover) {
+  background: var(--border-light);
+}
+
+/* ========== Selection ========== */
+:global(::selection) {
+  background: var(--accent-green);
+  color: var(--base-dark);
+}
+
+/* ========== Focus Styles ========== */
+:global(:focus-visible) {
+  outline: 2px solid var(--accent-green);
+  outline-offset: 2px;
+}
+
+/* ========== Utility Classes ========== */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--container-lg);
+  margin: 0 auto;
+  padding: 0 var(--spacing-lg);
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-sm {
+  gap: var(--spacing-sm);
+}
+
+.gap-md {
+  gap: var(--spacing-md);
+}
+
+.gap-lg {
+  gap: var(--spacing-lg);
+}
+
+.gap-xl {
+  gap: var(--spacing-xl);
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-right {
+  text-align: right;
+}
