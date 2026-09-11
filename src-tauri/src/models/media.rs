@@ -15,6 +15,47 @@ pub struct MediaCapabilities {
     pub repeat: bool,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaSessionInfo {
+    pub id: String,
+    pub display_name: String,
+    pub source: String,
+    pub is_playing: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedCover {
+    pub url: String,
+    pub provider: String,
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IdleSnapshot {
+    pub cpu_percent: f32,
+    pub memory_percent: f32,
+    pub upload_bytes_per_second: u64,
+    pub download_bytes_per_second: u64,
+    pub battery_percent: Option<u8>,
+    pub battery_charging: Option<bool>,
+    pub weather_temperature: Option<f32>,
+    pub weather_code: Option<u16>,
+    pub weather_updated_at: Option<u64>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeatherLocationCandidate {
+    pub name: String,
+    pub latitude: f64,
+    pub longitude: f64,
+    pub country: String,
+    pub admin1: String,
+    pub admin2: String,
+}
+
 /// 媒体播放状态
 ///
 /// 表示当前正在播放的媒体信息
@@ -124,4 +165,11 @@ pub struct MonitorInfo {
     pub height: u32,
     /// 是否为主显示器
     pub is_primary: bool,
+    pub x: i32,
+    pub y: i32,
+    pub work_x: i32,
+    pub work_y: i32,
+    pub work_width: u32,
+    pub work_height: u32,
+    pub scale_factor: f64,
 }

@@ -1,21 +1,36 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { spring } from "svelte/motion";
-  import { invoke } from "@tauri-apps/api/core";
   import { convertFileSrc } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
   import { Events } from "./utils/eventConstants";
   import { mediaApi } from "$lib/api/media";
+  import { idleApi } from "$lib/api/idle";
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
+  import IslandSurface from "$lib/IslandSurface.svelte";
   import Spectrum from "$lib/Spectrum.svelte";
-  import type { AppSettings } from "$lib/api/types";
+  import {
+    clampExpandedRadius,
+    clampShoulderRadius,
+    geometryFor,
+    hiddenPlacementFor,
+    hostFor,
+    overlapAttachedEdge,
+    placementFor,
+    surfaceOffsetFor,
+    type IslandEdge,
+    type IslandMode,
+    type IslandRegionChange,
+    type IslandStyle,
+  } from "$lib/islandGeometry";
+  import type { AppSettings, IdleContentItem, IdleSnapshot, MediaState } from "$lib/api/types";
   import { DEFAULT_SETTINGS } from "$lib/api/types";
+  import { applyAppFont } from "$lib/font";
+  import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition, shouldShowIdleClock } from "$lib/mediaClock";
   import {
     getCurrentWindow,
-    PhysicalSize,
-    PhysicalPosition,
     currentMonitor,
     availableMonitors,
   } from "@tauri-apps/api/window";
@@ -143,15 +158,67 @@
   let spectrumBottomColor = $state<string>("#888888");
 
   let currentTimeMs = $state<number>(0);
+  let mediaSnapshotAt = $state<number>(Date.now());
+  let clockNow = $state<number>(Date.now());
   let durationMs = $state<number>(0);
   let currentSource = $state<string>("generic");
+  let hasMediaSession = $state(false);
+  let mediaCapabilities = $state<MediaState["capabilities"]>();
   let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
-  let maxBackendPosition = 0;
+  let islandMode = $derived<IslandMode>(expanded ? "expanded" : hovering ? "hover" : "compact");
+  let islandMedia = $derived<MediaState>({
+    title: trackTitle,
+    artist: artistName,
+    albumArt: artworkUrl,
+    isPlaying,
+    positionMs: currentTimeMs,
+    durationMs,
+    lastUpdatedTimestamp: mediaSnapshotAt,
+    source: currentSource,
+    sourceDisplay: playerNames[currentSource as keyof typeof playerNames] || "多媒体",
+    capabilities: mediaCapabilities,
+  });
+  let displayedPosition = $derived(projectedPosition(islandMedia, clockNow));
+  function normalizedStyle(value: string): IslandStyle {
+    return value === "edge" ? "edge" : "floating";
+  }
 
-  let showTimeDisplay = $state(false);
+  function normalizedEdge(value: string): IslandEdge {
+    return value === "right" || value === "bottom" || value === "left" ? value : "top";
+  }
+
+  function normalizedSettings(value: Partial<AppSettings>): AppSettings {
+    const position = Number(value.islandEdgePosition ?? DEFAULT_SETTINGS.islandEdgePosition);
+    return {
+      ...DEFAULT_SETTINGS,
+      ...value,
+      islandStyle: normalizedStyle(value.islandStyle ?? DEFAULT_SETTINGS.islandStyle),
+      islandEdge: normalizedEdge(value.islandEdge ?? DEFAULT_SETTINGS.islandEdge),
+      spectrumMode: value.spectrumMode === "random" ? "random" : "realtime",
+      islandEdgePosition: Math.min(100, Math.max(0, Number.isFinite(position) ? position : 50)),
+      edgeShoulderRadius: clampShoulderRadius(value.edgeShoulderRadius ?? 8),
+      expandedCornerRadius: clampExpandedRadius(value.expandedCornerRadius ?? 45),
+      compactLength: Math.min(300, Math.max(80, Number(value.compactLength ?? 80))),
+      idleRotationSeconds: Math.min(60, Math.max(2, Number(value.idleRotationSeconds ?? 5))),
+      idleItems: Array.isArray(value.idleItems) ? value.idleItems : DEFAULT_SETTINGS.idleItems,
+    };
+  }
+
+  function applyIslandRegion({ geometry, radii, polygon }: IslandRegionChange) {
+    const host = hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength);
+    const offset = surfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge);
+    windowApi.setIslandInteractionRegion({
+      x: offset.x,
+      y: offset.y,
+      width: geometry.width,
+      height: geometry.height,
+      radii,
+      polygon,
+    }).catch((error) => logger.warn("窗口区域更新失败", error));
+  }
+
   let currentTime = $state("");
-  let pausedStartTime = $state<number>(0);
 
   // 优化：缓存时间格式化结果，减少字符串操作
   function updateTimeDisplay() {
@@ -162,26 +229,12 @@
     currentTime = `${hours < 10 ? "0" : ""}${hours}:${minutes < 10 ? "0" : ""}${minutes}`;
   }
 
-  $effect(() => {
-    if (!isPlaying) {
-      pausedStartTime = Date.now();
-      showTimeDisplay = false;
-    } else {
-      showTimeDisplay = false;
-    }
-  });
-
   onMount(() => {
     updateTimeDisplay();
     const checkInterval = setInterval(() => {
       updateTimeDisplay();
-      if (!isPlaying && pausedStartTime > 0) {
-        const elapsed = Date.now() - pausedStartTime;
-        if (elapsed >= 2 * 60 * 1000 && !showTimeDisplay) {
-          showTimeDisplay = true;
-        }
-      }
-    }, 1000);
+      clockNow = Date.now();
+    }, 100);
 
     return () => clearInterval(checkInterval);
   });
@@ -263,6 +316,71 @@
   let appSettings = $state<AppSettings>({
     ...DEFAULT_SETTINGS,
   });
+  $effect(() => applyAppFont(appSettings.fontId));
+  let idleSnapshot = $state<IdleSnapshot>({ cpuPercent: 0, memoryPercent: 0, uploadBytesPerSecond: 0, downloadBytesPerSecond: 0, batteryPercent: null, batteryCharging: null, weatherTemperature: null, weatherCode: null, weatherUpdatedAt: null });
+  let idleIndex = $state(0);
+  let idlePaused = $state(false);
+  let activeIdleItems = $derived(appSettings.idleItems.filter((item) => item.enabled && (item.kind !== "battery" || idleSnapshot.batteryPercent !== null)));
+  let showIdle = $derived(appSettings.idleContentEnabled && !hasMediaSession && activeIdleItems.length > 0);
+
+  function compactBytes(value: number) {
+    if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB/s`;
+    if (value >= 1024) return `${Math.round(value / 1024)} KB/s`;
+    return `${Math.round(value)} B/s`;
+  }
+  function weatherLabel(code: number | null) {
+    if (code === null) return "等待天气";
+    if (code === 0) return "晴";
+    if (code <= 3) return "多云";
+    if (code <= 48) return "雾";
+    if (code <= 67) return "雨";
+    if (code <= 77) return "雪";
+    if (code <= 82) return "阵雨";
+    if (code <= 86) return "阵雪";
+    return "雷雨";
+  }
+  function idlePresentation(item: IdleContentItem | undefined) {
+    const now = new Date();
+    if (!item) return { title: "等待播放", subtitle: "" };
+    if (item.kind === "clock") return { title: now.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }), subtitle: now.toLocaleTimeString("zh-CN", { second: "2-digit" }) };
+    if (item.kind === "date") return { title: now.toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" }), subtitle: String(now.getFullYear()) };
+    if (item.kind === "network") return { title: `↓ ${compactBytes(idleSnapshot.downloadBytesPerSecond)}`, subtitle: `↑ ${compactBytes(idleSnapshot.uploadBytesPerSecond)}` };
+    if (item.kind === "cpu") return { title: `CPU ${Math.round(idleSnapshot.cpuPercent)}%`, subtitle: "处理器使用率" };
+    if (item.kind === "memory") return { title: `内存 ${Math.round(idleSnapshot.memoryPercent)}%`, subtitle: "内存使用率" };
+    if (item.kind === "battery") return { title: `电量 ${idleSnapshot.batteryPercent ?? "--"}%`, subtitle: idleSnapshot.batteryCharging ? "正在充电" : "使用电池" };
+    if (item.kind === "weather") return { title: idleSnapshot.weatherTemperature === null ? "等待天气" : `${Math.round(idleSnapshot.weatherTemperature)}° ${weatherLabel(idleSnapshot.weatherCode)}`, subtitle: appSettings.weatherLocation?.name ?? "请在设置中选择城市" };
+    return { title: item.text || "自定义内容", subtitle: "" };
+  }
+  let currentIdle = $derived(idlePresentation(activeIdleItems[idleIndex % Math.max(1, activeIdleItems.length)]));
+  function idleAction(action: "prev" | "toggle" | "next") {
+    if (action === "toggle") { idlePaused = !idlePaused; return; }
+    const count = activeIdleItems.length;
+    if (!count) return;
+    idleIndex = action === "next" ? (idleIndex + 1) % count : (idleIndex - 1 + count) % count;
+  }
+  $effect(() => {
+    if (!showIdle) return;
+    const refresh = () => idleApi.getSnapshot().then((value) => idleSnapshot = value).catch(() => undefined);
+    refresh();
+    const timer = setInterval(refresh, 1000);
+    return () => clearInterval(timer);
+  });
+  $effect(() => {
+    const seconds = appSettings.idleRotationSeconds;
+    const count = activeIdleItems.length;
+    const paused = idlePaused || hovering || appSettings.reduceAnimations;
+    if (!showIdle || paused || count < 2) return;
+    const timer = setInterval(() => idleIndex = (idleIndex + 1) % count, seconds * 1000);
+    return () => clearInterval(timer);
+  });
+
+  let renderedIslandStyle = $state<IslandStyle>(DEFAULT_SETTINGS.islandStyle);
+  let renderedIslandEdge = $state<IslandEdge>(DEFAULT_SETTINGS.islandEdge);
+  let fixedHostElement: HTMLDivElement;
+  let placementAnimation: Animation | null = null;
+  let placementTransitionRevision = 0;
+  let suppressPlacementEffect = false;
+  let currentHost = $derived(hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength));
 
   // ========== 性能检测和自适应系统 ==========
   type PerformanceLevel = "high" | "medium" | "low";
@@ -511,20 +629,6 @@
 
   let isLive = $derived(durationMs === 0);
 
-  let progressSpring = spring(0, {
-    stiffness: 0.15,
-    damping: 0.8,
-    precision: 0.5,
-  });
-
-  const precisePosition = $derived(() => {
-    return currentTimeMs;
-  });
-
-  const progressPercent = $derived(
-    durationMs > 0 ? (precisePosition() / durationMs) * 100 : 0,
-  );
-
   let widthSpring = spring(80, {
     stiffness: 0.2,
     damping: 0.85,
@@ -545,94 +649,127 @@
 
   let cachedScreenWidth = 0;
   let cachedScreenHeight = 0;
-  let isSyncing = false;
-  let pendingW = 0;
-  let pendingH = 0;
-  let hasPendingSync = false;
 
   let monitorAnchorX = 0;
   let monitorAnchorY = 0;
+  let windowReady = $state(false);
+  let windowPlacementRevision = 0;
 
-  let lastSyncTime = 0;
-  const SYNC_COOLDOWN_MS = 16;
+  // Island geometry is animated inside a fixed native host. Resizing the
+  // WebView for every spring frame was the main source of expansion jank.
 
-  async function processSyncQueue() {
-    if (isSyncing || !hasPendingSync) return;
-
-    isSyncing = true;
-    hasPendingSync = false;
-    lastSyncTime = performance.now();
-
-    const w = pendingW;
-    const h = pendingH;
-    const dpr = window.devicePixelRatio || 1;
-
-    try {
-      if (!cachedScreenWidth) {
-        const monitor = await currentMonitor();
-        if (monitor) {
-          cachedScreenWidth = monitor.size.width;
-          cachedScreenHeight = monitor.size.height;
-          monitorAnchorX = monitor.position.x + monitor.size.width / 2;
-          monitorAnchorY = monitor.position.y;
-        }
-      }
-
-      const physW = Math.round(w * dpr);
-      const physH = Math.round(h * dpr);
-      const centerX = Math.round(monitorAnchorX - physW / 2);
-      const targetY = Math.round(monitorAnchorY + 22 * dpr);
-
-      await Promise.all([
-        win.setSize(new PhysicalSize(physW, physH)),
-        win.setPosition(new PhysicalPosition(centerX, targetY)),
-      ]);
-    } catch (err) {
-      logger.error("窗口同步失败:", err);
-    } finally {
-      isSyncing = false;
-      if (hasPendingSync) {
-        const elapsed = performance.now() - lastSyncTime;
-        if (elapsed < SYNC_COOLDOWN_MS) {
-          setTimeout(processSyncQueue, SYNC_COOLDOWN_MS - elapsed);
-        } else {
-          requestAnimationFrame(processSyncQueue);
-        }
-      }
-    }
+  async function applyWindowPlacement(
+    style = renderedIslandStyle,
+    edge = renderedIslandEdge,
+    monitorIndex = appSettings.monitorIndex,
+    positionPercent = appSettings.islandEdgePosition,
+    hidden = isHidden,
+  ) {
+    if (!windowReady) return;
+    const revision = ++windowPlacementRevision;
+    const allMonitors = await windowApi.getMonitors();
+    if (!allMonitors.length) return;
+    const safeIndex = Math.min(Math.max(0, monitorIndex), allMonitors.length - 1);
+    const monitor = allMonitors[safeIndex];
+    const dpr = monitor.scaleFactor || window.devicePixelRatio || 1;
+    const host = hostFor(style, edge, appSettings.compactLength);
+    const physicalHost = { width: Math.round(host.width * dpr), height: Math.round(host.height * dpr) };
+    const baseShown = placementFor(
+      { x: monitor.workX, y: monitor.workY, width: monitor.workWidth, height: monitor.workHeight },
+      physicalHost,
+      edge,
+      Math.min(100, Math.max(0, positionPercent)),
+    );
+    // Extend attached windows one physical pixel beyond the compositor edge,
+    // so clip-path antialiasing cannot reveal a transparent seam.
+    const shown = style === "edge" ? overlapAttachedEdge(baseShown, edge) : baseShown;
+    const compact = geometryFor("compact", appSettings.expandedCornerRadius, edge, appSettings.compactLength);
+    const offset = surfaceOffsetFor(host, compact, style, edge);
+    const target = hidden
+      ? hiddenPlacementFor(
+          baseShown,
+          { x: offset.x * dpr, y: offset.y * dpr },
+          { ...compact, width: compact.width * dpr, height: compact.height * dpr },
+          edge,
+          2,
+        )
+      : shown;
+    if (revision !== windowPlacementRevision) return;
+    currentMonitorIndex = safeIndex;
+    cachedScreenWidth = monitor.width;
+    cachedScreenHeight = monitor.height;
+    monitorAnchorX = monitor.x + monitor.width / 2;
+    monitorAnchorY = monitor.y;
+    const animate = appSettings.enableAnimations
+      && !appSettings.reduceAnimations
+      && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    await windowApi.animateWindowBounds(target.width, target.height, target.x, target.y, animate);
   }
 
-  let lastW = 0;
-  let lastH = 0;
+  function edgeTransform(edge: IslandEdge) {
+    if (edge === "top") return "translateY(-6px) scale(0.96)";
+    if (edge === "right") return "translateX(6px) scale(0.96)";
+    if (edge === "bottom") return "translateY(6px) scale(0.96)";
+    return "translateX(-6px) scale(0.96)";
+  }
 
-  function isNearTarget(current: number, ...targets: number[]): boolean {
-    return targets.some((t) => Math.abs(current - t) < 2);
+  async function transitionPlacement(nextStyle: IslandStyle, nextEdge: IslandEdge) {
+    if (nextEdge === renderedIslandEdge) {
+      // The fixed host reserves the floating gap in both modes, so the surface
+      // can stay visible while its anchor and silhouette morph in place.
+      renderedIslandStyle = nextStyle;
+      return;
+    }
+    const revision = ++placementTransitionRevision;
+    placementAnimation?.cancel();
+    const animate = appSettings.enableAnimations && fixedHostElement;
+    const reduced = appSettings.reduceAnimations || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const exitTransform = reduced ? "translate3d(0,0,0) scale(1)" : edgeTransform(renderedIslandEdge);
+    const enterTransform = reduced ? "translate3d(0,0,0) scale(1)" : edgeTransform(nextEdge);
+    if (animate) {
+      placementAnimation = fixedHostElement.animate(
+        [{ opacity: 1, transform: "translate3d(0,0,0) scale(1)" }, { opacity: 0, transform: exitTransform }],
+        { duration: reduced ? 120 : 140, easing: "cubic-bezier(0.23, 1, 0.32, 1)", fill: "forwards" },
+      );
+      await placementAnimation.finished.catch(() => undefined);
+      if (revision !== placementTransitionRevision) return;
+    }
+    suppressPlacementEffect = true;
+    renderedIslandStyle = nextStyle;
+    renderedIslandEdge = nextEdge;
+    await applyWindowPlacement(nextStyle, nextEdge).catch((error) => logger.warn("布局切换定位失败", error));
+    if (revision !== placementTransitionRevision) { suppressPlacementEffect = false; return; }
+    suppressPlacementEffect = false;
+    if (!fixedHostElement) return;
+    placementAnimation?.cancel();
+    if (animate) {
+      placementAnimation = fixedHostElement.animate(
+        [{ opacity: 0, transform: enterTransform }, { opacity: 1, transform: "translate3d(0,0,0) scale(1)" }],
+        { duration: reduced ? 120 : 180, easing: "cubic-bezier(0.23, 1, 0.32, 1)", fill: "forwards" },
+      );
+      await placementAnimation.finished.catch(() => undefined);
+    } else {
+      fixedHostElement.style.opacity = "1";
+      fixedHostElement.style.transform = "translate3d(0,0,0)";
+    }
   }
 
   $effect(() => {
-    const currentW = $widthSpring;
-    const currentH = $heightSpring;
-
-    const nearTarget =
-      isNearTarget(currentW, 80, 90, 300) &&
-      isNearTarget(currentH, 28, 30, 160);
-    const syncThreshold = nearTarget ? 0.5 : 1.5;
-
-    if (
-      Math.abs(currentW - lastW) > syncThreshold ||
-      Math.abs(currentH - lastH) > syncThreshold
-    ) {
-      pendingW = currentW;
-      pendingH = currentH;
-      hasPendingSync = true;
-
-      if (!isSyncing) {
-        requestAnimationFrame(processSyncQueue);
-      }
-
-      lastW = currentW;
-      lastH = currentH;
+    const style = normalizedStyle(appSettings.islandStyle);
+    const edge = normalizedEdge(appSettings.islandEdge);
+    if (style !== renderedIslandStyle || edge !== renderedIslandEdge) {
+      void transitionPlacement(style, edge);
     }
+  });
+
+  $effect(() => {
+    const ready = windowReady;
+    const monitorIndex = appSettings.monitorIndex;
+    const position = appSettings.islandEdgePosition;
+    const style = renderedIslandStyle;
+    const edge = renderedIslandEdge;
+    const hidden = isHidden;
+    if (ready && !suppressPlacementEffect) void applyWindowPlacement(style, edge, monitorIndex, position, hidden);
   });
 
   function startAutoClose() {
@@ -851,45 +988,8 @@
     }
   });
 
-  $effect(() => {
-    const isExp = expanded;
-    const isHov = hovering;
-    const reduced = appSettings.reduceAnimations;
-    const animEnabled = appSettings.enableAnimations;
-
-    requestAnimationFrame(() => {
-      if (isExp) {
-        widthSpring.set(300);
-        heightSpring.set(160);
-
-        if (!animEnabled) {
-          contentOpacity.set(1);
-        } else if (reduced) {
-          contentOpacity.set(1);
-        } else {
-          setTimeout(() => contentOpacity.set(1), 80);
-        }
-      } else {
-        contentOpacity.set(0);
-
-        setTimeout(() => {
-          widthSpring.set(isHov ? 90 : 80);
-          heightSpring.set(isHov ? 30 : 28);
-        }, 60);
-      }
-    });
-  });
-
-  let animatingTimer: ReturnType<typeof setTimeout> | null = null;
-  $effect(() => {
-    const _ = expanded;
-    if (animatingTimer) clearTimeout(animatingTimer);
-    isAnimating = true;
-    animatingTimer = setTimeout(() => {
-      isAnimating = false;
-      animatingTimer = null;
-    }, 300);
-  });
+  // IslandSurface owns one interruptible spring and derives both content
+  // layers from it, so rapid reversals cannot leave stale timers behind.
 
   let isPressed = $state(false);
 
@@ -908,8 +1008,8 @@
     expanded = !expanded;
   }
 
-  async function handleMediaAction(action: string, e: MouseEvent) {
-    e.stopPropagation();
+  async function handleMediaAction(action: string, e?: MouseEvent) {
+    e?.stopPropagation();
 
     if (action === "play_pause") {
       isPlaying = !isPlaying;
@@ -922,6 +1022,17 @@
         isPlaying = !isPlaying;
       }
       console.error("媒体控制失败:", err);
+    }
+  }
+
+  async function handleSeek(positionMs: number) {
+    const next = clampSeekPosition(positionMs, durationMs);
+    currentTimeMs = next;
+    mediaSnapshotAt = Date.now();
+    try {
+      await mediaApi.seekMedia(next);
+    } catch (error) {
+      console.error("调整播放进度失败:", error);
     }
   }
 
@@ -957,32 +1068,10 @@
 
   async function hideWindowToTop() {
     if (!appSettings.autoHide) return;
-
     try {
-      const appWindow = getCurrentWindow();
-      const currentSize = await appWindow.innerSize();
-
-      const allMonitors = await availableMonitors();
-
-      if (allMonitors.length > 0 && currentMonitorIndex < allMonitors.length) {
-        const targetMonitor = allMonitors[currentMonitorIndex];
-
-        const screenCenterX =
-          targetMonitor.position.x + targetMonitor.size.width / 2;
-        const windowCenterX = screenCenterX - currentSize.width / 2;
-        const targetY = Math.round(-currentSize.height + 2);
-
-        await appWindow.setPosition(
-          new PhysicalPosition(Math.round(windowCenterX), targetY),
-        );
-        isHidden = true;
-        console.log("[自动隐藏] 窗口已隐藏到顶部中间，留 2px 可见边");
-      } else {
-        const targetY = Math.round(-currentSize.height + 2);
-        await appWindow.setPosition(new PhysicalPosition(0, targetY));
-        isHidden = true;
-        console.log("[自动隐藏] 未找到显示器，使用默认位置");
-      }
+      isHidden = true;
+      await applyWindowPlacement(undefined, undefined, undefined, undefined, true);
+      console.log(`[自动隐藏] 窗口已向${renderedIslandEdge}边收起，保留 2px 唤醒区域`);
     } catch (error) {
       console.error("[自动隐藏] 失败:", error);
     }
@@ -990,31 +1079,9 @@
 
   async function showWindow() {
     try {
-      const appWindow = getCurrentWindow();
-      const currentSize = await appWindow.innerSize();
-      const dpr = window.devicePixelRatio || 1;
-
-      const allMonitors = await availableMonitors();
-
-      if (allMonitors.length > 0 && currentMonitorIndex < allMonitors.length) {
-        const targetMonitor = allMonitors[currentMonitorIndex];
-
-        const screenCenterX =
-          targetMonitor.position.x + targetMonitor.size.width / 2;
-        const windowCenterX = screenCenterX - currentSize.width / 2;
-        const targetY = Math.round(22 * dpr);
-
-        await appWindow.setPosition(
-          new PhysicalPosition(Math.round(windowCenterX), targetY),
-        );
-        isHidden = false;
-        console.log("[自动显示] 窗口已显示在顶部中间");
-      } else {
-        const targetY = Math.round(22 * dpr);
-        await appWindow.setPosition(new PhysicalPosition(0, targetY));
-        isHidden = false;
-        console.log("[自动显示] 未找到显示器，使用默认位置");
-      }
+      isHidden = false;
+      await applyWindowPlacement(undefined, undefined, undefined, undefined, false);
+      console.log(`[自动显示] 窗口已恢复到${renderedIslandEdge}边`);
     } catch (error) {
       console.error("[自动显示] 失败:", error);
     }
@@ -1023,9 +1090,13 @@
   async function handleMouseMove(event: MouseEvent) {
     if (!autoHideEnabled || !appSettings.autoHide || !isFullscreenApp) return;
 
+    const mouseX = event.clientX;
     const mouseY = event.clientY;
     const wasMouseAtTop = isMouseAtTop;
-    isMouseAtTop = mouseY < 100;
+    if (renderedIslandEdge === "top") isMouseAtTop = mouseY > window.innerHeight - 100;
+    else if (renderedIslandEdge === "right") isMouseAtTop = mouseX < 100;
+    else if (renderedIslandEdge === "bottom") isMouseAtTop = mouseY < 100;
+    else isMouseAtTop = mouseX > window.innerWidth - 100;
 
     if (isMouseAtTop !== wasMouseAtTop) {
       console.log("[鼠标检测] 鼠标在顶部:", isMouseAtTop);
@@ -1089,26 +1160,11 @@
   }
 
   async function moveToMonitor(targetMonitor: any) {
-    monitorAnchorX = targetMonitor.position.x + targetMonitor.size.width / 2;
-    monitorAnchorY = targetMonitor.position.y;
-    cachedScreenWidth = targetMonitor.size.width;
-    cachedScreenHeight = targetMonitor.size.height;
-
-    const appWindow = getCurrentWindow();
-    const currentSize = await appWindow.innerSize();
-
-    const targetX = Math.round(monitorAnchorX - currentSize.width / 2);
-    const targetY = Math.round(monitorAnchorY + 22);
-
-    await appWindow.setPosition(new PhysicalPosition(targetX, targetY));
-
-    console.log(
-      "[显示器] 已移动到:",
-      targetMonitor.name || `显示器`,
-      "位置:",
-      targetX,
-      targetY,
-    );
+    const index = typeof targetMonitor?.index === "number"
+      ? targetMonitor.index
+      : monitors.findIndex((monitor) => monitor.position.x === targetMonitor?.position?.x && monitor.position.y === targetMonitor?.position?.y);
+    await applyWindowPlacement(undefined, undefined, index >= 0 ? index : currentMonitorIndex);
+    console.log("[显示器] 已按当前边缘与沿边位置移动到:", targetMonitor?.name || "显示器");
   }
 
   let lastMonitorIndex = -1;
@@ -1185,38 +1241,23 @@
 
       try {
         const loadedSettings = await settingsApi.getSettings();
-        appSettings = { ...DEFAULT_SETTINGS, ...loadedSettings };
+        appSettings = normalizedSettings(loadedSettings);
         console.log("[设置] 已加载:", appSettings);
       } catch (error) {
         console.error("[设置] 读取失败:", error);
       }
 
-      try {
-        displayRefreshRate = await detectDisplayRefreshRate();
-        console.log(`[性能] 显示器刷新率: ${displayRefreshRate}Hz`);
-
-        performanceLevel = detectPerformanceLevel();
-        console.log(`[性能] 设备性能等级: ${performanceLevel}`);
-
-        updateSpringParams();
-
-        startFpsMonitoring();
-        console.log("[性能] 帧率监控已启动");
-
-        if (highFrameRateMode) {
-          console.log(`[性能] 🚀 高帧率模式已启用 (${displayRefreshRate}Hz)`);
-        }
-      } catch (error) {
-        console.error("[性能] 初始化失败:", error);
-        performanceLevel = "high";
-        displayRefreshRate = 60;
-      }
+      // Keep motion timing deterministic. The old FPS monitor changed spring
+      // parameters while an animation was running, which made the same gesture
+      // feel different across machines and did not remove any expensive work.
+      performanceLevel = "high";
+      displayRefreshRate = 60;
 
       const unlistenSettings = await eventManager.on(
         Events.SETTINGS_UPDATED,
         (s: any) => {
           if (s) {
-            appSettings = s;
+            appSettings = normalizedSettings(s);
             console.log("[设置] 实时更新:", appSettings);
 
             if (s.islandTheme) {
@@ -1362,38 +1403,37 @@
       }
 
       const unlistenMediaUpdate = await onMediaUpdate((data: any) => {
+        const receivedAt = Date.now();
+        // SMTC can briefly return an empty metadata snapshot while the same
+        // session is refreshing. Do not turn that transient gap into a new
+        // zero-position track.
+        if (
+          lastSongKey &&
+          (!data.title || data.title === "等待播放...") &&
+          trackTitle &&
+          trackTitle !== "未知曲目"
+        ) {
+          return;
+        }
+        const previousPosition = projectedPosition(islandMedia, receivedAt);
+        const nextPlaying = Boolean(data.isPlaying);
+        hasMediaSession = Boolean(data.source);
         if (data.source) currentSource = data.source;
-        isPlaying = data.isPlaying || false;
+        mediaCapabilities = data.capabilities;
 
-        const currentSongKey = `${data.title || ""}-${data.artist || ""}`;
+        const currentSongKey = mediaTrackKey(data.title || "", data.artist || artistName);
         const songChanged = lastSongKey !== currentSongKey;
 
-        if (songChanged) {
-          maxBackendPosition = 0;
-          lastSongKey = currentSongKey;
-        }
-
-        const newPosition = data.positionMs || 0;
-
-        maxBackendPosition = Math.max(maxBackendPosition, newPosition);
-
-        const isBackendStuck =
-          newPosition < 1000 &&
-          currentTimeMs > 3000 &&
-          maxBackendPosition < 1000 &&
-          !songChanged;
-
-        if (isBackendStuck) {
-          // 后端完全拿不到进度，忽略覆盖，全靠前端自己计时
-        } else {
-          if (
-            Math.abs(currentTimeMs - newPosition) > 3000 ||
-            songChanged ||
-            !isPlaying
-          ) {
-            currentTimeMs = newPosition;
-          }
-        }
+        const reportedDuration = Number(data.durationMs) || durationMs;
+        currentTimeMs = reconcileReportedPosition(
+          previousPosition,
+          Number(data.positionMs) || 0,
+          reportedDuration,
+          nextPlaying,
+          songChanged,
+        );
+        mediaSnapshotAt = receivedAt;
+        isPlaying = nextPlaying;
 
         if (songChanged) {
           console.log("[歌曲变更] 检测到新歌:", data.title, "-", data.artist);
@@ -1468,7 +1508,7 @@
           data.image ||
           "";
 
-        const coverChanged = newCover !== rawCoverUrl;
+        const coverChanged = songChanged || newCover !== rawCoverUrl;
 
         if (titleChanged || artistChanged || coverChanged) {
           if (titleChanged) {
@@ -1519,11 +1559,27 @@
             }
           }
 
-          progressSpring.set(0, { soft: true });
-        }
-
-        if (durationMs > 0) {
-          progressSpring.set((currentTimeMs / durationMs) * 100);
+          if (
+            songChanged &&
+            appSettings.enableHdCover &&
+            data.title &&
+            data.artist
+          ) {
+            const requestedTrackKey = currentSongKey;
+            void mediaApi
+              .resolveHdCover(data.title, data.artist, data.source || currentSource)
+              .then((resolved) => {
+                if (!resolved || lastSongKey !== requestedTrackKey) return;
+                const image = new Image();
+                image.onload = () => {
+                  if (lastSongKey !== requestedTrackKey) return;
+                  artworkUrl = resolved.url;
+                  flipKey += 1;
+                };
+                image.src = resolved.url;
+              })
+              .catch(() => undefined);
+          }
         }
       });
       cleanups.push(unlistenMediaUpdate);
@@ -1546,44 +1602,19 @@
     }
   }
 
+  async function initializeFixedHost() {
+    await applyWindowPlacement();
+  }
+
   onMount(() => {
     win = getCurrentWindow();
+    windowReady = true;
     console.log("[App.svelte] 窗口对象已初始化");
-
-    let progressInterval: ReturnType<typeof setInterval> | null = null;
-
-    const startProgressUpdate = () => {
-      if (progressInterval) return;
-
-      progressInterval = setInterval(() => {
-        if (isPlaying && durationMs > 0 && currentTimeMs < durationMs) {
-          currentTimeMs += 100;
-          if (currentTimeMs > durationMs) {
-            currentTimeMs = durationMs;
-          }
-        }
-      }, 100);
-    };
-
-    const stopProgressUpdate = () => {
-      if (progressInterval) {
-        clearInterval(progressInterval);
-        progressInterval = null;
-      }
-    };
-
-    $effect(() => {
-      if (isPlaying) {
-        startProgressUpdate();
-      } else {
-        stopProgressUpdate();
-      }
-    });
+    initializeFixedHost().catch((error) => logger.error("固定宿主初始化失败", error));
 
     document.addEventListener("click", handleGlobalClick);
     return () => {
       document.removeEventListener("click", handleGlobalClick);
-      stopProgressUpdate();
     };
   });
 
@@ -1604,12 +1635,19 @@
       currentTheme = event.payload as string;
       console.log("[主题切换] 主题已切换为:", currentTheme);
     });
+    const unlistenPlacementPreview = listen<{ position: number }>("island-placement-preview", (event) => {
+      const position = Math.min(100, Math.max(0, Number(event.payload?.position) || 0));
+      void applyWindowPlacement(renderedIslandStyle, renderedIslandEdge, appSettings.monitorIndex, position, isHidden);
+    });
+    const workAreaTimer = setInterval(() => {
+      if (windowReady) void applyWindowPlacement().catch(() => undefined);
+    }, 2000);
 
     // 监听后端推送的全屏状态变化事件
     const unlistenFullscreen = eventManager.on(
       "fullscreen-changed",
-      (event) => {
-        handleFullscreenChange(event.payload);
+      (isFullscreen) => {
+        handleFullscreenChange(Boolean(isFullscreen));
       },
     );
 
@@ -1628,6 +1666,7 @@
     return () => {
       // 清理主题监听
       unlistenTheme.then((unlisten) => unlisten());
+      unlistenPlacementPreview.then((unlisten) => unlisten());
       // 清理全屏监听
       unlistenFullscreen.then((unlisten) => unlisten());
 
@@ -1638,10 +1677,54 @@
         clearTimeout(mouseMoveTimeout);
       }
       document.removeEventListener("mousemove", handleMouseMoveThrottled);
+      clearInterval(workAreaTimer);
     };
   });
 </script>
 
+<div
+  bind:this={fixedHostElement}
+  class="fixed-host"
+  style={`width:${currentHost.width}px;height:${currentHost.height}px`}
+>
+  <IslandSurface
+    media={islandMedia}
+    mode={islandMode}
+    islandStyle={renderedIslandStyle}
+    edge={renderedIslandEdge}
+    position={displayedPosition}
+    expandedRadius={appSettings.expandedCornerRadius ?? 45}
+    edgeShoulderRadius={appSettings.edgeShoulderRadius ?? 8}
+    compactLength={appSettings.compactLength ?? 80}
+    idle={showIdle}
+    idleTitle={currentIdle.title}
+    idleSubtitle={currentIdle.subtitle}
+    {idlePaused}
+    showSpectrum={appSettings.showSpectrum}
+    spectrumMode={appSettings.spectrumMode}
+    enableAnimations={appSettings.enableAnimations}
+    reduceAnimations={appSettings.reduceAnimations}
+    background={getThemeBackground(currentTheme)}
+    border={getThemeBorder(currentTheme)}
+    boxShadow={getThemeBoxShadow(currentTheme, isHidden, expanded)}
+    {spectrumTopColor}
+    {spectrumBottomColor}
+    showTime={shouldShowIdleClock(hasMediaSession)}
+    timeText={currentTime}
+    showDebugInfo={appSettings.showDebugInfo}
+    debugLines={[`${fps} FPS`, currentSource, `${Math.round(displayedPosition)} ms`, isHidden ? "hidden" : islandMode]}
+    onToggle={() => expanded = !expanded}
+    onOpenPlayer={openCurrentPlayer}
+    onMediaAction={(action) => handleMediaAction(action)}
+    onSeek={handleSeek}
+    onToggleFloating={toggleFloatingWindow}
+    onHoverChange={(value) => hovering = value}
+    onRegionChange={applyIslandRegion}
+    onIdleAction={idleAction}
+  />
+</div>
+
+{#if false}
 <div
   class="fixed inset-0 flex items-start justify-center pointer-events-none"
   style="background: transparent;"
@@ -1701,8 +1784,6 @@
       </div>
     {/if}
 
-    <div class="absolute inset-0 z-0" data-tauri-drag-region></div>
-
     <div class="w-full h-full relative z-10 overflow-hidden">
       <!-- 收起态内容 -->
       <div
@@ -1710,7 +1791,7 @@
         class:is-hidden={expanded}
         style="opacity: {1 - $contentOpacity};"
       >
-        {#if showTimeDisplay}
+        {#if !hasMediaSession}
           <div
             class="h-full w-full flex items-center justify-center select-none"
           >
@@ -1883,16 +1964,16 @@
                 <div
                   class="progress-fill"
                   style="width: {durationMs > 0
-                    ? (currentTimeMs / durationMs) * 100
+                    ? Math.min(100, Math.max(0, (displayedPosition / durationMs) * 100))
                     : 0}%"
                 ></div>
               </div>
               <div class="flex justify-between mt-1">
                 <span class="text-[10px] text-white/60"
-                  >{formatTime(currentTimeMs)}</span
+                  >{formatTime(displayedPosition)}</span
                 >
                 <span class="text-[10px] text-white/60"
-                  >-{formatTime(durationMs - currentTimeMs)}</span
+                  >-{formatTime(Math.max(0, durationMs - displayedPosition))}</span
                 >
               </div>
             </div>
@@ -1972,6 +2053,7 @@
     </div>
   </div>
 </div>
+{/if}
 
 <style>
   /* ========== 全局基础样式 ========== */
@@ -1985,6 +2067,19 @@
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  .fixed-host {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    box-sizing: border-box;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .fixed-host :global(.island-surface) {
+    pointer-events: auto;
   }
 
   /* ========== 时间显示 ========== */
@@ -2307,18 +2402,6 @@
     backface-visibility: hidden;
     perspective: 1000px;
     contain: layout style;
-  }
-
-  :global(*:focus) {
-    outline: none !important;
-    box-shadow: none !important;
-    border: none !important;
-  }
-
-  :global(*:focus-visible) {
-    outline: none !important;
-    box-shadow: none !important;
-    border: none !important;
   }
 
   button,

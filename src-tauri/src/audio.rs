@@ -1,8 +1,8 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc, Mutex,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -19,32 +19,54 @@ const FREQ_BANDS: [(f32, f32); NUM_BARS] = [
     (10000.0, 20000.0),
 ];
 
-const BAND_GAINS: [f32; NUM_BARS] = [1.2, 1.8, 2.5, 4.0, 7.0, 12.0];
+const BAND_GAINS: [f32; NUM_BARS] = [1.15, 1.65, 2.2, 3.4, 5.4, 8.0];
 
-const SMOOTH_ATTACK: f32 = 0.3;
-const SMOOTH_RELEASE: f32 = 0.75;
+const SMOOTH_ATTACK: f32 = 0.38;
+const SMOOTH_RELEASE: f32 = 0.82;
 
-const MIN_DB: f32 = -85.0;
-const MAX_DB: f32 = -5.0;
+const MIN_DB: f32 = -78.0;
+const MAX_DB: f32 = -12.0;
 
 pub struct SpectrumCapture {
     running: Arc<AtomicBool>,
+    generation: Arc<AtomicU64>,
 }
 
 impl SpectrumCapture {
     pub fn new() -> Self {
         SpectrumCapture {
             running: Arc::new(AtomicBool::new(false)),
+            generation: Arc::new(AtomicU64::new(0)),
         }
     }
 
     pub fn start(&self, app: AppHandle) -> Result<(), String> {
-        if self.running.load(Ordering::Relaxed) {
+        if self
+            .running
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
             return Ok(());
         }
-
-        self.running.store(true, Ordering::Relaxed);
+        let token = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
         let running = self.running.clone();
+        let generation = self.generation.clone();
+        let published_bars = Arc::new(Mutex::new([0.0f32; NUM_BARS]));
+
+        let publisher_running = running.clone();
+        let publisher_generation = generation.clone();
+        let publisher_bars = published_bars.clone();
+        let publisher_app = app.clone();
+        std::thread::spawn(move || {
+            while publisher_running.load(Ordering::Acquire)
+                && publisher_generation.load(Ordering::Acquire) == token
+            {
+                if let Ok(values) = publisher_bars.lock() {
+                    let _ = publisher_app.emit("spectrum-data", values.to_vec());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(33));
+            }
+        });
 
         std::thread::spawn(move || {
             let host = cpal::default_host();
@@ -53,7 +75,7 @@ impl SpectrumCapture {
                 Some(d) => d,
                 None => {
                     eprintln!("[Spectrum] 无法获取音频输出设备");
-                    running.store(false, Ordering::Relaxed);
+                    running.store(false, Ordering::Release);
                     return;
                 }
             };
@@ -62,7 +84,7 @@ impl SpectrumCapture {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!("[Spectrum] 获取音频配置失败: {e}");
-                    running.store(false, Ordering::Relaxed);
+                    running.store(false, Ordering::Release);
                     return;
                 }
             };
@@ -83,18 +105,27 @@ impl SpectrumCapture {
             let mut ring_buf = vec![0.0f32; FFT_SIZE];
             let mut ring_pos: usize = 0;
             let mut hop_counter: usize = 0;
-            let mut smoothed = vec![0.0f32; NUM_BARS];
+            let mut smoothed = [0.0f32; NUM_BARS];
+            let mut fft_buf = vec![Complex::new(0.0f32, 0.0f32); FFT_SIZE];
+            let mut magnitudes = vec![0.0f32; FFT_SIZE / 2];
+            let mut new_bars = [0.0f32; NUM_BARS];
+            let callback_running = running.clone();
+            let callback_generation = generation.clone();
+            let callback_bars = published_bars.clone();
+            let error_running = running.clone();
+            let error_generation = generation.clone();
 
             let stream = device
                 .build_input_stream(
                     &config.into(),
                     move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                        let mono: Vec<f32> = data
-                            .chunks(channels)
-                            .map(|frame| frame.iter().sum::<f32>() / channels as f32)
-                            .collect();
-
-                        for sample in mono {
+                        if !callback_running.load(Ordering::Acquire)
+                            || callback_generation.load(Ordering::Acquire) != token
+                        {
+                            return;
+                        }
+                        for frame in data.chunks(channels) {
+                            let sample = frame.iter().sum::<f32>() / channels as f32;
                             ring_buf[ring_pos % FFT_SIZE] = sample;
                             ring_pos += 1;
                             hop_counter += 1;
@@ -104,46 +135,36 @@ impl SpectrumCapture {
                             }
                             hop_counter = 0;
 
-                            let mut fft_buf: Vec<Complex<f32>> = (0..FFT_SIZE)
-                                .map(|i| {
-                                    let idx = (ring_pos + i) % FFT_SIZE;
-                                    Complex::new(ring_buf[idx] * hann_window[i], 0.0)
-                                })
-                                .collect();
+                            for i in 0..FFT_SIZE {
+                                let idx = (ring_pos + i) % FFT_SIZE;
+                                fft_buf[i] = Complex::new(ring_buf[idx] * hann_window[i], 0.0);
+                            }
 
                             fft.process(&mut fft_buf);
 
                             let freq_bins = FFT_SIZE / 2;
-                            let magnitudes: Vec<f32> = fft_buf[..freq_bins]
-                                .iter()
-                                .map(|c| {
-                                    let mag = c.norm() / FFT_SIZE as f32;
-                                    let db = 20.0 * mag.max(1e-10_f32).log10();
-                                    ((db - MIN_DB) / (MAX_DB - MIN_DB)).clamp(0.0, 1.0)
-                                })
-                                .collect();
+                            for (index, complex) in fft_buf[..freq_bins].iter().enumerate() {
+                                let mag = complex.norm() / FFT_SIZE as f32;
+                                let db = 20.0 * mag.max(1e-10_f32).log10();
+                                magnitudes[index] =
+                                    ((db - MIN_DB) / (MAX_DB - MIN_DB)).clamp(0.0, 1.0);
+                            }
 
-                            let new_bars: Vec<f32> = FREQ_BANDS
-                                .iter()
-                                .enumerate()
-                                .map(|(idx, &(freq_lo, freq_hi))| {
-                                    let bin_lo = (freq_lo * FFT_SIZE as f32 / sample_rate) as usize;
-                                    let bin_hi = (freq_hi * FFT_SIZE as f32 / sample_rate) as usize;
-                                    let bin_lo = bin_lo.min(freq_bins - 1);
-                                    let bin_hi = bin_hi.min(freq_bins).max(bin_lo + 1);
-
-                                    let n = (bin_hi - bin_lo) as f32;
-                                    let rms = (magnitudes[bin_lo..bin_hi]
-                                        .iter()
-                                        .map(|x| x * x)
-                                        .sum::<f32>()
-                                        / n)
-                                        .sqrt();
-
-                                    let v = (rms * BAND_GAINS[idx]).min(1.0);
-                                    v.sqrt()
-                                })
-                                .collect();
+                            for (index, &(freq_lo, freq_hi)) in FREQ_BANDS.iter().enumerate() {
+                                let bin_lo = ((freq_lo * FFT_SIZE as f32 / sample_rate) as usize)
+                                    .min(freq_bins - 1);
+                                let bin_hi = ((freq_hi * FFT_SIZE as f32 / sample_rate) as usize)
+                                    .min(freq_bins)
+                                    .max(bin_lo + 1);
+                                let n = (bin_hi - bin_lo) as f32;
+                                let rms = (magnitudes[bin_lo..bin_hi]
+                                    .iter()
+                                    .map(|x| x * x)
+                                    .sum::<f32>()
+                                    / n)
+                                    .sqrt();
+                                new_bars[index] = (rms * BAND_GAINS[index]).min(1.0).sqrt();
+                            }
 
                             for i in 0..NUM_BARS {
                                 smoothed[i] = if new_bars[i] > smoothed[i] {
@@ -155,10 +176,17 @@ impl SpectrumCapture {
                                 };
                             }
 
-                            let _ = app.emit("spectrum-data", smoothed.clone());
+                            if let Ok(mut values) = callback_bars.try_lock() {
+                                *values = smoothed;
+                            }
                         }
                     },
-                    |err| eprintln!("[Spectrum] 音频流错误: {err}"),
+                    move |err| {
+                        eprintln!("[Spectrum] 音频流错误: {err}");
+                        if error_generation.load(Ordering::Acquire) == token {
+                            error_running.store(false, Ordering::Release);
+                        }
+                    },
                     None,
                 )
                 .map_err(|e| format!("创建音频流失败: {e}"));
@@ -167,20 +195,20 @@ impl SpectrumCapture {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!("[Spectrum] {e}");
-                    running.store(false, Ordering::Relaxed);
+                    running.store(false, Ordering::Release);
                     return;
                 }
             };
 
             if let Err(e) = stream.play() {
                 eprintln!("[Spectrum] 启动音频流失败: {e}");
-                running.store(false, Ordering::Relaxed);
+                running.store(false, Ordering::Release);
                 return;
             }
 
             println!("[Spectrum] 启动成功 | 采样率: {sample_rate} Hz | {NUM_BARS} 段");
 
-            while running.load(Ordering::Relaxed) {
+            while running.load(Ordering::Acquire) && generation.load(Ordering::Acquire) == token {
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
 
@@ -192,7 +220,8 @@ impl SpectrumCapture {
     }
 
     pub fn stop(&self) {
-        self.running.store(false, Ordering::Relaxed);
+        self.running.store(false, Ordering::Release);
+        self.generation.fetch_add(1, Ordering::AcqRel);
     }
 }
 

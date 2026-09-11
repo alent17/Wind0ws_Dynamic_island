@@ -5,9 +5,12 @@
 
 pub mod cache;
 pub mod color;
+pub mod idle;
 pub mod image;
 pub mod media;
 pub mod settings;
 pub mod spectrum;
+
+pub use idle::{get_idle_snapshot, search_weather_locations};
 
 pub use settings::{get_auto_start, read_settings_file, set_auto_start, write_settings_file};

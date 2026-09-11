@@ -384,6 +384,8 @@ pub fn run() {
             commands::close_floating_window,
             commands::reset_floating_window,
             commands::sync_window_bounds,
+            commands::animate_window_bounds,
+            commands::set_island_interaction_region,
             commands::set_floating_window_resizable,
             commands::open_application,
             commands::check_fullscreen_app,
@@ -392,8 +394,12 @@ pub fn run() {
             commands::set_current_monitor_index,
             // 媒体相关命令
             commands::get_media_info_cmd,
+            commands::list_media_sessions,
+            commands::get_idle_snapshot,
+            commands::search_weather_locations,
             commands::get_netease_song_info_cmd,
             commands::get_netease_mv_url_cmd,
+            commands::resolve_hd_cover,
             commands::control_media,
             commands::seek_media,
             commands::toggle_shuffle,
@@ -455,11 +461,18 @@ pub fn run() {
                     let target_monitor = &all_monitors[monitor_index as usize];
                     let position = target_monitor.position();
                     let size = target_monitor.size();
-                    // 计算居中位置
-                    let x = position.x + (size.width as i32 / 2) - 190;
-                    let y = position.y + 20;
+                    let scale = window.scale_factor().unwrap_or(1.0);
+                    let host_width = (300.0 * scale).round() as u32;
+                    let host_height = (182.0 * scale).round() as u32;
+                    let _ = window.set_size(tauri::PhysicalSize::new(host_width, host_height));
+                    let x = position.x + (size.width as i32 - host_width as i32) / 2;
+                    let y = position.y;
                     let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
                 }
+            }
+
+            if let Err(error) = commands::install_island_cursor_passthrough(&window) {
+                tracing::warn!("[Setup] 灵动岛点击穿透初始化失败: {}", error);
             }
 
             // 设置窗口焦点

@@ -22,8 +22,8 @@
       {
         "label": "main",
         "title": "Isle",
-        "width": 620,
-        "height": 220,
+        "width": 300,
+        "height": 182,
         "x": 0,
         "y": 0,
         "resizable": false,

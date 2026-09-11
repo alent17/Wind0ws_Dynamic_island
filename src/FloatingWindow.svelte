@@ -7,6 +7,9 @@
   import { mediaApi } from "$lib/api/media";
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
+  import { applyAppFont } from "$lib/font";
+  import MediaProgress from "$lib/MediaProgress.svelte";
+  import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition } from "$lib/mediaClock";
   import type { MediaState, AppSettings } from "$lib/api/types";
   import {
     Play,
@@ -25,9 +28,6 @@
 
   const PLACEHOLDER_TITLE = "等待播放...";
   const PLACEHOLDER_ARTIST = "未知艺术家";
-  const FETCH_TIMEOUT = 8000;
-  const MIN_COVER_SIZE_KB = 50;
-
   let mediaState = $state<MediaState>({
     title: PLACEHOLDER_TITLE,
     artist: PLACEHOLDER_ARTIST,
@@ -52,6 +52,8 @@
     "radial-gradient(circle at 50% 50%, rgb(40, 50, 60), rgb(30, 40, 50))",
   );
   let windowSize = $state<WindowSize>({ width: 0, height: 0 });
+  let clockNow = $state(Date.now());
+  let displayedPosition = $derived(projectedPosition(mediaState, clockNow));
 
   // MV 播放相关
   let isMVPlaybackEnabled = $state(false); // MV 播放功能是否启用
@@ -73,314 +75,7 @@
 
   let unlisten: () => void;
   let unlistenResize: () => void;
-  let progressInterval: ReturnType<typeof setInterval> | null = null;
   let savePositionTimeout: ReturnType<typeof setTimeout> | null = null;
-
-  async function fetchHighResCover(
-    title: string,
-    artist: string,
-    fallbackCover: string,
-  ) {
-    if (!title || title === PLACEHOLDER_TITLE) return fallbackCover;
-
-    if (fallbackCover && fallbackCover.startsWith("data:image")) {
-      try {
-        const sizeInBytes = Math.round((fallbackCover.length * 3) / 4);
-        if (sizeInBytes > MIN_COVER_SIZE_KB * 1024) {
-          return fallbackCover;
-        }
-      } catch {
-        // 忽略错误，继续获取网络高清图
-      }
-    }
-
-    const fetchWithTimeout = async (
-      url: string,
-      timeout = FETCH_TIMEOUT,
-      options: RequestInit = {},
-    ) => {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-      try {
-        const res = await fetch(url, {
-          ...options,
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        return res;
-      } catch (error) {
-        clearTimeout(timeoutId);
-        throw error;
-      }
-    };
-
-    interface CoverSource {
-      name: string;
-      fetch: () => Promise<string | null>;
-    }
-
-    // 先尝试获取专辑封面
-    const albumSources: CoverSource[] = [
-      {
-        name: "iTunes",
-        fetch: async () => {
-          try {
-            const query = encodeURIComponent(`${title} ${artist}`);
-            const res = await fetchWithTimeout(
-              `https://itunes.apple.com/search?term=${query}&limit=1&media=music`,
-            );
-
-            // 检查响应状态
-            if (!res.ok) {
-              return null;
-            }
-
-            const contentType = res.headers.get("content-type");
-            const isJSON =
-              contentType &&
-              (contentType.includes("application/json") ||
-                contentType.includes("text/javascript"));
-
-            if (!isJSON) {
-              return null;
-            }
-
-            // 使用 text() 方法读取内容，然后解析为 JSON
-            // 这样可以处理非标准的 Content-Type
-            const text = await res.text();
-            const data = JSON.parse(text);
-            if (data.results?.length > 0) {
-              // 将 iTunes 图片改为 600x600
-              return data.results[0].artworkUrl100.replace(
-                "100x100bb.jpg",
-                "600x600bb.jpg",
-              );
-            }
-            return null;
-          } catch (error) {
-            return null;
-          }
-        },
-      },
-      {
-        name: "Spotify",
-        fetch: async () => {
-          try {
-            const query = encodeURIComponent(`${artist} ${title}`);
-            const res = await fetchWithTimeout(
-              `https://open.spotify.com/search/${query}`,
-            );
-            if (!res.ok) {
-              return null;
-            }
-            const html = await res.text();
-            const imgMatch = html.match(/"images":\[{"url":"([^"]+)"}/);
-            if (imgMatch?.[1]) {
-              return imgMatch[1].replace("640x640", "600x600");
-            }
-            const ogMatch = html.match(
-              /<meta property="og:image" content="([^"]+)"/,
-            );
-            return ogMatch?.[1]?.replace("640x640", "600x600") || null;
-          } catch (error) {
-            return null;
-          }
-        },
-      },
-      {
-        name: "Apple Music",
-        fetch: async () => {
-          try {
-            const query = encodeURIComponent(`${title} ${artist}`);
-            const res = await fetchWithTimeout(
-              `https://music.apple.com/search?term=${query}`,
-            );
-            if (!res.ok) {
-              return null;
-            }
-            const html = await res.text();
-            const match = html.match(/"artworkUrl100":"([^"]+)"/);
-            return (
-              match?.[1]?.replace("100x100bb.jpg", "600x600bb.jpg") || null
-            );
-          } catch (error) {
-            return null;
-          }
-        },
-      },
-      {
-        name: "Last.fm",
-        fetch: async () => {
-          try {
-            const artistQuery = encodeURIComponent(artist);
-            const trackQuery = encodeURIComponent(title);
-            const res = await fetchWithTimeout(
-              `https://www.last.fm/music/${artistQuery}/_/${trackQuery}`,
-            );
-            if (!res.ok) {
-              return null;
-            }
-            const html = await res.text();
-            const match = html.match(
-              /<meta property="og:image" content="([^"]+)"/,
-            );
-            return match?.[1] || null;
-          } catch (error) {
-            return null;
-          }
-        },
-      },
-      {
-        name: "MusicBrainz",
-        fetch: async () => {
-          try {
-            const query = encodeURIComponent(
-              `artist:${artist} recording:${title}`,
-            );
-            const res = await fetchWithTimeout(
-              `https://musicbrainz.org/ws/2/recording/?query=${query}&fmt=json&limit=1`,
-            );
-            if (!res.ok) {
-              return null;
-            }
-            const data = await res.json();
-            if (data.recordings?.length > 0) {
-              const recording = data.recordings[0];
-              const releases = recording.releases;
-              if (releases?.length > 0) {
-                const release = releases[0];
-                if (release["cover-art-archive"]?.count > 0) {
-                  return `https://coverartarchive.org/release/${release.id}/front`;
-                }
-              }
-            }
-            return null;
-          } catch (error) {
-            return null;
-          }
-        },
-      },
-    ];
-
-    // 如果专辑封面失败，尝试获取歌手图片
-    const artistSources: CoverSource[] = [
-      {
-        name: "iTunes Artist",
-        fetch: async () => {
-          const query = encodeURIComponent(artist);
-          const res = await fetchWithTimeout(
-            `https://itunes.apple.com/search?term=${query}&limit=1&entity=musicArtist`,
-          );
-
-          const contentType = res.headers.get("content-type");
-          const isJSON =
-            contentType &&
-            (contentType.includes("application/json") ||
-              contentType.includes("text/javascript"));
-
-          if (!isJSON) {
-            return null;
-          }
-
-          // 使用 text() 方法读取内容，然后解析为 JSON
-          // 这样可以处理非标准的 Content-Type
-          const text = await res.text();
-          const data = JSON.parse(text);
-          if (data.results?.length > 0) {
-            // 获取歌手图片并转为 600x600
-            return (
-              data.results[0].artistArtworkUrl100?.replace(
-                "100x100bb.jpg",
-                "600x600bb.jpg",
-              ) || null
-            );
-          }
-          return null;
-        },
-      },
-      {
-        name: "Spotify Artist",
-        fetch: async () => {
-          const query = encodeURIComponent(artist);
-          const res = await fetchWithTimeout(
-            `https://open.spotify.com/search/${query}`,
-          );
-          const html = await res.text();
-          // 尝试获取歌手图片
-          const imgMatch = html.match(/"images":\[{"url":"([^"]+)"}/);
-          if (imgMatch?.[1]) {
-            return imgMatch[1].replace("640x640", "600x600");
-          }
-          return null;
-        },
-      },
-      {
-        name: "Last.fm Artist",
-        fetch: async () => {
-          const query = encodeURIComponent(artist);
-          const res = await fetchWithTimeout(
-            `https://www.last.fm/search/artists?q=${query}`,
-          );
-          const html = await res.text();
-          const match = html.match(/<img class="avatar" src="([^"]+)"/);
-          return match?.[1] || null;
-        },
-      },
-    ];
-
-    // 先尝试获取专辑封面
-    for (const source of albumSources) {
-      try {
-        const result = await source.fetch();
-        if (result) {
-
-          // 下载并缓存图片
-          try {
-            const cachedPath = await invoke<string>("download_and_cache", {
-              url: result,
-              contentType: "image/jpeg",
-            });
-            const safeUrl = convertFileSrc(cachedPath);
-            return safeUrl;
-          } catch (cacheError) {
-            // 缓存失败，返回原始链接
-            return result;
-          }
-        }
-      } catch (error: any) {
-        if (error.name === "AbortError") {
-        } else {
-        }
-      }
-    }
-
-    // 专辑封面失败，尝试获取歌手图片
-    for (const source of artistSources) {
-      try {
-        const result = await source.fetch();
-        if (result) {
-
-          // 下载并缓存图片
-          try {
-            const cachedPath = await invoke<string>("download_and_cache", {
-              url: result,
-              contentType: "image/jpeg",
-            });
-            const safeUrl = convertFileSrc(cachedPath);
-            return safeUrl;
-          } catch (cacheError) {
-            return result;
-          }
-        }
-      } catch (error: any) {
-        if (error.name === "AbortError") {
-        } else {
-        }
-      }
-    }
-
-    return fallbackCover;
-  }
 
   async function extractColors(imgSrc: string) {
     const DEFAULT_COLOR = { r: 60, g: 80, b: 100 };
@@ -643,6 +338,7 @@
     // 读取设置
     try {
       const settings = await invoke<AppSettings>("get_settings");
+      applyAppFont(settings.fontId);
       isMVPlaybackEnabled = settings.enableMvPlayback ?? false;
 
       // 加载置顶设置
@@ -723,6 +419,10 @@
       },
     );
     eventListeners.push(unlistenHalftoneChange);
+    const unlistenSettingsChange = await eventManager.on(Events.SETTINGS_UPDATED, (value: AppSettings) => {
+      if (value?.fontId) applyAppFont(value.fontId);
+    });
+    eventListeners.push(unlistenSettingsChange);
 
     const appWindow = getCurrentWindow();
     const size = await appWindow.innerSize();
@@ -808,7 +508,7 @@
 
     // 监听媒体更新事件（已内置节流）
     unlisten = await onMediaUpdate((payload: any) => {
-      const newTrackKey = `${payload.title}-${payload.artist}`;
+      const newTrackKey = mediaTrackKey(payload.title || "", payload.artist || mediaState.artist);
 
       // 检查是否是空状态（播放器关闭或无媒体）
       const isEmptyState =
@@ -817,6 +517,9 @@
         payload.title === "等待播放...";
 
       if (isEmptyState) {
+        // Metadata can be empty for one polling cycle while SMTC refreshes.
+        // Keep the current track instead of resetting its progress to zero.
+        if (currentTrackKey) return;
         // 播放器退出，重置为等待状态
         currentTrackKey = "";
         mediaState = {
@@ -840,15 +543,21 @@
         const smtcCover =
           payload.albumArt || payload.thumbnail || payload.coverUrl || "";
 
-        mediaState = { ...mediaState, ...payload, albumArt: smtcCover };
+        mediaState = {
+          ...mediaState,
+          ...payload,
+          albumArt: smtcCover,
+          lastUpdatedTimestamp: Date.now(),
+        };
 
         // 判断是否是音乐播放器
         const isMusicPlayer =
           payload.source &&
           (payload.source === "netease" ||
             payload.source === "qqmusic" ||
-            payload.source === "spotify" ||
-            payload.source === "apple_music" ||
+             payload.source === "spotify" ||
+             payload.source === "apple" ||
+             payload.source === "apple_music" ||
             payload.source === "local");
 
         // 网页播放时只获取歌手图片，音乐播放器获取专辑封面
@@ -860,7 +569,9 @@
           // 根据设置决定是否获取高清图
           if (enableHDCover) {
             // 获取专辑封面高清图
-            fetchHighResCover(payload.title, payload.artist, smtcCover)
+            mediaApi
+              .resolveHdCover(payload.title, payload.artist, payload.source || "generic")
+              .then((resolved) => resolved?.url || smtcCover)
               .then((hdCover) => {
                 const img = new Image();
                 if (
@@ -916,13 +627,24 @@
         }
       } else {
         // 播放状态变化
+        const receivedAt = Date.now();
+        const previousPosition = projectedPosition(mediaState, receivedAt);
         const wasPlaying = mediaState.isPlaying;
-        const isPlaying = payload.isPlaying;
+        const isPlaying = Boolean(payload.isPlaying);
 
-
-        mediaState.isPlaying = isPlaying;
-        mediaState.positionMs = payload.positionMs;
-        mediaState.durationMs = payload.durationMs;
+        mediaState = {
+          ...mediaState,
+          isPlaying,
+          positionMs: reconcileReportedPosition(
+            previousPosition,
+            Number(payload.positionMs) || 0,
+            Number(payload.durationMs) || mediaState.durationMs,
+            isPlaying,
+          ),
+          durationMs: Number(payload.durationMs) || mediaState.durationMs,
+          lastUpdatedTimestamp: receivedAt,
+          capabilities: payload.capabilities,
+        };
 
         // 根据播放状态控制 MV
         if (isPlayingMV && mvUrl) {
@@ -946,32 +668,9 @@
     });
   });
 
-  // 监听播放状态变化，自动启动/停止进度更新
   $effect(() => {
-    if (mediaState.isPlaying && mediaState.durationMs > 0) {
-      const interval = setInterval(() => {
-        if (
-          mediaState.isPlaying &&
-          mediaState.durationMs > 0 &&
-          mediaState.positionMs < mediaState.durationMs
-        ) {
-          mediaState.positionMs += 100;
-          if (mediaState.positionMs > mediaState.durationMs) {
-            mediaState.positionMs = mediaState.durationMs;
-          }
-        }
-      }, 100);
-
-      return () => {
-        clearInterval(interval);
-        progressInterval = null;
-      };
-    }
-
-    if (progressInterval) {
-      clearInterval(progressInterval);
-      progressInterval = null;
-    }
+    const interval = setInterval(() => clockNow = Date.now(), 100);
+    return () => clearInterval(interval);
   });
 
   onDestroy(() => {
@@ -1001,25 +700,7 @@
     oldCanvasRef = null;
 
     if (savePositionTimeout) clearTimeout(savePositionTimeout);
-    if (progressInterval) {
-      clearInterval(progressInterval);
-      progressInterval = null;
-    }
   });
-
-  function formatTime(ms: number): string {
-    if (!ms || ms <= 0) return "0:00";
-    const totalSeconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-  }
-
-  let progressPercent = $derived(
-    mediaState.durationMs > 0
-      ? (mediaState.positionMs / mediaState.durationMs) * 100
-      : 0,
-  );
 
   let showControls = $derived(
     isHovered && windowSize.width > 100 && windowSize.height > 100,
@@ -1482,6 +1163,15 @@
     // 不手动更新状态，等待后端的 media-update 事件同步
   }
 
+  async function seekTo(positionMs: number) {
+    const next = clampSeekPosition(positionMs, mediaState.durationMs);
+    mediaState.positionMs = next;
+    mediaState.lastUpdatedTimestamp = Date.now();
+    await mediaApi.seekMedia(next).catch((error) => {
+      console.error("[进度] 调整失败:", error);
+    });
+  }
+
   async function toggleAlwaysOnTop(e: MouseEvent) {
     e.stopPropagation();
     isAlwaysOnTop = !isAlwaysOnTop;
@@ -1638,37 +1328,16 @@
     <div class="resize-handle"></div>
   </div>
 
-  <!-- 进度条层 - 网易云使用灵动岛样式，其他来源使用普通样式 -->
-  {#if mediaState.source === "netease"}
-    <div class="progress-layer">
-      <div class="progress-container-netease">
-        <div class="progress-bar-netease">
-          <div
-            class="progress-fill-netease"
-            style="width: {progressPercent}%"
-          ></div>
-        </div>
-        <div class="time-row-netease">
-          <span class="time-netease">{formatTime(mediaState.positionMs)}</span>
-          <span class="time-netease"
-            >-{formatTime(mediaState.durationMs - mediaState.positionMs)}</span
-          >
-        </div>
-      </div>
+  <div class="progress-layer">
+    <div class="shared-progress">
+      <MediaProgress
+        position={displayedPosition}
+        duration={mediaState.durationMs}
+        seekable={Boolean(mediaState.capabilities?.seek)}
+        onSeek={seekTo}
+      />
     </div>
-  {:else}
-    <div class="progress-layer">
-      <div class="progress-container">
-        <div class="progress-row">
-          <span class="time">{formatTime(mediaState.positionMs)}</span>
-          <div class="progress-track">
-            <div class="progress-fill" style="width: {progressPercent}%"></div>
-          </div>
-          <span class="time">{formatTime(mediaState.durationMs)}</span>
-        </div>
-      </div>
-    </div>
-  {/if}
+  </div>
 
   <!-- 控制按钮遮罩层 -->
   <div class="controls-overlay" class:visible={showControls}>
@@ -1711,6 +1380,7 @@
 </div>
 
 <style>
+  :global(.player), :global(.player button), :global(.player input) { font-family: var(--app-font) !important; }
   :global(body, html) {
     margin: 0;
     padding: 0;
@@ -1986,6 +1656,8 @@
     display: block;
     border-radius: 10px;
     pointer-events: none; /* 让鼠标事件穿透，不阻挡按钮点击 */
+    user-select: none;
+    -webkit-user-drag: none;
     /* 优化的像素化效果 */
     image-rendering: -webkit-optimize-contrast;
     image-rendering: -moz-crisp-edges;
@@ -2091,13 +1763,14 @@
 
   .track-title {
     color: #dfdfdf; /* 调整字体颜色 */
-    font-size: 20px; /* 调整字体大小 */
+    font-size: clamp(14px, 5vw, 20px);
     font-weight: 600;
     letter-spacing: 0.01em;
     line-height: 1.3;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    user-select: none;
     font-family:
       "SF Pro Display",
       -apple-system,
@@ -2109,13 +1782,14 @@
 
   .track-artist {
     color: rgba(255, 255, 255, 0.7);
-    font-size: 12px; /* 调整字体大小 */
+    font-size: clamp(10px, 3vw, 12px);
     font-weight: 500;
     letter-spacing: 0.02em;
     line-height: 1.3;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    user-select: none;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     transition: all 0.3s ease;
   }
@@ -2149,10 +1823,6 @@
     border-radius: 0 !important;
   }
 
-  .player.pixelated .progress-fill {
-    border-radius: 0 !important;
-  }
-
   /* ==================== 进度条 ==================== */
   .progress-layer {
     position: absolute;
@@ -2172,88 +1842,12 @@
     opacity: 1;
   }
 
-  .progress-container {
+  .shared-progress {
     position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 0 16px; /* 与歌曲信息对齐 */
-    box-sizing: border-box;
-    margin-bottom: 56px; /* 调整到歌曲信息上方 */
-  }
-
-  .progress-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .time {
-    font-size: 10px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.65);
-    min-width: 28px;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.03em;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  }
-
-  .progress-track {
-    flex: 1;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 5px;
-    overflow: hidden;
-  }
-
-  .progress-fill {
-    height: 100%;
-    background: #fff;
-    border-radius: 5px;
-    transition: width 1s linear;
-    box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
-  }
-
-  /* 网易云进度条样式（与灵动岛一致） */
-  .progress-container-netease {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 0 16px;
-    box-sizing: border-box;
-    margin-bottom: 56px;
-  }
-
-  .progress-bar-netease {
-    height: 4px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 2px;
-    overflow: hidden;
-    margin-bottom: 4px;
-  }
-
-  .progress-fill-netease {
-    height: 100%;
-    background: #fff;
-    border-radius: 2px;
-    transition: width 0.1s linear;
-    box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
-  }
-
-  .time-row-netease {
-    display: flex;
-    justify-content: space-between;
-  }
-
-  .time-netease {
-    font-size: 10px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.6);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.03em;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    right: 16px;
+    bottom: 56px;
+    left: 16px;
+    pointer-events: auto;
   }
 
   /* 控制按钮遮罩层 */

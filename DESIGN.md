@@ -17,7 +17,7 @@ typography:
     fontFamily: "SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "14px"
 rounded:
-  island-compact: "24px"
+  island-compact: "14px"
   island-expanded: "45px"
   floating-shell: "5px"
   studio-panel: "16px"
@@ -26,7 +26,7 @@ components:
     backgroundColor: "{colors.island-black}"
     textColor: "{colors.island-white}"
     rounded: "{rounded.island-compact}"
-    width: "80px"
+    width: "80–300px"
     height: "28px"
   island-hover:
     width: "90px"
@@ -52,7 +52,7 @@ The production player surfaces use the project's original visual language. The m
 
 ## Dynamic Island
 
-- Compact: 80 × 28 px; Hover: 90 × 30 px; Expanded: 300 × 160 px.
+- Compact: 80–300 × 28 px; Hover adds 10 px up to 300 px; Expanded: 300 × 160 px.
 - Compact content uses a 20 px cover and six-bar Canvas spectrum.
 - Expanded content uses a 52 px cover, marquee title, artist, larger spectrum, source progress, three playback buttons, and the floating-player button.
 - Width, height, opacity, and content changes use the original Svelte spring and drop/flip motion.

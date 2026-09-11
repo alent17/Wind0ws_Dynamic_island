@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "Isle permissions",
-  "windows": ["main", "settings-window", "settings", "floating_player"],
+  "windows": ["main", "studio-window", "settings-window", "settings", "floating_player"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",

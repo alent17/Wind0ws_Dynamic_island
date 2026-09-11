@@ -4,13 +4,18 @@
 
 use crate::error::AppResult;
 use crate::event_bus::EVENT_BUS;
-use crate::models::{MediaState, NeteaseSong};
+use crate::models::{MediaSessionInfo, MediaState, NeteaseSong, ResolvedCover};
 use tauri::AppHandle;
 
 /// 获取当前播放的媒体信息
 #[tauri::command]
 pub fn get_media_info_cmd(app: AppHandle) -> AppResult<MediaState> {
     crate::services::media::get_media_info(&app)
+}
+
+#[tauri::command]
+pub fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
+    crate::services::media::list_media_sessions()
 }
 
 /// 从网易云音乐获取歌曲信息
@@ -28,6 +33,15 @@ pub async fn get_netease_mv_url_cmd(mv_id: u64) -> AppResult<Option<String>> {
     crate::services::media::get_netease_mv_url(mv_id).await
 }
 
+#[tauri::command]
+pub async fn resolve_hd_cover(
+    title: String,
+    artist: String,
+    source: String,
+) -> AppResult<Option<ResolvedCover>> {
+    crate::services::media::resolve_hd_cover(&title, &artist, &source).await
+}
+
 /// 控制媒体播放
 ///
 /// 支持的操作：
@@ -43,7 +57,7 @@ pub fn control_media(app: AppHandle, action: String) -> AppResult<()> {
 
     // 在后台线程执行控制操作
     std::thread::spawn(move || {
-        if let Err(e) = crate::services::media::control_media(&action_clone) {
+        if let Err(e) = crate::services::media::control_media(&app_clone, &action_clone) {
             tracing::error!("[control_media] Error: {:?}", e);
         }
 
@@ -69,18 +83,18 @@ pub fn control_media(app: AppHandle, action: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn seek_media(position_ms: u64) -> AppResult<()> {
-    crate::services::media::seek_media(position_ms)
+pub fn seek_media(app: AppHandle, position_ms: u64) -> AppResult<()> {
+    crate::services::media::seek_media(&app, position_ms)
 }
 
 #[tauri::command]
-pub fn toggle_shuffle() -> AppResult<()> {
-    crate::services::media::toggle_shuffle()
+pub fn toggle_shuffle(app: AppHandle) -> AppResult<()> {
+    crate::services::media::toggle_shuffle(&app)
 }
 
 #[tauri::command]
-pub fn cycle_repeat() -> AppResult<()> {
-    crate::services::media::cycle_repeat()
+pub fn cycle_repeat(app: AppHandle) -> AppResult<()> {
+    crate::services::media::cycle_repeat(&app)
 }
 
 /// 提取图片主色调

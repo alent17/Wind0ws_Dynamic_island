@@ -8,5 +8,8 @@ mod media;
 mod settings;
 
 pub use cache::{CacheMetadata, CacheStats};
-pub use media::{MediaCapabilities, MediaState, MonitorInfo, NeteaseSong, SpectrumData};
-pub use settings::{AppPreferences, AppSettings};
+pub use media::{
+    IdleSnapshot, MediaCapabilities, MediaSessionInfo, MediaState, MonitorInfo, NeteaseSong,
+    ResolvedCover, SpectrumData, WeatherLocationCandidate,
+};
+pub use settings::{AppPreferences, AppSettings, WeatherLocation};

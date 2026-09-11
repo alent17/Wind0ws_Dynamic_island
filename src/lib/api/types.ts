@@ -1,7 +1,18 @@
+export type IslandStyle = "floating" | "edge";
+export type IslandEdge = "top" | "right" | "bottom" | "left";
+export type SpectrumMode = "realtime" | "random";
+
 export interface AppSettings {
   islandTheme: string;
+  islandStyle: IslandStyle;
+  islandEdge: IslandEdge;
+  islandEdgePosition: number;
+  edgeShoulderRadius: number;
+  compactLength: number;
+  fontId: FontId;
   autoHide: boolean;
   showSpectrum: boolean;
+  spectrumMode: SpectrumMode;
   enableAnimations: boolean;
   windowOpacity: number;
   alwaysOnTop: boolean;
@@ -11,6 +22,11 @@ export interface AppSettings {
   logLevel: string;
   monitorIndex: number;
   playerWeights: Record<string, number>;
+  selectedPlayerIds: string[] | null;
+  idleContentEnabled: boolean;
+  idleRotationSeconds: number;
+  idleItems: IdleContentItem[];
+  weatherLocation: WeatherLocation | null;
   floatingWindowX: number | null;
   floatingWindowY: number | null;
   floatingWindowWidth: number | null;
@@ -28,6 +44,24 @@ export interface AppSettings {
   expandedCornerRadius: number;
   alwaysShowTopBar: boolean;
 }
+
+export type FontId = "system" | "misans" | "source-han-serif-cn-bold" | "alibaba-puhuiti-heavy";
+export type IdleContentKind = "clock" | "date" | "weather" | "network" | "cpu" | "memory" | "battery" | "custom";
+export interface IdleContentItem { id: string; kind: IdleContentKind; enabled: boolean; text: string; }
+export interface WeatherLocation { name: string; latitude: number; longitude: number; }
+export interface MediaSessionInfo { id: string; displayName: string; source: string; isPlaying: boolean; }
+export interface IdleSnapshot {
+  cpuPercent: number;
+  memoryPercent: number;
+  uploadBytesPerSecond: number;
+  downloadBytesPerSecond: number;
+  batteryPercent: number | null;
+  batteryCharging: boolean | null;
+  weatherTemperature: number | null;
+  weatherCode: number | null;
+  weatherUpdatedAt: number | null;
+}
+export interface WeatherLocationCandidate extends WeatherLocation { country: string; admin1: string; admin2: string; }
 
 export type AppPreferences = AppSettings;
 
@@ -62,6 +96,11 @@ export interface NeteaseSong {
   mvUrl?: string;
 }
 
+export interface ResolvedCover {
+  url: string;
+  provider: "netease" | "apple";
+}
+
 export interface CacheStats {
   totalSizeMb: number;
   totalFiles: number;
@@ -76,6 +115,13 @@ export interface MonitorInfo {
   width: number;
   height: number;
   isPrimary: boolean;
+  x: number;
+  y: number;
+  workX: number;
+  workY: number;
+  workWidth: number;
+  workHeight: number;
+  scaleFactor: number;
 }
 
 export interface AppError {
@@ -85,8 +131,15 @@ export interface AppError {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   islandTheme: "original",
+  islandStyle: "floating",
+  islandEdge: "top",
+  islandEdgePosition: 50,
+  edgeShoulderRadius: 8,
+  compactLength: 80,
+  fontId: "system",
   autoHide: true,
   showSpectrum: true,
+  spectrumMode: "realtime",
   enableAnimations: true,
   windowOpacity: 255,
   alwaysOnTop: true,
@@ -103,6 +156,16 @@ export const DEFAULT_SETTINGS: AppSettings = {
     apple: 50,
     generic: 10,
   },
+  selectedPlayerIds: null,
+  idleContentEnabled: true,
+  idleRotationSeconds: 5,
+  idleItems: ["clock", "date", "weather", "network", "cpu", "memory", "battery"].map((kind) => ({
+    id: kind,
+    kind: kind as IdleContentKind,
+    enabled: true,
+    text: "",
+  })),
+  weatherLocation: null,
   floatingWindowX: null,
   floatingWindowY: null,
   floatingWindowWidth: null,

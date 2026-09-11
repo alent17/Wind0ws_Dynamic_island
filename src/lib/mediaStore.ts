@@ -3,10 +3,12 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { mediaApi } from "$lib/api/media";
 import type { MediaState } from "$lib/api/types";
 
+const demoAlbumArt = new URL("../assets/icons/spotify.svg", import.meta.url).href;
+
 export const DEMO_MEDIA: MediaState = {
   title: "Midnight City",
   artist: "M83 · Hurry Up, We’re Dreaming",
-  albumArt: "",
+  albumArt: demoAlbumArt,
   isPlaying: true,
   positionMs: 112_000,
   durationMs: 244_000,

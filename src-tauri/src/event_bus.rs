@@ -25,7 +25,7 @@
 //!
 //! ## 使用示例
 //!
-//! ```rust
+//! ```rust,ignore
 //! // 初始化（在 setup 中）
 //! EVENT_BUS.initialize(app_handle)?;
 //!

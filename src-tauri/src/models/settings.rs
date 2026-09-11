@@ -1,6 +1,58 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WeatherLocation {
+    pub name: String,
+    pub latitude: f64,
+    pub longitude: f64,
+}
+
+impl Default for WeatherLocation {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            latitude: 0.0,
+            longitude: 0.0,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct IdleContentItem {
+    pub id: String,
+    pub kind: String,
+    pub enabled: bool,
+    pub text: String,
+}
+
+impl Default for IdleContentItem {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            kind: "custom".to_string(),
+            enabled: true,
+            text: String::new(),
+        }
+    }
+}
+
+fn default_idle_items() -> Vec<IdleContentItem> {
+    [
+        "clock", "date", "weather", "network", "cpu", "memory", "battery",
+    ]
+    .into_iter()
+    .map(|kind| IdleContentItem {
+        id: kind.to_string(),
+        kind: kind.to_string(),
+        enabled: true,
+        text: String::new(),
+    })
+    .collect()
+}
+
 /// Persisted settings shared by the legacy player surfaces and the current
 /// Isle Studio. Missing fields from newer, reduced settings files are filled
 /// from the legacy defaults.
@@ -8,8 +60,15 @@ use std::collections::HashMap;
 #[serde(default, rename_all = "camelCase")]
 pub struct AppPreferences {
     pub island_theme: String,
+    pub island_style: String,
+    pub island_edge: String,
+    pub island_edge_position: u8,
+    pub edge_shoulder_radius: u8,
+    pub compact_length: u16,
+    pub font_id: String,
     pub auto_hide: bool,
     pub show_spectrum: bool,
+    pub spectrum_mode: String,
     pub enable_animations: bool,
     pub window_opacity: u8,
     pub always_on_top: bool,
@@ -19,6 +78,11 @@ pub struct AppPreferences {
     pub log_level: String,
     pub monitor_index: u32,
     pub player_weights: HashMap<String, u32>,
+    pub selected_player_ids: Option<Vec<String>>,
+    pub idle_content_enabled: bool,
+    pub idle_rotation_seconds: u16,
+    pub idle_items: Vec<IdleContentItem>,
+    pub weather_location: Option<WeatherLocation>,
     pub floating_window_x: Option<i32>,
     pub floating_window_y: Option<i32>,
     pub floating_window_width: Option<u32>,
@@ -51,8 +115,15 @@ impl Default for AppPreferences {
 
         Self {
             island_theme: "original".to_string(),
+            island_style: "floating".to_string(),
+            island_edge: "top".to_string(),
+            island_edge_position: 50,
+            edge_shoulder_radius: 8,
+            compact_length: 80,
+            font_id: "system".to_string(),
             auto_hide: true,
             show_spectrum: true,
+            spectrum_mode: "realtime".to_string(),
             enable_animations: true,
             window_opacity: 255,
             always_on_top: true,
@@ -62,6 +133,11 @@ impl Default for AppPreferences {
             log_level: "Info".to_string(),
             monitor_index: 0,
             player_weights,
+            selected_player_ids: None,
+            idle_content_enabled: true,
+            idle_rotation_seconds: 5,
+            idle_items: default_idle_items(),
+            weather_location: None,
             floating_window_x: None,
             floating_window_y: None,
             floating_window_width: None,
@@ -79,5 +155,22 @@ impl Default for AppPreferences {
             expanded_corner_radius: 45,
             always_show_top_bar: true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppPreferences;
+
+    #[test]
+    fn defaults_and_migrates_edge_shoulder_radius() {
+        assert_eq!(AppPreferences::default().edge_shoulder_radius, 8);
+        let loaded: AppPreferences = serde_json::from_str("{}").expect("defaulted settings");
+        assert_eq!(loaded.edge_shoulder_radius, 8);
+        assert_eq!(loaded.compact_length, 80);
+        assert_eq!(loaded.font_id, "system");
+        assert_eq!(loaded.spectrum_mode, "realtime");
+        assert!(loaded.selected_player_ids.is_none());
+        assert_eq!(loaded.idle_items.len(), 7);
     }
 }

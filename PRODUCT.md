@@ -33,7 +33,7 @@ The app runs as an always-available Tauri desktop utility, reads Windows media s
 ## Brand Commitments
 
 - Product name: Isle.
-- The main surface uses the original 80 × 28 pill, 90 × 30 hover state, and 300 × 160 expanded state.
+- The main surface defaults to the original 80 × 28 pill, supports a configurable 80–300 px compact length with a capped +10 px hover response, and keeps the 300 × 160 expanded state.
 - Isle Studio is evaluated on a white canvas so clipping, square black corners, and radius failures remain visible.
 - The floating player keeps the original cover-stage composition, hover toolbar, progress overlay, and compact five-pixel outer radius.
 

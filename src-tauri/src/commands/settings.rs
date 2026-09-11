@@ -43,8 +43,31 @@ pub fn get_preferences(state: State<'_, AppState>) -> AppResult<AppPreferences> 
 pub fn save_settings(
     app: AppHandle,
     state: State<'_, AppState>,
-    settings: AppSettings,
+    mut settings: AppSettings,
 ) -> AppResult<()> {
+    settings.compact_length = settings.compact_length.clamp(80, 300);
+    settings.idle_rotation_seconds = settings.idle_rotation_seconds.clamp(2, 60);
+    if !matches!(
+        settings.font_id.as_str(),
+        "system" | "misans" | "source-han-serif-cn-bold" | "alibaba-puhuiti-heavy"
+    ) {
+        settings.font_id = "system".to_string();
+    }
+    if let Some(ids) = settings.selected_player_ids.as_mut() {
+        let mut seen = std::collections::HashSet::new();
+        ids.retain(|id| !id.trim().is_empty() && seen.insert(id.clone()));
+    }
+    settings.idle_items.retain_mut(|item| {
+        if item.kind == "custom" {
+            item.text = item.text.trim().chars().take(120).collect();
+            !item.text.is_empty()
+        } else {
+            matches!(
+                item.kind.as_str(),
+                "clock" | "date" | "weather" | "network" | "cpu" | "memory" | "battery"
+            )
+        }
+    });
     let always_on_top = settings.always_on_top;
     let auto_start = settings.auto_start;
 

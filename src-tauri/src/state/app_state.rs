@@ -23,7 +23,7 @@ pub struct MediaCache {
 /// 通过 Tauri 的 `.manage()` 注册，在命令中通过 `State` 参数访问
 ///
 /// # 示例
-/// ```rust
+/// ```rust,ignore
 /// #[tauri::command]
 /// fn get_preferences(state: State<'_, AppState>) -> AppResult<AppPreferences> {
 ///     let settings = state.settings.lock()?;

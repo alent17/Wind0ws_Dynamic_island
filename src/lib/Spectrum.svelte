@@ -1,118 +1,160 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
-  import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+  import { onMount, onDestroy } from "svelte";
+  import { retainSpectrum, spectrumValues } from "$lib/spectrumStore";
+  import type { SpectrumMode } from "$lib/api/types";
 
   let {
-    topColor = '#ffffff',
-    bottomColor = '#888888',
+    topColor = "#ffffff",
+    bottomColor = "#888888",
     scale = 1,
-  }: { topColor?: string; bottomColor?: string; scale?: number } = $props();
+    active = true,
+    playing = true,
+    mode = "realtime",
+    reduceMotion = false,
+    values,
+  }: {
+    topColor?: string;
+    bottomColor?: string;
+    scale?: number;
+    active?: boolean;
+    playing?: boolean;
+    mode?: SpectrumMode;
+    reduceMotion?: boolean;
+    values?: number[];
+  } = $props();
 
-  const NUM_BARS    = 6;
-  const BASE_BAR_W  = 2;
-  const BASE_BAR_GAP = 1.5;
-  const BASE_MAX_H  = 14;
-  const MIN_HEIGHT  = 2;
-  const BASE_CORNER_R = 1;
-  const BASE_CANVAS_H = 18;
-
-  const BAR_WIDTH   = $derived(BASE_BAR_W * scale);
-  const BAR_GAP     = $derived(BASE_BAR_GAP * (1 + (scale - 1) * 0.4));
-  const MAX_HEIGHT  = $derived(BASE_MAX_H * scale);
-  const CORNER_R    = $derived(BASE_CORNER_R * scale);
-  const CANVAS_H    = $derived(BASE_CANVAS_H * scale);
-  const CANVAS_W    = $derived(NUM_BARS * (BAR_WIDTH + BAR_GAP) - BAR_GAP);
-
+  const NUM_BARS = 6;
+  const MIN_HEIGHT = 2;
   let canvasEl: HTMLCanvasElement;
-  let ctx: CanvasRenderingContext2D;
-  let animId: number;
-  let unlisten: UnlistenFn | undefined;
-
-  let bars = $state<Float32Array>(new Float32Array(NUM_BARS));
+  let ctx: CanvasRenderingContext2D | null = null;
+  let animId = 0;
+  let mounted = $state(false);
   let latestBars = new Float32Array(NUM_BARS);
+  let randomBars = new Float32Array(NUM_BARS);
+  let visibleBars = new Float32Array(NUM_BARS);
+
+  const barWidth = $derived(2 * scale);
+  const barGap = $derived(1.5 * (1 + (scale - 1) * 0.4));
+  const maxHeight = $derived(14 * scale);
+  const cornerRadius = $derived(scale);
+  const canvasHeight = $derived(18 * scale);
+  const canvasWidth = $derived(NUM_BARS * (barWidth + barGap) - barGap);
 
   function parseColor(color: string): [number, number, number] {
-    const rgbMatch = color.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
-    if (rgbMatch) {
-      return [+rgbMatch[1], +rgbMatch[2], +rgbMatch[3]];
-    }
-    const h = color.replace('#', '');
-    return [
-      parseInt(h.substring(0, 2), 16),
-      parseInt(h.substring(2, 4), 16),
-      parseInt(h.substring(4, 6), 16),
-    ];
+    const rgb = color.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+    if (rgb) return [+rgb[1], +rgb[2], +rgb[3]];
+    const hex = color.replace("#", "");
+    if (hex.length === 3) return hex.split("").map((value) => parseInt(value + value, 16)) as [number, number, number];
+    return [parseInt(hex.slice(0, 2), 16) || 255, parseInt(hex.slice(2, 4), 16) || 255, parseInt(hex.slice(4, 6), 16) || 255];
   }
 
-  onMount(async () => {
+  const topRgb = $derived(parseColor(topColor));
+  const bottomRgb = $derived(parseColor(bottomColor));
+
+  function resizeCanvas() {
+    if (!canvasEl || !ctx) return;
     const dpr = window.devicePixelRatio || 1;
-    canvasEl.width  = CANVAS_W * dpr;
-    canvasEl.height = CANVAS_H * dpr;
-    canvasEl.style.width  = `${CANVAS_W}px`;
-    canvasEl.style.height = `${CANVAS_H}px`;
-
-    ctx = canvasEl.getContext('2d')!;
-    ctx.scale(dpr, dpr);
-
-    unlisten = await listen<number[]>('spectrum-data', (event) => {
-      const payload = event.payload;
-      for (let i = 0; i < NUM_BARS; i++) {
-        latestBars[i] = payload[i] ?? 0;
-      }
-      bars = new Float32Array(latestBars);
-    });
-
-    try {
-      await invoke('start_spectrum');
-    } catch (e) {
-      console.error('[Spectrum] 启动失败:', e);
-    }
-
-    startRenderLoop();
-  });
-
-  onDestroy(async () => {
-    cancelAnimationFrame(animId);
-    unlisten?.();
-    try {
-      await invoke('stop_spectrum');
-    } catch (_) {}
-  });
-
-  function startRenderLoop() {
-    const render = () => {
-      animId = requestAnimationFrame(render);
-      draw();
-    };
-    render();
+    canvasEl.width = Math.round(canvasWidth * dpr);
+    canvasEl.height = Math.round(canvasHeight * dpr);
+    canvasEl.style.width = `${canvasWidth}px`;
+    canvasEl.style.height = `${canvasHeight}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   function draw() {
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-
-    const [tr, tg, tb] = parseColor(topColor);
-    const [br, bg, bb] = parseColor(bottomColor);
-
-    for (let i = 0; i < NUM_BARS; i++) {
-      const value = latestBars[i] ?? 0;
-      const barH = MIN_HEIGHT + value * (MAX_HEIGHT - MIN_HEIGHT);
-      const x = i * (BAR_WIDTH + BAR_GAP);
-      const y = (CANVAS_H - barH) / 2;
-
-      const gradient = ctx.createLinearGradient(x, y + barH, x, y);
-      gradient.addColorStop(0, `rgba(${br}, ${bg}, ${bb}, 0.9)`);
-      gradient.addColorStop(1, `rgba(${tr}, ${tg}, ${tb}, 1.0)`);
-
-      const alpha = 0.6 + value * 0.4;
-      ctx.globalAlpha = alpha;
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    const [tr, tg, tb] = topRgb;
+    const [br, bg, bb] = bottomRgb;
+    for (let index = 0; index < NUM_BARS; index += 1) {
+      const sourceBars = mode === "random" ? randomBars : latestBars;
+      const target = !playing ? 0 : reduceMotion ? 0.18 : values?.[index] ?? sourceBars[index] ?? 0;
+      visibleBars[index] += (target - visibleBars[index]) * (target > visibleBars[index] ? 0.34 : 0.12);
+      const value = visibleBars[index];
+      const height = MIN_HEIGHT + value * (maxHeight - MIN_HEIGHT);
+      const x = index * (barWidth + barGap);
+      const y = (canvasHeight - height) / 2;
+      const gradient = ctx.createLinearGradient(x, y + height, x, y);
+      gradient.addColorStop(0, `rgba(${br},${bg},${bb},.9)`);
+      gradient.addColorStop(1, `rgb(${tr},${tg},${tb})`);
+      ctx.globalAlpha = 0.6 + value * 0.4;
       ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.roundRect(x, y, BAR_WIDTH, barH, CORNER_R);
+      ctx.roundRect(x, y, barWidth, height, cornerRadius);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
   }
+
+  function render() {
+    if (!mounted || !active) { animId = 0; return; }
+    draw();
+    if (!playing && visibleBars.every((value) => value < 0.01)) {
+      visibleBars.fill(0);
+      draw();
+      animId = 0;
+      return;
+    }
+    animId = requestAnimationFrame(render);
+  }
+
+  function ensureRenderLoop() {
+    if (active && mounted && (playing || visibleBars.some((value) => value >= 0.01)) && !animId) animId = requestAnimationFrame(render);
+    if (!active && animId) { cancelAnimationFrame(animId); animId = 0; }
+  }
+
+  $effect(() => { active; values; mode; playing; reduceMotion; ensureRenderLoop(); });
+  $effect(() => { scale; resizeCanvas(); });
+
+  $effect(() => {
+    if (!mounted || values || mode !== "realtime" || reduceMotion) return;
+    const stopListening = spectrumValues.subscribe((next) => latestBars = next);
+    const release = retainSpectrum();
+    return () => {
+      stopListening();
+      release();
+    };
+  });
+
+  $effect(() => {
+    if (!mounted || values || mode !== "random" || !active || !playing) {
+      randomBars = new Float32Array(NUM_BARS);
+      return;
+    }
+    if (reduceMotion) {
+      randomBars = Float32Array.from({ length: NUM_BARS }, () => 0.18);
+      return () => {
+        randomBars = new Float32Array(NUM_BARS);
+      };
+    }
+    const retarget = () => {
+      randomBars = Float32Array.from({ length: NUM_BARS }, (_, index) => {
+        if (!playing) return 0;
+        const wave = (Math.sin(Date.now() / 230 + index * 1.35) + 1) * 0.16;
+        return Math.min(1, 0.16 + wave + Math.random() * 0.48);
+      });
+    };
+    retarget();
+    const timer = setInterval(retarget, 170);
+    return () => {
+      clearInterval(timer);
+      randomBars = new Float32Array(NUM_BARS);
+    };
+  });
+
+  onMount(() => {
+    mounted = true;
+    ctx = canvasEl.getContext("2d");
+    resizeCanvas();
+    ensureRenderLoop();
+  });
+
+  onDestroy(() => {
+    mounted = false;
+    if (animId) cancelAnimationFrame(animId);
+  });
 </script>
 
-<canvas bind:this={canvasEl} style="display:block;"></canvas>
+<canvas bind:this={canvasEl} aria-label="六段音频频谱"></canvas>
+
+<style>canvas{display:block}</style>

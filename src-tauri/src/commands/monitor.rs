@@ -11,6 +11,10 @@ use tauri::{AppHandle, Manager};
 /// 返回显示器列表，包括名称、分辨率和是否为主显示器
 #[tauri::command]
 pub fn get_monitors(app: AppHandle) -> AppResult<Vec<MonitorInfo>> {
+    use windows::Win32::Foundation::POINT;
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
     let window = app
         .get_webview_window("main")
         .or_else(|| app.get_webview_window("floating"))
@@ -33,15 +37,44 @@ pub fn get_monitors(app: AppHandle) -> AppResult<Vec<MonitorInfo>> {
                 .map(|pp| pp.x == m.position().x && pp.y == m.position().y)
                 .unwrap_or(false);
 
+            let position = m.position();
+            let size = m.size();
+            let point = POINT {
+                x: position.x + size.width as i32 / 2,
+                y: position.y + size.height as i32 / 2,
+            };
+            let handle = unsafe { MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST) };
+            let mut native = MONITORINFO {
+                cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                ..Default::default()
+            };
+            let has_work_area = unsafe { GetMonitorInfoW(handle, &mut native) }.as_bool();
+            let work = if has_work_area {
+                native.rcWork
+            } else {
+                windows::Win32::Foundation::RECT {
+                    left: position.x,
+                    top: position.y,
+                    right: position.x + size.width as i32,
+                    bottom: position.y + size.height as i32,
+                }
+            };
             MonitorInfo {
                 index: idx as u32,
                 name: m
                     .name()
                     .map(|n| n.to_string())
                     .unwrap_or_else(|| format!("显示器 {}", idx + 1)),
-                width: m.size().width,
-                height: m.size().height,
+                width: size.width,
+                height: size.height,
                 is_primary,
+                x: position.x,
+                y: position.y,
+                work_x: work.left,
+                work_y: work.top,
+                work_width: (work.right - work.left).max(0) as u32,
+                work_height: (work.bottom - work.top).max(0) as u32,
+                scale_factor: m.scale_factor(),
             }
         })
         .collect();

@@ -1,10 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { MediaState, NeteaseSong } from "./types";
+import type { MediaSessionInfo, MediaState, NeteaseSong, ResolvedCover } from "./types";
 
 export const mediaApi = {
   async getMediaInfo(): Promise<MediaState> {
     return invoke<MediaState>("get_media_info_cmd");
   },
+  listMediaSessions: () => invoke<MediaSessionInfo[]>("list_media_sessions"),
 
   async controlMedia(action: "play_pause" | "next" | "prev"): Promise<void> {
     return invoke("control_media", { action });
@@ -17,6 +18,9 @@ export const mediaApi = {
   async getNeteaseSongInfo(songName: string, artist: string): Promise<NeteaseSong | null> {
     return invoke<NeteaseSong | null>("get_netease_song_info_cmd", { songName, artist });
   },
+
+  resolveHdCover: (title: string, artist: string, source: string) =>
+    invoke<ResolvedCover | null>("resolve_hd_cover", { title, artist, source }),
 
   async getNeteaseDuration(): Promise<number | null> {
     return invoke<number | null>("get_netease_duration_cmd");

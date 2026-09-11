@@ -4,12 +4,14 @@
 //! 命令层只负责参数解析和服务调用，不包含业务逻辑
 
 mod cache;
+mod idle;
 mod media;
 mod monitor;
 mod settings;
 mod window;
 
 pub use cache::*;
+pub use idle::*;
 pub use media::*;
 pub use monitor::*;
 pub use settings::*;

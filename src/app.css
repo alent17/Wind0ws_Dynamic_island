@@ -1,11 +1,18 @@
 @import 'tailwindcss';
 
+@font-face { font-family: "MiSans"; src: url("/fonts/MiSans-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "MiSans"; src: url("/fonts/MiSans-Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "MiSans"; src: url("/fonts/MiSans-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Source Han Serif CN"; src: url("/fonts/SourceHanSerifCN-Bold.otf") format("opentype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Alibaba PuHuiTi Heavy"; src: url("/fonts/Alibaba-PuHuiTi-Heavy.ttf") format("truetype"); font-weight: 900; font-display: swap; }
+
 /* ============================================================================
    主题系统 - CSS 变量定义
    ============================================================================ */
 
 /* 1. 默认：经典黑 (Original) */
 :root, .theme-original {
+  --app-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --island-bg: #000000;
   --island-border: rgba(255, 255, 255, 0.1);
   --accent-color: #ffffff;
@@ -24,7 +31,9 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family: var(--app-font);
   overflow: hidden;
   background: transparent;
 }
+
+button, input, select, textarea { font: inherit; }
