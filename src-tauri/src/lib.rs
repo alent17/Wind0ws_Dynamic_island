@@ -161,126 +161,125 @@ fn start_media_listener(handle: AppHandle) {
     });
 }
 
-/// 启动全屏状态监控器
+/// 启动统一捕获状态监控器
 ///
-/// 在后台线程中持续监控全屏状态，
-/// 只有状态改变时才通知前端。
+/// 在后台线程中监控截图快捷键与全屏状态，并向前端发布统一快照。
 ///
 /// ## 工作流程
 ///
-/// 1. 每 500ms 检测一次全屏状态
-/// 2. 只有状态变化时才发送事件
-/// 3. 避免高频轮询造成的性能浪费
-fn start_fullscreen_monitor(handle: AppHandle) {
+/// 1. 每 50ms 检测截图快捷键
+/// 2. 每 500ms 检测一次全屏状态
+/// 3. 状态变化时立即发布，并周期重发以同步晚加载的窗口
+fn start_capture_monitor(handle: AppHandle) {
+    use std::time::{Duration, Instant};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetAsyncKeyState, VK_LWIN, VK_RWIN, VK_S, VK_SHIFT, VK_SNAPSHOT,
+    };
+
     std::thread::spawn(move || {
-        let mut was_fullscreen = false;
+        let mut previous = (false, false);
+        let mut screenshot_until: Option<Instant> = None;
+        let mut previous_shortcut_down = false;
+        let mut is_fullscreen = false;
+        let mut next_fullscreen_check = Instant::now();
+        let mut last_emit = Instant::now() - Duration::from_secs(2);
 
         loop {
-            let is_fullscreen = detect_fullscreen_app(&handle);
-            if is_fullscreen != was_fullscreen {
-                if let Err(e) = event_bus::emit_fullscreen_changed(is_fullscreen) {
-                    tracing::error!("[全屏监控] 发送事件失败：{}", e);
-                } else {
-                    tracing::info!(
-                        "[全屏监控] 状态变化：{} -> {}",
-                        if was_fullscreen {
-                            "全屏"
-                        } else {
-                            "非全屏"
-                        },
-                        if is_fullscreen { "全屏" } else { "非全屏" }
-                    );
-                }
-                was_fullscreen = is_fullscreen;
+            if Instant::now() >= next_fullscreen_check {
+                is_fullscreen = detect_fullscreen_app(&handle);
+                next_fullscreen_check = Instant::now() + Duration::from_millis(500);
+            }
+            let shortcut_down = unsafe {
+                let print_screen = GetAsyncKeyState(VK_SNAPSHOT.0 as i32) < 0;
+                let win = GetAsyncKeyState(VK_LWIN.0 as i32) < 0
+                    || GetAsyncKeyState(VK_RWIN.0 as i32) < 0;
+                let shift = GetAsyncKeyState(VK_SHIFT.0 as i32) < 0;
+                let s = GetAsyncKeyState(VK_S.0 as i32) < 0;
+                print_screen || (win && shift && s)
+            };
+            if shortcut_down && !previous_shortcut_down {
+                screenshot_until = Some(Instant::now() + Duration::from_millis(1500));
+            }
+            previous_shortcut_down = shortcut_down;
+
+            let screenshot = screenshot_until.is_some_and(|until| Instant::now() < until);
+            if !screenshot {
+                screenshot_until = None;
             }
 
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            let current = (screenshot, is_fullscreen);
+            if current != previous || last_emit.elapsed() >= Duration::from_secs(2) {
+                let payload = serde_json::json!({
+                    "screenshot": screenshot,
+                    "recording": false,
+                    "fullscreen": is_fullscreen,
+                    "screenShare": false,
+                });
+                if let Err(error) = event_bus::emit_capture_mode_changed(payload) {
+                    tracing::error!("[Capture Mode] 发送状态失败: {}", error);
+                }
+                previous = current;
+                last_emit = Instant::now();
+            }
+
+            std::thread::sleep(Duration::from_millis(50));
         }
     });
 }
 
 fn detect_fullscreen_app(_handle: &AppHandle) -> bool {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use windows::Win32::Foundation::{BOOL, HWND, LPARAM, RECT};
+    use windows::Win32::Foundation::RECT;
     use windows::Win32::Graphics::Gdi::{
         GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetForegroundWindow, GetWindowLongPtrW, GetWindowRect, IsWindowVisible,
-        GWL_STYLE, WS_CAPTION,
+        GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowLongPtrW, GetWindowRect,
+        GetWindowThreadProcessId, IsWindowVisible, GWL_STYLE, WS_CAPTION,
     };
 
-    let our_hwnd = unsafe { GetForegroundWindow() };
-
-    struct EnumCtx {
-        found: AtomicBool,
-        our_hwnd: HWND,
-    }
-
-    unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
-        let ctx = &*(lparam.0 as *const EnumCtx);
-
-        if hwnd.0 == ctx.our_hwnd.0 {
-            return BOOL::from(true);
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.0 == 0
+            || hwnd == GetShellWindow()
+            || hwnd == GetDesktopWindow()
+            || !IsWindowVisible(hwnd).as_bool()
+        {
+            return false;
         }
 
-        if !IsWindowVisible(hwnd).as_bool() {
-            return BOOL::from(true);
-        }
-
-        let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
-        if (style & WS_CAPTION.0 as isize) != 0 {
-            return BOOL::from(true);
+        let mut process_id = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut process_id));
+        if process_id == std::process::id() {
+            return false;
         }
 
         let mut rect = RECT::default();
         if GetWindowRect(hwnd, &mut rect).is_err() {
-            return BOOL::from(true);
+            return false;
         }
-
         let win_w = rect.right - rect.left;
         let win_h = rect.bottom - rect.top;
         if win_w <= 0 || win_h <= 0 {
-            return BOOL::from(true);
+            return false;
         }
 
         let hmon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
         if hmon.0 == 0 {
-            return BOOL::from(true);
+            return false;
         }
-
         let mut mi = MONITORINFO {
             cbSize: std::mem::size_of::<MONITORINFO>() as u32,
             ..MONITORINFO::default()
         };
         if !GetMonitorInfoW(hmon, &mut mi).as_bool() {
-            return BOOL::from(true);
+            return false;
         }
-
         let mon_w = mi.rcMonitor.right - mi.rcMonitor.left;
         let mon_h = mi.rcMonitor.bottom - mi.rcMonitor.top;
-
-        if win_w >= mon_w - 10 && win_h >= mon_h - 10 {
-            ctx.found.store(true, Ordering::Relaxed);
-            return BOOL::from(false);
-        }
-
-        BOOL::from(true)
+        let covers_screen = win_w >= mon_w - 10 && win_h >= mon_h - 10;
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        covers_screen && (style & WS_CAPTION.0 as isize) == 0
     }
-
-    let mut ctx = EnumCtx {
-        found: AtomicBool::new(false),
-        our_hwnd,
-    };
-
-    unsafe {
-        let _ = EnumWindows(
-            Some(enum_callback),
-            LPARAM(&mut ctx as *mut EnumCtx as isize),
-        );
-    }
-
-    ctx.found.load(Ordering::Relaxed)
 }
 
 // ============================================================================
@@ -474,6 +473,7 @@ pub fn run() {
             if let Err(error) = commands::install_island_cursor_passthrough(&window) {
                 tracing::warn!("[Setup] 灵动岛点击穿透初始化失败: {}", error);
             }
+            commands::apply_capture_protection(app.handle(), &initial_settings);
 
             // 设置窗口焦点
             if let Err(e) = window.set_focus() {
@@ -482,7 +482,7 @@ pub fn run() {
 
             // 启动后台服务
             start_media_listener(app.handle().clone());
-            start_fullscreen_monitor(app.handle().clone());
+            start_capture_monitor(app.handle().clone());
 
             // 创建托盘菜单
             let menu = Menu::with_items(

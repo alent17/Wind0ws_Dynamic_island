@@ -66,7 +66,11 @@ pub struct AppPreferences {
     pub edge_shoulder_radius: u8,
     pub compact_length: u16,
     pub font_id: String,
-    pub auto_hide: bool,
+    pub capture_hide_on_screenshot: bool,
+    pub capture_hide_on_recording: bool,
+    #[serde(alias = "autoHide")]
+    pub capture_hide_on_fullscreen: bool,
+    pub capture_hide_on_screen_share: bool,
     pub show_spectrum: bool,
     pub spectrum_mode: String,
     pub enable_animations: bool,
@@ -121,7 +125,10 @@ impl Default for AppPreferences {
             edge_shoulder_radius: 8,
             compact_length: 80,
             font_id: "system".to_string(),
-            auto_hide: true,
+            capture_hide_on_screenshot: true,
+            capture_hide_on_recording: true,
+            capture_hide_on_fullscreen: true,
+            capture_hide_on_screen_share: true,
             show_spectrum: true,
             spectrum_mode: "realtime".to_string(),
             enable_animations: true,
@@ -170,7 +177,18 @@ mod tests {
         assert_eq!(loaded.compact_length, 80);
         assert_eq!(loaded.font_id, "system");
         assert_eq!(loaded.spectrum_mode, "realtime");
+        assert!(loaded.capture_hide_on_screenshot);
+        assert!(loaded.capture_hide_on_recording);
+        assert!(loaded.capture_hide_on_fullscreen);
+        assert!(loaded.capture_hide_on_screen_share);
         assert!(loaded.selected_player_ids.is_none());
         assert_eq!(loaded.idle_items.len(), 7);
+    }
+
+    #[test]
+    fn migrates_legacy_auto_hide_to_fullscreen_capture_setting() {
+        let loaded: AppPreferences =
+            serde_json::from_str(r#"{"autoHide":false}"#).expect("legacy settings");
+        assert!(!loaded.capture_hide_on_fullscreen);
     }
 }

@@ -382,6 +382,9 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
             settings.floating_window_y,
             settings.floating_window_width,
             settings.floating_window_height,
+            settings.capture_hide_on_screenshot
+                || settings.capture_hide_on_recording
+                || settings.capture_hide_on_screen_share,
         )
     };
 
@@ -397,16 +400,19 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
     .transparent(true)
     .always_on_top(true);
 
-    if let (Some(x), Some(y), Some(w), Some(h)) = saved_position {
+    if let (Some(x), Some(y), Some(w), Some(h), _) = saved_position {
         builder = builder.inner_size(w as f64, h as f64);
         builder = builder.position(x as f64, y as f64);
     } else {
         builder = builder.inner_size(360.0, 360.0);
     }
 
-    builder
+    let window = builder
         .build()
         .map_err(|e| AppError::window(e.to_string()))?;
+    window
+        .set_content_protected(saved_position.4)
+        .map_err(|e| AppError::window(format!("设置悬浮窗内容保护失败: {}", e)))?;
 
     Ok(())
 }

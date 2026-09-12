@@ -10,7 +10,10 @@ export interface AppSettings {
   edgeShoulderRadius: number;
   compactLength: number;
   fontId: FontId;
-  autoHide: boolean;
+  captureHideOnScreenshot: boolean;
+  captureHideOnRecording: boolean;
+  captureHideOnFullscreen: boolean;
+  captureHideOnScreenShare: boolean;
   showSpectrum: boolean;
   spectrumMode: SpectrumMode;
   enableAnimations: boolean;
@@ -137,7 +140,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   edgeShoulderRadius: 8,
   compactLength: 80,
   fontId: "system",
-  autoHide: true,
+  captureHideOnScreenshot: true,
+  captureHideOnRecording: true,
+  captureHideOnFullscreen: true,
+  captureHideOnScreenShare: true,
   showSpectrum: true,
   spectrumMode: "realtime",
   enableAnimations: true,

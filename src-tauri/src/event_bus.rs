@@ -90,11 +90,7 @@ pub const EVENT_MV_PLAYBACK_CHANGED: &str = "mv-playback-changed";
 /// 浮动窗口关闭事件
 pub const EVENT_FLOATING_WINDOW_CLOSED: &str = "floating-window-closed";
 
-/// 全屏状态变更事件
-///
-/// 当系统全屏状态发生变化时触发
-/// 节流间隔：1000ms（避免频繁切换）
-pub const EVENT_FULLSCREEN_CHANGED: &str = "fullscreen-changed";
+pub const EVENT_CAPTURE_MODE_CHANGED: &str = "capture-mode-changed";
 
 // ============================================================================
 // 事件优先级
@@ -512,19 +508,14 @@ pub fn emit_settings_changed(setting_name: &str) -> AppResult<()> {
     EVENT_BUS.emit(EVENT_SETTINGS_CHANGED, setting_name)
 }
 
-/// 发送全屏状态变更事件
-///
-/// 使用 1000ms 节流，避免频繁切换
-///
-/// # 参数
-///
-/// - `is_fullscreen`: 是否全屏
-pub fn emit_fullscreen_changed(is_fullscreen: bool) -> AppResult<()> {
+/// Publish the unified capture-scene snapshot. Consumers decide which active
+/// reasons are enabled instead of maintaining separate hide paths.
+pub fn emit_capture_mode_changed(value: serde_json::Value) -> AppResult<()> {
     EVENT_BUS.emit_with_options(
-        EVENT_FULLSCREEN_CHANGED,
-        is_fullscreen,
+        EVENT_CAPTURE_MODE_CHANGED,
+        value,
         Some(ThrottleConfig {
-            interval_ms: 1000,
+            interval_ms: 50,
             priority: EventPriority::High,
         }),
     )

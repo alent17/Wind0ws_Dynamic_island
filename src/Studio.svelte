@@ -31,7 +31,7 @@
   onMount(()=>{nativeRuntime=Boolean((window as any).__TAURI_INTERNALS__);const unsubscribe=media.subscribe(value=>liveMedia=value);let disconnect:undefined|(()=>void);if(nativeRuntime){void (async()=>{disconnect=await connectMedia();try{settings={...DEFAULT_SETTINGS,...await settingsApi.getPreferences()};applyAppFont(settings.fontId)}catch{}try{monitors=await windowApi.getMonitors()}catch{}await refreshSessions()})()}return()=>{if(saveTimer)clearTimeout(saveTimer);unsubscribe();disconnect?.()}});
   async function persist(){if(saveTimer){clearTimeout(saveTimer);saveTimer=undefined}if(nativeRuntime)await settingsApi.savePreferences({...settings}).catch(()=>{})}
   function updatePreference(patch:Partial<AppPreferences>,defer=false){settings={...settings,...patch};if(!nativeRuntime)return;if(defer){if(saveTimer)clearTimeout(saveTimer);saveTimer=setTimeout(()=>void persist(),120)}else void persist()}
-  async function setPreference(key:"autoHide"|"alwaysOnTop",value:boolean){settings={...settings,[key]:value};if(!nativeRuntime)return;if(key==="alwaysOnTop")await settingsApi.setAlwaysOnTop(value).catch(()=>{});else await persist()}
+  async function setAlwaysOnTop(value:boolean){settings={...settings,alwaysOnTop:value};if(!nativeRuntime)return;await settingsApi.setAlwaysOnTop(value).catch(()=>{})}
   async function setAutoStart(value:boolean){settings={...settings,autoStart:value};if(nativeRuntime)await settingsApi.setAutoStart(value).catch(()=>{})}
   function setIslandStyle(value:IslandStyle){updatePreference({islandStyle:value})}
   function setIslandEdge(value:IslandEdge){updatePreference({islandEdge:value})}
@@ -109,10 +109,15 @@
         {/if}
       </section>
       <section><h2>应用行为</h2>
-        <label class="toggle-row"><span><strong>全屏时自动隐藏</strong><small>检测到全屏应用后朝所选边缘收起</small></span><input type="checkbox" checked={settings.autoHide} disabled={!nativeRuntime} onchange={(e)=>setPreference("autoHide",e.currentTarget.checked)}/></label>
-        <label class="toggle-row"><span><strong>始终置顶</strong><small>让岛体保持在工作流上方</small></span><input type="checkbox" checked={settings.alwaysOnTop} disabled={!nativeRuntime} onchange={(e)=>setPreference("alwaysOnTop",e.currentTarget.checked)}/></label>
+        <label class="toggle-row"><span><strong>始终置顶</strong><small>让岛体保持在工作流上方</small></span><input type="checkbox" checked={settings.alwaysOnTop} disabled={!nativeRuntime} onchange={(e)=>setAlwaysOnTop(e.currentTarget.checked)}/></label>
         <label class="toggle-row"><span><strong>开机启动</strong><small>登录 Windows 后自动运行</small></span><input type="checkbox" checked={settings.autoStart} disabled={!nativeRuntime} onchange={(e)=>setAutoStart(e.currentTarget.checked)}/></label>
         <label class="select-row"><span><Monitor size={17}/>显示器</span><select value={settings.monitorIndex} disabled={!nativeRuntime} onchange={(e)=>updatePreference({monitorIndex:Number(e.currentTarget.value)})}>{#each monitors as monitor}<option value={monitor.index}>{monitor.name}</option>{/each}{#if !monitors.length}<option>主显示器</option>{/if}</select></label>
+      </section>
+      <section><h2>Capture Mode</h2><p class="hint">捕获场景开始时临时隐藏或从捕获画面排除，结束后恢复原状态。</p>
+        <label class="toggle-row"><span><strong>截图时隐藏</strong><small>响应 Print Screen 与 Win + Shift + S</small></span><input type="checkbox" checked={settings.captureHideOnScreenshot} disabled={!nativeRuntime} onchange={(e)=>updatePreference({captureHideOnScreenshot:e.currentTarget.checked})}/></label>
+        <label class="toggle-row"><span><strong>录屏时隐藏</strong><small>通过 Windows 内容保护从录制画面排除</small></span><input type="checkbox" checked={settings.captureHideOnRecording} disabled={!nativeRuntime} onchange={(e)=>updatePreference({captureHideOnRecording:e.currentTarget.checked})}/></label>
+        <label class="toggle-row"><span><strong>全屏游戏时隐藏</strong><small>检测到无边框全屏应用后向边缘收起</small></span><input type="checkbox" checked={settings.captureHideOnFullscreen} disabled={!nativeRuntime} onchange={(e)=>updatePreference({captureHideOnFullscreen:e.currentTarget.checked})}/></label>
+        <label class="toggle-row"><span><strong>屏幕共享时隐藏</strong><small>通过 Windows 内容保护从共享画面排除</small></span><input type="checkbox" checked={settings.captureHideOnScreenShare} disabled={!nativeRuntime} onchange={(e)=>updatePreference({captureHideOnScreenShare:e.currentTarget.checked})}/></label>
       </section>
       <section><h2>工具</h2><div class="tool-list"><button disabled={!nativeRuntime} onclick={()=>windowApi.openFloatingWindow()}><ExternalLink size={17}/>打开悬浮播放器</button><button disabled={!nativeRuntime} onclick={()=>windowApi.resetFloatingWindow()}><RotateCcw size={17}/>复位悬浮窗</button><button disabled={!nativeRuntime} onclick={clearCache}><Trash2 size={17}/>清理媒体缓存</button></div>{#if cacheMessage}<p class="message">{cacheMessage}</p>{/if}</section>
     </aside>

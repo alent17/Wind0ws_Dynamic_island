@@ -12,6 +12,19 @@ use crate::state::AppState;
 use std::collections::HashMap;
 use tauri::{AppHandle, Manager, State};
 
+pub(crate) fn apply_capture_protection(app: &AppHandle, settings: &AppPreferences) {
+    let protect = settings.capture_hide_on_screenshot
+        || settings.capture_hide_on_recording
+        || settings.capture_hide_on_screen_share;
+    for label in ["main", "floating_player"] {
+        if let Some(window) = app.get_webview_window(label) {
+            if let Err(error) = window.set_content_protected(protect) {
+                tracing::warn!("[Capture Mode] 设置窗口 {} 内容保护失败: {}", label, error);
+            }
+        }
+    }
+}
+
 /// 获取当前应用设置
 #[tauri::command]
 pub fn get_settings(_app: AppHandle, state: State<'_, AppState>) -> AppResult<AppSettings> {
@@ -89,6 +102,7 @@ pub fn save_settings(
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_always_on_top(always_on_top);
     }
+    apply_capture_protection(&app, &settings);
 
     // 更新开机自启动
     if auto_start {

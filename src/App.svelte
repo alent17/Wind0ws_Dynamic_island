@@ -28,6 +28,11 @@
   import type { AppSettings, IdleContentItem, IdleSnapshot, MediaState } from "$lib/api/types";
   import { DEFAULT_SETTINGS } from "$lib/api/types";
   import { applyAppFont } from "$lib/font";
+  import {
+    activeCaptureReasons,
+    EMPTY_CAPTURE_SNAPSHOT,
+    type CaptureSnapshot,
+  } from "$lib/captureMode";
   import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition, shouldShowIdleClock } from "$lib/mediaClock";
   import {
     getCurrentWindow,
@@ -190,12 +195,14 @@
 
   function normalizedSettings(value: Partial<AppSettings>): AppSettings {
     const position = Number(value.islandEdgePosition ?? DEFAULT_SETTINGS.islandEdgePosition);
+    const legacyAutoHide = (value as Partial<AppSettings> & { autoHide?: boolean }).autoHide;
     return {
       ...DEFAULT_SETTINGS,
       ...value,
       islandStyle: normalizedStyle(value.islandStyle ?? DEFAULT_SETTINGS.islandStyle),
       islandEdge: normalizedEdge(value.islandEdge ?? DEFAULT_SETTINGS.islandEdge),
       spectrumMode: value.spectrumMode === "random" ? "random" : "realtime",
+      captureHideOnFullscreen: value.captureHideOnFullscreen ?? legacyAutoHide ?? true,
       islandEdgePosition: Math.min(100, Math.max(0, Number.isFinite(position) ? position : 50)),
       edgeShoulderRadius: clampShoulderRadius(value.edgeShoulderRadius ?? 8),
       expandedCornerRadius: clampExpandedRadius(value.expandedCornerRadius ?? 45),
@@ -591,10 +598,10 @@
     );
   }
 
-  let isFullscreenApp = $state(false);
+  let captureSnapshot = $state<CaptureSnapshot>({ ...EMPTY_CAPTURE_SNAPSHOT });
+  let isFullscreenApp = $derived(captureSnapshot.fullscreen);
   let isMouseAtTop = $state(false);
   let isHidden = $state(false);
-  let autoHideEnabled = $state(true);
 
   let showMonitorMenu = $state(false);
   let monitors: Array<{
@@ -1044,30 +1051,22 @@
     return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
   }
 
-  let fullscreenCheckInterval: ReturnType<typeof setInterval> | null = null;
   let hideTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  // 处理全屏状态变化
-  function handleFullscreenChange(isFullscreen: boolean) {
-    if (!autoHideEnabled || !appSettings.autoHide) return;
+  function syncCaptureVisibility(snapshot = captureSnapshot) {
+    const reasons = activeCaptureReasons(snapshot, appSettings);
+    const fullscreenPeek = isMouseAtTop && reasons.length === 1 && reasons[0] === "fullscreen";
+    const shouldHide = reasons.length > 0 && !fullscreenPeek;
+    if (shouldHide && !isHidden) void hideWindowToTop();
+    else if (!shouldHide && isHidden) void showWindow();
+  }
 
-    if (isFullscreen !== isFullscreenApp) {
-      isFullscreenApp = isFullscreen;
-      console.log(
-        "[全屏检测] 状态变化:",
-        isFullscreen ? "检测到全屏应用" : "全屏应用已关闭",
-      );
-
-      if (isFullscreen) {
-        hideWindowToTop();
-      } else {
-        showWindow();
-      }
-    }
+  function handleCaptureModeChange(snapshot: CaptureSnapshot) {
+    captureSnapshot = { ...EMPTY_CAPTURE_SNAPSHOT, ...snapshot };
+    syncCaptureVisibility(captureSnapshot);
   }
 
   async function hideWindowToTop() {
-    if (!appSettings.autoHide) return;
     try {
       isHidden = true;
       await applyWindowPlacement(undefined, undefined, undefined, undefined, true);
@@ -1088,7 +1087,7 @@
   }
 
   async function handleMouseMove(event: MouseEvent) {
-    if (!autoHideEnabled || !appSettings.autoHide || !isFullscreenApp) return;
+    if (!appSettings.captureHideOnFullscreen || !isFullscreenApp || captureSnapshot.screenshot) return;
 
     const mouseX = event.clientX;
     const mouseY = event.clientY;
@@ -1268,9 +1267,7 @@
               currentMonitorIndex = s.monitorIndex;
             }
 
-            if (!appSettings.autoHide && isHidden) {
-              showWindow();
-            }
+            syncCaptureVisibility();
           }
         },
       );
@@ -1643,12 +1640,10 @@
       if (windowReady) void applyWindowPlacement().catch(() => undefined);
     }, 2000);
 
-    // 监听后端推送的全屏状态变化事件
-    const unlistenFullscreen = eventManager.on(
-      "fullscreen-changed",
-      (isFullscreen) => {
-        handleFullscreenChange(Boolean(isFullscreen));
-      },
+    // 所有捕获场景统一从 Capture Mode 状态进入，不各自维护隐藏逻辑。
+    const unlistenCaptureMode = eventManager.on(
+      Events.CAPTURE_MODE_CHANGED,
+      (snapshot) => handleCaptureModeChange(snapshot as CaptureSnapshot),
     );
 
     let mouseMoveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -1667,8 +1662,7 @@
       // 清理主题监听
       unlistenTheme.then((unlisten) => unlisten());
       unlistenPlacementPreview.then((unlisten) => unlisten());
-      // 清理全屏监听
-      unlistenFullscreen.then((unlisten) => unlisten());
+      unlistenCaptureMode.then((unlisten) => unlisten());
 
       if (hideTimeout) {
         clearTimeout(hideTimeout);

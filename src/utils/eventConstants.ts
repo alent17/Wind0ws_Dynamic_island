@@ -3,6 +3,7 @@ export const Events = {
   // 媒体相关
   MEDIA_UPDATE: "media-update",
   AUDIO_SPECTRUM: "audio-spectrum",
+  CAPTURE_MODE_CHANGED: "capture-mode-changed",
 
   // 设置相关
   SETTINGS_UPDATED: "settings-updated",
