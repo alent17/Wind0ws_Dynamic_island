@@ -10,7 +10,11 @@ pub mod image;
 pub mod media;
 pub mod settings;
 pub mod spectrum;
+mod system_audio;
 
 pub use idle::{get_idle_snapshot, search_weather_locations};
 
 pub use settings::{get_auto_start, read_settings_file, set_auto_start, write_settings_file};
+pub use system_audio::{
+    get_system_audio_state, list_audio_output_devices, set_default_audio_output, set_system_volume,
+};

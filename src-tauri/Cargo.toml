@@ -38,6 +38,12 @@ windows = { version = "0.52", features = [
     "Win32_Foundation",     # Win32 基础类型（窗口句柄等）
     "Win32_UI_WindowsAndMessaging",  # Win32 UI 窗口消息（窗口样式、位置等）
     "Win32_UI_Input_KeyboardAndMouse", # 截图快捷键检测
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
+    "Win32_Devices_FunctionDiscovery",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_UI_Shell_PropertiesSystem",
     "Win32_Graphics_Gdi",    # Win32 GDI（获取屏幕分辨率）
     "Win32_System",          # Win32 系统服务
     "Win32_System_Com",      # Win32 COM（CoInitializeEx）

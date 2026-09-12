@@ -63,7 +63,10 @@ mod utils;
 // ============================================================================
 
 pub use error::{AppError, AppResult};
-pub use models::{AppPreferences, CacheStats, MediaState, MonitorInfo, NeteaseSong};
+pub use models::{
+    AppPreferences, AudioDeviceInfo, CacheStats, MediaState, MonitorInfo, NeteaseSong,
+    SystemAudioState,
+};
 pub use services::{get_auto_start, read_settings_file, set_auto_start, write_settings_file};
 pub use state::AppState;
 
@@ -157,6 +160,27 @@ fn start_media_listener(handle: AppHandle) {
                 let _ = event_bus::emit_media_update(info);
             }
             std::thread::sleep(std::time::Duration::from_millis(1000));
+        }
+    });
+}
+
+fn start_system_audio_monitor() {
+    std::thread::spawn(move || {
+        unsafe {
+            let _ = windows::Win32::System::Com::CoInitializeEx(
+                None,
+                windows::Win32::System::Com::COINIT_MULTITHREADED,
+            );
+        }
+        let mut previous = services::get_system_audio_state().ok();
+        loop {
+            if let Ok(current) = services::get_system_audio_state() {
+                if previous.as_ref() != Some(&current) {
+                    let _ = EVENT_BUS.emit(event_bus::EVENT_SYSTEM_AUDIO_CHANGED, &current);
+                    previous = Some(current);
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(150));
         }
     });
 }
@@ -388,6 +412,10 @@ pub fn run() {
             commands::set_floating_window_resizable,
             commands::open_application,
             commands::check_fullscreen_app,
+            commands::get_system_audio_state,
+            commands::list_audio_output_devices,
+            commands::set_system_volume,
+            commands::set_default_audio_output,
             commands::get_available_monitors,
             commands::get_current_monitor_index,
             commands::set_current_monitor_index,
@@ -482,6 +510,7 @@ pub fn run() {
 
             // 启动后台服务
             start_media_listener(app.handle().clone());
+            start_system_audio_monitor();
             start_capture_monitor(app.handle().clone());
 
             // 创建托盘菜单

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { spring } from "svelte/motion";
-  import { ChevronLeft, ChevronRight, Music2, Pause, Play, SkipBack, SkipForward, GalleryHorizontalEnd } from "lucide-svelte";
+  import { ChevronLeft, ChevronRight, Music2, Pause, Play, SkipBack, SkipForward, GalleryHorizontalEnd, Volume2, VolumeX, Speaker } from "lucide-svelte";
   import MediaProgress from "$lib/MediaProgress.svelte";
   import Spectrum from "$lib/Spectrum.svelte";
-  import type { MediaState, SpectrumMode } from "$lib/api/types";
+  import type { AudioDeviceInfo, MediaState, SpectrumMode, SystemAudioState } from "$lib/api/types";
   import {
     borderRadiusCss,
     expansionForGeometry,
@@ -50,6 +50,8 @@
     debugLines = [],
     interactive = true,
     simulateHidden = false,
+    systemAudio = null,
+    audioDevices = [],
     onToggle,
     onOpenPlayer,
     onMediaAction,
@@ -58,6 +60,8 @@
     onHoverChange,
     onRegionChange,
     onIdleAction,
+    onAudioVolume,
+    onAudioDevice,
   } = $props<{
     media: MediaState;
     mode?: IslandMode;
@@ -87,6 +91,8 @@
     debugLines?: string[];
     interactive?: boolean;
     simulateHidden?: boolean;
+    systemAudio?: SystemAudioState | null;
+    audioDevices?: AudioDeviceInfo[];
     onToggle?: () => void;
     onOpenPlayer?: () => void;
     onMediaAction?: (action: "prev" | "play_pause" | "next") => void;
@@ -95,6 +101,8 @@
     onHoverChange?: (hovering: boolean) => void;
     onRegionChange?: (change: IslandRegionChange) => void;
     onIdleAction?: (action: "prev" | "toggle" | "next") => void;
+    onAudioVolume?: (volumePercent: number) => void | Promise<void>;
+    onAudioDevice?: (deviceId: string) => void | Promise<void>;
   }>();
 
   const initial = untrack(() => geometryFor(mode, expandedRadius, edge, compactLength));
@@ -204,7 +212,12 @@
     {/if}
 
     <div class="compact-layer" class:vertical={edge === "left" || edge === "right"} class:edge-inset={islandStyle === "edge"} style={`opacity:${compactOpacity};--shoulder-inset:${contentShoulderInset}px`} aria-hidden={expandedOpacity > .5}>
-      {#if showTime}
+      {#if systemAudio}
+        <span class="audio-compact" class:vertical={edge === "left" || edge === "right"}>
+          {#if systemAudio.muted || systemAudio.volumePercent === 0}<VolumeX size={13}/>{:else}<Volume2 size={13}/>{/if}
+          <b>{systemAudio.muted ? "静音" : `${systemAudio.volumePercent}%`}</b>
+        </span>
+      {:else if showTime}
         <span class="time-display">{timeText}</span>
       {:else if idle}
         <span class="idle-compact" class:vertical={edge === "left" || edge === "right"} title={idleTitle}>{idleTitle}</span>
@@ -226,7 +239,20 @@
       style:transform={`translateX(-50%) translateY(${(1 - expandedOpacity) * 5}px)`}
       aria-hidden={expandedOpacity <= .5}
     >
-      {#if idle}
+      {#if systemAudio}
+        <div class="audio-expanded" data-stop-toggle>
+          <div class="audio-heading">
+            <span class="audio-icon">{#if systemAudio.muted || systemAudio.volumePercent === 0}<VolumeX size={22}/>{:else}<Volume2 size={22}/>{/if}</span>
+            <span><small title={systemAudio.deviceName}>{systemAudio.deviceName || "系统音量"}</small><strong>{systemAudio.muted ? "静音" : `${systemAudio.volumePercent}%`}</strong></span>
+          </div>
+          <input aria-label="系统音量" type="range" min="0" max="100" value={systemAudio.volumePercent} oninput={(event) => onAudioVolume?.(Number(event.currentTarget.value))}/>
+          <div class="audio-device-list">
+            {#each audioDevices as device (device.id)}
+              <button type="button" class:active={device.isDefault} onclick={(event) => { event.stopPropagation(); onAudioDevice?.(device.id); }} title={device.name}><Speaker size={13}/><span>{device.name}</span></button>
+            {/each}
+          </div>
+        </div>
+      {:else if idle}
         <div class="idle-expanded">
           <small>空闲信息</small>
           <strong title={idleTitle}>{idleTitle}</strong>
@@ -277,6 +303,7 @@
   .island-surface{position:relative;z-index:1;overflow:hidden;flex:none;box-sizing:border-box;color:#fff;contain:layout paint style;transform:translateZ(0);transition:transform 140ms cubic-bezier(.23,1,.32,1),box-shadow 180ms cubic-bezier(.23,1,.32,1);will-change:clip-path}
   .floating-style .island-surface:active{transform:scale(.97) translateZ(0)}.compact-layer,.expanded-layer{position:absolute;z-index:1;box-sizing:border-box;pointer-events:none}
   .compact-layer{inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 4px}.compact-layer.edge-inset:not(.vertical){padding-left:calc(4px + var(--shoulder-inset));padding-right:calc(8px + var(--shoulder-inset))}.compact-layer.vertical{flex-direction:column;padding:4px 0 8px}.compact-layer.edge-inset.vertical{padding-top:calc(4px + var(--shoulder-inset));padding-bottom:calc(8px + var(--shoulder-inset))}.compact-layer button,.compact-layer :global(canvas){pointer-events:auto}.time-display{width:100%;text-align:center;color:rgba(255,255,255,.8);font:500 12px/1 var(--app-font);letter-spacing:.05em;font-variant-numeric:tabular-nums;user-select:none}.cover{display:grid;place-items:center;flex:none;padding:0;overflow:hidden;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);border:0;cursor:pointer;user-select:none}.cover img{width:100%;height:100%;display:block;object-fit:cover;-webkit-user-drag:none;user-select:none}.compact-cover{width:20px;height:20px;border-radius:50%}.expanded-cover{width:52px;height:52px;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.35);outline:1px solid rgba(255,255,255,.1)}.playing-dot{width:3px;height:3px;border-radius:50%}
+  .audio-compact{width:100%;display:flex;align-items:center;justify-content:center;gap:5px;color:#fff;font:600 11px/1 var(--app-font);font-variant-numeric:tabular-nums}.audio-compact.vertical{flex-direction:column}.audio-expanded{width:100%;height:100%;padding:18px 26px 14px;box-sizing:border-box;display:flex;flex-direction:column}.audio-heading{display:flex;align-items:center;gap:10px}.audio-heading>span:last-child{min-width:0;display:flex;flex-direction:column}.audio-heading small{font-size:9px;color:rgba(255,255,255,.5)}.audio-heading strong{font-size:16px}.audio-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,.1)}.audio-expanded input[type="range"]{width:100%;margin:12px 0 9px;accent-color:#fff}.audio-device-list{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none}.audio-device-list button{min-width:0;max-width:120px;display:flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid rgba(255,255,255,.08);border-radius:8px;color:rgba(255,255,255,.6);background:rgba(255,255,255,.05);cursor:pointer}.audio-device-list button.active{color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.12)}.audio-device-list span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px}
   .idle-compact{display:block;width:100%;padding:0 7px;overflow:hidden;text-align:center;text-overflow:ellipsis;white-space:nowrap;font:600 11px/1 var(--app-font);color:rgba(255,255,255,.9)}.idle-compact.vertical{writing-mode:vertical-rl;max-height:100%;padding:7px 0}.idle-expanded{width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:18px 28px}.idle-expanded small{font-size:9px;letter-spacing:.12em;color:rgba(255,255,255,.45)}.idle-expanded strong{max-width:100%;margin-top:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:22px;line-height:1.15}.idle-expanded>span{max-width:100%;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:rgba(255,255,255,.62)}.idle-controls{display:flex;gap:10px;margin-top:16px}.idle-controls button{display:grid;place-items:center;width:32px;height:30px;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;background:rgba(255,255,255,.06);pointer-events:auto;cursor:pointer}
   .cover-image{animation:cover-flip-in 420ms cubic-bezier(.23,1,.32,1)}@keyframes cover-flip-in{from{opacity:0;transform:perspective(500px) rotateY(-70deg) scale(.9)}to{opacity:1;transform:perspective(500px) rotateY(0) scale(1)}}
   .debug-overlay{position:absolute;z-index:4;top:4px;left:50%;display:flex;gap:5px;max-width:calc(100% - 12px);padding:2px 6px;border-radius:5px;transform:translateX(-50%);overflow:hidden;color:#4ade80;background:rgba(0,0,0,.75);font:500 8px/1.3 ui-monospace,monospace;white-space:nowrap;pointer-events:none}.debug-overlay span{overflow:hidden;text-overflow:ellipsis}

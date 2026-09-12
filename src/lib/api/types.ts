@@ -104,6 +104,19 @@ export interface ResolvedCover {
   provider: "netease" | "apple";
 }
 
+export interface AudioDeviceInfo {
+  id: string;
+  name: string;
+  isDefault: boolean;
+}
+
+export interface SystemAudioState {
+  volumePercent: number;
+  muted: boolean;
+  deviceId: string;
+  deviceName: string;
+}
+
 export interface CacheStats {
   totalSizeMb: number;
   totalFiles: number;

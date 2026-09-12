@@ -91,6 +91,7 @@ pub const EVENT_MV_PLAYBACK_CHANGED: &str = "mv-playback-changed";
 pub const EVENT_FLOATING_WINDOW_CLOSED: &str = "floating-window-closed";
 
 pub const EVENT_CAPTURE_MODE_CHANGED: &str = "capture-mode-changed";
+pub const EVENT_SYSTEM_AUDIO_CHANGED: &str = "system-audio-changed";
 
 // ============================================================================
 // 事件优先级

@@ -7,6 +7,7 @@
   import { Events } from "./utils/eventConstants";
   import { mediaApi } from "$lib/api/media";
   import { idleApi } from "$lib/api/idle";
+  import { audioApi } from "$lib/api/audio";
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
   import IslandSurface from "$lib/IslandSurface.svelte";
@@ -25,7 +26,7 @@
     type IslandRegionChange,
     type IslandStyle,
   } from "$lib/islandGeometry";
-  import type { AppSettings, IdleContentItem, IdleSnapshot, MediaState } from "$lib/api/types";
+  import type { AppSettings, AudioDeviceInfo, IdleContentItem, IdleSnapshot, MediaState, SystemAudioState } from "$lib/api/types";
   import { DEFAULT_SETTINGS } from "$lib/api/types";
   import { applyAppFont } from "$lib/font";
   import {
@@ -323,6 +324,47 @@
   let appSettings = $state<AppSettings>({
     ...DEFAULT_SETTINGS,
   });
+  let systemAudio = $state<SystemAudioState | null>(null);
+  let audioDevices = $state<AudioDeviceInfo[]>([]);
+  let systemAudioTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function scheduleSystemAudioDismiss(delay = 3500) {
+    if (systemAudioTimeout) clearTimeout(systemAudioTimeout);
+    systemAudioTimeout = setTimeout(() => {
+      systemAudio = null;
+      systemAudioTimeout = null;
+    }, delay);
+  }
+
+  function showSystemAudio(state: SystemAudioState) {
+    systemAudio = state;
+    scheduleSystemAudioDismiss(expanded ? 10000 : 3500);
+    void audioApi.listDevices().then((devices) => audioDevices = devices).catch(() => undefined);
+  }
+
+  function toggleIsland() {
+    expanded = !expanded;
+    if (systemAudio) scheduleSystemAudioDismiss(expanded ? 10000 : 3500);
+  }
+
+  async function handleAudioVolume(volumePercent: number) {
+    if (!systemAudio) return;
+    systemAudio = { ...systemAudio, volumePercent, muted: volumePercent === 0 };
+    scheduleSystemAudioDismiss(10000);
+    await audioApi.setVolume(volumePercent).catch((error) => logger.error("设置系统音量失败", error));
+  }
+
+  async function handleAudioDevice(deviceId: string) {
+    scheduleSystemAudioDismiss(10000);
+    try {
+      await audioApi.setDefaultDevice(deviceId);
+      const [state, devices] = await Promise.all([audioApi.getState(), audioApi.listDevices()]);
+      systemAudio = state;
+      audioDevices = devices;
+    } catch (error) {
+      logger.error("切换音频设备失败", error);
+    }
+  }
   $effect(() => applyAppFont(appSettings.fontId));
   let idleSnapshot = $state<IdleSnapshot>({ cpuPercent: 0, memoryPercent: 0, uploadBytesPerSecond: 0, downloadBytesPerSecond: 0, batteryPercent: null, batteryCharging: null, weatherTemperature: null, weatherCode: null, weatherUpdatedAt: null });
   let idleIndex = $state(0);
@@ -1391,6 +1433,12 @@
       );
       cleanups.push(unlistenTheme);
 
+      const unlistenSystemAudio = await eventManager.on(
+        Events.SYSTEM_AUDIO_CHANGED,
+        (state) => showSystemAudio(state as SystemAudioState),
+      );
+      cleanups.push(unlistenSystemAudio);
+
       try {
         const savedSettings = await settingsApi.getSettings();
         currentTheme = savedSettings.islandTheme || "original";
@@ -1590,6 +1638,7 @@
   onDestroy(() => {
     stopAutoClose();
     stopDebugFps();
+    if (systemAudioTimeout) clearTimeout(systemAudioTimeout);
   });
 
   function handleGlobalClick(event: MouseEvent) {
@@ -1707,7 +1756,7 @@
     timeText={currentTime}
     showDebugInfo={appSettings.showDebugInfo}
     debugLines={[`${fps} FPS`, currentSource, `${Math.round(displayedPosition)} ms`, isHidden ? "hidden" : islandMode]}
-    onToggle={() => expanded = !expanded}
+    onToggle={toggleIsland}
     onOpenPlayer={openCurrentPlayer}
     onMediaAction={(action) => handleMediaAction(action)}
     onSeek={handleSeek}
@@ -1715,6 +1764,10 @@
     onHoverChange={(value) => hovering = value}
     onRegionChange={applyIslandRegion}
     onIdleAction={idleAction}
+    {systemAudio}
+    {audioDevices}
+    onAudioVolume={handleAudioVolume}
+    onAudioDevice={handleAudioDevice}
   />
 </div>
 
