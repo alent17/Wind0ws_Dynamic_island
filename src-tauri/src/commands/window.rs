@@ -201,7 +201,7 @@ pub fn install_island_cursor_passthrough(window: &tauri::WebviewWindow) -> AppRe
                 }
                 last_ignored = Some(ignored);
             }
-            std::thread::sleep(std::time::Duration::from_millis(8));
+            std::thread::sleep(std::time::Duration::from_millis(16));
         }
     });
     Ok(())
@@ -394,7 +394,7 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
         tauri::WebviewUrl::App("index.html?window=floating".into()),
     )
     .title("Mini Player")
-    .min_inner_size(200.0, 200.0)
+    .min_inner_size(50.0, 50.0)
     .resizable(true)
     .decorations(false)
     .transparent(true)
@@ -622,7 +622,7 @@ pub fn animate_window_bounds(
             if values.1 {
                 return;
             }
-            std::thread::sleep(std::time::Duration::from_millis(8));
+            std::thread::sleep(std::time::Duration::from_millis(16));
         }
     });
     Ok(())

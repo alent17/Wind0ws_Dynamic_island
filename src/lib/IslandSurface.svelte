@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { untrack } from "svelte";
-  import { spring } from "svelte/motion";
+  import { onMount, untrack } from "svelte";
+  import { spring, tweened } from "svelte/motion";
   import { ChevronLeft, ChevronRight, Music2, Pause, Play, SkipBack, SkipForward, GalleryHorizontalEnd, Volume2, VolumeX, Speaker } from "lucide-svelte";
   import MediaProgress from "$lib/MediaProgress.svelte";
   import Spectrum from "$lib/Spectrum.svelte";
+  import { ISLAND_MOTION, islandMorphEasing, islandSettleEasing } from "$lib/islandMotion";
   import type { AudioDeviceInfo, MediaState, SpectrumMode, SystemAudioState } from "$lib/api/types";
   import {
     borderRadiusCss,
-    expansionForGeometry,
     geometryFor,
     interpolatePolygon,
     radiiFor,
@@ -106,41 +106,117 @@
   }>();
 
   const initial = untrack(() => geometryFor(mode, expandedRadius, edge, compactLength));
-  const geometry = spring(initial, { stiffness: 0.18, damping: 0.7, precision: 0.1 });
-  const styleMorph = spring(untrack(() => islandStyle === "edge" ? 1 : 0), { stiffness: 0.18, damping: 0.7, precision: 0.001 });
+  const widthMotion = tweened(initial.width);
+  const heightMotion = tweened(initial.height);
+  const radiusMotion = tweened(initial.radius);
+  const styleMorph = tweened(untrack(() => islandStyle === "edge" ? 1 : 0));
   const hideMorph = spring(untrack(() => simulateHidden && mode === "hidden" ? 1 : 0), { stiffness: 0.18, damping: 0.7, precision: 0.001 });
-  let size = $state(initial);
+  let animatedWidth = $state(initial.width);
+  let animatedHeight = $state(initial.height);
+  let animatedRadius = $state(initial.radius);
   let styleProgress = $state(untrack(() => islandStyle === "edge" ? 1 : 0));
   let hideProgress = $state(untrack(() => simulateHidden && mode === "hidden" ? 1 : 0));
+  let prefersReducedMotion = $state(false);
   let activeEnvelope: IslandGeometry = initial;
   let transitionRevision = 0;
-  const unsubscribe = geometry.subscribe((value) => {
-    size = value;
-  });
+  const unsubscribeWidth = widthMotion.subscribe((value) => animatedWidth = value);
+  const unsubscribeHeight = heightMotion.subscribe((value) => animatedHeight = value);
+  const unsubscribeRadius = radiusMotion.subscribe((value) => animatedRadius = value);
   const unsubscribeStyle = styleMorph.subscribe((value) => styleProgress = value);
   const unsubscribeHide = hideMorph.subscribe((value) => hideProgress = value);
 
+  const size = $derived({ width: animatedWidth, height: animatedHeight, radius: animatedRadius });
+
+  onMount(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updatePreference = () => prefersReducedMotion = mediaQuery.matches;
+    updatePreference();
+    mediaQuery.addEventListener("change", updatePreference);
+    return () => mediaQuery.removeEventListener("change", updatePreference);
+  });
+
+  async function animateGeometry(target: IslandGeometry, hard: boolean, revision: number) {
+    if (hard) {
+      await Promise.all([
+        widthMotion.set(target.width, { duration: 0 }),
+        heightMotion.set(target.height, { duration: 0 }),
+        radiusMotion.set(target.radius, { duration: 0 }),
+      ]);
+      return;
+    }
+
+    const horizontalEdge = edge === "top" || edge === "bottom";
+    const crossAxis = horizontalEdge ? widthMotion : heightMotion;
+    const outwardAxis = horizontalEdge ? heightMotion : widthMotion;
+    const crossTarget = horizontalEdge ? target.width : target.height;
+    const outwardTarget = horizontalEdge ? target.height : target.width;
+
+    if (mode === "expanded") {
+      const cross = crossAxis.set(crossTarget, {
+        duration: ISLAND_MOTION.crossAxisDuration,
+        easing: islandMorphEasing,
+      });
+      const radius = radiusMotion.set(target.radius, {
+        duration: ISLAND_MOTION.radiusDuration,
+        easing: islandMorphEasing,
+      });
+      const outward = outwardAxis.set(outwardTarget + ISLAND_MOTION.overshoot, {
+        delay: ISLAND_MOTION.outwardDelay,
+        duration: ISLAND_MOTION.outwardDuration,
+        easing: islandMorphEasing,
+      }).then(() => {
+        if (revision !== transitionRevision) return;
+        return outwardAxis.set(outwardTarget, {
+          duration: ISLAND_MOTION.settleDuration,
+          easing: islandSettleEasing,
+        });
+      });
+      await Promise.all([cross, radius, outward]);
+      return;
+    }
+
+    const duration = mode === "hover" ? ISLAND_MOTION.hoverDuration : ISLAND_MOTION.collapseDuration;
+    await Promise.all([
+      outwardAxis.set(outwardTarget, { duration, easing: islandSettleEasing }),
+      crossAxis.set(crossTarget, {
+        delay: mode === "hover" ? 0 : ISLAND_MOTION.outwardDelay,
+        duration,
+        easing: islandSettleEasing,
+      }),
+      radiusMotion.set(target.radius, { duration, easing: islandSettleEasing }),
+    ]);
+  }
+
   $effect(() => {
     const target = geometryFor(mode, expandedRadius, edge, compactLength);
-    const hard = !enableAnimations || reduceAnimations;
+    const hard = !enableAnimations || reduceAnimations || prefersReducedMotion;
     const revision = ++transitionRevision;
     activeEnvelope = stableEnvelope(activeEnvelope, target);
     onRegionChange?.({ geometry: activeEnvelope, radii: radiiFor(activeEnvelope, islandStyle, edge), polygon: shapePolygonFor(activeEnvelope, islandStyle, edge, edgeShoulderRadius), settled: false });
-    geometry.set(target, { hard }).then(() => {
+    animateGeometry(target, hard, revision).then(() => {
       if (revision !== transitionRevision) return;
       activeEnvelope = target;
       onRegionChange?.({ geometry: target, radii: radiiFor(target, islandStyle, edge), polygon: shapePolygonFor(target, islandStyle, edge, edgeShoulderRadius), settled: true });
     });
   });
   $effect(() => {
-    styleMorph.set(islandStyle === "edge" ? 1 : 0, { hard: !enableAnimations || reduceAnimations });
+    const hard = !enableAnimations || reduceAnimations || prefersReducedMotion;
+    styleMorph.set(
+      islandStyle === "edge" ? 1 : 0,
+      hard ? { duration: 0 } : { duration: ISLAND_MOTION.styleDuration, easing: islandMorphEasing },
+    );
   });
   $effect(() => {
     hideMorph.set(simulateHidden && mode === "hidden" ? 1 : 0, { hard: !enableAnimations || reduceAnimations });
   });
-  $effect(() => () => { unsubscribe(); unsubscribeStyle(); unsubscribeHide(); });
+  $effect(() => () => {
+    unsubscribeWidth();
+    unsubscribeHeight();
+    unsubscribeRadius();
+    unsubscribeStyle();
+    unsubscribeHide();
+  });
 
-  const expansion = $derived(expansionForGeometry(size, edge, compactLength));
   const currentRadii = $derived(radiiFor(size, islandStyle, edge));
   const currentPolygon = $derived(interpolatePolygon(
     shapePolygonFor(size, "floating", edge, edgeShoulderRadius),
@@ -157,8 +233,18 @@
     if (edge === "bottom") return `translateX(-50%) translateY(${mix(-gap, size.height - 2)}px)`;
     return `translateY(-50%) translateX(${mix(gap, 2 - size.width)}px)`;
   });
-  const expandedOpacity = $derived(Math.min(1, Math.max(0, (expansion - 0.1) / 0.5)));
-  const compactOpacity = $derived(Math.min(1, Math.max(0, 1 - expansion * 3)));
+  const outwardProgress = $derived.by(() => {
+    const horizontalEdge = edge === "top" || edge === "bottom";
+    const compact = geometryFor("hover", expandedRadius, edge, compactLength);
+    const expanded = geometryFor("expanded", expandedRadius, edge, compactLength);
+    const value = horizontalEdge ? size.height : size.width;
+    const start = horizontalEdge ? compact.height : compact.width;
+    const end = horizontalEdge ? expanded.height : expanded.width;
+    return Math.min(1, Math.max(0, (value - start) / (end - start)));
+  });
+  const expandedOpacity = $derived(Math.min(1, Math.max(0, (outwardProgress - 0.18) / 0.42)));
+  const secondaryOpacity = $derived(Math.min(1, Math.max(0, (outwardProgress - 0.42) / 0.38)));
+  const compactOpacity = $derived(Math.min(1, Math.max(0, 1 - outwardProgress * 4)));
   const surfaceBackground = $derived(mode === "expanded" ? background : "#000");
   const surfaceBorder = $derived(mode === "expanded" ? border : "1px solid transparent");
   function toggleFromSurface(event: MouseEvent | KeyboardEvent) {
@@ -223,7 +309,15 @@
         <span class="idle-compact" class:vertical={edge === "left" || edge === "right"} title={idleTitle}>{idleTitle}</span>
       {:else}
         <button class="cover compact-cover" type="button" aria-label="打开当前播放器" onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
-          {#if media.albumArt}{#key media.albumArt}<img class="cover-image" src={media.albumArt} alt="" draggable="false" />{/key}{:else}<Music2 size={12} />{/if}
+          {#if media.albumArt}
+            {#key media.albumArt}
+              <span class="compact-disc" class:spinning={mode === "compact" && media.isPlaying && enableAnimations && !reduceAnimations}>
+                <img class="cover-image" src={media.albumArt} alt="" draggable="false" />
+              </span>
+            {/key}
+          {:else}
+            <Music2 size={12} />
+          {/if}
         </button>
         {#if showSpectrum}
           <Spectrum active={compactOpacity > .05} playing={media.isPlaying} mode={spectrumMode} reduceMotion={reduceAnimations} topColor={spectrumTopColor} bottomColor={spectrumBottomColor} values={previewSpectrum} />
@@ -235,8 +329,7 @@
 
     <div
       class="expanded-layer"
-      style:opacity={expandedOpacity}
-      style:transform={`translateX(-50%) translateY(${(1 - expandedOpacity) * 5}px)`}
+      style={`opacity:${expandedOpacity};transform:translateX(-50%) translateY(${(1 - expandedOpacity) * -6}px);--secondary-opacity:${secondaryOpacity}`}
       aria-hidden={expandedOpacity <= .5}
     >
       {#if systemAudio}
@@ -284,11 +377,11 @@
       <div class="control-row">
         <span class="control-spacer"></span>
         <div class="controls">
-          <button type="button" aria-label="上一首" onclick={(e) => { e.stopPropagation(); onMediaAction?.("prev"); }}><SkipBack size={22} fill="currentColor" /></button>
+          <button type="button" class="side" aria-label="上一首" onclick={(e) => { e.stopPropagation(); onMediaAction?.("prev"); }}><SkipBack size={22} fill="currentColor" /></button>
           <button type="button" class="play" aria-label={media.isPlaying ? "暂停" : "播放"} onclick={(e) => { e.stopPropagation(); onMediaAction?.("play_pause"); }}>
             {#if media.isPlaying}<Pause size={32} fill="currentColor" />{:else}<Play size={32} fill="currentColor" />{/if}
           </button>
-          <button type="button" aria-label="下一首" onclick={(e) => { e.stopPropagation(); onMediaAction?.("next"); }}><SkipForward size={22} fill="currentColor" /></button>
+          <button type="button" class="side" aria-label="下一首" onclick={(e) => { e.stopPropagation(); onMediaAction?.("next"); }}><SkipForward size={22} fill="currentColor" /></button>
         </div>
         <button type="button" class="floating" aria-label="切换悬浮窗" onclick={(e) => { e.stopPropagation(); onToggleFloating?.(); }}><GalleryHorizontalEnd size={18} /></button>
       </div>
@@ -303,13 +396,14 @@
   .island-surface{position:relative;z-index:1;overflow:hidden;flex:none;box-sizing:border-box;color:#fff;contain:layout paint style;transform:translateZ(0);transition:transform 140ms cubic-bezier(.23,1,.32,1),box-shadow 180ms cubic-bezier(.23,1,.32,1);will-change:clip-path}
   .floating-style .island-surface:active{transform:scale(.97) translateZ(0)}.compact-layer,.expanded-layer{position:absolute;z-index:1;box-sizing:border-box;pointer-events:none}
   .compact-layer{inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 4px}.compact-layer.edge-inset:not(.vertical){padding-left:calc(4px + var(--shoulder-inset));padding-right:calc(8px + var(--shoulder-inset))}.compact-layer.vertical{flex-direction:column;padding:4px 0 8px}.compact-layer.edge-inset.vertical{padding-top:calc(4px + var(--shoulder-inset));padding-bottom:calc(8px + var(--shoulder-inset))}.compact-layer button,.compact-layer :global(canvas){pointer-events:auto}.time-display{width:100%;text-align:center;color:rgba(255,255,255,.8);font:500 12px/1 var(--app-font);letter-spacing:.05em;font-variant-numeric:tabular-nums;user-select:none}.cover{display:grid;place-items:center;flex:none;padding:0;overflow:hidden;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);border:0;cursor:pointer;user-select:none}.cover img{width:100%;height:100%;display:block;object-fit:cover;-webkit-user-drag:none;user-select:none}.compact-cover{width:20px;height:20px;border-radius:50%}.expanded-cover{width:52px;height:52px;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.35);outline:1px solid rgba(255,255,255,.1)}.playing-dot{width:3px;height:3px;border-radius:50%}
+  .compact-disc{display:block;width:100%;height:100%;transform-origin:center;animation:compact-disc-spin 8s linear infinite;animation-play-state:paused}.compact-disc.spinning{animation-play-state:running;will-change:transform}@keyframes compact-disc-spin{to{transform:rotate(1turn)}}
   .audio-compact{width:100%;display:flex;align-items:center;justify-content:center;gap:5px;color:#fff;font:600 11px/1 var(--app-font);font-variant-numeric:tabular-nums}.audio-compact.vertical{flex-direction:column}.audio-expanded{width:100%;height:100%;padding:18px 26px 14px;box-sizing:border-box;display:flex;flex-direction:column}.audio-heading{display:flex;align-items:center;gap:10px}.audio-heading>span:last-child{min-width:0;display:flex;flex-direction:column}.audio-heading small{font-size:9px;color:rgba(255,255,255,.5)}.audio-heading strong{font-size:16px}.audio-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,.1)}.audio-expanded input[type="range"]{width:100%;margin:12px 0 9px;accent-color:#fff}.audio-device-list{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none}.audio-device-list button{min-width:0;max-width:120px;display:flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid rgba(255,255,255,.08);border-radius:8px;color:rgba(255,255,255,.6);background:rgba(255,255,255,.05);cursor:pointer}.audio-device-list button.active{color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.12)}.audio-device-list span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px}
   .idle-compact{display:block;width:100%;padding:0 7px;overflow:hidden;text-align:center;text-overflow:ellipsis;white-space:nowrap;font:600 11px/1 var(--app-font);color:rgba(255,255,255,.9)}.idle-compact.vertical{writing-mode:vertical-rl;max-height:100%;padding:7px 0}.idle-expanded{width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:18px 28px}.idle-expanded small{font-size:9px;letter-spacing:.12em;color:rgba(255,255,255,.45)}.idle-expanded strong{max-width:100%;margin-top:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:22px;line-height:1.15}.idle-expanded>span{max-width:100%;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:rgba(255,255,255,.62)}.idle-controls{display:flex;gap:10px;margin-top:16px}.idle-controls button{display:grid;place-items:center;width:32px;height:30px;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;background:rgba(255,255,255,.06);pointer-events:auto;cursor:pointer}
   .cover-image{animation:cover-flip-in 420ms cubic-bezier(.23,1,.32,1)}@keyframes cover-flip-in{from{opacity:0;transform:perspective(500px) rotateY(-70deg) scale(.9)}to{opacity:1;transform:perspective(500px) rotateY(0) scale(1)}}
   .debug-overlay{position:absolute;z-index:4;top:4px;left:50%;display:flex;gap:5px;max-width:calc(100% - 12px);padding:2px 6px;border-radius:5px;transform:translateX(-50%);overflow:hidden;color:#4ade80;background:rgba(0,0,0,.75);font:500 8px/1.3 ui-monospace,monospace;white-space:nowrap;pointer-events:none}.debug-overlay span{overflow:hidden;text-overflow:ellipsis}
-  .expanded-layer{left:50%;top:0;width:300px;height:160px;padding:20px 28px 16px;display:flex;flex-direction:column;transition:opacity 120ms linear;will-change:transform,opacity}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.top-row{display:flex;align-items:center;gap:12px;margin-bottom:12px;min-height:52px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata strong,.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata strong{font-size:13px;line-height:1.15;font-weight:700;letter-spacing:-.03em;margin-bottom:4px}.metadata span{font-size:11px;line-height:1.15;font-weight:500;color:rgba(255,255,255,.65)}
-  .progress-block{width:100%;margin-bottom:8px}
-  .control-row{position:relative;display:grid;grid-template-columns:28px 1fr 28px;align-items:center;width:100%;height:40px}.control-spacer{width:28px}.controls{display:flex;align-items:center;justify-content:center;gap:20px}.controls button,.floating{display:grid;place-items:center;padding:0;color:rgba(255,255,255,.9);background:transparent;border:0;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease}.controls button{width:32px;height:32px}.controls .play{width:40px;height:40px;color:#fff}.floating{width:28px;height:28px;border-radius:12px;border:1px solid rgba(255,255,255,.1)}.controls button:active,.floating:active,.cover:active{transform:scale(.94)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .expanded-layer{left:50%;top:0;width:300px;height:160px;padding:16px 28px 20px;display:flex;flex-direction:column;transition:opacity 120ms linear;will-change:transform,opacity}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.top-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;min-height:52px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata strong,.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata strong{font-size:13px;line-height:1.15;font-weight:700;letter-spacing:-.03em;margin-bottom:4px}.metadata span{font-size:11px;line-height:1.15;font-weight:500;color:rgba(255,255,255,.65)}.progress-block,.control-row,.audio-device-list,.idle-controls{opacity:var(--secondary-opacity);transition:opacity 100ms linear}
+  .progress-block{width:100%;margin-bottom:4px}
+  .control-row{position:relative;display:grid;grid-template-columns:28px 1fr 28px;align-items:center;width:100%;height:40px}.control-spacer{width:28px}.controls{display:flex;align-items:center;justify-content:center;gap:20px}.controls button,.floating{display:grid;place-items:center;padding:0;color:rgba(255,255,255,.9);background:transparent;border:0;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease}.controls button{width:40px;height:40px}.controls .side{width:32px;height:32px}.controls .play{color:#fff}.floating{width:28px;height:28px;border-radius:12px;border:1px solid rgba(255,255,255,.1)}.controls button:active,.floating:active,.cover:active{transform:scale(.94)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   @media (hover:hover) and (pointer:fine){.controls button:hover,.floating:hover{transform:scale(1.06);color:#fff}.cover:hover{filter:brightness(1.08)}}
-  @media (prefers-reduced-motion:reduce){.surface-anchor{transition:none!important}.island-surface,.expanded-layer,.controls button,.floating{transition-duration:120ms!important}.island-surface{transition-property:opacity,box-shadow!important}.expanded-layer{transform:translateX(-50%)!important}.cover-image{animation:none}}
+  @media (prefers-reduced-motion:reduce){.surface-anchor{transition:none!important}.island-surface,.expanded-layer,.controls button,.floating{transition-duration:120ms!important}.island-surface{transition-property:opacity,box-shadow!important}.expanded-layer{transform:translateX(-50%)!important}.cover-image,.compact-disc{animation:none}}
 </style>

@@ -26,6 +26,7 @@ struct CoverCandidate {
     title: String,
     artist: String,
     url: String,
+    source_id: Option<u64>,
 }
 
 static COVER_CACHE: OnceLock<Mutex<HashMap<String, (Instant, Option<ResolvedCover>)>>> =
@@ -58,17 +59,26 @@ fn stabilize_timeline(
     } else {
         previous.position_ms
     };
+    let reported_position = if effective_duration > 0 {
+        reported.position_ms.min(effective_duration)
+    } else {
+        reported.position_ms
+    };
     TimelineSnapshot {
         position_ms: if !is_playing {
             previous_position
+        } else if reported_position < 1_000 && previous_position > 0 {
+            // Some SMTC providers briefly publish a zero timeline while they
+            // refresh an actively playing session. Keep the last valid value;
+            // the frontend clock will continue advancing from it until a
+            // usable snapshot arrives.
+            previous_position
         } else {
-            reported.position_ms
+            reported_position
         },
-        duration_ms: if !is_playing && reported.duration_ms == 0 {
-            previous.duration_ms
-        } else {
-            reported.duration_ms
-        },
+        // A missing duration is transient for several desktop players and
+        // must never replace a known duration, regardless of playback state.
+        duration_ms: effective_duration,
     }
 }
 
@@ -85,7 +95,7 @@ fn candidate_score(title: &str, artist: &str, candidate: &CoverCandidate) -> u8 
     let wanted_artist = normalize_media_text(artist);
     let found_title = normalize_media_text(&candidate.title);
     let found_artist = normalize_media_text(&candidate.artist);
-    if wanted_title.is_empty() || wanted_artist.is_empty() {
+    if wanted_title.is_empty() {
         return 0;
     }
     let title_score = if wanted_title == found_title {
@@ -95,7 +105,9 @@ fn candidate_score(title: &str, artist: &str, candidate: &CoverCandidate) -> u8 
     } else {
         0
     };
-    let artist_score = if wanted_artist == found_artist {
+    let artist_score = if wanted_artist.is_empty() {
+        0
+    } else if wanted_artist == found_artist {
         40
     } else if wanted_artist.contains(&found_artist) || found_artist.contains(&wanted_artist) {
         25
@@ -110,22 +122,65 @@ fn best_cover_candidate(
     artist: &str,
     candidates: Vec<CoverCandidate>,
 ) -> Option<CoverCandidate> {
+    let threshold = if normalize_media_text(artist).is_empty() {
+        60
+    } else {
+        COVER_MATCH_THRESHOLD
+    };
     candidates
         .into_iter()
         .map(|candidate| (candidate_score(title, artist, &candidate), candidate))
-        .filter(|(score, _)| *score >= COVER_MATCH_THRESHOLD)
+        .filter(|(score, _)| *score >= threshold)
         .max_by_key(|(score, _)| *score)
         .map(|(_, candidate)| candidate)
 }
 
 fn netease_hd_url(url: &str) -> String {
-    let separator = if url.contains('?') { '&' } else { '?' };
-    format!("{url}{separator}param=1200y1200")
+    let base_url = url.split('?').next().unwrap_or(url);
+    format!("{base_url}?param=1200y1200")
 }
 
 fn apple_hd_url(url: &str) -> String {
     url.replace("100x100bb", "1200x1200bb")
         .replace("100x100-75", "1200x1200-75")
+}
+
+async fn download_cover_as_data_url(client: &reqwest::Client, url: &str) -> AppResult<String> {
+    const MAX_COVER_BYTES: u64 = 12 * 1024 * 1024;
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|error| AppError::network(format!("Cover download failed: {error}")))?
+        .error_for_status()
+        .map_err(|error| AppError::network(format!("Cover download status failed: {error}")))?;
+    if response
+        .content_length()
+        .is_some_and(|size| size > MAX_COVER_BYTES)
+    {
+        return Err(AppError::business(3004, "封面图片过大"));
+    }
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|error| AppError::network(format!("Cover bytes failed: {error}")))?;
+    if bytes.len() as u64 > MAX_COVER_BYTES {
+        return Err(AppError::business(3004, "封面图片过大"));
+    }
+    let format = image::guess_format(&bytes)
+        .map_err(|error| AppError::parse(format!("Cover image format failed: {error}")))?;
+    let mime = match format {
+        image::ImageFormat::Jpeg => "image/jpeg",
+        image::ImageFormat::Png => "image/png",
+        image::ImageFormat::WebP => "image/webp",
+        image::ImageFormat::Gif => "image/gif",
+        image::ImageFormat::Bmp => "image/bmp",
+        _ => return Err(AppError::business(3002, "不支持的封面图片格式")),
+    };
+    Ok(format!(
+        "data:{mime};base64,{}",
+        general_purpose::STANDARD.encode(&bytes)
+    ))
 }
 
 fn allow_apple_request() -> bool {
@@ -168,6 +223,7 @@ async fn cover_from_netease(
     let url = format!("https://music.163.com/api/search/get/?s={keyword}&type=1&limit=5");
     let json: Value = client
         .get(url)
+        .header(reqwest::header::REFERER, "https://music.163.com/")
         .send()
         .await
         .map_err(|error| AppError::network(format!("Netease cover request failed: {error}")))?
@@ -189,16 +245,53 @@ async fn cover_from_netease(
                 .filter_map(|item| item["name"].as_str())
                 .collect::<Vec<_>>()
                 .join(" ");
-            let url = song["album"]["picUrl"].as_str()?.to_string();
-            Some(CoverCandidate { title, artist, url })
+            let url = song["album"]["picUrl"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+            Some(CoverCandidate {
+                title,
+                artist,
+                url,
+                source_id: song["id"].as_u64(),
+            })
         })
         .collect();
-    Ok(
-        best_cover_candidate(title, artist, candidates).map(|candidate| ResolvedCover {
-            url: netease_hd_url(&candidate.url),
-            provider: "netease".to_string(),
-        }),
-    )
+    let Some(candidate) = best_cover_candidate(title, artist, candidates) else {
+        return Ok(None);
+    };
+    let cover_url = if candidate.url.is_empty() {
+        let Some(song_id) = candidate.source_id else {
+            return Ok(None);
+        };
+        let detail_url =
+            format!("https://music.163.com/api/song/detail/?id={song_id}&ids=%5B{song_id}%5D");
+        let detail: Value = client
+            .get(detail_url)
+            .header(reqwest::header::REFERER, "https://music.163.com/")
+            .send()
+            .await
+            .map_err(|error| AppError::network(format!("Netease detail failed: {error}")))?
+            .error_for_status()
+            .map_err(|error| AppError::network(format!("Netease detail status failed: {error}")))?
+            .json()
+            .await
+            .map_err(|error| AppError::parse(format!("Netease detail response failed: {error}")))?;
+        detail["songs"][0]["album"]["picUrl"]
+            .as_str()
+            .or_else(|| detail["songs"][0]["album"]["blurPicUrl"].as_str())
+            .unwrap_or_default()
+            .to_string()
+    } else {
+        candidate.url
+    };
+    if cover_url.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(ResolvedCover {
+        url: netease_hd_url(&cover_url),
+        provider: "netease".to_string(),
+    }))
 }
 
 async fn cover_from_apple(
@@ -212,7 +305,7 @@ async fn cover_from_apple(
     let query = format!("{title} {artist}");
     let term = urlencoding::encode(&query);
     let url = format!(
-        "https://itunes.apple.com/search?term={term}&country=CN&media=music&entity=song&limit=5"
+        "https://itunes.apple.com/search?term={term}&country=US&media=music&entity=song&limit=5"
     );
     let json: Value = client
         .get(url)
@@ -233,6 +326,7 @@ async fn cover_from_apple(
                 title: item["trackName"].as_str()?.to_string(),
                 artist: item["artistName"].as_str()?.to_string(),
                 url: item["artworkUrl100"].as_str()?.to_string(),
+                source_id: item["trackId"].as_u64(),
             })
         })
         .collect();
@@ -255,7 +349,7 @@ pub async fn resolve_hd_cover(
         normalize_media_text(artist),
         source.to_lowercase()
     );
-    if cache_key.starts_with('|') || cache_key.contains("||") {
+    if cache_key.starts_with('|') {
         return Ok(None);
     }
     if let Ok(cache) = COVER_CACHE
@@ -285,9 +379,17 @@ pub async fn resolve_hd_cover(
             "apple" => cover_from_apple(&client, title, artist).await,
             _ => cover_from_netease(&client, title, artist).await,
         };
-        if let Ok(Some(cover)) = attempt {
-            resolved = Some(cover);
-            break;
+        if let Ok(Some(mut cover)) = attempt {
+            match download_cover_as_data_url(&client, &cover.url).await {
+                Ok(data_url) => {
+                    cover.url = data_url;
+                    resolved = Some(cover);
+                    break;
+                }
+                Err(error) => {
+                    tracing::warn!("[高清封面] {} 图片下载失败: {}", provider, error);
+                }
+            }
         }
     }
     if let Ok(mut cache) = COVER_CACHE
@@ -565,38 +667,19 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
     let is_playing = playback_status.0 == 4; // Playing = 4
 
     // 计算实际播放位置（考虑时间差）
-    let mut dur_ms = (timeline.EndTime().unwrap_or_default().Duration / 10000) as u64;
+    let dur_ms = (timeline.EndTime().unwrap_or_default().Duration / 10000) as u64;
     let snapshot_pos_ms = (timeline.Position().unwrap_or_default().Duration / 10000) as u64;
-    let last_updated_filetime = timeline.LastUpdatedTime().unwrap_or_default().UniversalTime;
-
-    // Windows FILETIME 转换为 Unix 时间戳
-    let last_updated_timestamp = if last_updated_filetime > 0 {
-        ((last_updated_filetime / 10000) - 11644473600000) as u64
-    } else {
-        0
-    };
-
-    let now_filetime =
-        chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0) / 100 + 116444736000000000;
-    let diff_ms = if now_filetime > last_updated_filetime {
-        ((now_filetime - last_updated_filetime) / 10000) as u64
-    } else {
-        0
-    };
-
-    // 计算实时播放位置
-    let real_pos_ms = if is_playing && dur_ms > 0 {
-        (snapshot_pos_ms + diff_ms).min(dur_ms)
+    // Position 已经是 SMTC 的当前快照。LastUpdatedTime 在部分播放器中是
+    // 曲目创建时间或旧时间戳，用它再次外推会直接把进度推到 100%。
+    // 前端收到快照后会从接收时刻继续本地计时，因此这里不再重复外推。
+    let real_pos_ms = if dur_ms > 0 {
+        snapshot_pos_ms.min(dur_ms)
     } else {
         snapshot_pos_ms
     };
 
-    if dur_ms == 0 && is_playing {
-        dur_ms = 1;
-    }
-
     // 处理直播流（时长为0或超大）
-    let is_live_logic = dur_ms == 0 || dur_ms > 360000000;
+    let is_live_logic = dur_ms > 360000000;
     let (position_ms, duration_ms) = if is_live_logic {
         (0u64, 0u64)
     } else {
@@ -637,7 +720,10 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
         is_playing,
         position_ms: timeline.position_ms,
         duration_ms: timeline.duration_ms,
-        last_updated_timestamp,
+        last_updated_timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64,
         source: source_type,
         source_display: raw_id,
         capabilities,
@@ -845,6 +931,7 @@ mod cover_tests {
             title: title.to_string(),
             artist: artist.to_string(),
             url: url.to_string(),
+            source_id: None,
         }
     }
 
@@ -873,20 +960,39 @@ mod cover_tests {
     }
 
     #[test]
-    fn keeps_last_timeline_when_pause_snapshot_resets_to_zero() {
+    fn keeps_last_timeline_when_smtc_snapshot_resets_to_zero() {
         let previous = TimelineSnapshot {
             position_ms: 42_500,
             duration_ms: 180_000,
         };
         let reset = TimelineSnapshot::default();
         assert_eq!(stabilize_timeline(Some(previous), reset, false), previous);
-        assert_eq!(stabilize_timeline(Some(previous), reset, true), reset);
+        assert_eq!(stabilize_timeline(Some(previous), reset, true), previous);
         let stale = TimelineSnapshot {
             position_ms: 12_000,
             duration_ms: 180_000,
         };
         assert_eq!(stabilize_timeline(Some(previous), stale, false), previous);
         assert_eq!(stabilize_timeline(Some(previous), stale, true), stale);
+    }
+
+    #[test]
+    fn keeps_known_duration_during_a_playing_metadata_gap() {
+        let previous = TimelineSnapshot {
+            position_ms: 42_500,
+            duration_ms: 180_000,
+        };
+        let missing_duration = TimelineSnapshot {
+            position_ms: 43_000,
+            duration_ms: 0,
+        };
+        assert_eq!(
+            stabilize_timeline(Some(previous), missing_duration, true),
+            TimelineSnapshot {
+                position_ms: 43_000,
+                duration_ms: 180_000,
+            }
+        );
     }
 
     #[test]
@@ -904,9 +1010,24 @@ mod cover_tests {
     }
 
     #[test]
+    fn accepts_an_exact_title_when_the_player_omits_artist() {
+        let selected = best_cover_candidate(
+            "Midnight City",
+            "",
+            vec![candidate("Midnight City", "M83", "cover")],
+        )
+        .expect("title-only matching cover");
+        assert_eq!(selected.url, "cover");
+    }
+
+    #[test]
     fn upgrades_provider_artwork_urls() {
         assert_eq!(
             netease_hd_url("https://p.example/cover.jpg"),
+            "https://p.example/cover.jpg?param=1200y1200"
+        );
+        assert_eq!(
+            netease_hd_url("https://p.example/cover.jpg?param=100y100"),
             "https://p.example/cover.jpg?param=1200y1200"
         );
         assert!(apple_hd_url("https://a.example/100x100bb.jpg").contains("1200x1200bb"));

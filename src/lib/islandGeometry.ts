@@ -30,7 +30,8 @@ export const ISLAND_GEOMETRY = {
 } as const;
 
 export const ISLAND_GAP = 22;
-export const ISLAND_HOST = { width: 300, height: 182, top: ISLAND_GAP } as const;
+export const ISLAND_OVERSHOOT = 4;
+export const ISLAND_HOST = { width: 300, height: 186, top: ISLAND_GAP } as const;
 
 export function isVerticalEdge(edge: IslandEdge) {
   return edge === "left" || edge === "right";
@@ -87,14 +88,15 @@ export function borderRadiusCss(radii: CornerRadii) {
   return `${radii.topLeft}px ${radii.topRight}px ${radii.bottomRight}px ${radii.bottomLeft}px`;
 }
 
-export function hostFor(style: IslandStyle, edge: IslandEdge, compactLength = 80): HostGeometry {
-  // Keep one stable native envelope while morphing between floating and edge.
-  // The unused gap is transparent in edge mode.
-  const gap = style === "floating" ? ISLAND_GAP : 0;
+export function hostFor(_style: IslandStyle, edge: IslandEdge, compactLength = 80): HostGeometry {
+  // Floating and attached silhouettes share one native window envelope. Mode
+  // changes can then stay entirely inside the compositor instead of resizing
+  // the WebView on every switch. Edge mode simply leaves the gap transparent.
+  const gap = ISLAND_GAP;
   const length = clampCompactLength(compactLength);
   return isVerticalEdge(edge)
-    ? { width: ISLAND_GEOMETRY.expanded.width + gap, height: Math.max(ISLAND_GEOMETRY.expanded.height, length) }
-    : { width: ISLAND_GEOMETRY.expanded.width, height: ISLAND_GEOMETRY.expanded.height + gap };
+    ? { width: ISLAND_GEOMETRY.expanded.width + gap + ISLAND_OVERSHOOT, height: Math.max(ISLAND_GEOMETRY.expanded.height, length) }
+    : { width: ISLAND_GEOMETRY.expanded.width, height: ISLAND_GEOMETRY.expanded.height + gap + ISLAND_OVERSHOOT };
 }
 
 function cubicPoint(a: Point, b: Point, c: Point, d: Point, t: number): Point {

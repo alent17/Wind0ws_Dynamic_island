@@ -1,6 +1,7 @@
 //! 通用工具函数模块
 
 use crate::error::{AppError, AppResult};
+use base64::{engine::general_purpose, Engine as _};
 
 /// 校验路径安全性
 fn validate_path(image_path: &str) -> AppResult<()> {
@@ -26,6 +27,17 @@ fn validate_path(image_path: &str) -> AppResult<()> {
 /// - 相对于 Packages 目录的路径
 /// - 相对于 AppData 目录的路径
 pub fn load_image_data(image_path: &str) -> AppResult<Vec<u8>> {
+    if let Some(encoded) = image_path
+        .strip_prefix("data:image/")
+        .and_then(|value| value.split_once(","))
+        .filter(|(metadata, _)| metadata.ends_with(";base64"))
+        .map(|(_, encoded)| encoded)
+    {
+        return general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(|e| AppError::parse(format!("无法解码图片数据：{}", e)));
+    }
+
     validate_path(image_path)?;
 
     let path = std::path::Path::new(image_path);
@@ -54,4 +66,17 @@ pub fn load_image_data(image_path: &str) -> AppResult<Vec<u8>> {
     }
 
     Err(AppError::not_found(format!("图片不存在：{}", image_path)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::load_image_data;
+
+    #[test]
+    fn loads_base64_image_data_urls() {
+        assert_eq!(
+            load_image_data("data:image/png;base64,AQID").expect("decoded image bytes"),
+            vec![1, 2, 3]
+        );
+    }
 }

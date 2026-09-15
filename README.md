@@ -76,10 +76,10 @@ cargo test --manifest-path src-tauri/Cargo.toml
 构建生产安装包：
 
 ```powershell
-npm run tauri build
+npm run bundle:windows
 ```
 
-构建结果位于 `src-tauri/target/release/bundle/`。
+构建结果位于 `src-tauri/target/release/bundle/nsis/`。安装向导允许用户选择安装目录，并在完成安装前询问是否随 Windows 开机启动。
 
 ## 使用方式
 

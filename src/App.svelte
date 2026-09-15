@@ -26,7 +26,7 @@
     type IslandRegionChange,
     type IslandStyle,
   } from "$lib/islandGeometry";
-  import type { AppSettings, AudioDeviceInfo, IdleContentItem, IdleSnapshot, MediaState, SystemAudioState } from "$lib/api/types";
+  import type { AppSettings, AudioDeviceInfo, IdleContentItem, IdleSnapshot, MediaState, MonitorInfo, SystemAudioState } from "$lib/api/types";
   import { DEFAULT_SETTINGS } from "$lib/api/types";
   import { applyAppFont } from "$lib/font";
   import {
@@ -242,7 +242,7 @@
     const checkInterval = setInterval(() => {
       updateTimeDisplay();
       clockNow = Date.now();
-    }, 100);
+    }, 250);
 
     return () => clearInterval(checkInterval);
   });
@@ -703,6 +703,9 @@
   let monitorAnchorY = 0;
   let windowReady = $state(false);
   let windowPlacementRevision = 0;
+  let lastAppliedBounds = "";
+  let placementMonitors: MonitorInfo[] = [];
+  let placementMonitorsRefreshedAt = 0;
 
   // Island geometry is animated inside a fixed native host. Resizing the
   // WebView for every spring frame was the main source of expansion jank.
@@ -713,11 +716,20 @@
     monitorIndex = appSettings.monitorIndex,
     positionPercent = appSettings.islandEdgePosition,
     hidden = isHidden,
+    animateBounds = true,
   ) {
     if (!windowReady) return;
     const revision = ++windowPlacementRevision;
-    const allMonitors = await windowApi.getMonitors();
+    const shouldRefreshMonitors =
+      placementMonitors.length === 0 || Date.now() - placementMonitorsRefreshedAt >= 5000;
+    const allMonitors = shouldRefreshMonitors
+      ? await windowApi.getMonitors()
+      : placementMonitors;
     if (!allMonitors.length) return;
+    if (shouldRefreshMonitors) {
+      placementMonitors = allMonitors;
+      placementMonitorsRefreshedAt = Date.now();
+    }
     const safeIndex = Math.min(Math.max(0, monitorIndex), allMonitors.length - 1);
     const monitor = allMonitors[safeIndex];
     const dpr = monitor.scaleFactor || window.devicePixelRatio || 1;
@@ -749,10 +761,14 @@
     cachedScreenHeight = monitor.height;
     monitorAnchorX = monitor.x + monitor.width / 2;
     monitorAnchorY = monitor.y;
-    const animate = appSettings.enableAnimations
+    const animate = animateBounds
+      && appSettings.enableAnimations
       && !appSettings.reduceAnimations
       && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const boundsKey = `${target.x}:${target.y}:${target.width}:${target.height}`;
+    if (boundsKey === lastAppliedBounds) return;
     await windowApi.animateWindowBounds(target.width, target.height, target.x, target.y, animate);
+    if (revision === windowPlacementRevision) lastAppliedBounds = boundsKey;
   }
 
   function edgeTransform(edge: IslandEdge) {
@@ -765,8 +781,22 @@
   async function transitionPlacement(nextStyle: IslandStyle, nextEdge: IslandEdge) {
     if (nextEdge === renderedIslandEdge) {
       // The fixed host reserves the floating gap in both modes, so the surface
-      // can stay visible while its anchor and silhouette morph in place.
+      // can stay visible while its anchor and silhouette morph in place. Only
+      // the one-pixel edge overlap changes at the native level; apply it once
+      // without starting the expensive SetWindowPos animation loop.
+      placementTransitionRevision += 1;
+      placementAnimation?.cancel();
+      suppressPlacementEffect = true;
       renderedIslandStyle = nextStyle;
+      await applyWindowPlacement(
+        nextStyle,
+        nextEdge,
+        appSettings.monitorIndex,
+        appSettings.islandEdgePosition,
+        isHidden,
+        false,
+      ).catch((error) => logger.warn("布局切换定位失败", error));
+      suppressPlacementEffect = false;
       return;
     }
     const revision = ++placementTransitionRevision;
@@ -786,7 +816,17 @@
     suppressPlacementEffect = true;
     renderedIslandStyle = nextStyle;
     renderedIslandEdge = nextEdge;
-    await applyWindowPlacement(nextStyle, nextEdge).catch((error) => logger.warn("布局切换定位失败", error));
+    // The host is fully transparent at this point. Reposition it once, then
+    // fade the compositor layer in; animating native resize/move concurrently
+    // with WebView layout is visibly janky on Windows.
+    await applyWindowPlacement(
+      nextStyle,
+      nextEdge,
+      appSettings.monitorIndex,
+      appSettings.islandEdgePosition,
+      isHidden,
+      false,
+    ).catch((error) => logger.warn("布局切换定位失败", error));
     if (revision !== placementTransitionRevision) { suppressPlacementEffect = false; return; }
     suppressPlacementEffect = false;
     if (!fixedHostElement) return;
@@ -1037,7 +1077,7 @@
     }
   });
 
-  // IslandSurface owns one interruptible spring and derives both content
+  // IslandSurface owns interruptible per-axis motion and derives both content
   // layers from it, so rapid reversals cannot leave stale timers behind.
 
   let isPressed = $state(false);
@@ -1469,7 +1509,10 @@
         const currentSongKey = mediaTrackKey(data.title || "", data.artist || artistName);
         const songChanged = lastSongKey !== currentSongKey;
 
-        const reportedDuration = Number(data.durationMs) || durationMs;
+        const incomingDuration = Number(data.durationMs) || 0;
+        const reportedDuration = songChanged
+          ? incomingDuration
+          : incomingDuration || durationMs;
         currentTimeMs = reconcileReportedPosition(
           previousPosition,
           Number(data.positionMs) || 0,
@@ -1488,19 +1531,19 @@
             durationMs = data.durationMs;
             console.log("[时长] ✓ 使用 SMTC 提供的有效时长:", durationMs, "ms");
           } else {
+            durationMs = 0;
             const songName = data.title || trackTitle;
-            const resolvedArtist = data.artist || artistName;
+            const resolvedArtist = data.artist || "";
 
             if (
               songName &&
-              songName !== "未知曲目" &&
-              resolvedArtist &&
-              resolvedArtist !== "未知艺术家"
+              songName !== "未知曲目"
             ) {
+              const requestedTrackKey = currentSongKey;
               mediaApi
                 .getNeteaseSongInfo(songName, resolvedArtist)
                 .then((songInfo) => {
-                  if (songInfo) {
+                  if (songInfo && lastSongKey === requestedTrackKey) {
                     if (songInfo.duration && songInfo.duration > 0) {
                       durationMs = songInfo.duration;
                       console.log(
@@ -1551,7 +1594,7 @@
           data.coverUrl ||
           data.api_cover_url ||
           data.image ||
-          "";
+          (songChanged ? "" : rawCoverUrl);
 
         const coverChanged = songChanged || newCover !== rawCoverUrl;
 
@@ -1575,7 +1618,7 @@
                   }
                 });
               }
-            }, 100);
+    }, 250);
           }
           if (artistChanged) {
             artistName = data.artist || "未知艺术家";
@@ -1607,12 +1650,11 @@
           if (
             songChanged &&
             appSettings.enableHdCover &&
-            data.title &&
-            data.artist
+            data.title
           ) {
             const requestedTrackKey = currentSongKey;
             void mediaApi
-              .resolveHdCover(data.title, data.artist, data.source || currentSource)
+              .resolveHdCover(data.title, data.artist || "", data.source || currentSource)
               .then((resolved) => {
                 if (!resolved || lastSongKey !== requestedTrackKey) return;
                 const image = new Image();
@@ -1686,7 +1728,16 @@
       void applyWindowPlacement(renderedIslandStyle, renderedIslandEdge, appSettings.monitorIndex, position, isHidden);
     });
     const workAreaTimer = setInterval(() => {
-      if (windowReady) void applyWindowPlacement().catch(() => undefined);
+      if (windowReady) {
+        void applyWindowPlacement(
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          false,
+        ).catch(() => undefined);
+      }
     }, 2000);
 
     // 所有捕获场景统一从 Capture Mode 状态进入，不各自维护隐藏逻辑。

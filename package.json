@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "bundle:windows": "tauri build --bundles nsis",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "lint": "echo 'No linter configured yet'",

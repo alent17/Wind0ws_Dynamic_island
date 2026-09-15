@@ -8,9 +8,14 @@
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
   import { applyAppFont } from "$lib/font";
+  import {
+    activeCaptureReasons,
+    EMPTY_CAPTURE_SNAPSHOT,
+    type CaptureSnapshot,
+  } from "$lib/captureMode";
   import MediaProgress from "$lib/MediaProgress.svelte";
   import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition } from "$lib/mediaClock";
-  import type { MediaState, AppSettings } from "$lib/api/types";
+  import { DEFAULT_SETTINGS, type MediaState, type AppSettings } from "$lib/api/types";
   import {
     Play,
     Pause,
@@ -44,6 +49,12 @@
   let displayCover = $state("");
   let previousCover = $state("");
   let isHovered = $state(false);
+  let hoverLeaveTimeout: ReturnType<typeof setTimeout> | null = null;
+  let captureSnapshot = $state<CaptureSnapshot>({ ...EMPTY_CAPTURE_SNAPSHOT });
+  let capturePreferences = $state<AppSettings>({ ...DEFAULT_SETTINGS });
+  let isCaptureHidden = $derived(
+    activeCaptureReasons(captureSnapshot, capturePreferences).length > 0,
+  );
   let slideDirection = $state<"left" | "right" | "">("");
   let isAnimating = $state(false); // 动画进行中标志
   let animationTimeoutId: ReturnType<typeof setTimeout> | null = null; // 动画定时器ID
@@ -52,6 +63,9 @@
     "radial-gradient(circle at 50% 50%, rgb(40, 50, 60), rgb(30, 40, 50))",
   );
   let windowSize = $state<WindowSize>({ width: 0, height: 0 });
+  let isCompactCover = $derived(
+    windowSize.width < 100 || windowSize.height < 100,
+  );
   let clockNow = $state(Date.now());
   let displayedPosition = $derived(projectedPosition(mediaState, clockNow));
 
@@ -76,6 +90,100 @@
   let unlisten: () => void;
   let unlistenResize: () => void;
   let savePositionTimeout: ReturnType<typeof setTimeout> | null = null;
+  let coverRequestId = 0;
+  let durationRequestId = 0;
+
+  function handlePointerEnter() {
+    if (hoverLeaveTimeout) {
+      clearTimeout(hoverLeaveTimeout);
+      hoverLeaveTimeout = null;
+    }
+    isHovered = true;
+  }
+
+  function handlePointerLeave() {
+    if (hoverLeaveTimeout) clearTimeout(hoverLeaveTimeout);
+    hoverLeaveTimeout = setTimeout(() => {
+      isHovered = false;
+      hoverLeaveTimeout = null;
+    }, 80);
+  }
+
+  function preloadCover(url: string): Promise<boolean> {
+    if (!url) return Promise.resolve(false);
+
+    return new Promise((resolve) => {
+      const image = new Image();
+      if (url.startsWith("http") && !url.includes("asset.localhost")) {
+        image.crossOrigin = "Anonymous";
+      }
+      image.onload = () => resolve(true);
+      image.onerror = () => resolve(false);
+      image.src = url;
+    });
+  }
+
+  async function resolveTrackCover(
+    trackKey: string,
+    title: string,
+    artist: string,
+    source: string,
+    fallbackCover: string,
+  ) {
+    const requestId = ++coverRequestId;
+
+    // Never leave the previous track's artwork visible while the HD lookup runs.
+    transitionCover(fallbackCover, "left");
+    if (!enableHDCover || !title) return;
+
+    try {
+      const resolved = await mediaApi.resolveHdCover(
+        title,
+        artist,
+        source || "generic",
+      );
+      if (
+        !resolved?.url ||
+        requestId !== coverRequestId ||
+        trackKey !== currentTrackKey ||
+        !enableHDCover
+      ) {
+        return;
+      }
+
+      if (await preloadCover(resolved.url)) {
+        if (requestId === coverRequestId && trackKey === currentTrackKey) {
+          transitionCover(resolved.url, "left");
+        }
+      }
+    } catch (error) {
+      console.warn("[高清封面] 获取失败，继续使用系统封面:", error);
+    }
+  }
+
+  async function resolveMissingDuration(
+    trackKey: string,
+    title: string,
+    artist: string,
+  ) {
+    if (!title || mediaState.durationMs > 0) return;
+    const requestId = ++durationRequestId;
+    try {
+      const songInfo = await mediaApi.getNeteaseSongInfo(title, artist || "");
+      if (
+        requestId === durationRequestId &&
+        trackKey === currentTrackKey &&
+        songInfo?.duration &&
+        songInfo.duration > 0 &&
+        mediaState.durationMs === 0
+      ) {
+        mediaState.durationMs = songInfo.duration;
+        mediaState.lastUpdatedTimestamp = Date.now();
+      }
+    } catch (error) {
+      console.warn("[进度] 无法补全歌曲时长，继续等待播放器上报:", error);
+    }
+  }
 
   async function extractColors(imgSrc: string) {
     const DEFAULT_COLOR = { r: 60, g: 80, b: 100 };
@@ -338,6 +446,7 @@
     // 读取设置
     try {
       const settings = await invoke<AppSettings>("get_settings");
+      capturePreferences = settings;
       applyAppFont(settings.fontId);
       isMVPlaybackEnabled = settings.enableMvPlayback ?? false;
 
@@ -398,6 +507,20 @@
       Events.HD_COVER_CHANGED,
       ({ enableHDCover: enabled }: any) => {
         enableHDCover = enabled;
+        coverRequestId += 1;
+        if (!currentTrackKey) return;
+
+        if (enabled) {
+          void resolveTrackCover(
+            currentTrackKey,
+            mediaState.title,
+            mediaState.artist,
+            mediaState.source,
+            mediaState.albumArt,
+          );
+        } else {
+          transitionCover(mediaState.albumArt, "left");
+        }
       },
     );
     eventListeners.push(unlistenHDCoverChange);
@@ -421,12 +544,19 @@
     eventListeners.push(unlistenHalftoneChange);
     const unlistenSettingsChange = await eventManager.on(Events.SETTINGS_UPDATED, (value: AppSettings) => {
       if (value?.fontId) applyAppFont(value.fontId);
+      if (value) capturePreferences = value;
     });
     eventListeners.push(unlistenSettingsChange);
+    const unlistenCaptureMode = await eventManager.on(
+      Events.CAPTURE_MODE_CHANGED,
+      (snapshot: CaptureSnapshot) => {
+        captureSnapshot = { ...EMPTY_CAPTURE_SNAPSHOT, ...snapshot };
+      },
+    );
+    eventListeners.push(unlistenCaptureMode);
 
     const appWindow = getCurrentWindow();
-    const size = await appWindow.innerSize();
-    windowSize = { width: size.width, height: size.height };
+    windowSize = { width: window.innerWidth, height: window.innerHeight };
 
     // 监听窗口大小变化
     unlistenResize = await appWindow.onResized(({ payload }) => {
@@ -435,7 +565,9 @@
         return;
       }
 
-      windowSize = { width: payload.width, height: payload.height };
+      // Tauri reports physical pixels here, while the 100px layout breakpoint
+      // is expressed in CSS pixels. Read the viewport to stay correct on HiDPI.
+      windowSize = { width: window.innerWidth, height: window.innerHeight };
 
       // 防抖保存位置和大小
       if (savePositionTimeout) clearTimeout(savePositionTimeout);
@@ -475,39 +607,14 @@
       }, 500); // 500ms 防抖
     });
 
-    // 添加全局鼠标事件监听
-    let handleMouseMove = (e: MouseEvent) => {
-      const player = document.querySelector(".player");
-      if (player) {
-        const rect = player.getBoundingClientRect();
-        // 添加 5px 的容差，避免边界抖动
-        // 排除底部区域，但包括顶部区域（让顶部栏可以触发）
-        const isInside =
-          e.clientX >= rect.left + 5 &&
-          e.clientX <= rect.right - 5 &&
-          e.clientY >= rect.top && // 包括顶部，让顶部栏可以触发
-          e.clientY <= rect.bottom - 80 - 5; // 减去底部 80px 和 5px 容差
-
-        // 使用 requestAnimationFrame 来避免频繁更新
-        requestAnimationFrame(() => {
-          if (isInside && !isHovered) {
-            isHovered = true;
-          } else if (!isInside && isHovered) {
-            isHovered = false;
-          }
-        });
-      }
-    };
-
-    // 保存引用以便清理
-    (window as any).__handleMouseMove = handleMouseMove;
-    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("blur", handlePointerLeave);
+    document.addEventListener("mouseleave", handlePointerLeave);
 
     // 保存移动监听器引用
     (window as any).__unlistenMoved = unlistenMoved;
 
     // 监听媒体更新事件（已内置节流）
-    unlisten = await onMediaUpdate((payload: any) => {
+    const handleMediaUpdate = (payload: any) => {
       const newTrackKey = mediaTrackKey(payload.title || "", payload.artist || mediaState.artist);
 
       // 检查是否是空状态（播放器关闭或无媒体）
@@ -522,6 +629,8 @@
         if (currentTrackKey) return;
         // 播放器退出，重置为等待状态
         currentTrackKey = "";
+        coverRequestId += 1;
+        durationRequestId += 1;
         mediaState = {
           title: PLACEHOLDER_TITLE,
           artist: PLACEHOLDER_ARTIST,
@@ -550,80 +659,37 @@
           lastUpdatedTimestamp: Date.now(),
         };
 
-        // 判断是否是音乐播放器
-        const isMusicPlayer =
-          payload.source &&
-          (payload.source === "netease" ||
-            payload.source === "qqmusic" ||
-             payload.source === "spotify" ||
-             payload.source === "apple" ||
-             payload.source === "apple_music" ||
-            payload.source === "local");
+        // Stop the previous MV and show the new SMTC cover immediately. The
+        // resolver validates title/artist matches before upgrading any source,
+        // including browser-based players, to high-resolution artwork.
+        isPlayingMV = false;
+        mvUrl = "";
+        void resolveTrackCover(
+          newTrackKey,
+          payload.title || "",
+          payload.artist || "",
+          payload.source || "generic",
+          smtcCover,
+        );
+        void resolveMissingDuration(
+          newTrackKey,
+          payload.title || "",
+          payload.artist || "",
+        );
 
-        // 网页播放时只获取歌手图片，音乐播放器获取专辑封面
-        if (isMusicPlayer) {
-          // 停止当前播放的 MV
-          isPlayingMV = false;
-          mvUrl = "";
-
-          // 根据设置决定是否获取高清图
-          if (enableHDCover) {
-            // 获取专辑封面高清图
-            mediaApi
-              .resolveHdCover(payload.title, payload.artist, payload.source || "generic")
-              .then((resolved) => resolved?.url || smtcCover)
-              .then((hdCover) => {
-                const img = new Image();
-                if (
-                  hdCover.startsWith("http") &&
-                  !hdCover.includes("asset.localhost")
-                ) {
-                  img.crossOrigin = "Anonymous";
-                }
-                img.onload = () => {
+        if (isMVPlaybackEnabled) {
+          fetchMVFromAppleMusic(payload.title, payload.artist).then(
+            (mvLink) => {
+              if (mvLink && currentTrackKey === newTrackKey) {
+                setTimeout(() => {
                   if (currentTrackKey === newTrackKey) {
-                    transitionCover(hdCover, "left");
+                    mvUrl = mvLink;
+                    isPlayingMV = true;
                   }
-                };
-                img.onerror = () => {
-                  if (currentTrackKey === newTrackKey) {
-                    transitionCover(smtcCover, "left");
-                  }
-                };
-                img.src = hdCover;
-              })
-              .catch(() => {
-                if (currentTrackKey === newTrackKey) {
-                  transitionCover(smtcCover, "left");
-                }
-              });
-          } else {
-            // 不获取高清图，直接使用 SMTC 图片
-            if (currentTrackKey === newTrackKey) {
-              transitionCover(smtcCover, "left");
-            }
-          }
-
-          // 如果启用了 MV 播放，尝试获取 MV（在专辑封面加载完成后）
-          if (isMVPlaybackEnabled) {
-            fetchMVFromAppleMusic(payload.title, payload.artist).then(
-              (mvLink) => {
-                if (mvLink && currentTrackKey === newTrackKey) {
-                  setTimeout(() => {
-                    if (currentTrackKey === newTrackKey) {
-                      mvUrl = mvLink;
-                      isPlayingMV = true;
-                    }
-                  }, 450);
-                }
-              },
-            );
-          }
-        } else {
-          // 网页或其他来源，直接使用 SMTC 图片
-          if (currentTrackKey === newTrackKey) {
-            transitionCover(smtcCover, "left");
-          }
+                }, 450);
+              }
+            },
+          );
         }
       } else {
         // 播放状态变化
@@ -665,11 +731,17 @@
           }
         }
       }
-    });
+    };
+    unlisten = await onMediaUpdate(handleMediaUpdate);
+    try {
+      handleMediaUpdate(await mediaApi.getMediaInfo());
+    } catch (error) {
+      console.warn("[悬浮窗] 初始媒体状态读取失败:", error);
+    }
   });
 
   $effect(() => {
-    const interval = setInterval(() => clockNow = Date.now(), 100);
+    const interval = setInterval(() => clockNow = Date.now(), 250);
     return () => clearInterval(interval);
   });
 
@@ -680,13 +752,9 @@
       (window as any).__unlistenMoved();
       delete (window as any).__unlistenMoved;
     }
-    if ((window as any).__handleMouseMove) {
-      window.removeEventListener(
-        "mousemove",
-        (window as any).__handleMouseMove,
-      );
-      delete (window as any).__handleMouseMove;
-    }
+    window.removeEventListener("blur", handlePointerLeave);
+    document.removeEventListener("mouseleave", handlePointerLeave);
+    if (hoverLeaveTimeout) clearTimeout(hoverLeaveTimeout);
 
     // 清理所有事件监听器
     if (eventListeners) {
@@ -766,57 +834,37 @@
 
   // 缓存处理后的图片
   let processedImageCache = $state<{ [key: string]: string }>({}); // 缓存处理后的图片 base64
-  let processingQueue = $state<Set<string>>(new Set()); // 正在处理的图片队列
+  const processingPromises = new Map<string, Promise<string>>();
 
   // 使用后端 API 处理图片（支持像素化）
   async function processImageBackend(
     imageUrl: string,
     enablePixelArt: boolean,
   ): Promise<string> {
-    // 如果已经在处理队列中，等待
-    if (processingQueue.has(imageUrl)) {
-      return new Promise((resolve) => {
-        const checkInterval = setInterval(() => {
-          if (!processingQueue.has(imageUrl) && processedImageCache[imageUrl]) {
-            clearInterval(checkInterval);
-            resolve(processedImageCache[imageUrl]);
-          }
-        }, 50);
-      });
-    }
-
     // 如果已有缓存，直接返回
     if (processedImageCache[imageUrl]) {
       return processedImageCache[imageUrl];
     }
+    const pending = processingPromises.get(imageUrl);
+    if (pending) return pending;
 
-    processingQueue.add(imageUrl);
-
-    try {
-      // 调用后端 API 处理图片
-      const processedBase64 = await invoke<string>("process_image", {
-        imagePath: imageUrl,
-        enablePixelArt: enablePixelArt,
-      });
-
-      // 缓存结果
-      processedImageCache[imageUrl] = processedBase64;
-      return processedBase64;
-    } catch (error) {
-      console.error("[图片处理] 后端处理失败:", error);
-      // 如果是空图片错误，使用默认占位图
-      if (
-        error &&
-        typeof error === "string" &&
-        error.includes("图片数据为空")
-      ) {
+    const processing = (async () => {
+      try {
+        const processedBase64 = await invoke<string>("process_image", {
+          imagePath: imageUrl,
+          enablePixelArt: enablePixelArt,
+        });
+        processedImageCache[imageUrl] = processedBase64;
+        return processedBase64;
+      } catch (error) {
+        console.error("[图片处理] 后端处理失败:", error);
         return imageUrl;
+      } finally {
+        processingPromises.delete(imageUrl);
       }
-      // 失败时返回原图
-      return imageUrl;
-    } finally {
-      processingQueue.delete(imageUrl);
-    }
+    })();
+    processingPromises.set(imageUrl, processing);
+    return processing;
   }
 
   // 渲染图片到 Canvas（简化版，直接使用后端处理后的 base64）
@@ -1214,6 +1262,10 @@
   class:hovered={isHovered}
   class:locked={isFloatingWindowLocked}
   class:pixelated={enablePixelArt}
+  class:compact-cover={isCompactCover}
+  class:capture-hidden={isCaptureHidden}
+  onpointerenter={handlePointerEnter}
+  onpointerleave={handlePointerLeave}
   role="region"
   aria-label="音乐播放器"
   style:--bg={bgColor}
@@ -1255,6 +1307,12 @@
   <div class="album-stage">
     <div class="album-wrapper">
       {#if displayCover}
+        <img
+          class="compact-cover-image"
+          src={displayCover}
+          alt=""
+          draggable="false"
+        />
         <!-- MV 视频播放 -->
         {#if isPlayingMV && mvUrl}
           <video
@@ -1664,6 +1722,71 @@
     image-rendering: crisp-edges;
     image-rendering: pixelated;
     -ms-interpolation-mode: nearest-neighbor;
+  }
+
+  .compact-cover-image {
+    display: none;
+  }
+
+  /* Below 100 x 100 CSS pixels the floating player becomes a cover tile. */
+  .player.compact-cover .album-stage {
+    inset: 0;
+    padding: 0;
+  }
+
+  .player.compact-cover .album-wrapper {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    min-width: 0;
+    min-height: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .player.compact-cover .album-art,
+  .player.compact-cover .mv-player,
+  .player.compact-cover .halftone-overlay {
+    border-radius: 0;
+  }
+
+  .player.compact-cover {
+    border: 0;
+  }
+
+  .player.compact-cover .compact-cover-image {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  .player.compact-cover .album-art {
+    display: none;
+  }
+
+  .player.capture-hidden {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .player.compact-cover.pixelated .compact-cover-image {
+    image-rendering: pixelated;
+  }
+
+  .player.compact-cover .bg-solid,
+  .player.compact-cover .drag-bar,
+  .player.compact-cover .track-info-layer,
+  .player.compact-cover .progress-layer,
+  .player.compact-cover .controls-overlay {
+    display: none;
   }
 
   /* 像素字体定义 */

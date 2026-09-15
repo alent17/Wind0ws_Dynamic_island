@@ -98,17 +98,34 @@ pub fn save_settings(
     // 持久化到文件
     write_settings_file(&app, &settings)?;
 
-    // 更新窗口置顶状态
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.set_always_on_top(always_on_top);
+    // 仅在相关设置真正变化时调用 Windows API。发布版中注册表和
+    // SetWindowDisplayAffinity 都可能阻塞数秒，不能在每次普通保存时执行。
+    if old_settings
+        .as_ref()
+        .is_some_and(|old| old.always_on_top != settings.always_on_top)
+    {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.set_always_on_top(always_on_top);
+        }
     }
-    apply_capture_protection(&app, &settings);
+    if old_settings.as_ref().is_some_and(|old| {
+        old.capture_hide_on_screenshot != settings.capture_hide_on_screenshot
+            || old.capture_hide_on_recording != settings.capture_hide_on_recording
+            || old.capture_hide_on_screen_share != settings.capture_hide_on_screen_share
+    }) {
+        apply_capture_protection(&app, &settings);
+    }
 
-    // 更新开机自启动
-    if auto_start {
-        set_auto_start(true)?;
-    } else {
-        let _ = set_auto_start(false);
+    // 只有开关本身发生变化时才访问开机启动注册表。
+    if old_settings
+        .as_ref()
+        .is_some_and(|old| old.auto_start != settings.auto_start)
+    {
+        if auto_start {
+            set_auto_start(true)?;
+        } else {
+            let _ = set_auto_start(false);
+        }
     }
 
     // 发送设置变更事件

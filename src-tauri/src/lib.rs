@@ -154,9 +154,21 @@ fn start_media_listener(handle: AppHandle) {
             );
         }
 
+        let mut last_artwork_track = String::new();
+        let mut last_artwork = String::new();
         // 持续监听媒体状态
         loop {
-            if let Ok(info) = services::media::get_media_info(&handle) {
+            if let Ok(mut info) = services::media::get_media_info(&handle) {
+                let artwork_track = format!("{}|{}|{}", info.source, info.title, info.artist);
+                if artwork_track == last_artwork_track && info.album_art == last_artwork {
+                    // Artwork is often hundreds of KB. Sending the same Base64
+                    // payload to every WebView once per second caused release
+                    // builds to stutter even though only progress had changed.
+                    info.album_art.clear();
+                } else {
+                    last_artwork_track = artwork_track;
+                    last_artwork = info.album_art.clone();
+                }
                 let _ = event_bus::emit_media_update(info);
             }
             std::thread::sleep(std::time::Duration::from_millis(1000));
@@ -180,7 +192,7 @@ fn start_system_audio_monitor() {
                     previous = Some(current);
                 }
             }
-            std::thread::sleep(std::time::Duration::from_millis(150));
+            std::thread::sleep(std::time::Duration::from_millis(250));
         }
     });
 }
