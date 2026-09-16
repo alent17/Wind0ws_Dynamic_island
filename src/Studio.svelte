@@ -23,6 +23,9 @@
   let textCommitTimer: ReturnType<typeof setTimeout> | undefined;
   let persistInFlight: Promise<void> | undefined;
   let persistPending=false;
+  let appearanceDragging=$state(false);
+  let previewRaf=0;
+  let queuedPreview:Partial<AppPreferences>={};
   const previewBars=[.45,.78,.58,.96,.7,.38];
   let scenarioMedia=$derived.by<MediaState>(()=>{const base={...DEMO_MEDIA,positionMs:244000*progress/100,lastUpdatedTimestamp:Date.now()};if(scenario==="paused")return{...base,isPlaying:false};if(scenario==="no-art")return{...base,albumArt:""};if(scenario==="long-title")return{...base,title:"宇宙尽头的浪漫主义与一场不会结束的午夜公路旅行",artist:"The Extremely Long Artist Name · 特别长的专辑名称"};return base});
   let sample=$derived(nativeRuntime&&followingLive?liveMedia:scenarioMedia);
@@ -65,6 +68,8 @@
       if(deferredFrame)cancelAnimationFrame(deferredFrame);
       if(deferredTimer)clearTimeout(deferredTimer);
       if(textCommitTimer){clearTimeout(textCommitTimer);textCommitTimer=undefined;commitPreference({idleItems:settings.idleItems})}
+      if(previewRaf){cancelAnimationFrame(previewRaf);previewRaf=0}
+      queuedPreview={};
       if(saveTimer)clearTimeout(saveTimer);
       void persist();
       unsubscribe();
@@ -86,11 +91,23 @@
     await persistInFlight;
   }
   function schedulePersist(){if(saveTimer)clearTimeout(saveTimer);saveTimer=setTimeout(()=>void persist(),300)}
-  function previewPreference(patch:Partial<AppPreferences>){settings={...settings,...patch}}
-  function commitPreference(patch:Partial<AppPreferences>){
+  function flushPreview(){
+    const patch=queuedPreview;
+    queuedPreview={};
+    if(!Object.keys(patch).length)return;
     settings={...settings,...patch};
+    if(nativeRuntime) void emit("settings-preview",patch);
+  }
+  function previewPreference(patch:Partial<AppPreferences>){
+    queuedPreview={...queuedPreview,...patch};
+    if(previewRaf)return;
+    previewRaf=requestAnimationFrame(()=>{previewRaf=0;flushPreview()});
+  }
+  function commitPreference(patch:Partial<AppPreferences>){
+    queuedPreview={...queuedPreview,...patch};
+    if(previewRaf){cancelAnimationFrame(previewRaf);previewRaf=0}
+    flushPreview();
     if(!nativeRuntime)return;
-    void emit("settings-preview",patch);
     schedulePersist();
   }
   function updatePreference(patch:Partial<AppPreferences>){commitPreference(patch)}
@@ -134,7 +151,7 @@
     <section class="stage" aria-label={t("previewLabel")} bind:clientWidth={stageWidth} bind:clientHeight={stageHeight}>
       <div class="ruler top"><span>0%</span><span>50%</span><span>100%</span></div>
       <div class="preview-host" style={`width:${previewHost.width}px;height:${previewHost.height}px;${previewPositionStyle}`}>
-        <IslandSurface media={sample} {mode} islandStyle={settings.islandStyle} edge={settings.islandEdge} position={sample.positionMs} expandedRadius={settings.expandedCornerRadius??45} edgeShoulderRadius={settings.edgeShoulderRadius??8} compactLength={settings.compactLength} showSpectrum={settings.showSpectrum} spectrumMode={settings.spectrumMode} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={settings.spectrumMode==="realtime"?previewBars:undefined} interactive simulateHidden onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{followingLive=false;if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
+        <IslandSurface media={sample} {mode} islandStyle={settings.islandStyle} edge={settings.islandEdge} position={sample.positionMs} expandedRadius={settings.expandedCornerRadius??45} edgeShoulderRadius={settings.edgeShoulderRadius??8} compactLength={settings.compactLength} showSpectrum={settings.showSpectrum} spectrumMode={settings.spectrumMode} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations || appearanceDragging} previewSpectrum={settings.spectrumMode==="realtime"?previewBars:undefined} interactive simulateHidden onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{followingLive=false;if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
       </div>
       <div class="caption"><strong>{enumLabel(mode)}</strong><span>{enumLabel(settings.islandStyle)} · {enumLabel(settings.islandEdge)} {settings.islandEdgePosition}% · {currentGeometry.width} × {currentGeometry.height} · r{currentGeometry.radius} · {t("shoulderShort")} {settings.edgeShoulderRadius}px</span></div>
     </section>
@@ -151,14 +168,14 @@
           <button aria-label={t("screenLeft")} aria-pressed={settings.islandEdge==="left"} class:active={settings.islandEdge==="left"} onclick={()=>setIslandEdge("left")}><ArrowLeft size={16}/>{t("left")}</button>
         </div>
         <label class="range-label"><span>{t("edgePosition")}</span><output>{settings.islandEdgePosition}%</output></label>
-        <input aria-label={t("edgePosition")} type="range" min="0" max="100" step="1" value={settings.islandEdgePosition} oninput={(e)=>setAlongEdge(Number(e.currentTarget.value))} onchange={(e)=>setAlongEdge(Number(e.currentTarget.value),true)}/>
+        <input aria-label={t("edgePosition")} type="range" min="0" max="100" step="1" value={settings.islandEdgePosition} onpointerdown={()=>appearanceDragging=true} onpointerup={()=>appearanceDragging=false} onpointercancel={()=>appearanceDragging=false} oninput={(e)=>setAlongEdge(Number(e.currentTarget.value))} onchange={(e)=>{appearanceDragging=false;setAlongEdge(Number(e.currentTarget.value),true)}}/>
         <button class="center-button" onclick={()=>setAlongEdge(50,true)}>{t("center")}</button>
         <label class="range-label"><span>{t("compactLength")}</span><output>{settings.compactLength}px</output></label>
-        <input aria-label={t("compactLength")} type="range" min="80" max="300" step="1" value={settings.compactLength} oninput={(e)=>setCompactLength(Number(e.currentTarget.value))} onchange={(e)=>setCompactLength(Number(e.currentTarget.value),true)}/>
+        <input aria-label={t("compactLength")} type="range" min="80" max="300" step="1" value={settings.compactLength} onpointerdown={()=>appearanceDragging=true} onpointerup={()=>appearanceDragging=false} onpointercancel={()=>appearanceDragging=false} oninput={(e)=>setCompactLength(Number(e.currentTarget.value))} onchange={(e)=>{appearanceDragging=false;setCompactLength(Number(e.currentTarget.value),true)}}/>
         <label class="range-label"><span>{t("shoulder")}</span><output>{settings.edgeShoulderRadius}px</output></label>
-        <input aria-label={t("shoulder")} type="range" min="0" max="16" step="1" value={settings.edgeShoulderRadius} oninput={(e)=>setShoulderRadius(Number(e.currentTarget.value))} onchange={(e)=>setShoulderRadius(Number(e.currentTarget.value),true)}/>
+        <input aria-label={t("shoulder")} type="range" min="0" max="16" step="1" value={settings.edgeShoulderRadius} onpointerdown={()=>appearanceDragging=true} onpointerup={()=>appearanceDragging=false} onpointercancel={()=>appearanceDragging=false} oninput={(e)=>setShoulderRadius(Number(e.currentTarget.value))} onchange={(e)=>{appearanceDragging=false;setShoulderRadius(Number(e.currentTarget.value),true)}}/>
         <label class="range-label"><span>{t("expandedRadius")}</span><output>{settings.expandedCornerRadius}px</output></label>
-        <input aria-label={t("expandedRadius")} type="range" min="0" max="80" step="1" value={settings.expandedCornerRadius} oninput={(e)=>setRadius(Number(e.currentTarget.value))} onchange={(e)=>setRadius(Number(e.currentTarget.value),true)}/>
+        <input aria-label={t("expandedRadius")} type="range" min="0" max="80" step="1" value={settings.expandedCornerRadius} onpointerdown={()=>appearanceDragging=true} onpointerup={()=>appearanceDragging=false} onpointercancel={()=>appearanceDragging=false} oninput={(e)=>setRadius(Number(e.currentTarget.value))} onchange={(e)=>{appearanceDragging=false;setRadius(Number(e.currentTarget.value),true)}}/>
       </section>
       <section><h2>{t("language")}</h2><label class="select-row"><span>{t("language")}</span><select value={settings.language} onchange={(e)=>setLanguage(e.currentTarget.value as AppLanguage)}><option value="system">{t("systemLanguage")}</option><option value="zh-CN">{t("chinese")}</option><option value="en">{t("english")}</option><option value="ja">{t("japanese")}</option></select></label></section>
       <section><h2>{t("font")}</h2><label class="select-row"><span><Type size={17}/>{t("appFont")}</span><select value={settings.fontId} onchange={(e)=>setFont(e.currentTarget.value as AppPreferences["fontId"])}>{#each FONT_OPTIONS as font}<option value={font.id}>{font.id==="system"?t("systemDefault"):font.label}</option>{/each}</select></label><p class="hint">{t("fontHint")}</p></section>

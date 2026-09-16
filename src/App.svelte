@@ -328,6 +328,14 @@
   let appSettings = $state<AppSettings>({
     ...DEFAULT_SETTINGS,
   });
+  let lastSettingsSnapshot = "";
+  function applySettingsIfChanged(value: AppSettings) {
+    const next = normalizedSettings(value);
+    const snapshot = JSON.stringify(next);
+    if (snapshot === lastSettingsSnapshot) return;
+    lastSettingsSnapshot = snapshot;
+    appSettings = next;
+  }
   let systemAudio = $state<SystemAudioState | null>(null);
   let audioDevices = $state<AudioDeviceInfo[]>([]);
   let systemAudioTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -718,6 +726,9 @@
   let lastAppliedBounds = "";
   let placementMonitors: MonitorInfo[] = [];
   let placementMonitorsRefreshedAt = 0;
+  let previewPlacementTimer: ReturnType<typeof setTimeout> | undefined;
+  let pendingPreviewPlacement: AppSettings | undefined;
+  let previewPlacementRevision = 0;
 
   // Island geometry is animated inside a fixed native host. Resizing the
   // WebView for every spring frame was the main source of expansion jank.
@@ -781,6 +792,30 @@
     if (boundsKey === lastAppliedBounds) return;
     await windowApi.animateWindowBounds(target.width, target.height, target.x, target.y, animate);
     if (revision === windowPlacementRevision) lastAppliedBounds = boundsKey;
+  }
+
+  function schedulePreviewPlacement(next: AppSettings) {
+    pendingPreviewPlacement = next;
+    if (previewPlacementTimer) return;
+    previewPlacementTimer = setTimeout(() => {
+      previewPlacementTimer = undefined;
+      const pending = pendingPreviewPlacement;
+      pendingPreviewPlacement = undefined;
+      if (!pending || !windowReady) return;
+
+      const revision = ++previewPlacementRevision;
+      suppressPlacementEffect = true;
+      void applyWindowPlacement(
+        normalizedStyle(pending.islandStyle),
+        normalizedEdge(pending.islandEdge),
+        pending.monitorIndex,
+        pending.islandEdgePosition,
+        isHidden,
+        false,
+      ).finally(() => {
+        if (revision === previewPlacementRevision) suppressPlacementEffect = false;
+      });
+    }, 33);
   }
 
   function edgeTransform(edge: IslandEdge) {
@@ -1334,7 +1369,7 @@
 
       try {
         const loadedSettings = await settingsApi.getSettings();
-        appSettings = normalizedSettings(loadedSettings);
+        applySettingsIfChanged(loadedSettings);
         console.log("[设置] 已加载:", appSettings);
       } catch (error) {
         console.error("[设置] 读取失败:", error);
@@ -1350,7 +1385,7 @@
         Events.SETTINGS_UPDATED,
         (s: any) => {
           if (s) {
-            appSettings = normalizedSettings(s);
+            applySettingsIfChanged(s);
             console.log("[设置] 实时更新:", appSettings);
 
             if (s.islandTheme) {
@@ -1398,15 +1433,6 @@
         },
       );
       cleanups.push(unlistenSettingsChanged);
-
-      const unlistenCornerRadiusChanged = await eventManager.on(
-        Events.CORNER_RADIUS_CHANGED,
-        (radius: any) => {
-          console.log("[设置] 圆角变更:", radius);
-          appSettings.expandedCornerRadius = radius;
-        },
-      );
-      cleanups.push(unlistenCornerRadiusChanged);
 
       try {
         const allMonitors = await availableMonitors();
@@ -1745,23 +1771,15 @@
       const monitorChanged = next.monitorIndex !== appSettings.monitorIndex;
       const hostSizeChanged = next.compactLength !== appSettings.compactLength;
       const positionChanged = next.islandEdgePosition !== appSettings.islandEdgePosition;
+      lastSettingsSnapshot = JSON.stringify(next);
+      appSettings = next;
       if (!monitorChanged && !hostSizeChanged && !positionChanged) {
-        appSettings = next;
         return;
       }
 
-      // Crossing monitors and resizing the fixed host are direct-manipulation
-      // operations. Avoid a long native spring (or a spring per range sample).
-      suppressPlacementEffect = true;
-      appSettings = next;
-      void applyWindowPlacement(
-        normalizedStyle(next.islandStyle),
-        normalizedEdge(next.islandEdge),
-        next.monitorIndex,
-        next.islandEdgePosition,
-        isHidden,
-        false,
-      ).finally(() => { suppressPlacementEffect = false; });
+      // Slider input can arrive many times per second. Keep the visual state
+      // immediate, but coalesce native HWND updates to roughly 30 FPS.
+      schedulePreviewPlacement(next);
     });
     const workAreaTimer = setInterval(() => {
       if (windowReady) {
@@ -1806,6 +1824,11 @@
       if (mouseMoveTimeout) {
         clearTimeout(mouseMoveTimeout);
       }
+      if (previewPlacementTimer) {
+        clearTimeout(previewPlacementTimer);
+        previewPlacementTimer = undefined;
+      }
+      pendingPreviewPlacement = undefined;
       document.removeEventListener("mousemove", handleMouseMoveThrottled);
       clearInterval(workAreaTimer);
     };

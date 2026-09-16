@@ -53,12 +53,15 @@ pub fn get_preferences(state: State<'_, AppState>) -> AppResult<AppPreferences> 
 /// - 更新开机自启动
 /// - 发送相关事件通知前端
 #[tauri::command]
-pub fn save_settings(
+pub async fn save_settings(
     app: AppHandle,
     state: State<'_, AppState>,
     mut settings: AppSettings,
 ) -> AppResult<()> {
     settings.compact_length = settings.compact_length.clamp(80, 300);
+    settings.island_edge_position = settings.island_edge_position.min(100);
+    settings.edge_shoulder_radius = settings.edge_shoulder_radius.min(16);
+    settings.expanded_corner_radius = settings.expanded_corner_radius.min(80);
     settings.idle_rotation_seconds = settings.idle_rotation_seconds.clamp(2, 60);
     if !matches!(
         settings.font_id.as_str(),
@@ -96,7 +99,13 @@ pub fn save_settings(
     };
 
     // 持久化到文件
-    write_settings_file(&app, &settings)?;
+    let app_for_write = app.clone();
+    let settings_for_write = settings.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        write_settings_file(&app_for_write, &settings_for_write)
+    })
+    .await
+    .map_err(|error| AppError::config(format!("保存设置任务失败：{}", error)))??;
 
     // 仅在相关设置真正变化时调用 Windows API。发布版中注册表和
     // SetWindowDisplayAffinity 都可能阻塞数秒，不能在每次普通保存时执行。
@@ -182,12 +191,12 @@ pub fn save_settings(
 /// Current Isle Studio compatibility endpoint. Both surfaces intentionally
 /// persist the same complete settings object.
 #[tauri::command]
-pub fn save_preferences(
+pub async fn save_preferences(
     app: AppHandle,
     state: State<'_, AppState>,
     preferences: AppPreferences,
 ) -> AppResult<()> {
-    save_settings(app, state, preferences)
+    save_settings(app, state, preferences).await
 }
 
 /// 设置主题
