@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { retainSpectrum, spectrumValues } from "$lib/spectrumStore";
+  import { shouldAnimateSpectrum } from "$lib/spectrumRender";
   import type { SpectrumMode } from "$lib/api/types";
+  import { locale, translate } from "$lib/i18n";
 
   let {
     topColor = "#ffffff",
@@ -32,6 +34,7 @@
   let latestBars = new Float32Array(NUM_BARS);
   let randomBars = new Float32Array(NUM_BARS);
   let visibleBars = new Float32Array(NUM_BARS);
+  let barGradient: CanvasGradient | string = "#ffffff";
 
   const barWidth = $derived(2 * scale);
   const barGap = $derived(1.5 * (1 + (scale - 1) * 0.4));
@@ -59,26 +62,33 @@
     canvasEl.style.width = `${canvasWidth}px`;
     canvasEl.style.height = `${canvasHeight}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    rebuildGradient();
+  }
+
+  function rebuildGradient() {
+    if (!ctx) return;
+    const [tr, tg, tb] = topRgb;
+    const [br, bg, bb] = bottomRgb;
+    const gradient = ctx.createLinearGradient(0, canvasHeight, 0, 0);
+    gradient.addColorStop(0, `rgba(${br},${bg},${bb},.9)`);
+    gradient.addColorStop(1, `rgb(${tr},${tg},${tb})`);
+    barGradient = gradient;
   }
 
   function draw() {
     if (!ctx) return;
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-    const [tr, tg, tb] = topRgb;
-    const [br, bg, bb] = bottomRgb;
     for (let index = 0; index < NUM_BARS; index += 1) {
       const sourceBars = mode === "random" ? randomBars : latestBars;
       const target = !playing ? 0 : reduceMotion ? 0.18 : values?.[index] ?? sourceBars[index] ?? 0;
-      visibleBars[index] += (target - visibleBars[index]) * (target > visibleBars[index] ? 0.34 : 0.12);
+      if (values) visibleBars[index] = target;
+      else visibleBars[index] += (target - visibleBars[index]) * (target > visibleBars[index] ? 0.34 : 0.12);
       const value = visibleBars[index];
       const height = MIN_HEIGHT + value * (maxHeight - MIN_HEIGHT);
       const x = index * (barWidth + barGap);
       const y = (canvasHeight - height) / 2;
-      const gradient = ctx.createLinearGradient(x, y + height, x, y);
-      gradient.addColorStop(0, `rgba(${br},${bg},${bb},.9)`);
-      gradient.addColorStop(1, `rgb(${tr},${tg},${tb})`);
       ctx.globalAlpha = 0.6 + value * 0.4;
-      ctx.fillStyle = gradient;
+      ctx.fillStyle = barGradient;
       ctx.beginPath();
       ctx.roundRect(x, y, barWidth, height, cornerRadius);
       ctx.fill();
@@ -89,6 +99,7 @@
   function render() {
     if (!mounted || !active) { animId = 0; return; }
     draw();
+    if (values) { animId = 0; return; }
     if (!playing && visibleBars.every((value) => value < 0.01)) {
       visibleBars.fill(0);
       draw();
@@ -99,15 +110,21 @@
   }
 
   function ensureRenderLoop() {
-    if (active && mounted && (playing || visibleBars.some((value) => value >= 0.01)) && !animId) animId = requestAnimationFrame(render);
+    if (values) {
+      if (animId) { cancelAnimationFrame(animId); animId = 0; }
+      if (active && mounted) draw();
+      return;
+    }
+    if (shouldAnimateSpectrum(active, mounted, playing, false, visibleBars.some((value) => value >= 0.01)) && !animId) animId = requestAnimationFrame(render);
     if (!active && animId) { cancelAnimationFrame(animId); animId = 0; }
   }
 
   $effect(() => { active; values; mode; playing; reduceMotion; ensureRenderLoop(); });
   $effect(() => { scale; resizeCanvas(); });
+  $effect(() => { topRgb; bottomRgb; rebuildGradient(); if (values && mounted && active) draw(); });
 
   $effect(() => {
-    if (!mounted || values || mode !== "realtime" || reduceMotion) return;
+    if (!mounted || !active || !playing || values || mode !== "realtime" || reduceMotion) return;
     const stopListening = spectrumValues.subscribe((next) => latestBars = next);
     const release = retainSpectrum();
     return () => {
@@ -155,6 +172,6 @@
   });
 </script>
 
-<canvas bind:this={canvasEl} aria-label="六段音频频谱"></canvas>
+<canvas bind:this={canvasEl} aria-label={translate("audioSpectrum",{},$locale)}></canvas>
 
 <style>canvas{display:block}</style>

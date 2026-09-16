@@ -6,6 +6,7 @@
   import Spectrum from "$lib/Spectrum.svelte";
   import { ISLAND_MOTION, islandMorphEasing, islandSettleEasing } from "$lib/islandMotion";
   import type { AudioDeviceInfo, MediaState, SpectrumMode, SystemAudioState } from "$lib/api/types";
+  import { locale, translate, type TranslationKey } from "$lib/i18n";
   import {
     borderRadiusCss,
     geometryFor,
@@ -104,6 +105,7 @@
     onAudioVolume?: (volumePercent: number) => void | Promise<void>;
     onAudioDevice?: (deviceId: string) => void | Promise<void>;
   }>();
+  const t = (key: TranslationKey, values: Record<string, string | number> = {}) => translate(key, values, $locale);
 
   const initial = untrack(() => geometryFor(mode, expandedRadius, edge, compactLength));
   const widthMotion = tweened(initial.width);
@@ -283,7 +285,7 @@
     role="button"
     aria-expanded={mode === "expanded"}
     tabindex={interactive ? 0 : undefined}
-    aria-label="灵动岛，点击切换展开状态"
+    aria-label={t("dynamicIsland")}
     onmouseenter={() => onHoverChange?.(true)}
     onmouseleave={() => onHoverChange?.(false)}
     onfocusin={() => onHoverChange?.(true)}
@@ -301,14 +303,14 @@
       {#if systemAudio}
         <span class="audio-compact" class:vertical={edge === "left" || edge === "right"}>
           {#if systemAudio.muted || systemAudio.volumePercent === 0}<VolumeX size={13}/>{:else}<Volume2 size={13}/>{/if}
-          <b>{systemAudio.muted ? "静音" : `${systemAudio.volumePercent}%`}</b>
+          <b>{systemAudio.muted ? t("muted") : `${systemAudio.volumePercent}%`}</b>
         </span>
       {:else if showTime}
         <span class="time-display">{timeText}</span>
       {:else if idle}
         <span class="idle-compact" class:vertical={edge === "left" || edge === "right"} title={idleTitle}>{idleTitle}</span>
       {:else}
-        <button class="cover compact-cover" type="button" aria-label="打开当前播放器" onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
+        <button class="cover compact-cover" type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
           {#if media.albumArt}
             {#key media.albumArt}
               <span class="compact-disc" class:spinning={mode === "compact" && media.isPlaying && enableAnimations && !reduceAnimations}>
@@ -336,9 +338,9 @@
         <div class="audio-expanded" data-stop-toggle>
           <div class="audio-heading">
             <span class="audio-icon">{#if systemAudio.muted || systemAudio.volumePercent === 0}<VolumeX size={22}/>{:else}<Volume2 size={22}/>{/if}</span>
-            <span><small title={systemAudio.deviceName}>{systemAudio.deviceName || "系统音量"}</small><strong>{systemAudio.muted ? "静音" : `${systemAudio.volumePercent}%`}</strong></span>
+            <span><small title={systemAudio.deviceName}>{systemAudio.deviceName || t("volume")}</small><strong>{systemAudio.muted ? t("muted") : `${systemAudio.volumePercent}%`}</strong></span>
           </div>
-          <input aria-label="系统音量" type="range" min="0" max="100" value={systemAudio.volumePercent} oninput={(event) => onAudioVolume?.(Number(event.currentTarget.value))}/>
+          <input aria-label={t("volume")} type="range" min="0" max="100" value={systemAudio.volumePercent} oninput={(event) => onAudioVolume?.(Number(event.currentTarget.value))}/>
           <div class="audio-device-list">
             {#each audioDevices as device (device.id)}
               <button type="button" class:active={device.isDefault} onclick={(event) => { event.stopPropagation(); onAudioDevice?.(device.id); }} title={device.name}><Speaker size={13}/><span>{device.name}</span></button>
@@ -347,23 +349,23 @@
         </div>
       {:else if idle}
         <div class="idle-expanded">
-          <small>空闲信息</small>
+          <small>{t("idleInfo")}</small>
           <strong title={idleTitle}>{idleTitle}</strong>
           <span title={idleSubtitle}>{idleSubtitle}</span>
           <div class="idle-controls">
-            <button type="button" aria-label="上一项" onclick={(e) => { e.stopPropagation(); onIdleAction?.("prev"); }}><ChevronLeft size={18}/></button>
-            <button type="button" aria-label={idlePaused ? "继续轮播" : "暂停轮播"} aria-pressed={idlePaused} onclick={(e) => { e.stopPropagation(); onIdleAction?.("toggle"); }}>{#if idlePaused}<Play size={17}/>{:else}<Pause size={17}/>{/if}</button>
-            <button type="button" aria-label="下一项" onclick={(e) => { e.stopPropagation(); onIdleAction?.("next"); }}><ChevronRight size={18}/></button>
+            <button type="button" aria-label={t("previousItem")} onclick={(e) => { e.stopPropagation(); onIdleAction?.("prev"); }}><ChevronLeft size={18}/></button>
+            <button type="button" aria-label={idlePaused ? t("resumeCarousel") : t("pauseCarousel")} aria-pressed={idlePaused} onclick={(e) => { e.stopPropagation(); onIdleAction?.("toggle"); }}>{#if idlePaused}<Play size={17}/>{:else}<Pause size={17}/>{/if}</button>
+            <button type="button" aria-label={t("nextItem")} onclick={(e) => { e.stopPropagation(); onIdleAction?.("next"); }}><ChevronRight size={18}/></button>
           </div>
         </div>
       {:else}
       <div class="top-row">
-        <button class="cover expanded-cover" type="button" aria-label="打开当前播放器" onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
+        <button class="cover expanded-cover" type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
           {#if media.albumArt}{#key media.albumArt}<img class="cover-image" src={media.albumArt} alt="" draggable="false" />{/key}{:else}<Music2 size={30} />{/if}
         </button>
         <div class="metadata">
-          <strong title={media.title}>{media.title || "等待播放..."}</strong>
-          <span title={media.artist}>{media.artist || "未知艺术家"}</span>
+          <strong title={media.title}>{media.title || t("waitingPlayback")}</strong>
+          <span title={media.artist}>{media.artist || t("unknownArtist")}</span>
         </div>
         {#if showSpectrum}
           <Spectrum active={expandedOpacity > .05} playing={media.isPlaying} mode={spectrumMode} reduceMotion={reduceAnimations} topColor={spectrumTopColor} bottomColor={spectrumBottomColor} scale={1.5} values={previewSpectrum} />
@@ -377,13 +379,13 @@
       <div class="control-row">
         <span class="control-spacer"></span>
         <div class="controls">
-          <button type="button" class="side" aria-label="上一首" onclick={(e) => { e.stopPropagation(); onMediaAction?.("prev"); }}><SkipBack size={22} fill="currentColor" /></button>
-          <button type="button" class="play" aria-label={media.isPlaying ? "暂停" : "播放"} onclick={(e) => { e.stopPropagation(); onMediaAction?.("play_pause"); }}>
+          <button type="button" class="side" aria-label={t("previous")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("prev"); }}><SkipBack size={22} fill="currentColor" /></button>
+          <button type="button" class="play" aria-label={media.isPlaying ? t("pause") : t("play")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("play_pause"); }}>
             {#if media.isPlaying}<Pause size={32} fill="currentColor" />{:else}<Play size={32} fill="currentColor" />{/if}
           </button>
-          <button type="button" class="side" aria-label="下一首" onclick={(e) => { e.stopPropagation(); onMediaAction?.("next"); }}><SkipForward size={22} fill="currentColor" /></button>
+          <button type="button" class="side" aria-label={t("next")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("next"); }}><SkipForward size={22} fill="currentColor" /></button>
         </div>
-        <button type="button" class="floating" aria-label="切换悬浮窗" onclick={(e) => { e.stopPropagation(); onToggleFloating?.(); }}><GalleryHorizontalEnd size={18} /></button>
+        <button type="button" class="floating" aria-label={t("toggleFloating")} onclick={(e) => { e.stopPropagation(); onToggleFloating?.(); }}><GalleryHorizontalEnd size={18} /></button>
       </div>
       {/if}
     </div>
@@ -398,7 +400,7 @@
   .compact-layer{inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 4px}.compact-layer.edge-inset:not(.vertical){padding-left:calc(4px + var(--shoulder-inset));padding-right:calc(8px + var(--shoulder-inset))}.compact-layer.vertical{flex-direction:column;padding:4px 0 8px}.compact-layer.edge-inset.vertical{padding-top:calc(4px + var(--shoulder-inset));padding-bottom:calc(8px + var(--shoulder-inset))}.compact-layer button,.compact-layer :global(canvas){pointer-events:auto}.time-display{width:100%;text-align:center;color:rgba(255,255,255,.8);font:500 12px/1 var(--app-font);letter-spacing:.05em;font-variant-numeric:tabular-nums;user-select:none}.cover{display:grid;place-items:center;flex:none;padding:0;overflow:hidden;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);border:0;cursor:pointer;user-select:none}.cover img{width:100%;height:100%;display:block;object-fit:cover;-webkit-user-drag:none;user-select:none}.compact-cover{width:20px;height:20px;border-radius:50%}.expanded-cover{width:52px;height:52px;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.35);outline:1px solid rgba(255,255,255,.1)}.playing-dot{width:3px;height:3px;border-radius:50%}
   .compact-disc{display:block;width:100%;height:100%;transform-origin:center;animation:compact-disc-spin 8s linear infinite;animation-play-state:paused}.compact-disc.spinning{animation-play-state:running;will-change:transform}@keyframes compact-disc-spin{to{transform:rotate(1turn)}}
   .audio-compact{width:100%;display:flex;align-items:center;justify-content:center;gap:5px;color:#fff;font:600 11px/1 var(--app-font);font-variant-numeric:tabular-nums}.audio-compact.vertical{flex-direction:column}.audio-expanded{width:100%;height:100%;padding:18px 26px 14px;box-sizing:border-box;display:flex;flex-direction:column}.audio-heading{display:flex;align-items:center;gap:10px}.audio-heading>span:last-child{min-width:0;display:flex;flex-direction:column}.audio-heading small{font-size:9px;color:rgba(255,255,255,.5)}.audio-heading strong{font-size:16px}.audio-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,.1)}.audio-expanded input[type="range"]{width:100%;margin:12px 0 9px;accent-color:#fff}.audio-device-list{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none}.audio-device-list button{min-width:0;max-width:120px;display:flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid rgba(255,255,255,.08);border-radius:8px;color:rgba(255,255,255,.6);background:rgba(255,255,255,.05);cursor:pointer}.audio-device-list button.active{color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.12)}.audio-device-list span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px}
-  .idle-compact{display:block;width:100%;padding:0 7px;overflow:hidden;text-align:center;text-overflow:ellipsis;white-space:nowrap;font:600 11px/1 var(--app-font);color:rgba(255,255,255,.9)}.idle-compact.vertical{writing-mode:vertical-rl;max-height:100%;padding:7px 0}.idle-expanded{width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:18px 28px}.idle-expanded small{font-size:9px;letter-spacing:.12em;color:rgba(255,255,255,.45)}.idle-expanded strong{max-width:100%;margin-top:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:22px;line-height:1.15}.idle-expanded>span{max-width:100%;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:rgba(255,255,255,.62)}.idle-controls{display:flex;gap:10px;margin-top:16px}.idle-controls button{display:grid;place-items:center;width:32px;height:30px;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;background:rgba(255,255,255,.06);pointer-events:auto;cursor:pointer}
+  .idle-compact{display:block;width:100%;padding:0 7px;overflow:hidden;text-align:center;text-overflow:ellipsis;white-space:nowrap;font:600 11px/1 var(--app-font);color:rgba(255,255,255,.9)}.idle-compact.vertical{writing-mode:vertical-rl;max-height:100%;padding:7px 0}.idle-expanded{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:18px 28px;box-sizing:border-box}.idle-expanded small{font-size:9px;letter-spacing:.12em;color:rgba(255,255,255,.45)}.idle-expanded strong{max-width:100%;margin-top:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:22px;line-height:1.15}.idle-expanded>span{max-width:100%;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:rgba(255,255,255,.62)}.idle-controls{display:flex;flex:none;gap:10px;margin-top:14px}.idle-controls button{display:grid;place-items:center;width:32px;height:30px;border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;background:rgba(255,255,255,.06);pointer-events:auto;cursor:pointer}
   .cover-image{animation:cover-flip-in 420ms cubic-bezier(.23,1,.32,1)}@keyframes cover-flip-in{from{opacity:0;transform:perspective(500px) rotateY(-70deg) scale(.9)}to{opacity:1;transform:perspective(500px) rotateY(0) scale(1)}}
   .debug-overlay{position:absolute;z-index:4;top:4px;left:50%;display:flex;gap:5px;max-width:calc(100% - 12px);padding:2px 6px;border-radius:5px;transform:translateX(-50%);overflow:hidden;color:#4ade80;background:rgba(0,0,0,.75);font:500 8px/1.3 ui-monospace,monospace;white-space:nowrap;pointer-events:none}.debug-overlay span{overflow:hidden;text-overflow:ellipsis}
   .expanded-layer{left:50%;top:0;width:300px;height:160px;padding:16px 28px 20px;display:flex;flex-direction:column;transition:opacity 120ms linear;will-change:transform,opacity}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.top-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;min-height:52px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata strong,.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata strong{font-size:13px;line-height:1.15;font-weight:700;letter-spacing:-.03em;margin-bottom:4px}.metadata span{font-size:11px;line-height:1.15;font-weight:500;color:rgba(255,255,255,.65)}.progress-block,.control-row,.audio-device-list,.idle-controls{opacity:var(--secondary-opacity);transition:opacity 100ms linear}

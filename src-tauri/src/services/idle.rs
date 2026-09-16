@@ -17,7 +17,9 @@ struct SystemCollector {
 impl Default for SystemCollector {
     fn default() -> Self {
         Self {
-            system: System::new_all(),
+            // Only CPU and memory are read below. new_all() also enumerates
+            // every process and disk on first use, causing a visible pause.
+            system: System::new(),
             networks: Networks::new_with_refreshed_list(),
             last_refresh: Instant::now(),
         }
@@ -121,10 +123,16 @@ fn geocoding_rank(item: &GeocodingResult) -> (u8, u64) {
     (u8::from(administrative), item.population)
 }
 
-async fn fetch_geocoding_results(query: &str) -> AppResult<Vec<GeocodingResult>> {
+async fn fetch_geocoding_results(query: &str, language: &str) -> AppResult<Vec<GeocodingResult>> {
+    let language = match language {
+        "en" => "en",
+        "ja" => "ja",
+        _ => "zh",
+    };
     let url = format!(
-        "https://geocoding-api.open-meteo.com/v1/search?name={}&count=8&language=zh&format=json",
-        urlencoding::encode(query)
+        "https://geocoding-api.open-meteo.com/v1/search?name={}&count=8&language={}&format=json",
+        urlencoding::encode(query),
+        language
     );
     let response: GeocodingResponse = reqwest::get(url)
         .await
@@ -156,18 +164,21 @@ fn dedupe_weather_candidates(
         .collect()
 }
 
-pub async fn search_weather_locations(query: &str) -> AppResult<Vec<WeatherLocationCandidate>> {
+pub async fn search_weather_locations(
+    query: &str,
+    language: &str,
+) -> AppResult<Vec<WeatherLocationCandidate>> {
     let query = query.trim();
     if query.chars().count() < 2 {
         return Ok(Vec::new());
     }
 
-    let mut results = fetch_geocoding_results(query).await?;
+    let mut results = fetch_geocoding_results(query, language).await?;
     // GeoNames often indexes Chinese prefecture-level cities with the 市 suffix only.
     // Searching both forms makes queries such as “江门” find “江门市” instead of
     // returning only small same-name settlements in other provinces.
     if is_cjk(query) && !query.ends_with('市') {
-        results.extend(fetch_geocoding_results(&format!("{query}市")).await?);
+        results.extend(fetch_geocoding_results(&format!("{query}市"), language).await?);
     }
     results.sort_by(|left, right| geocoding_rank(right).cmp(&geocoding_rank(left)));
 

@@ -7,7 +7,10 @@ use std::sync::{
 use tauri::{AppHandle, Emitter};
 
 const FFT_SIZE: usize = 2048;
-const HOP_SIZE: usize = 256;
+// A 48 kHz stream needs about 47 analyses per second at this hop size.
+// The former 256-sample hop ran the 2048-point FFT about 188 times/s on
+// the real-time audio callback, competing with WebView animation.
+const HOP_SIZE: usize = 1024;
 const NUM_BARS: usize = 6;
 
 const FREQ_BANDS: [(f32, f32); NUM_BARS] = [
@@ -64,7 +67,7 @@ impl SpectrumCapture {
                 if let Ok(values) = publisher_bars.lock() {
                     let _ = publisher_app.emit("spectrum-data", values.to_vec());
                 }
-                std::thread::sleep(std::time::Duration::from_millis(33));
+                std::thread::sleep(std::time::Duration::from_millis(50));
             }
         });
 

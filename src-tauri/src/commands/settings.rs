@@ -341,8 +341,8 @@ pub fn save_floating_window_position(
 
     settings.floating_window_x = Some(x);
     settings.floating_window_y = Some(y);
-    settings.floating_window_width = Some(width);
-    settings.floating_window_height = Some(height);
+    settings.floating_window_width = Some(width.max(200));
+    settings.floating_window_height = Some(height.max(200));
 
     write_settings_file(&app, &settings)?;
 

@@ -22,11 +22,22 @@ static CACHE_METADATA: Mutex<Option<Vec<CacheMetadata>>> = Mutex::new(None);
 /// 2. 创建缓存目录（如果不存在）
 /// 3. 加载现有缓存的元数据
 pub fn init_cache_system(app_handle: &tauri::AppHandle) -> AppResult<()> {
-    let cache_dir = app_handle
+    // Keep portable installs self-contained: artwork and MV previews live next
+    // to the executable by default. If that location is read-only (for
+    // example a manually copied binary under Program Files), gracefully fall
+    // back to the per-user application cache.
+    let install_cache = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(|parent| parent.join("cache").join("media")));
+    let fallback_cache = app_handle
         .path()
         .app_cache_dir()
         .map_err(|e| AppError::cache(format!("无法获取缓存目录：{}", e)))?
         .join("media_cache");
+    let cache_dir = match install_cache {
+        Some(path) if fs::create_dir_all(&path).is_ok() => path,
+        _ => fallback_cache,
+    };
 
     // 创建缓存目录
     fs::create_dir_all(&cache_dir)
@@ -188,12 +199,25 @@ pub async fn download_and_cache(url: &str, content_type: &str) -> AppResult<Stri
         .get(url)
         .send()
         .await
-        .map_err(|e| AppError::network(format!("下载失败：{}", e)))?;
+        .map_err(|e| AppError::network(format!("下载失败：{}", e)))?
+        .error_for_status()
+        .map_err(|e| AppError::network(format!("下载响应失败：{}", e)))?;
+
+    const MAX_MEDIA_BYTES: u64 = 128 * 1024 * 1024;
+    if response
+        .content_length()
+        .is_some_and(|size| size > MAX_MEDIA_BYTES)
+    {
+        return Err(AppError::business(3004, "媒体文件超过 128 MB"));
+    }
 
     let bytes = response
         .bytes()
         .await
         .map_err(|e| AppError::network(format!("读取数据失败：{}", e)))?;
+    if bytes.len() as u64 > MAX_MEDIA_BYTES {
+        return Err(AppError::business(3004, "媒体文件超过 128 MB"));
+    }
 
     save_cache_file(url, &bytes, content_type)
 }

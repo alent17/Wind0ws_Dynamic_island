@@ -92,6 +92,32 @@ const STUDIO_MENU_ID: &str = "studio";
 /// 托盘菜单 - 退出应用
 const QUIT_MENU_ID: &str = "quit";
 
+fn resolved_ui_language(preference: &str) -> &'static str {
+    match preference {
+        "zh-CN" => "zh-CN",
+        "ja" => "ja",
+        "en" => "en",
+        _ => {
+            let primary_language = unsafe {
+                windows::Win32::Globalization::GetUserDefaultUILanguage() & 0x03ff
+            };
+            match primary_language {
+                0x04 => "zh-CN",
+                0x11 => "ja",
+                _ => "en",
+            }
+        }
+    }
+}
+
+fn tray_labels(language: &str) -> (&'static str, &'static str, &'static str) {
+    match language {
+        "ja" => ("メイン画面を表示", "Isle Studio", "終了"),
+        "en" => ("Show main window", "Isle Studio", "Quit"),
+        _ => ("显示主窗口", "Isle Studio", "退出"),
+    }
+}
+
 // ============================================================================
 // 数据结构
 // ============================================================================
@@ -475,6 +501,8 @@ pub fn run() {
             // 加载保存的设置
             let saved_settings = read_settings_file(app.handle());
             let initial_settings = saved_settings.unwrap_or_default();
+            let (show_label, studio_label, quit_label) =
+                tray_labels(resolved_ui_language(&initial_settings.language));
 
             // 获取目标显示器索引
             let monitor_index = initial_settings.monitor_index;
@@ -529,10 +557,10 @@ pub fn run() {
             let menu = Menu::with_items(
                 app,
                 &[
-                    &MenuItem::with_id(app, SHOW_MENU_ID, "显示主窗口", true, None::<&str>)?,
-                    &MenuItem::with_id(app, STUDIO_MENU_ID, "Isle Studio", true, None::<&str>)?,
+                    &MenuItem::with_id(app, SHOW_MENU_ID, show_label, true, None::<&str>)?,
+                    &MenuItem::with_id(app, STUDIO_MENU_ID, studio_label, true, None::<&str>)?,
                     &PredefinedMenuItem::separator(app)?,
-                    &MenuItem::with_id(app, QUIT_MENU_ID, "退出", true, None::<&str>)?,
+                    &MenuItem::with_id(app, QUIT_MENU_ID, quit_label, true, None::<&str>)?,
                 ],
             )?;
 

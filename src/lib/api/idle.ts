@@ -3,5 +3,5 @@ import type { IdleSnapshot, WeatherLocationCandidate } from "./types";
 
 export const idleApi = {
   getSnapshot: () => invoke<IdleSnapshot>("get_idle_snapshot"),
-  searchLocations: (query: string) => invoke<WeatherLocationCandidate[]>("search_weather_locations", { query }),
+  searchLocations: (query: string, language = "zh") => invoke<WeatherLocationCandidate[]>("search_weather_locations", { query, language }),
 };

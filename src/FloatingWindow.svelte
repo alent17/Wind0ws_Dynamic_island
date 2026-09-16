@@ -8,6 +8,7 @@
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
   import { applyAppFont } from "$lib/font";
+  import { locale, setLocale, translate, type TranslationKey } from "$lib/i18n";
   import {
     activeCaptureReasons,
     EMPTY_CAPTURE_SNAPSHOT,
@@ -31,8 +32,9 @@
     height: number;
   }
 
-  const PLACEHOLDER_TITLE = "等待播放...";
-  const PLACEHOLDER_ARTIST = "未知艺术家";
+  const t = (key: TranslationKey, values: Record<string, string | number> = {}) => translate(key, values, $locale);
+  let PLACEHOLDER_TITLE = t("waitingPlayback");
+  let PLACEHOLDER_ARTIST = t("unknownArtist");
   let mediaState = $state<MediaState>({
     title: PLACEHOLDER_TITLE,
     artist: PLACEHOLDER_ARTIST,
@@ -64,7 +66,7 @@
   );
   let windowSize = $state<WindowSize>({ width: 0, height: 0 });
   let isCompactCover = $derived(
-    windowSize.width < 100 || windowSize.height < 100,
+    windowSize.width <= 200.5 && windowSize.height <= 200.5,
   );
   let clockNow = $state(Date.now());
   let displayedPosition = $derived(projectedPosition(mediaState, clockNow));
@@ -92,6 +94,7 @@
   let savePositionTimeout: ReturnType<typeof setTimeout> | null = null;
   let coverRequestId = 0;
   let durationRequestId = 0;
+  let mvRequestId = 0;
 
   function handlePointerEnter() {
     if (hoverLeaveTimeout) {
@@ -151,9 +154,12 @@
         return;
       }
 
-      if (await preloadCover(resolved.url)) {
+      const resolvedUrl = resolved.url.includes(":\\") || resolved.url.includes(":/")
+        ? convertFileSrc(resolved.url)
+        : resolved.url;
+      if (await preloadCover(resolvedUrl)) {
         if (requestId === coverRequestId && trackKey === currentTrackKey) {
-          transitionCover(resolved.url, "left");
+          transitionCover(resolvedUrl, "left");
         }
       }
     } catch (error) {
@@ -442,12 +448,56 @@
     }
   }
 
+  async function cacheMV(url: string) {
+    try {
+      const cachedPath = await invoke<string>("download_and_cache", {
+        url,
+        contentType: "video/mp4",
+      });
+      return convertFileSrc(cachedPath);
+    } catch {
+      return url;
+    }
+  }
+
+  async function fetchMVPreview(title: string, artist: string) {
+    if (!isMVPlaybackEnabled || !title) return null;
+    try {
+      // Restore the project's original NetEase MV path first. It works for
+      // full MVs as well; the player below intentionally loops only 30 s.
+      const song = await mediaApi.getNeteaseSongInfo(title, artist);
+      if (song?.mvUrl) return await cacheMV(song.mvUrl);
+    } catch (error) {
+      console.warn("[MV] 网易云匹配失败，尝试 Apple Music:", error);
+    }
+    return fetchMVFromAppleMusic(title, artist);
+  }
+
+  function requestMVForCurrentTrack(trackKey: string, title: string, artist: string) {
+    const requestId = ++mvRequestId;
+    void fetchMVPreview(title, artist).then((mvLink) => {
+      if (!mvLink || requestId !== mvRequestId || currentTrackKey !== trackKey || !isMVPlaybackEnabled) return;
+      mvUrl = mvLink;
+      isPlayingMV = true;
+    });
+  }
+
+  function keepMVInPreview(video: HTMLVideoElement) {
+    if (video.currentTime >= 30 || video.ended) {
+      video.currentTime = 0;
+      if (mediaState.isPlaying) void video.play().catch(() => undefined);
+    }
+  }
+
   onMount(async () => {
     // 读取设置
     try {
       const settings = await invoke<AppSettings>("get_settings");
       capturePreferences = settings;
       applyAppFont(settings.fontId);
+      setLocale(settings.language);
+      PLACEHOLDER_TITLE = t("waitingPlayback");
+      PLACEHOLDER_ARTIST = t("unknownArtist");
       isMVPlaybackEnabled = settings.enableMvPlayback ?? false;
 
       // 加载置顶设置
@@ -465,7 +515,7 @@
       await windowApi.setFloatingWindowResizable(!isFloatingWindowLocked);
     } catch (error) {
       console.error("[设置] 读取失败:", error);
-      isMVPlaybackEnabled = false;
+      isMVPlaybackEnabled = true;
       isAlwaysOnTop = false;
     }
 
@@ -479,8 +529,11 @@
         isMVPlaybackEnabled = enable;
         // 如果关闭了 MV 播放，停止当前播放
         if (!isMVPlaybackEnabled) {
+          mvRequestId += 1;
           isPlayingMV = false;
           mvUrl = "";
+        } else if (currentTrackKey) {
+          requestMVForCurrentTrack(currentTrackKey, mediaState.title, mediaState.artist);
         }
       },
     );
@@ -544,6 +597,7 @@
     eventListeners.push(unlistenHalftoneChange);
     const unlistenSettingsChange = await eventManager.on(Events.SETTINGS_UPDATED, (value: AppSettings) => {
       if (value?.fontId) applyAppFont(value.fontId);
+      if (value?.language) setLocale(value.language);
       if (value) capturePreferences = value;
     });
     eventListeners.push(unlistenSettingsChange);
@@ -629,6 +683,7 @@
         if (currentTrackKey) return;
         // 播放器退出，重置为等待状态
         currentTrackKey = "";
+        mvRequestId += 1;
         coverRequestId += 1;
         durationRequestId += 1;
         mediaState = {
@@ -663,6 +718,7 @@
         // resolver validates title/artist matches before upgrading any source,
         // including browser-based players, to high-resolution artwork.
         isPlayingMV = false;
+        mvRequestId += 1;
         mvUrl = "";
         void resolveTrackCover(
           newTrackKey,
@@ -677,20 +733,7 @@
           payload.artist || "",
         );
 
-        if (isMVPlaybackEnabled) {
-          fetchMVFromAppleMusic(payload.title, payload.artist).then(
-            (mvLink) => {
-              if (mvLink && currentTrackKey === newTrackKey) {
-                setTimeout(() => {
-                  if (currentTrackKey === newTrackKey) {
-                    mvUrl = mvLink;
-                    isPlayingMV = true;
-                  }
-                }, 450);
-              }
-            },
-          );
-        }
+        if (isMVPlaybackEnabled) requestMVForCurrentTrack(newTrackKey, payload.title, payload.artist);
       } else {
         // 播放状态变化
         const receivedAt = Date.now();
@@ -1267,7 +1310,7 @@
   onpointerenter={handlePointerEnter}
   onpointerleave={handlePointerLeave}
   role="region"
-  aria-label="音乐播放器"
+  aria-label={t("mediaPlayer")}
   style:--bg={bgColor}
   style:--bg-gradient={bgGradient}
 >
@@ -1280,13 +1323,13 @@
       class:locked={isFloatingWindowLocked}
       onmousedown={handleDragBarMousedown}
       role="button"
-      aria-label="拖动窗口"
+      aria-label={t("dragWindow")}
       tabindex="0"
     >
       <button
         class="pin-btn-topbar"
         onclick={toggleAlwaysOnTop}
-        aria-label={isAlwaysOnTop ? "取消置顶" : "置顶"}
+        aria-label={isAlwaysOnTop ? t("unpin") : t("pin")}
         class:pinned={isAlwaysOnTop}
       >
         <Pin size={16} strokeWidth={2} />
@@ -1298,7 +1341,7 @@
           <div class="drag-dot"></div>
         </div>
       </div>
-      <button class="close-btn-topbar" onclick={closeWindow} aria-label="关闭">
+      <button class="close-btn-topbar" onclick={closeWindow} aria-label={t("close")}>
         <X size={16} strokeWidth={2} />
       </button>
     </div>
@@ -1327,9 +1370,11 @@
             poster=""
             onloadeddata={(e) => {
               const video = e.target as HTMLVideoElement;
-              // 确保视频已缓冲足够再播放
-              video.play().catch(console.error);
+              video.currentTime = 0;
+              if (mediaState.isPlaying) video.play().catch(console.error);
             }}
+            ontimeupdate={(e) => keepMVInPreview(e.currentTarget)}
+            onended={(e) => keepMVInPreview(e.currentTarget)}
             onwaiting={() => {
             }}
             onplaying={() => {
@@ -1406,7 +1451,7 @@
           e.stopPropagation();
           mediaApi.controlMedia("prev");
         }}
-        aria-label="上一首"
+        aria-label={t("previous")}
       >
         <SkipBack size={18} fill="currentColor" />
       </button>
@@ -1414,7 +1459,7 @@
       <button
         class="play-btn"
         onclick={togglePlay}
-        aria-label={mediaState.isPlaying ? "暂停" : "播放"}
+        aria-label={mediaState.isPlaying ? t("pause") : t("play")}
       >
         {#if mediaState.isPlaying}
           <Pause size={24} fill="black" color="black" />
@@ -1429,7 +1474,7 @@
           e.stopPropagation();
           mediaApi.controlMedia("next");
         }}
-        aria-label="下一首"
+        aria-label={t("next")}
       >
         <SkipForward size={18} fill="currentColor" />
       </button>
@@ -1728,7 +1773,7 @@
     display: none;
   }
 
-  /* Below 100 x 100 CSS pixels the floating player becomes a cover tile. */
+  /* At the 200 x 200 minimum size the floating player becomes a cover tile. */
   .player.compact-cover .album-stage {
     inset: 0;
     padding: 0;

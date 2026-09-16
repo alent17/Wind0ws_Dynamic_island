@@ -15,7 +15,7 @@
       "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost https://asset.localhost data:; media-src 'self' asset: http://asset.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://asset.localhost",
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPCACHE/**", "$APPDATA/**", "$RESOURCE/**"]
+        "scope": ["$APPCACHE/**", "$APPDATA/**", "$RESOURCE/**", "$EXE/cache/**"]
       }
     },
     "windows": [
@@ -51,7 +51,13 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "installerHooks": "./windows/installer-hooks.nsh"
+        "installerHooks": "./windows/installer-hooks.nsh",
+        "installerIcon": "./icons/icon.ico",
+        "headerImage": "./windows/installer-header.bmp",
+        "sidebarImage": "./windows/installer-sidebar.bmp",
+        "languages": ["SimpChinese", "English", "Japanese"],
+        "displayLanguageSelector": false,
+        "startMenuFolder": "Isle"
       }
     }
   }

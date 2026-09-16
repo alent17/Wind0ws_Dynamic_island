@@ -36,8 +36,17 @@ struct IslandInteractionRegion {
 }
 
 static ISLAND_INTERACTION_REGION: OnceLock<Mutex<IslandInteractionRegion>> = OnceLock::new();
+static ISLAND_INTERACTION_REGION_REVISION: AtomicU64 = AtomicU64::new(0);
 static ISLAND_CURSOR_MONITOR_STARTED: AtomicBool = AtomicBool::new(false);
+static ISLAND_CURSOR_WATCHDOG_STARTED: AtomicBool = AtomicBool::new(false);
+static ISLAND_CURSOR_MONITOR_GENERATION: AtomicU64 = AtomicU64::new(0);
+static ISLAND_CURSOR_MONITOR_HEARTBEAT: AtomicU64 = AtomicU64::new(0);
 static WINDOW_MOTION_REVISION: AtomicU64 = AtomicU64::new(0);
+
+const CURSOR_MONITOR_INTERVAL_MS: u64 = 33;
+const CURSOR_MONITOR_RETRY_MS: u64 = 100;
+const CURSOR_MONITOR_WATCHDOG_INTERVAL_MS: u64 = 1_000;
+const CURSOR_MONITOR_STALE_MS: u64 = 3_000;
 
 #[derive(Default)]
 struct WindowMotionState {
@@ -144,10 +153,135 @@ fn point_in_rounded_rect(x: f64, y: f64, region: &IslandInteractionRegion) -> bo
     true
 }
 
-pub fn install_island_cursor_passthrough(window: &tauri::WebviewWindow) -> AppResult<()> {
+fn unix_millis() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis().min(u64::MAX as u128) as u64)
+        .unwrap_or(0)
+}
+
+fn cursor_monitor_is_stale(started: bool, heartbeat: u64, now: u64) -> bool {
+    started && now.saturating_sub(heartbeat) >= CURSOR_MONITOR_STALE_MS
+}
+
+fn monitor_owns_generation(owned: u64, current: u64) -> bool {
+    owned == current
+}
+
+fn interaction_revision_is_current(candidate: u64, current: u64) -> bool {
+    candidate >= current
+}
+
+fn spawn_cursor_monitor(window: tauri::WebviewWindow, generation: u64) -> AppResult<()> {
     use windows::Win32::Foundation::{HWND, POINT, RECT};
     use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetWindowRect};
 
+    let raw_handle = window
+        .hwnd()
+        .map_err(|error| AppError::window(error.to_string()))?;
+    let handle = HWND(raw_handle.0 as _);
+    std::thread::spawn(move || {
+        let mut last_ignored = None;
+        while monitor_owns_generation(
+            generation,
+            ISLAND_CURSOR_MONITOR_GENERATION.load(Ordering::Acquire),
+        ) {
+            ISLAND_CURSOR_MONITOR_HEARTBEAT.store(unix_millis(), Ordering::Release);
+            if window
+                .app_handle()
+                .get_webview_window(window.label())
+                .is_none()
+            {
+                break;
+            }
+
+            let mut cursor = POINT::default();
+            let mut window_rect = RECT::default();
+            if unsafe { GetCursorPos(&mut cursor) }.is_err()
+                || unsafe { GetWindowRect(handle, &mut window_rect) }.is_err()
+            {
+                let _ = window.set_ignore_cursor_events(false);
+                last_ignored = Some(false);
+                std::thread::sleep(std::time::Duration::from_millis(CURSOR_MONITOR_RETRY_MS));
+                continue;
+            }
+
+            let scale = match window.scale_factor() {
+                Ok(scale) => scale.max(f64::EPSILON),
+                Err(_) => {
+                    let _ = window.set_ignore_cursor_events(false);
+                    last_ignored = Some(false);
+                    std::thread::sleep(std::time::Duration::from_millis(CURSOR_MONITOR_RETRY_MS));
+                    continue;
+                }
+            };
+            let local_x = (cursor.x - window_rect.left) as f64 / scale;
+            let local_y = (cursor.y - window_rect.top) as f64 / scale;
+            let inside = match ISLAND_INTERACTION_REGION
+                .get()
+                .and_then(|region| region.lock().ok())
+            {
+                Some(region) => point_in_rounded_rect(local_x, local_y, &region),
+                None => {
+                    let _ = window.set_ignore_cursor_events(false);
+                    last_ignored = Some(false);
+                    std::thread::sleep(std::time::Duration::from_millis(CURSOR_MONITOR_RETRY_MS));
+                    continue;
+                }
+            };
+            let ignored = !inside;
+
+            if last_ignored != Some(ignored) {
+                if window.set_ignore_cursor_events(ignored).is_err() {
+                    let _ = window.set_ignore_cursor_events(false);
+                    last_ignored = Some(false);
+                    std::thread::sleep(std::time::Duration::from_millis(CURSOR_MONITOR_RETRY_MS));
+                    continue;
+                }
+                last_ignored = Some(ignored);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(CURSOR_MONITOR_INTERVAL_MS));
+        }
+
+        let _ = window.set_ignore_cursor_events(false);
+        if monitor_owns_generation(
+            generation,
+            ISLAND_CURSOR_MONITOR_GENERATION.load(Ordering::Acquire),
+        ) {
+            ISLAND_CURSOR_MONITOR_STARTED.store(false, Ordering::Release);
+        }
+    });
+    Ok(())
+}
+
+fn ensure_cursor_watchdog(window: &tauri::WebviewWindow) {
+    if ISLAND_CURSOR_WATCHDOG_STARTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let app = window.app_handle().clone();
+    let label = window.label().to_string();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(
+            CURSOR_MONITOR_WATCHDOG_INTERVAL_MS,
+        ));
+        let Some(window) = app.get_webview_window(&label) else {
+            ISLAND_CURSOR_WATCHDOG_STARTED.store(false, Ordering::Release);
+            break;
+        };
+        let started = ISLAND_CURSOR_MONITOR_STARTED.load(Ordering::Acquire);
+        let heartbeat = ISLAND_CURSOR_MONITOR_HEARTBEAT.load(Ordering::Acquire);
+        if cursor_monitor_is_stale(started, heartbeat, unix_millis()) {
+            ISLAND_CURSOR_MONITOR_GENERATION.fetch_add(1, Ordering::AcqRel);
+            let _ = window.set_ignore_cursor_events(false);
+            ISLAND_CURSOR_MONITOR_STARTED.store(false, Ordering::Release);
+            let _ = install_island_cursor_passthrough(&window);
+        } else if !started {
+            let _ = install_island_cursor_passthrough(&window);
+        }
+    });
+}
+
+pub fn install_island_cursor_passthrough(window: &tauri::WebviewWindow) -> AppResult<()> {
     let initial_radii = InteractionCornerRadii {
         top_left: 14.0,
         top_right: 14.0,
@@ -156,59 +290,26 @@ pub fn install_island_cursor_passthrough(window: &tauri::WebviewWindow) -> AppRe
     };
     let initial = normalized_interaction_region(110.0, 22.0, 80.0, 28.0, initial_radii, Vec::new())
         .map_err(AppError::window)?;
-    *ISLAND_INTERACTION_REGION
-        .get_or_init(|| Mutex::new(IslandInteractionRegion::default()))
-        .lock()
-        .map_err(|_| AppError::lock("Failed to lock island interaction region"))? = initial;
+    ISLAND_INTERACTION_REGION.get_or_init(|| Mutex::new(initial));
+
+    ensure_cursor_watchdog(window);
 
     if ISLAND_CURSOR_MONITOR_STARTED.swap(true, Ordering::AcqRel) {
         return Ok(());
     }
-
-    let window = window.clone();
-    let raw_handle = window
-        .hwnd()
-        .map_err(|error| AppError::window(error.to_string()))?;
-    let handle = HWND(raw_handle.0 as _);
-    std::thread::spawn(move || {
-        let mut last_ignored = None;
-        loop {
-            let mut cursor = POINT::default();
-            let mut window_rect = RECT::default();
-            if unsafe { GetCursorPos(&mut cursor) }.is_err()
-                || unsafe { GetWindowRect(handle, &mut window_rect) }.is_err()
-            {
-                break;
-            }
-
-            let scale = window.scale_factor().unwrap_or(1.0).max(f64::EPSILON);
-            let local_x = (cursor.x - window_rect.left) as f64 / scale;
-            let local_y = (cursor.y - window_rect.top) as f64 / scale;
-            let inside = ISLAND_INTERACTION_REGION
-                .get()
-                .and_then(|region| {
-                    region
-                        .lock()
-                        .ok()
-                        .map(|region| point_in_rounded_rect(local_x, local_y, &region))
-                })
-                .unwrap_or(false);
-            let ignored = !inside;
-
-            if last_ignored != Some(ignored) {
-                if window.set_ignore_cursor_events(ignored).is_err() {
-                    break;
-                }
-                last_ignored = Some(ignored);
-            }
-            std::thread::sleep(std::time::Duration::from_millis(16));
-        }
-    });
+    let generation = ISLAND_CURSOR_MONITOR_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
+    ISLAND_CURSOR_MONITOR_HEARTBEAT.store(unix_millis(), Ordering::Release);
+    if let Err(error) = spawn_cursor_monitor(window.clone(), generation) {
+        ISLAND_CURSOR_MONITOR_STARTED.store(false, Ordering::Release);
+        let _ = window.set_ignore_cursor_events(false);
+        return Err(error);
+    }
     Ok(())
 }
 
 #[tauri::command]
 pub fn set_island_interaction_region(
+    revision: u64,
     x: f64,
     y: f64,
     width: f64,
@@ -218,16 +319,25 @@ pub fn set_island_interaction_region(
 ) -> AppResult<()> {
     let next = normalized_interaction_region(x, y, width, height, radii, polygon)
         .map_err(AppError::window)?;
-    *ISLAND_INTERACTION_REGION
+    ISLAND_INTERACTION_REGION_REVISION.fetch_max(revision, Ordering::AcqRel);
+    let mut region = ISLAND_INTERACTION_REGION
         .get_or_init(|| Mutex::new(IslandInteractionRegion::default()))
         .lock()
-        .map_err(|_| AppError::lock("Failed to lock island interaction region"))? = next;
+        .map_err(|_| AppError::lock("Failed to lock island interaction region"))?;
+    if !interaction_revision_is_current(
+        revision,
+        ISLAND_INTERACTION_REGION_REVISION.load(Ordering::Acquire),
+    ) {
+        return Ok(());
+    }
+    *region = next;
     Ok(())
 }
 
 #[cfg(test)]
 mod interaction_region_tests {
     use super::{
+        cursor_monitor_is_stale, interaction_revision_is_current, monitor_owns_generation,
         normalized_interaction_region, point_in_rounded_rect, InteractionCornerRadii,
         InteractionPoint,
     };
@@ -310,6 +420,26 @@ mod interaction_region_tests {
         assert!(point_in_rounded_rect(40.0, 14.0, &region));
         assert!(point_in_rounded_rect(2.0, 1.0, &region));
         assert!(!point_in_rounded_rect(2.0, 12.0, &region));
+    }
+
+    #[test]
+    fn rejects_out_of_order_interaction_regions() {
+        assert!(interaction_revision_is_current(42, 42));
+        assert!(interaction_revision_is_current(43, 42));
+        assert!(!interaction_revision_is_current(41, 42));
+    }
+
+    #[test]
+    fn cursor_monitor_generation_has_a_single_owner() {
+        assert!(monitor_owns_generation(7, 7));
+        assert!(!monitor_owns_generation(7, 8));
+    }
+
+    #[test]
+    fn watchdog_only_restarts_a_started_stale_monitor() {
+        assert!(!cursor_monitor_is_stale(false, 1_000, 9_000));
+        assert!(!cursor_monitor_is_stale(true, 7_001, 10_000));
+        assert!(cursor_monitor_is_stale(true, 7_000, 10_000));
     }
 }
 
@@ -394,14 +524,14 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
         tauri::WebviewUrl::App("index.html?window=floating".into()),
     )
     .title("Mini Player")
-    .min_inner_size(50.0, 50.0)
+    .min_inner_size(200.0, 200.0)
     .resizable(true)
     .decorations(false)
     .transparent(true)
     .always_on_top(true);
 
     if let (Some(x), Some(y), Some(w), Some(h), _) = saved_position {
-        builder = builder.inner_size(w as f64, h as f64);
+        builder = builder.inner_size(w.max(200) as f64, h.max(200) as f64);
         builder = builder.position(x as f64, y as f64);
     } else {
         builder = builder.inner_size(360.0, 360.0);

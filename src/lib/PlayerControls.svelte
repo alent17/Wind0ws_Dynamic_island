@@ -2,6 +2,7 @@
   import { SkipBack, Pause, Play, SkipForward, Shuffle, Repeat, Repeat1 } from "lucide-svelte";
   import { mediaApi } from "$lib/api/media";
   import type { MediaCapabilities } from "$lib/api/types";
+  import { locale, translate, type TranslationKey } from "$lib/i18n";
 
   let { playing = false, capabilities, large = false, live = true, shuffleActive = false, repeatMode = "none", onPlayPause } = $props<{
     playing?: boolean;
@@ -13,20 +14,21 @@
     onPlayPause?: () => void;
   }>();
   const enabled = (key: keyof MediaCapabilities) => capabilities?.[key] !== false;
+  const t = (key: TranslationKey, values: Record<string, string | number> = {}) => translate(key, values, $locale);
   const act = (action: "prev" | "play_pause" | "next") => {
     if (action === "play_pause" && onPlayPause) onPlayPause();
     if (live) mediaApi.controlMedia(action).catch(() => {});
   };
 </script>
 
-<div class:large class="controls" aria-label="播放控制">
-  {#if capabilities?.shuffle}<button class:active={shuffleActive} aria-label={shuffleActive ? "关闭随机播放" : "开启随机播放"} onclick={(event)=>{event.stopPropagation();if(live)mediaApi.toggleShuffle().catch(()=>{})}}><Shuffle size={large ? 18 : 15}/></button>{/if}
-  <button disabled={!enabled("previous")} aria-label="上一首" onclick={(event) => { event.stopPropagation(); act("prev"); }}><SkipBack size={large ? 21 : 17} fill="currentColor" /></button>
-  <button class="primary" disabled={!enabled("playPause")} aria-label={playing ? "暂停" : "播放"} onclick={(event) => { event.stopPropagation(); act("play_pause"); }}>
+<div class:large class="controls" aria-label={t("playbackControls")}>
+  {#if capabilities?.shuffle}<button class:active={shuffleActive} aria-label={shuffleActive ? t("shuffleOff") : t("shuffleOn")} onclick={(event)=>{event.stopPropagation();if(live)mediaApi.toggleShuffle().catch(()=>{})}}><Shuffle size={large ? 18 : 15}/></button>{/if}
+  <button disabled={!enabled("previous")} aria-label={t("previous")} onclick={(event) => { event.stopPropagation(); act("prev"); }}><SkipBack size={large ? 21 : 17} fill="currentColor" /></button>
+  <button class="primary" disabled={!enabled("playPause")} aria-label={playing ? t("pause") : t("play")} onclick={(event) => { event.stopPropagation(); act("play_pause"); }}>
     {#if playing}<Pause size={large ? 25 : 20} fill="currentColor" />{:else}<Play size={large ? 25 : 20} fill="currentColor" />{/if}
   </button>
-  <button disabled={!enabled("next")} aria-label="下一首" onclick={(event) => { event.stopPropagation(); act("next"); }}><SkipForward size={large ? 21 : 17} fill="currentColor" /></button>
-  {#if capabilities?.repeat}<button class:active={repeatMode !== "none"} aria-label={`循环模式：${repeatMode}`} onclick={(event)=>{event.stopPropagation();if(live)mediaApi.cycleRepeat().catch(()=>{})}}>{#if repeatMode === "track"}<Repeat1 size={large ? 18 : 15}/>{:else}<Repeat size={large ? 18 : 15}/>{/if}</button>{/if}
+  <button disabled={!enabled("next")} aria-label={t("next")} onclick={(event) => { event.stopPropagation(); act("next"); }}><SkipForward size={large ? 21 : 17} fill="currentColor" /></button>
+  {#if capabilities?.repeat}<button class:active={repeatMode !== "none"} aria-label={t("repeatMode",{mode:repeatMode})} onclick={(event)=>{event.stopPropagation();if(live)mediaApi.cycleRepeat().catch(()=>{})}}>{#if repeatMode === "track"}<Repeat1 size={large ? 18 : 15}/>{:else}<Repeat size={large ? 18 : 15}/>{/if}</button>{/if}
 </div>
 
 <style>

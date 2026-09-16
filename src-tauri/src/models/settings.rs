@@ -65,6 +65,7 @@ pub struct AppPreferences {
     pub island_edge_position: u8,
     pub edge_shoulder_radius: u8,
     pub compact_length: u16,
+    pub language: String,
     pub font_id: String,
     pub capture_hide_on_screenshot: bool,
     pub capture_hide_on_recording: bool,
@@ -124,6 +125,7 @@ impl Default for AppPreferences {
             island_edge_position: 50,
             edge_shoulder_radius: 8,
             compact_length: 80,
+            language: "system".to_string(),
             font_id: "system".to_string(),
             capture_hide_on_screenshot: true,
             capture_hide_on_recording: true,
@@ -175,6 +177,7 @@ mod tests {
         let loaded: AppPreferences = serde_json::from_str("{}").expect("defaulted settings");
         assert_eq!(loaded.edge_shoulder_radius, 8);
         assert_eq!(loaded.compact_length, 80);
+        assert_eq!(loaded.language, "system");
         assert_eq!(loaded.font_id, "system");
         assert_eq!(loaded.spectrum_mode, "realtime");
         assert!(loaded.capture_hide_on_screenshot);

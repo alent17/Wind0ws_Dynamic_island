@@ -32,6 +32,7 @@ export const windowApi = {
   },
 
   async setIslandInteractionRegion(region: {
+    revision: number;
     x: number;
     y: number;
     width: number;

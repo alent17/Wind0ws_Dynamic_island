@@ -10,6 +10,14 @@ export const spectrumValues = { subscribe: values.subscribe };
 let consumers = 0;
 let generation = 0;
 let unlisten: UnlistenFn | undefined;
+let captureCommands: Promise<unknown> = Promise.resolve();
+
+function queueCaptureCommand(command: "start_spectrum" | "stop_spectrum") {
+  // Start and stop can cross during a quick collapse, pause, or settings
+  // change. Keep their native calls in order so capture cannot outlive users.
+  captureCommands = captureCommands.catch(() => undefined).then(() => invoke(command));
+  return captureCommands;
+}
 
 async function connect(currentGeneration: number) {
   const dispose = await listen<number[]>("spectrum-data", ({ payload }) => {
@@ -23,7 +31,7 @@ async function connect(currentGeneration: number) {
 
   unlisten = dispose;
   try {
-    await invoke("start_spectrum");
+    await queueCaptureCommand("start_spectrum");
   } catch (error) {
     if (currentGeneration === generation) {
       unlisten?.();
@@ -53,6 +61,6 @@ export function retainSpectrum(): () => void {
     unlisten?.();
     unlisten = undefined;
     values.set(new Float32Array(NUM_BARS));
-    void invoke("stop_spectrum").catch(() => {});
+    void queueCaptureCommand("stop_spectrum").catch(() => {});
   };
 }

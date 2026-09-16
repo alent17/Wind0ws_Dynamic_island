@@ -380,14 +380,28 @@ pub async fn resolve_hd_cover(
             _ => cover_from_netease(&client, title, artist).await,
         };
         if let Ok(Some(mut cover)) = attempt {
-            match download_cover_as_data_url(&client, &cover.url).await {
-                Ok(data_url) => {
-                    cover.url = data_url;
+            match crate::services::cache::download_and_cache(&cover.url, "image/jpeg").await {
+                Ok(cached_path) => {
+                    cover.url = cached_path;
                     resolved = Some(cover);
                     break;
                 }
                 Err(error) => {
-                    tracing::warn!("[高清封面] {} 图片下载失败: {}", provider, error);
+                    // Keep high-resolution artwork working if the install
+                    // directory is temporarily unavailable.
+                    match download_cover_as_data_url(&client, &cover.url).await {
+                        Ok(data_url) => {
+                            cover.url = data_url;
+                            resolved = Some(cover);
+                            break;
+                        }
+                        Err(fallback_error) => tracing::warn!(
+                            "[高清封面] {} 图片缓存失败: {}; 回退下载失败: {}",
+                            provider,
+                            error,
+                            fallback_error
+                        ),
+                    }
                 }
             }
         }

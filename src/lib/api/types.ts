@@ -1,6 +1,7 @@
 export type IslandStyle = "floating" | "edge";
 export type IslandEdge = "top" | "right" | "bottom" | "left";
 export type SpectrumMode = "realtime" | "random";
+export type AppLanguage = "system" | "zh-CN" | "en" | "ja";
 
 export interface AppSettings {
   islandTheme: string;
@@ -9,6 +10,7 @@ export interface AppSettings {
   islandEdgePosition: number;
   edgeShoulderRadius: number;
   compactLength: number;
+  language: AppLanguage;
   fontId: FontId;
   captureHideOnScreenshot: boolean;
   captureHideOnRecording: boolean;
@@ -152,6 +154,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   islandEdgePosition: 50,
   edgeShoulderRadius: 8,
   compactLength: 80,
+  language: "system",
   fontId: "system",
   captureHideOnScreenshot: true,
   captureHideOnRecording: true,

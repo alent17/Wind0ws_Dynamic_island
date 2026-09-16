@@ -29,6 +29,7 @@
   import type { AppSettings, AudioDeviceInfo, IdleContentItem, IdleSnapshot, MediaState, MonitorInfo, SystemAudioState } from "$lib/api/types";
   import { DEFAULT_SETTINGS } from "$lib/api/types";
   import { applyAppFont } from "$lib/font";
+  import { locale, setLocale, translate, type TranslationKey } from "$lib/i18n";
   import {
     activeCaptureReasons,
     EMPTY_CAPTURE_SNAPSHOT,
@@ -79,6 +80,7 @@
   };
 
   const isDev = import.meta.env?.DEV ?? false;
+  const t = (key: TranslationKey, values: Record<string, string | number> = {}) => translate(key, values, $locale);
 
   const logger = {
     log: (...args: any[]) => isDev && console.log("[App]", ...args),
@@ -213,10 +215,12 @@
     };
   }
 
+  let interactionRegionRevision = Date.now() * 1000;
   function applyIslandRegion({ geometry, radii, polygon }: IslandRegionChange) {
     const host = hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength);
     const offset = surfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge);
     windowApi.setIslandInteractionRegion({
+      revision: ++interactionRegionRevision,
       x: offset.x,
       y: offset.y,
       width: geometry.width,
@@ -365,7 +369,10 @@
       logger.error("切换音频设备失败", error);
     }
   }
-  $effect(() => applyAppFont(appSettings.fontId));
+  $effect(() => {
+    applyAppFont(appSettings.fontId);
+    setLocale(appSettings.language);
+  });
   let idleSnapshot = $state<IdleSnapshot>({ cpuPercent: 0, memoryPercent: 0, uploadBytesPerSecond: 0, downloadBytesPerSecond: 0, batteryPercent: null, batteryCharging: null, weatherTemperature: null, weatherCode: null, weatherUpdatedAt: null });
   let idleIndex = $state(0);
   let idlePaused = $state(false);
@@ -378,27 +385,32 @@
     return `${Math.round(value)} B/s`;
   }
   function weatherLabel(code: number | null) {
-    if (code === null) return "等待天气";
-    if (code === 0) return "晴";
-    if (code <= 3) return "多云";
-    if (code <= 48) return "雾";
-    if (code <= 67) return "雨";
-    if (code <= 77) return "雪";
-    if (code <= 82) return "阵雨";
-    if (code <= 86) return "阵雪";
-    return "雷雨";
+    const labels = $locale === "ja"
+      ? ["天気を待機", "晴れ", "曇り", "霧", "雨", "雪", "にわか雨", "にわか雪", "雷雨"]
+      : $locale === "en"
+        ? ["Waiting for weather", "Clear", "Cloudy", "Fog", "Rain", "Snow", "Showers", "Snow showers", "Thunderstorm"]
+        : ["等待天气", "晴", "多云", "雾", "雨", "雪", "阵雨", "阵雪", "雷雨"];
+    if (code === null) return labels[0];
+    if (code === 0) return labels[1];
+    if (code <= 3) return labels[2];
+    if (code <= 48) return labels[3];
+    if (code <= 67) return labels[4];
+    if (code <= 77) return labels[5];
+    if (code <= 82) return labels[6];
+    if (code <= 86) return labels[7];
+    return labels[8];
   }
   function idlePresentation(item: IdleContentItem | undefined) {
     const now = new Date();
-    if (!item) return { title: "等待播放", subtitle: "" };
-    if (item.kind === "clock") return { title: now.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }), subtitle: now.toLocaleTimeString("zh-CN", { second: "2-digit" }) };
-    if (item.kind === "date") return { title: now.toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" }), subtitle: String(now.getFullYear()) };
+    if (!item) return { title: t("waitingPlayback"), subtitle: "" };
+    if (item.kind === "clock") return { title: now.toLocaleTimeString($locale, { hour: "2-digit", minute: "2-digit" }), subtitle: now.toLocaleTimeString($locale, { second: "2-digit" }) };
+    if (item.kind === "date") return { title: now.toLocaleDateString($locale, { month: "long", day: "numeric", weekday: "short" }), subtitle: String(now.getFullYear()) };
     if (item.kind === "network") return { title: `↓ ${compactBytes(idleSnapshot.downloadBytesPerSecond)}`, subtitle: `↑ ${compactBytes(idleSnapshot.uploadBytesPerSecond)}` };
-    if (item.kind === "cpu") return { title: `CPU ${Math.round(idleSnapshot.cpuPercent)}%`, subtitle: "处理器使用率" };
-    if (item.kind === "memory") return { title: `内存 ${Math.round(idleSnapshot.memoryPercent)}%`, subtitle: "内存使用率" };
-    if (item.kind === "battery") return { title: `电量 ${idleSnapshot.batteryPercent ?? "--"}%`, subtitle: idleSnapshot.batteryCharging ? "正在充电" : "使用电池" };
-    if (item.kind === "weather") return { title: idleSnapshot.weatherTemperature === null ? "等待天气" : `${Math.round(idleSnapshot.weatherTemperature)}° ${weatherLabel(idleSnapshot.weatherCode)}`, subtitle: appSettings.weatherLocation?.name ?? "请在设置中选择城市" };
-    return { title: item.text || "自定义内容", subtitle: "" };
+    if (item.kind === "cpu") return { title: `CPU ${Math.round(idleSnapshot.cpuPercent)}%`, subtitle: $locale === "ja" ? "プロセッサ使用率" : $locale === "en" ? "Processor usage" : "处理器使用率" };
+    if (item.kind === "memory") return { title: `${t("memory")} ${Math.round(idleSnapshot.memoryPercent)}%`, subtitle: $locale === "ja" ? "メモリ使用率" : $locale === "en" ? "Memory usage" : "内存使用率" };
+    if (item.kind === "battery") return { title: `${t("battery")} ${idleSnapshot.batteryPercent ?? "--"}%`, subtitle: idleSnapshot.batteryCharging ? ($locale === "ja" ? "充電中" : $locale === "en" ? "Charging" : "正在充电") : ($locale === "ja" ? "バッテリー使用中" : $locale === "en" ? "On battery" : "使用电池") };
+    if (item.kind === "weather") return { title: idleSnapshot.weatherTemperature === null ? weatherLabel(null) : `${Math.round(idleSnapshot.weatherTemperature)}° ${weatherLabel(idleSnapshot.weatherCode)}`, subtitle: appSettings.weatherLocation?.name ?? ($locale === "ja" ? "設定で都市を選択" : $locale === "en" ? "Choose a city in Settings" : "请在设置中选择城市") };
+    return { title: item.text || ($locale === "ja" ? "カスタム情報" : $locale === "en" ? "Custom content" : "自定义内容"), subtitle: "" };
   }
   let currentIdle = $derived(idlePresentation(activeIdleItems[idleIndex % Math.max(1, activeIdleItems.length)]));
   function idleAction(action: "prev" | "toggle" | "next") {
@@ -1657,13 +1669,16 @@
               .resolveHdCover(data.title, data.artist || "", data.source || currentSource)
               .then((resolved) => {
                 if (!resolved || lastSongKey !== requestedTrackKey) return;
+                const resolvedUrl = resolved.url.includes(":\\") || resolved.url.includes(":/")
+                  ? convertFileSrc(resolved.url)
+                  : resolved.url;
                 const image = new Image();
                 image.onload = () => {
                   if (lastSongKey !== requestedTrackKey) return;
-                  artworkUrl = resolved.url;
+                  artworkUrl = resolvedUrl;
                   flipKey += 1;
                 };
-                image.src = resolved.url;
+                image.src = resolvedUrl;
               })
               .catch(() => undefined);
           }
@@ -1723,9 +1738,30 @@
       currentTheme = event.payload as string;
       console.log("[主题切换] 主题已切换为:", currentTheme);
     });
-    const unlistenPlacementPreview = listen<{ position: number }>("island-placement-preview", (event) => {
-      const position = Math.min(100, Math.max(0, Number(event.payload?.position) || 0));
-      void applyWindowPlacement(renderedIslandStyle, renderedIslandEdge, appSettings.monitorIndex, position, isHidden);
+    const unlistenSettingsPreview = listen<Partial<AppSettings>>("settings-preview", (event) => {
+      const patch = event.payload;
+      if (!patch || typeof patch !== "object") return;
+      const next = normalizedSettings({ ...appSettings, ...patch });
+      const monitorChanged = next.monitorIndex !== appSettings.monitorIndex;
+      const hostSizeChanged = next.compactLength !== appSettings.compactLength;
+      const positionChanged = next.islandEdgePosition !== appSettings.islandEdgePosition;
+      if (!monitorChanged && !hostSizeChanged && !positionChanged) {
+        appSettings = next;
+        return;
+      }
+
+      // Crossing monitors and resizing the fixed host are direct-manipulation
+      // operations. Avoid a long native spring (or a spring per range sample).
+      suppressPlacementEffect = true;
+      appSettings = next;
+      void applyWindowPlacement(
+        normalizedStyle(next.islandStyle),
+        normalizedEdge(next.islandEdge),
+        next.monitorIndex,
+        next.islandEdgePosition,
+        isHidden,
+        false,
+      ).finally(() => { suppressPlacementEffect = false; });
     });
     const workAreaTimer = setInterval(() => {
       if (windowReady) {
@@ -1761,7 +1797,7 @@
     return () => {
       // 清理主题监听
       unlistenTheme.then((unlisten) => unlisten());
-      unlistenPlacementPreview.then((unlisten) => unlisten());
+      unlistenSettingsPreview.then((unlisten) => unlisten());
       unlistenCaptureMode.then((unlisten) => unlisten());
 
       if (hideTimeout) {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { formatTime } from "$lib/mediaClock";
+  import { locale, translate } from "$lib/i18n";
 
   let { position = 0, duration = 0, light = false, showTimes = true, seekable = false, onSeek } = $props<{
     position?: number;
@@ -28,8 +29,8 @@
   }
 </script>
 
-<div class:light class="progress-block" aria-label={`播放进度 ${Math.round(ratio * 100)}%`}>
-  <div class="track"><span style={`transform:scaleX(${ratio})`}></span>{#if seekable && duration > 0}<input type="range" min="0" max={duration} value={displayedPosition} aria-label="调整播放进度" onclick={(event)=>event.stopPropagation()} oninput={preview} onchange={commit}/>{/if}</div>
+<div class:light class="progress-block" aria-label={translate("playbackProgress",{percent:Math.round(ratio*100)},$locale)}>
+  <div class="track"><span style={`transform:scaleX(${ratio})`}></span>{#if seekable && duration > 0}<input type="range" min="0" max={duration} value={displayedPosition} aria-label={translate("seekProgress",{},$locale)} onclick={(event)=>event.stopPropagation()} oninput={preview} onchange={commit}/>{/if}</div>
   {#if showTimes}
     <div class="times"><span>{formatTime(displayedPosition)}</span><span>-{formatTime(Math.max(0, duration - displayedPosition))}</span></div>
   {/if}

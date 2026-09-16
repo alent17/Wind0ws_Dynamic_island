@@ -8,6 +8,9 @@ pub async fn get_idle_snapshot(app: AppHandle) -> AppResult<IdleSnapshot> {
 }
 
 #[tauri::command]
-pub async fn search_weather_locations(query: String) -> AppResult<Vec<WeatherLocationCandidate>> {
-    crate::services::search_weather_locations(&query).await
+pub async fn search_weather_locations(
+    query: String,
+    language: String,
+) -> AppResult<Vec<WeatherLocationCandidate>> {
+    crate::services::search_weather_locations(&query, &language).await
 }
