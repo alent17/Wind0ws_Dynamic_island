@@ -96,7 +96,7 @@ npm run bundle:windows
 ├─ src/
 │  ├─ App.svelte                 # 主灵动岛窗口
 │  ├─ FloatingWindow.svelte      # 独立悬浮播放器
-│  ├─ Studio.svelte              # 设置与交互预览
+│  ├─ Studio.svelte              # 设置页面
 │  ├─ lib/IslandSurface.svelte   # 主岛共享表面组件
 │  └─ lib/                       # 媒体时钟、频谱、API 与几何逻辑
 ├─ src-tauri/

@@ -726,9 +726,6 @@
   let lastAppliedBounds = "";
   let placementMonitors: MonitorInfo[] = [];
   let placementMonitorsRefreshedAt = 0;
-  let previewPlacementTimer: ReturnType<typeof setTimeout> | undefined;
-  let pendingPreviewPlacement: AppSettings | undefined;
-  let previewPlacementRevision = 0;
 
   // Island geometry is animated inside a fixed native host. Resizing the
   // WebView for every spring frame was the main source of expansion jank.
@@ -792,30 +789,6 @@
     if (boundsKey === lastAppliedBounds) return;
     await windowApi.animateWindowBounds(target.width, target.height, target.x, target.y, animate);
     if (revision === windowPlacementRevision) lastAppliedBounds = boundsKey;
-  }
-
-  function schedulePreviewPlacement(next: AppSettings) {
-    pendingPreviewPlacement = next;
-    if (previewPlacementTimer) return;
-    previewPlacementTimer = setTimeout(() => {
-      previewPlacementTimer = undefined;
-      const pending = pendingPreviewPlacement;
-      pendingPreviewPlacement = undefined;
-      if (!pending || !windowReady) return;
-
-      const revision = ++previewPlacementRevision;
-      suppressPlacementEffect = true;
-      void applyWindowPlacement(
-        normalizedStyle(pending.islandStyle),
-        normalizedEdge(pending.islandEdge),
-        pending.monitorIndex,
-        pending.islandEdgePosition,
-        isHidden,
-        false,
-      ).finally(() => {
-        if (revision === previewPlacementRevision) suppressPlacementEffect = false;
-      });
-    }, 33);
   }
 
   function edgeTransform(edge: IslandEdge) {
@@ -1764,23 +1737,6 @@
       currentTheme = event.payload as string;
       console.log("[主题切换] 主题已切换为:", currentTheme);
     });
-    const unlistenSettingsPreview = listen<Partial<AppSettings>>("settings-preview", (event) => {
-      const patch = event.payload;
-      if (!patch || typeof patch !== "object") return;
-      const next = normalizedSettings({ ...appSettings, ...patch });
-      const monitorChanged = next.monitorIndex !== appSettings.monitorIndex;
-      const hostSizeChanged = next.compactLength !== appSettings.compactLength;
-      const positionChanged = next.islandEdgePosition !== appSettings.islandEdgePosition;
-      lastSettingsSnapshot = JSON.stringify(next);
-      appSettings = next;
-      if (!monitorChanged && !hostSizeChanged && !positionChanged) {
-        return;
-      }
-
-      // Slider input can arrive many times per second. Keep the visual state
-      // immediate, but coalesce native HWND updates to roughly 30 FPS.
-      schedulePreviewPlacement(next);
-    });
     const workAreaTimer = setInterval(() => {
       if (windowReady) {
         void applyWindowPlacement(
@@ -1815,7 +1771,6 @@
     return () => {
       // 清理主题监听
       unlistenTheme.then((unlisten) => unlisten());
-      unlistenSettingsPreview.then((unlisten) => unlisten());
       unlistenCaptureMode.then((unlisten) => unlisten());
 
       if (hideTimeout) {
@@ -1824,11 +1779,6 @@
       if (mouseMoveTimeout) {
         clearTimeout(mouseMoveTimeout);
       }
-      if (previewPlacementTimer) {
-        clearTimeout(previewPlacementTimer);
-        previewPlacementTimer = undefined;
-      }
-      pendingPreviewPlacement = undefined;
       document.removeEventListener("mousemove", handleMouseMoveThrottled);
       clearInterval(workAreaTimer);
     };

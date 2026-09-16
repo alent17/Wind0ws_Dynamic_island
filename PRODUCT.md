@@ -12,11 +12,11 @@ Windows users who keep music playing while working, gaming, or using full-screen
 
 ## Product Purpose
 
-Isle turns Windows media-session data into a compact, top-of-screen music surface. Success means playback information and controls remain readable, immediate, and unobtrusive across compact, expanded, hidden, studio-preview, and floating-player contexts.
+Isle turns Windows media-session data into a compact, top-of-screen music surface. Success means playback information and controls remain readable, immediate, and unobtrusive across compact, expanded, hidden, settings, and floating-player contexts.
 
 ## Positioning
 
-Unlike a generic desktop mini-player, Isle combines the original compact top-edge island with a resizable, cover-first floating player and a separate visual test studio.
+Unlike a generic desktop mini-player, Isle combines the original compact top-edge island with a resizable, cover-first floating player and a separate settings studio.
 
 ## Operating Context
 
@@ -34,7 +34,7 @@ The app runs as an always-available Tauri desktop utility, reads Windows media s
 
 - Product name: Isle.
 - The main surface defaults to the original 80 × 28 pill, supports a configurable 80–300 px compact length with a capped +10 px hover response, and keeps the 300 × 160 expanded state.
-- Isle Studio is evaluated on a white canvas so clipping, square black corners, and radius failures remain visible.
+- Isle Studio uses a focused white settings surface so preferences remain quick to scan and change.
 - The floating player keeps the original cover-stage composition, hover toolbar, progress overlay, and compact five-pixel outer radius.
 
 ## Evidence on Hand

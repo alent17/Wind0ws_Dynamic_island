@@ -1,6 +1,6 @@
 ---
 name: Isle
-description: The restored original Windows media island with a white visual inspection studio.
+description: The restored original Windows media island with a focused white settings studio.
 colors:
   island-black: "#000000"
   island-white: "#ffffff"
@@ -48,7 +48,7 @@ components:
 
 ## Overview
 
-The production player surfaces use the project's original visual language. The main island is a very small black pill that grows into a 300 × 160 media controller. The separate floating player is a cover-first square stage with a compact black information strip and hover-revealed controls. Isle Studio remains a white inspection and settings surface and must not be replaced by the legacy settings page.
+The production player surfaces use the project's original visual language. The main island is a very small black pill that grows into a 300 × 160 media controller. The separate floating player is a cover-first square stage with a compact black information strip and hover-revealed controls. Isle Studio remains a focused white settings surface and must not be replaced by the legacy settings page.
 
 ## Dynamic Island
 
@@ -68,7 +68,7 @@ The production player surfaces use the project's original visual language. The m
 
 ## Isle Studio
 
-The current white Isle Studio is authoritative and stays visually unchanged. Its white stage, gray inspector panels, preview scenarios, behavior controls, and tools remain separate from the restored legacy player implementation. Do not restore the archived Settings page or its HTML/build entry.
+The current white Isle Studio is authoritative. Its gray settings panels, behavior controls, and tools remain separate from the restored legacy player implementation. The studio does not render a live island preview, keeping settings interactions lightweight. Do not restore the archived Settings page or its HTML/build entry.
 
 ## Compatibility
 
