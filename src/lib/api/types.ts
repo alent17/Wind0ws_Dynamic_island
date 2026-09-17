@@ -27,6 +27,7 @@ export interface AppSettings {
   logLevel: string;
   monitorIndex: number;
   playerWeights: Record<string, number>;
+  playerOrderIds: string[];
   selectedPlayerIds: string[] | null;
   idleContentEnabled: boolean;
   idleRotationSeconds: number;
@@ -178,6 +179,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     apple: 50,
     generic: 10,
   },
+  playerOrderIds: [],
   selectedPlayerIds: null,
   idleContentEnabled: true,
   idleRotationSeconds: 5,

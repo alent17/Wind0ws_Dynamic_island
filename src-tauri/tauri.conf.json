@@ -12,7 +12,7 @@
   "app": {
     "withGlobalTauri": false,
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost https://asset.localhost data:; media-src 'self' asset: http://asset.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://asset.localhost",
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost https://asset.localhost data:; media-src 'self' asset: http://asset.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://asset.localhost https://itunes.apple.com",
       "assetProtocol": {
         "enable": true,
         "scope": ["$APPCACHE/**", "$APPDATA/**", "$RESOURCE/**", "$EXE/cache/**"]

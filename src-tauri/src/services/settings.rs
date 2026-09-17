@@ -51,7 +51,7 @@ pub fn write_settings_file(app: &AppHandle, settings: &AppPreferences) -> AppRes
 pub fn set_auto_start(enable: bool) -> AppResult<()> {
     let exe_path = std::env::current_exe()
         .map_err(|e| AppError::config(format!("获取可执行文件路径失败：{}", e)))?;
-    let exe_path_str = exe_path.to_string_lossy().to_string();
+    let registry_value = format!("\"{}\"", exe_path.display());
 
     if enable {
         // 添加注册表启动项
@@ -64,7 +64,7 @@ pub fn set_auto_start(enable: bool) -> AppResult<()> {
                 "/t",
                 "REG_SZ",
                 "/d",
-                &exe_path_str,
+                &registry_value,
                 "/f",
             ])
             .output()
@@ -113,8 +113,10 @@ pub fn set_auto_start(enable: bool) -> AppResult<()> {
 
 /// 检查是否已设置开机自启动
 ///
-/// 通过查询注册表判断启动项是否存在
+/// 通过查询注册表并比较当前可执行文件路径判断启动项是否有效
 pub fn get_auto_start() -> AppResult<bool> {
+    let current_exe = std::env::current_exe()
+        .map_err(|e| AppError::config(format!("获取可执行文件路径失败：{}", e)))?;
     let output = std::process::Command::new("reg")
         .args([
             "query",
@@ -125,5 +127,39 @@ pub fn get_auto_start() -> AppResult<bool> {
         .output()
         .map_err(|e| AppError::config(format!("执行 reg query 命令失败：{}", e)))?;
 
-    Ok(output.status.success())
+    if !output.status.success() {
+        return Ok(false);
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let registry_value = stdout
+        .lines()
+        .find_map(|line| {
+            line.find("REG_SZ")
+                .map(|index| line[index + "REG_SZ".len()..].trim())
+        })
+        .unwrap_or_default();
+
+    Ok(normalize_windows_path(registry_value)
+        == normalize_windows_path(&current_exe.to_string_lossy()))
+}
+
+fn normalize_windows_path(path: &str) -> String {
+    path.trim()
+        .trim_matches('"')
+        .replace('/', "\\")
+        .to_ascii_lowercase()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_windows_path;
+
+    #[test]
+    fn normalizes_quoted_windows_paths_for_registry_comparison() {
+        assert_eq!(
+            normalize_windows_path(r#""C:/Apps/Isle/Isle.exe""#),
+            r#"c:\apps\isle\isle.exe"#
+        );
+    }
 }

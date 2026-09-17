@@ -456,6 +456,15 @@ fn selected_player_ids(app: &AppHandle) -> Option<Vec<String>> {
         .and_then(|settings| settings.selected_player_ids.clone())
 }
 
+fn player_order_ids(app: &AppHandle) -> Vec<String> {
+    app.state::<AppState>()
+        .settings
+        .lock()
+        .ok()
+        .map(|settings| settings.player_order_ids.clone())
+        .unwrap_or_default()
+}
+
 fn selected_session(
     app: &AppHandle,
 ) -> AppResult<Option<(GlobalSystemMediaTransportControlsSession, String, String)>> {
@@ -503,6 +512,19 @@ fn selected_session(
             }
         }
         return Ok(None);
+    }
+    let order = player_order_ids(app);
+    if !order.is_empty() {
+        for ordered_id in order {
+            if let Some((session, raw_id, _, _)) = candidates
+                .iter()
+                .filter(|(_, id, _, _)| id == &ordered_id)
+                .max_by_key(|(_, _, playing, updated)| (*playing, *updated))
+            {
+                let source = source_for_id(raw_id).to_string();
+                return Ok(Some((session.clone(), source, raw_id.clone())));
+            }
+        }
     }
     let previous_id = LAST_AUTO_SESSION_ID
         .get_or_init(|| Mutex::new(None))

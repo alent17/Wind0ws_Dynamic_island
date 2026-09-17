@@ -43,9 +43,3 @@ export function shouldHideForCapture(
 ): boolean {
   return activeCaptureReasons(snapshot, preferences).length > 0;
 }
-
-export function shouldProtectCapturedContent(preferences: CapturePreferences): boolean {
-  return preferences.captureHideOnScreenshot
-    || preferences.captureHideOnRecording
-    || preferences.captureHideOnScreenShare;
-}

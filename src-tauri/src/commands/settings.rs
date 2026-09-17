@@ -12,13 +12,16 @@ use crate::state::AppState;
 use std::collections::HashMap;
 use tauri::{AppHandle, Manager, State};
 
-pub(crate) fn apply_capture_protection(app: &AppHandle, settings: &AppPreferences) {
-    let protect = settings.capture_hide_on_screenshot
-        || settings.capture_hide_on_recording
-        || settings.capture_hide_on_screen_share;
+/// Clear the Windows-wide capture protection flag.
+///
+/// `set_content_protected` is a single window-level switch on Windows. It
+/// cannot distinguish screenshots, recordings, or screen sharing, so the
+/// individual capture preferences are handled by the capture-mode monitor and
+/// the front-end visibility flow instead of being OR-ed into this flag.
+pub(crate) fn reset_content_protection(app: &AppHandle) {
     for label in ["main", "floating_player"] {
         if let Some(window) = app.get_webview_window(label) {
-            if let Err(error) = window.set_content_protected(protect) {
+            if let Err(error) = window.set_content_protected(false) {
                 tracing::warn!("[Capture Mode] 设置窗口 {} 内容保护失败: {}", label, error);
             }
         }
@@ -73,6 +76,12 @@ pub async fn save_settings(
         let mut seen = std::collections::HashSet::new();
         ids.retain(|id| !id.trim().is_empty() && seen.insert(id.clone()));
     }
+    {
+        let mut seen = std::collections::HashSet::new();
+        settings
+            .player_order_ids
+            .retain(|id| !id.trim().is_empty() && seen.insert(id.clone()));
+    }
     settings.idle_items.retain_mut(|item| {
         if item.kind == "custom" {
             item.text = item.text.trim().chars().take(120).collect();
@@ -120,9 +129,10 @@ pub async fn save_settings(
     if old_settings.as_ref().is_some_and(|old| {
         old.capture_hide_on_screenshot != settings.capture_hide_on_screenshot
             || old.capture_hide_on_recording != settings.capture_hide_on_recording
+            || old.capture_hide_on_fullscreen != settings.capture_hide_on_fullscreen
             || old.capture_hide_on_screen_share != settings.capture_hide_on_screen_share
     }) {
-        apply_capture_protection(&app, &settings);
+        reset_content_protection(&app);
     }
 
     // 只有开关本身发生变化时才访问开机启动注册表。

@@ -60,9 +60,18 @@
   let slideDirection = $state<"left" | "right" | "">("");
   let isAnimating = $state(false); // 动画进行中标志
   let animationTimeoutId: ReturnType<typeof setTimeout> | null = null; // 动画定时器ID
-  let bgColor = $state("rgb(40, 50, 60)");
-  let bgGradient = $state(
+  // Keep the configured base fill separate from the artwork-derived accent.
+  // The current floating-player design follows album color by default; the
+  // separate states prevent color extraction from overwriting a future manual
+  // fill preference.
+  let configuredFillColor = $state("rgb(40, 50, 60)");
+  let albumAccentColor = $state("rgb(40, 50, 60)");
+  let albumAccentGradient = $state(
     "radial-gradient(circle at 50% 50%, rgb(40, 50, 60), rgb(30, 40, 50))",
+  );
+  let useAlbumColor = $state(true);
+  let effectiveBackground = $derived(
+    useAlbumColor ? albumAccentGradient : configuredFillColor,
   );
   let windowSize = $state<WindowSize>({ width: 0, height: 0 });
   let isCompactCover = $derived(
@@ -195,7 +204,7 @@
     const DEFAULT_COLOR = { r: 60, g: 80, b: 100 };
 
     // 保存当前颜色
-    const currentColor = parseColor(bgColor);
+    const currentColor = parseColor(albumAccentColor);
 
     try {
       const [r, g, b] = await invoke<[number, number, number]>(
@@ -278,8 +287,8 @@
       const currentG = Math.round(from.g + (to.g - from.g) * eased);
       const currentB = Math.round(from.b + (to.b - from.b) * eased);
 
-      bgColor = `rgb(${currentR}, ${currentG}, ${currentB})`;
-      bgGradient = `radial-gradient(circle at 50% 50%, rgb(${Math.min(currentR + 8, 255)}, ${Math.min(currentG + 8, 255)}, ${Math.min(currentB + 8, 255)}), rgb(${Math.max(currentR - 15, 0)}, ${Math.max(currentG - 15, 0)}, ${Math.max(currentB - 15, 0)}))`;
+      albumAccentColor = `rgb(${currentR}, ${currentG}, ${currentB})`;
+      albumAccentGradient = `radial-gradient(circle at 50% 50%, rgb(${Math.min(currentR + 8, 255)}, ${Math.min(currentG + 8, 255)}, ${Math.min(currentB + 8, 255)}), rgb(${Math.max(currentR - 15, 0)}, ${Math.max(currentG - 15, 0)}, ${Math.max(currentB - 15, 0)}))`;
 
       if (progress < 1) {
         requestAnimationFrame(animate);
@@ -298,10 +307,6 @@
       clearTimeout(animationTimeoutId);
       animationTimeoutId = null;
     }
-
-    // 保存当前颜色作为起始颜色
-    const oldBgColor = bgColor;
-    const oldBgGradient = bgGradient;
 
     displayCover = newCover;
     if (newCover) extractColors(newCover);
@@ -331,45 +336,6 @@
   // 缓动函数
   function easeInOutCubic(t: number): number {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  }
-
-  // 检测 MV 文件大小
-  async function getMVFileSize(url: string): Promise<number> {
-    try {
-      const res = await fetch(url, { method: "HEAD" });
-      const contentLength = res.headers.get("content-length");
-      if (contentLength) {
-        return parseInt(contentLength, 10);
-      }
-      return 0;
-    } catch {
-      return 0;
-    }
-  }
-
-  // 检测 MV 分辨率
-  function getMVResolution(
-    url: string,
-  ): Promise<{ width: number; height: number } | null> {
-    return new Promise((resolve) => {
-      const video = document.createElement("video");
-      video.preload = "metadata";
-      video.muted = true;
-
-      video.onloadedmetadata = () => {
-        const resolution = {
-          width: video.videoWidth,
-          height: video.videoHeight,
-        };
-        resolve(resolution);
-      };
-
-      video.onerror = () => {
-        resolve(null);
-      };
-
-      video.src = url;
-    });
   }
 
   // 从 Apple Music 获取 MV 链接（使用本地缓存）
@@ -407,6 +373,7 @@
       if (data.results?.length > 0) {
         const mvData = data.results[0];
         const previewUrl = mvData.previewUrl; // Apple Music 提供的 MV 预览链接
+        if (!previewUrl) return null;
 
         // 先检查缓存
         try {
@@ -420,14 +387,6 @@
         } catch (cacheError) {
         }
 
-        // 检测文件大小和分辨率
-        const fileSize = await getMVFileSize(previewUrl);
-        const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
-        const resolution = await getMVResolution(previewUrl);
-
-        if (resolution) {
-        }
-
         // 下载并缓存 MV
         try {
           const cachedPath = await invoke<string>("download_and_cache", {
@@ -437,8 +396,8 @@
           const safeUrl = convertFileSrc(cachedPath);
           return safeUrl;
         } catch (cacheError) {
-          // 缓存失败，返回原始链接
-          return previewUrl;
+          console.error("[MV] Apple Music 本地缓存失败:", cacheError);
+          return null;
         }
       }
       return null;
@@ -448,15 +407,17 @@
     }
   }
 
-  async function cacheMV(url: string) {
+  async function cacheMV(url: string): Promise<string | null> {
+    if (!url) return null;
     try {
       const cachedPath = await invoke<string>("download_and_cache", {
         url,
         contentType: "video/mp4",
       });
       return convertFileSrc(cachedPath);
-    } catch {
-      return url;
+    } catch (error) {
+      console.error("[MV] 网易云 MV 本地缓存失败:", error);
+      return null;
     }
   }
 
@@ -475,11 +436,13 @@
 
   function requestMVForCurrentTrack(trackKey: string, title: string, artist: string) {
     const requestId = ++mvRequestId;
-    void fetchMVPreview(title, artist).then((mvLink) => {
-      if (!mvLink || requestId !== mvRequestId || currentTrackKey !== trackKey || !isMVPlaybackEnabled) return;
-      mvUrl = mvLink;
-      isPlayingMV = true;
-    });
+    void fetchMVPreview(title, artist)
+      .then((mvLink) => {
+        if (!mvLink || requestId !== mvRequestId || currentTrackKey !== trackKey || !isMVPlaybackEnabled) return;
+        mvUrl = mvLink;
+        isPlayingMV = true;
+      })
+      .catch((error) => console.error("[MV] 请求失败:", error));
   }
 
   function keepMVInPreview(video: HTMLVideoElement) {
@@ -1311,10 +1274,34 @@
   onpointerleave={handlePointerLeave}
   role="region"
   aria-label={t("mediaPlayer")}
-  style:--bg={bgColor}
-  style:--bg-gradient={bgGradient}
+  style:--bg={configuredFillColor}
+  style:--bg-gradient={effectiveBackground}
 >
-  <div class="bg-solid" style:background={bgGradient}></div>
+  <div class="bg-solid" style:background={effectiveBackground}></div>
+
+  {#if isCompactCover && isHovered}
+    <div class="compact-controls">
+      <button
+        class="compact-play"
+        type="button"
+        onclick={togglePlay}
+        aria-label={mediaState.isPlaying ? t("pause") : t("play")}
+      >
+        {#if mediaState.isPlaying}
+          <Pause size={22} fill="black" color="black" />
+        {:else}
+          <Play size={22} fill="black" color="black" style="margin-left:2px" />
+        {/if}
+      </button>
+    </div>
+    <div
+      class="compact-drag-zone"
+      onmousedown={handleDragBarMousedown}
+      role="button"
+      aria-label={t("dragWindow")}
+      tabindex="0"
+    ></div>
+  {/if}
 
   <!-- 可拖拽的顶部栏 - 鼠标悬停时滑下（锁定时固定显示） -->
   {#if !isFloatingWindowLocked || isFloatingWindowLocked}
@@ -1361,7 +1348,7 @@
           <video
             class="mv-player"
             src={mvUrl}
-            autoplay
+            autoplay={mediaState.isPlaying}
             muted
             loop
             playsinline
@@ -1373,14 +1360,20 @@
               video.currentTime = 0;
               if (mediaState.isPlaying) video.play().catch(console.error);
             }}
+            onloadedmetadata={() => {
+              console.log("[MV] metadata loaded", mvUrl);
+            }}
+            onerror={(e) => {
+              const video = e.currentTarget as HTMLVideoElement;
+              console.error(
+                "[MV] playback error",
+                video.error?.code,
+                video.error?.message,
+                mvUrl,
+              );
+            }}
             ontimeupdate={(e) => keepMVInPreview(e.currentTarget)}
             onended={(e) => keepMVInPreview(e.currentTarget)}
-            onwaiting={() => {
-            }}
-            onplaying={() => {
-            }}
-            onstalled={() => {
-            }}
           ></video>
         {/if}
         <!-- 旧图（如果有） -->
@@ -1832,6 +1825,43 @@
   .player.compact-cover .progress-layer,
   .player.compact-cover .controls-overlay {
     display: none;
+  }
+
+  .compact-controls {
+    position: absolute;
+    inset: 0;
+    z-index: 250;
+    display: grid;
+    place-items: center;
+    background: rgba(0, 0, 0, 0.18);
+    pointer-events: none;
+  }
+
+  .compact-play {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: #000;
+    background: #fff;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.3);
+  }
+
+  .compact-play:active {
+    transform: scale(0.94);
+  }
+
+  .compact-drag-zone {
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 300;
+    height: 28px;
+    cursor: grab;
   }
 
   /* 像素字体定义 */

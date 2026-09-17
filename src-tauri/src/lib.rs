@@ -541,7 +541,7 @@ pub fn run() {
             if let Err(error) = commands::install_island_cursor_passthrough(&window) {
                 tracing::warn!("[Setup] 灵动岛点击穿透初始化失败: {}", error);
             }
-            commands::apply_capture_protection(app.handle(), &initial_settings);
+            commands::reset_content_protection(app.handle());
 
             // 设置窗口焦点
             if let Err(e) = window.set_focus() {

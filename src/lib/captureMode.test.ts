@@ -3,7 +3,6 @@ import {
   activeCaptureReasons,
   EMPTY_CAPTURE_SNAPSHOT,
   shouldHideForCapture,
-  shouldProtectCapturedContent,
   type CapturePreferences,
 } from "./captureMode";
 
@@ -26,8 +25,4 @@ describe("capture mode", () => {
     expect(shouldHideForCapture(snapshot, preferences)).toBe(false);
   });
 
-  it("protects captured output independently from fullscreen hiding", () => {
-    expect(shouldProtectCapturedContent(preferences)).toBe(true);
-    expect(shouldProtectCapturedContent({ ...preferences, captureHideOnScreenshot: false })).toBe(false);
-  });
 });
