@@ -18,9 +18,19 @@
   let textCommitTimer: ReturnType<typeof setTimeout> | undefined;
   let persistInFlight: Promise<void> | undefined;
   let persistPending=false;
-  let preferenceRaf=0;
-  let queuedPreference:Partial<AppPreferences>={};
+  let idlePreferenceRaf=0;
+  let queuedIdlePreference:Partial<AppPreferences>={};
+  let draftEdgePosition=$state(DEFAULT_SETTINGS.islandEdgePosition);
+  let draftCompactLength=$state(DEFAULT_SETTINGS.compactLength);
+  let draftShoulderRadius=$state(DEFAULT_SETTINGS.edgeShoulderRadius);
+  let draftExpandedRadius=$state(DEFAULT_SETTINGS.expandedCornerRadius);
   const t=(key:TranslationKey,values:Record<string,string|number>={})=>translate(key,values,$locale);
+  function syncAppearanceDrafts(){
+    draftEdgePosition=settings.islandEdgePosition;
+    draftCompactLength=settings.compactLength;
+    draftShoulderRadius=settings.edgeShoulderRadius;
+    draftExpandedRadius=settings.expandedCornerRadius;
+  }
   onMount(()=>{
     nativeRuntime=Boolean((window as any).__TAURI_INTERNALS__);
     let disposed=false;
@@ -30,6 +40,7 @@
       void (async()=>{
         try{
           settings={...DEFAULT_SETTINGS,...await settingsApi.getPreferences()};
+          syncAppearanceDrafts();
           applyAppFont(settings.fontId);
           setLocale(settings.language);
         }catch{}
@@ -49,8 +60,8 @@
       if(deferredFrame)cancelAnimationFrame(deferredFrame);
       if(deferredTimer)clearTimeout(deferredTimer);
       if(textCommitTimer){clearTimeout(textCommitTimer);textCommitTimer=undefined;commitPreference({idleItems:settings.idleItems})}
-      if(preferenceRaf){cancelAnimationFrame(preferenceRaf);preferenceRaf=0}
-      queuedPreference={};
+      if(idlePreferenceRaf){cancelAnimationFrame(idlePreferenceRaf);idlePreferenceRaf=0}
+      queuedIdlePreference={};
       if(saveTimer)clearTimeout(saveTimer);
       void persist();
     };
@@ -70,21 +81,21 @@
     await persistInFlight;
   }
   function schedulePersist(){if(saveTimer)clearTimeout(saveTimer);saveTimer=setTimeout(()=>void persist(),300)}
-  function flushQueuedPreference(){
-    const patch=queuedPreference;
-    queuedPreference={};
+  function flushQueuedIdlePreference(){
+    const patch=queuedIdlePreference;
+    queuedIdlePreference={};
     if(!Object.keys(patch).length)return;
     settings={...settings,...patch};
   }
-  function queuePreferenceUpdate(patch:Partial<AppPreferences>){
-    queuedPreference={...queuedPreference,...patch};
-    if(preferenceRaf)return;
-    preferenceRaf=requestAnimationFrame(()=>{preferenceRaf=0;flushQueuedPreference()});
+  function queueIdlePreferenceUpdate(patch:Partial<AppPreferences>){
+    queuedIdlePreference={...queuedIdlePreference,...patch};
+    if(idlePreferenceRaf)return;
+    idlePreferenceRaf=requestAnimationFrame(()=>{idlePreferenceRaf=0;flushQueuedIdlePreference()});
   }
   function commitPreference(patch:Partial<AppPreferences>){
-    queuedPreference={...queuedPreference,...patch};
-    if(preferenceRaf){cancelAnimationFrame(preferenceRaf);preferenceRaf=0}
-    flushQueuedPreference();
+    if(idlePreferenceRaf){cancelAnimationFrame(idlePreferenceRaf);idlePreferenceRaf=0}
+    flushQueuedIdlePreference();
+    settings={...settings,...patch};
     if(!nativeRuntime)return;
     schedulePersist();
   }
@@ -93,10 +104,10 @@
   async function setAutoStart(value:boolean){settings={...settings,autoStart:value};if(nativeRuntime)await settingsApi.setAutoStart(value).catch(()=>{})}
   function setIslandStyle(value:IslandStyle){updatePreference({islandStyle:value})}
   function setIslandEdge(value:IslandEdge){updatePreference({islandEdge:value})}
-  function setAlongEdge(value:number,commit=false){const patch={islandEdgePosition:Math.min(100,Math.max(0,value))};commit?commitPreference(patch):queuePreferenceUpdate(patch)}
-  function setRadius(value:number,commit=false){const patch={expandedCornerRadius:Math.min(80,Math.max(0,value))};commit?commitPreference(patch):queuePreferenceUpdate(patch)}
-  function setShoulderRadius(value:number,commit=false){const patch={edgeShoulderRadius:Math.min(16,Math.max(0,value))};commit?commitPreference(patch):queuePreferenceUpdate(patch)}
-  function setCompactLength(value:number,commit=false){const patch={compactLength:Math.min(300,Math.max(80,value))};commit?commitPreference(patch):queuePreferenceUpdate(patch)}
+  function commitEdgePosition(){commitPreference({islandEdgePosition:draftEdgePosition})}
+  function commitCompactLength(){commitPreference({compactLength:draftCompactLength})}
+  function commitShoulderRadius(){commitPreference({edgeShoulderRadius:draftShoulderRadius})}
+  function commitRadius(){commitPreference({expandedCornerRadius:draftExpandedRadius})}
   function setFont(value:AppPreferences["fontId"]){applyAppFont(value);updatePreference({fontId:value})}
   function setLanguage(value:AppLanguage){setLocale(value);updatePreference({language:value})}
   async function refreshSessions(){if(!nativeRuntime)return;try{sessions=await mediaApi.listMediaSessions()}catch{sessions=[]}}
@@ -107,7 +118,7 @@
   const idleLabel=(kind:string)=>t((({clock:"clock",date:"date",weather:"weather",network:"network",cpu:"cpu",memory:"memory",battery:"battery",custom:"customText"} as const)[kind]??"customText") as TranslationKey);
   function patchIdle(id:string,patch:Partial<IdleContentItem>){updatePreference({idleItems:settings.idleItems.map(item=>item.id===id?{...item,...patch}:item)})}
   function updateIdleText(id:string,text:string){
-    queuePreferenceUpdate({idleItems:settings.idleItems.map(item=>item.id===id?{...item,text}:item)});
+    queueIdlePreferenceUpdate({idleItems:settings.idleItems.map(item=>item.id===id?{...item,text}:item)});
     if(textCommitTimer)clearTimeout(textCommitTimer);
     textCommitTimer=setTimeout(()=>{textCommitTimer=undefined;commitPreference({idleItems:settings.idleItems})},300);
   }
@@ -137,15 +148,15 @@
           <button aria-label={t("screenBottom")} aria-pressed={settings.islandEdge==="bottom"} class:active={settings.islandEdge==="bottom"} onclick={()=>setIslandEdge("bottom")}><ArrowDown size={16}/>{t("bottom")}</button>
           <button aria-label={t("screenLeft")} aria-pressed={settings.islandEdge==="left"} class:active={settings.islandEdge==="left"} onclick={()=>setIslandEdge("left")}><ArrowLeft size={16}/>{t("left")}</button>
         </div>
-        <label class="range-label"><span>{t("edgePosition")}</span><output>{settings.islandEdgePosition}%</output></label>
-        <input aria-label={t("edgePosition")} type="range" min="0" max="100" step="1" value={settings.islandEdgePosition} oninput={(e)=>setAlongEdge(Number(e.currentTarget.value))} onchange={(e)=>setAlongEdge(Number(e.currentTarget.value),true)}/>
-        <button class="center-button" onclick={()=>setAlongEdge(50,true)}>{t("center")}</button>
-        <label class="range-label"><span>{t("compactLength")}</span><output>{settings.compactLength}px</output></label>
-        <input aria-label={t("compactLength")} type="range" min="80" max="300" step="1" value={settings.compactLength} oninput={(e)=>setCompactLength(Number(e.currentTarget.value))} onchange={(e)=>setCompactLength(Number(e.currentTarget.value),true)}/>
-        <label class="range-label"><span>{t("shoulder")}</span><output>{settings.edgeShoulderRadius}px</output></label>
-        <input aria-label={t("shoulder")} type="range" min="0" max="16" step="1" value={settings.edgeShoulderRadius} oninput={(e)=>setShoulderRadius(Number(e.currentTarget.value))} onchange={(e)=>setShoulderRadius(Number(e.currentTarget.value),true)}/>
-        <label class="range-label"><span>{t("expandedRadius")}</span><output>{settings.expandedCornerRadius}px</output></label>
-        <input aria-label={t("expandedRadius")} type="range" min="0" max="80" step="1" value={settings.expandedCornerRadius} oninput={(e)=>setRadius(Number(e.currentTarget.value))} onchange={(e)=>setRadius(Number(e.currentTarget.value),true)}/>
+        <label class="range-label"><span>{t("edgePosition")}</span><output>{draftEdgePosition}%</output></label>
+        <input aria-label={t("edgePosition")} type="range" min="0" max="100" step="1" bind:value={draftEdgePosition} onchange={commitEdgePosition}/>
+        <button class="center-button" onclick={()=>{draftEdgePosition=50;commitPreference({islandEdgePosition:50})}}>{t("center")}</button>
+        <label class="range-label"><span>{t("compactLength")}</span><output>{draftCompactLength}px</output></label>
+        <input aria-label={t("compactLength")} type="range" min="80" max="300" step="1" bind:value={draftCompactLength} onchange={commitCompactLength}/>
+        <label class="range-label"><span>{t("shoulder")}</span><output>{draftShoulderRadius}px</output></label>
+        <input aria-label={t("shoulder")} type="range" min="0" max="16" step="1" bind:value={draftShoulderRadius} onchange={commitShoulderRadius}/>
+        <label class="range-label"><span>{t("expandedRadius")}</span><output>{draftExpandedRadius}px</output></label>
+        <input aria-label={t("expandedRadius")} type="range" min="0" max="80" step="1" bind:value={draftExpandedRadius} onchange={commitRadius}/>
       </section>
       <section><h2>{t("language")}</h2><label class="select-row"><span>{t("language")}</span><select value={settings.language} onchange={(e)=>setLanguage(e.currentTarget.value as AppLanguage)}><option value="system">{t("systemLanguage")}</option><option value="zh-CN">{t("chinese")}</option><option value="en">{t("english")}</option><option value="ja">{t("japanese")}</option></select></label></section>
       <section><h2>{t("font")}</h2><label class="select-row"><span><Type size={17}/>{t("appFont")}</span><select value={settings.fontId} onchange={(e)=>setFont(e.currentTarget.value as AppPreferences["fontId"])}>{#each FONT_OPTIONS as font}<option value={font.id}>{font.id==="system"?t("systemDefault"):font.label}</option>{/each}</select></label><p class="hint">{t("fontHint")}</p></section>
@@ -156,7 +167,7 @@
       <section><h2>{t("idleContent")}</h2>
         <label class="toggle-row"><span><strong>{t("enableIdle")}</strong><small>{t("enableIdleHint")}</small></span><input type="checkbox" checked={settings.idleContentEnabled} onchange={(e)=>updatePreference({idleContentEnabled:e.currentTarget.checked})}/></label>
         {#if settings.idleContentEnabled}
-          <label class="range-label"><span>{t("interval")}</span><output>{t("seconds",{value:settings.idleRotationSeconds})}</output></label><input aria-label={t("idleInterval")} type="range" min="2" max="60" value={settings.idleRotationSeconds} oninput={(e)=>queuePreferenceUpdate({idleRotationSeconds:Number(e.currentTarget.value)})} onchange={(e)=>commitPreference({idleRotationSeconds:Number(e.currentTarget.value)})}/>
+          <label class="range-label"><span>{t("interval")}</span><output>{t("seconds",{value:settings.idleRotationSeconds})}</output></label><input aria-label={t("idleInterval")} type="range" min="2" max="60" value={settings.idleRotationSeconds} oninput={(e)=>queueIdlePreferenceUpdate({idleRotationSeconds:Number(e.currentTarget.value)})} onchange={(e)=>commitPreference({idleRotationSeconds:Number(e.currentTarget.value)})}/>
           <div class="ordered-list idle-list">{#each settings.idleItems as item,index (item.id)}<div class="ordered-row idle-row"><input aria-label={t("enableItem",{name:idleLabel(item.kind)})} type="checkbox" checked={item.enabled} onchange={(e)=>patchIdle(item.id,{enabled:e.currentTarget.checked})}/><span><strong>{idleLabel(item.kind)}</strong>{#if item.kind==="custom"}<input aria-label={t("customText")} maxlength="120" value={item.text} oninput={(e)=>updateIdleText(item.id,e.currentTarget.value)} onchange={commitIdleText} onblur={commitIdleText}/>{/if}</span><button aria-label={t("moveUp")} disabled={index===0} onclick={()=>moveIdle(item.id,-1)}><ChevronUp size={14}/></button><button aria-label={t("moveDown")} disabled={index===settings.idleItems.length-1} onclick={()=>moveIdle(item.id,1)}><ChevronDown size={14}/></button>{#if item.kind==="custom"}<button aria-label={t("deleteCustom")} onclick={()=>removeIdle(item.id)}><X size={14}/></button>{/if}</div>{/each}</div>
           <button class="center-button add-button" onclick={addCustom}><Plus size={15}/>{t("addCustom")}</button>
           <div class="weather-box"><label for="weather-city">{t("weatherCity")}</label><div class="search-row"><input id="weather-city" placeholder={t("cityExample")} bind:value={weatherQuery} onkeydown={(e)=>{if(e.key==="Enter")void searchWeather()}}/><button aria-label={t("searchCity")} onclick={searchWeather}><Search size={15}/></button></div>{#if settings.weatherLocation}<p class="selected-city">{t("currentCity",{name:settings.weatherLocation.name})}</p>{/if}{#if weatherMessage}<p class="message">{weatherMessage}</p>{/if}{#if weatherResults.length}<div class="weather-results">{#each weatherResults as item}<button onclick={()=>selectWeather(item)}><strong>{item.name}</strong><small>{weatherCandidateDetail(item)}</small></button>{/each}</div>{/if}<p class="hint">{t("weatherSource")}</p></div>
@@ -186,7 +197,7 @@
   :global(html),:global(body),:global(#app){min-width:780px;min-height:600px;background:#fff;color:#111113} :global(body){overflow:auto}
   main{min-height:100vh;padding:38px 44px 44px;box-sizing:border-box;background:#fff}header{max-width:760px;margin:0 auto 28px;border-bottom:1px solid #e5e5e8;padding-bottom:20px}h1{margin:0;font-size:32px;line-height:1;letter-spacing:-.035em}header p{margin:9px 0 0;color:#6b6b72;font-size:14px}
   .workspace{max-width:760px;margin:auto}.workspace aside{width:100%}
-  aside{display:flex;flex-direction:column;gap:12px}aside section{padding:18px;border-radius:16px;background:#f5f5f7;content-visibility:auto;contain-intrinsic-size:auto 180px}h2{margin:0 0 13px;font-size:12px;letter-spacing:.01em}.segmented{display:grid;grid-template-columns:repeat(4,1fr);padding:3px;border-radius:11px;background:#e9e9ec}.segmented.two{grid-template-columns:repeat(2,1fr)}.segmented button{border:0;background:transparent;color:#66666e;font-size:10px}.segmented button{min-height:32px;padding:7px 4px;border-radius:8px}.segmented button.active{color:#111;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.08)}.field-label,.range-label{display:flex;align-items:baseline;justify-content:space-between;margin:14px 0 8px;font-size:11px}.field-label:first-of-type{margin-top:0}.field-label small{color:#777780;font-size:9px}.range-label output{color:#66666e;font-variant-numeric:tabular-nums}.edge-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.edge-grid button{min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:1px solid transparent;border-radius:10px;color:#66666e;background:#fff;font-size:10px;cursor:pointer}.edge-grid button.active{color:#fff;background:#111113}.center-button{width:100%;min-height:36px;margin-top:7px;border:0;border-radius:10px;color:#414148;background:#fff;cursor:pointer}
+  aside{display:flex;flex-direction:column;gap:12px}aside section{padding:18px;border-radius:16px;background:#f5f5f7}h2{margin:0 0 13px;font-size:12px;letter-spacing:.01em}.segmented{display:grid;grid-template-columns:repeat(4,1fr);padding:3px;border-radius:11px;background:#e9e9ec}.segmented.two{grid-template-columns:repeat(2,1fr)}.segmented button{border:0;background:transparent;color:#66666e;font-size:10px}.segmented button{min-height:32px;padding:7px 4px;border-radius:8px}.segmented button.active{color:#111;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.08)}.field-label,.range-label{display:flex;align-items:baseline;justify-content:space-between;margin:14px 0 8px;font-size:11px}.field-label:first-of-type{margin-top:0}.field-label small{color:#777780;font-size:9px}.range-label output{color:#66666e;font-variant-numeric:tabular-nums}.edge-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.edge-grid button{min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:1px solid transparent;border-radius:10px;color:#66666e;background:#fff;font-size:10px;cursor:pointer}.edge-grid button.active{color:#fff;background:#111113}.center-button{width:100%;min-height:36px;margin-top:7px;border:0;border-radius:10px;color:#414148;background:#fff;cursor:pointer}
   input[type="range"]{width:100%;accent-color:#111113}
   .toggle-row,.select-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-top:1px solid #e5e5e8}.toggle-row:first-of-type{border-top:0}.toggle-row span{display:flex;flex-direction:column;gap:3px}.toggle-row strong{font-size:12px}.toggle-row small{color:#777780;font-size:10px}.toggle-row input{width:38px;height:22px;accent-color:#111}.select-row span{display:flex;align-items:center;gap:8px;font-size:12px}.select-row select{max-width:160px;border:0;border-radius:8px;padding:6px 8px;background:#fff}
   .section-title{display:flex;align-items:center;justify-content:space-between}.section-title h2{margin:0}.icon-button,.ordered-row button,.search-row button{display:grid;place-items:center;border:0;border-radius:8px;background:#fff;color:#414148;cursor:pointer}.icon-button{width:30px;height:30px}.hint,.empty{margin:7px 0;color:#777780;font-size:10px;line-height:1.45}.ordered-list{display:flex;flex-direction:column;gap:6px;margin-top:11px}.ordered-row{display:flex;align-items:center;gap:7px;min-height:42px;padding:7px;border-radius:10px;background:#fff}.ordered-row.offline{opacity:.62}.ordered-row>span{min-width:0;display:flex;flex:1;flex-direction:column;gap:2px}.ordered-row strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}.ordered-row small{color:#777780;font-size:9px}.ordered-row button{width:27px;height:27px}.idle-list{margin-top:14px}.idle-row>span>input{width:100%;min-width:0;border:1px solid #dddde1;border-radius:7px;padding:5px 7px;font-size:10px}.add-button{display:flex;align-items:center;justify-content:center;gap:6px}.weather-box{margin-top:14px;padding-top:13px;border-top:1px solid #e2e2e5}.weather-box>label{font-size:11px;font-weight:600}.search-row{display:grid;grid-template-columns:1fr 34px;gap:6px;margin-top:7px}.search-row input{min-width:0;border:1px solid #dddde1;border-radius:9px;padding:8px}.selected-city{margin:7px 0 0;font-size:10px;color:#39724a}.weather-results{display:flex;flex-direction:column;gap:4px;margin-top:7px}.weather-results button{display:flex;align-items:center;justify-content:space-between;border:0;border-radius:8px;padding:8px;background:#fff;text-align:left;cursor:pointer}.weather-results small{color:#777780}.tool-list{display:flex;flex-direction:column;gap:7px}.tool-list button{padding:10px 11px}.tool-list button:active,.edge-grid button:active,.center-button:active{transform:scale(.98)}button:disabled,select:disabled,input:disabled{cursor:not-allowed;opacity:.45}.message{margin:10px 0 0;color:#39724a;font-size:11px}.segmented button:focus-visible,.edge-grid button:focus-visible,.center-button:focus-visible,.tool-list button:focus-visible,.icon-button:focus-visible,.ordered-row button:focus-visible,.weather-results button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #111;outline-offset:2px}@media(max-width:848px){:global(html),:global(body),:global(#app){min-width:0}main{padding:24px}}
