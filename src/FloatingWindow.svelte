@@ -1597,53 +1597,45 @@
     width: 28px;
     height: 28px;
     padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 0;
     outline: none;
-    border-radius: 9px;
-    background: rgba(255, 255, 255, 0.06);
+    border-radius: 50%;
+    background: transparent;
     cursor: pointer;
-    color: rgba(255, 255, 255, 0.68);
+    color: rgba(255, 255, 255, 0.58);
     display: flex;
     align-items: center;
     justify-content: center;
     transition:
       color 0.15s ease,
       transform 0.15s ease,
-      background 0.15s ease,
-      border-color 0.15s ease,
-      box-shadow 0.15s ease;
+      background 0.15s ease;
     flex-shrink: 0; /* 不被压缩 */
   }
 
   .pin-btn-topbar:hover {
     color: #fff;
-    transform: translateY(-1px);
-    background: rgba(255, 255, 255, 0.14);
-    border-color: rgba(255, 255, 255, 0.24);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.1);
   }
 
   .pin-btn-topbar:active {
     transform: scale(0.94);
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.16);
+  }
+
+  .pin-btn-topbar:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.76);
+    outline-offset: 1px;
   }
 
   .pin-btn-topbar.pinned {
-    color: #111113;
-    background: #fff;
-    border-color: #fff;
-    box-shadow:
-      0 4px 12px rgba(0, 0, 0, 0.24),
-      0 0 0 1px rgba(255, 255, 255, 0.18);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
   }
 
   .pin-btn-topbar.pinned:hover {
-    color: #111113;
-    background: #fff;
-    border-color: #fff;
-    box-shadow:
-      0 6px 16px rgba(0, 0, 0, 0.28),
-      0 0 0 1px rgba(255, 255, 255, 0.24);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.18);
   }
 
   .pin-btn-topbar :global(svg) {
