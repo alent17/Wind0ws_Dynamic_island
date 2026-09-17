@@ -32,6 +32,14 @@
     height: number;
   }
 
+  type RGB = { r: number; g: number; b: number };
+  type HSL = { h: number; s: number; l: number };
+
+  const INFO_HEIGHT = 64;
+  const ART_MAX_SIZE = 640;
+  const ART_SIDE_GUTTER = 16;
+  const ART_VERTICAL_GUTTER = 8;
+
   const t = (key: TranslationKey, values: Record<string, string | number> = {}) => translate(key, values, $locale);
   let PLACEHOLDER_TITLE = t("waitingPlayback");
   let PLACEHOLDER_ARTIST = t("unknownArtist");
@@ -59,12 +67,26 @@
   );
   let slideDirection = $state<"left" | "right" | "">("");
   let isAnimating = $state(false); // 动画进行中标志
-  let animationTimeoutId: ReturnType<typeof setTimeout> | null = null; // 动画定时器ID
-  // The floating player's body uses only the persisted fill color. Artwork
-  // extraction must never be allowed to replace this background.
+  // Artwork drives the album fill when enabled. The configured color remains
+  // an independent fallback and is never mutated by extraction.
   let configuredFillColor = $state(DEFAULT_SETTINGS.floatingFillColor);
-  let effectiveBackground = $derived(configuredFillColor);
+  let albumAccentColor = $state("rgb(40, 50, 60)");
+  let albumAccentGradient = $state(createAlbumFill(40, 50, 60));
+  let useAlbumColor = $state(DEFAULT_SETTINGS.floatingUseAlbumColor);
+  let effectiveBackground = $derived(
+    useAlbumColor ? albumAccentGradient : configuredFillColor,
+  );
   let windowSize = $state<WindowSize>({ width: 0, height: 0 });
+  let albumArtSize = $derived(
+    Math.max(
+      50,
+      Math.min(
+        ART_MAX_SIZE,
+        windowSize.width - ART_SIDE_GUTTER,
+        windowSize.height - INFO_HEIGHT - ART_VERTICAL_GUTTER,
+      ),
+    ),
+  );
   let isCompactCover = $derived(
     windowSize.width <= 200.5 && windowSize.height <= 200.5,
   );
@@ -191,43 +213,118 @@
     }
   }
 
+  function clamp01(value: number) {
+    return Math.max(0, Math.min(1, value));
+  }
+
+  function rgbToHsl(r: number, g: number, b: number): HSL {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    const delta = max - min;
+    let h = 0;
+    let s = 0;
+
+    if (delta !== 0) {
+      s = delta / (1 - Math.abs(2 * l - 1));
+
+      switch (max) {
+        case r:
+          h = ((g - b) / delta) % 6;
+          break;
+        case g:
+          h = (b - r) / delta + 2;
+          break;
+        default:
+          h = (r - g) / delta + 4;
+          break;
+      }
+
+      h *= 60;
+      if (h < 0) h += 360;
+    }
+
+    return { h, s, l };
+  }
+
+  function hslToRgb(h: number, s: number, l: number): RGB {
+    const chroma = (1 - Math.abs(2 * l - 1)) * s;
+    const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - chroma / 2;
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+
+    if (h < 60) {
+      red = chroma;
+      green = x;
+    } else if (h < 120) {
+      red = x;
+      green = chroma;
+    } else if (h < 180) {
+      green = chroma;
+      blue = x;
+    } else if (h < 240) {
+      green = x;
+      blue = chroma;
+    } else if (h < 300) {
+      red = x;
+      blue = chroma;
+    } else {
+      red = chroma;
+      blue = x;
+    }
+
+    return {
+      r: Math.round((red + m) * 255),
+      g: Math.round((green + m) * 255),
+      b: Math.round((blue + m) * 255),
+    };
+  }
+
+  function createAlbumFill(r: number, g: number, b: number): string {
+    const { h, s, l } = rgbToHsl(r, g, b);
+    const strength = 0.07 * s;
+    const top = hslToRgb(h, s, clamp01(l + strength));
+    const bottom = hslToRgb(h, s, clamp01(l - strength));
+
+    return `linear-gradient(180deg, rgb(${top.r}, ${top.g}, ${top.b}) 0%, rgb(${r}, ${g}, ${b}) 50%, rgb(${bottom.r}, ${bottom.g}, ${bottom.b}) 100%)`;
+  }
+
+  async function extractColors(imgSrc: string) {
+    if (!useAlbumColor || !imgSrc) return;
+
+    try {
+      const [r, g, b] = await invoke<[number, number, number]>(
+        "extract_dominant_color",
+        { imagePath: imgSrc },
+      );
+
+      // Ignore an in-flight result if the user disabled album coloring while
+      // the native color extraction was running.
+      if (!useAlbumColor) return;
+
+      albumAccentColor = `rgb(${r}, ${g}, ${b})`;
+      albumAccentGradient = createAlbumFill(r, g, b);
+    } catch (error) {
+      console.error("[颜色提取] 失败:", error);
+    }
+  }
+
   // 封面切换函数（无动画）
   function transitionCover(
     newCover: string,
     direction: "left" | "right" = "left",
   ) {
-    if (animationTimeoutId) {
-      clearTimeout(animationTimeoutId);
-      animationTimeoutId = null;
-    }
-
     displayCover = newCover;
+    if (newCover && useAlbumColor) void extractColors(newCover);
     previousCover = "";
     slideDirection = "";
     isAnimating = false;
-
-    // 背景颜色渐变动画（200ms）
-    const startTime = Date.now();
-    const duration = 200;
-
-    const animateColor = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const easeProgress = easeInOutCubic(progress);
-
-      // 如果需要继续动画
-      if (progress < 1) {
-        requestAnimationFrame(animateColor);
-      }
-    };
-
-    // 启动动画
-    animateColor();
-  }
-
-  // 缓动函数
-  function easeInOutCubic(t: number): number {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
   // 从 Apple Music 获取 MV 链接（使用本地缓存）
@@ -350,6 +447,7 @@
       const settings = await invoke<AppSettings>("get_settings");
       capturePreferences = settings;
       configuredFillColor = settings.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
+      useAlbumColor = settings.floatingUseAlbumColor ?? DEFAULT_SETTINGS.floatingUseAlbumColor;
       applyAppFont(settings.fontId);
       setLocale(settings.language);
       PLACEHOLDER_TITLE = t("waitingPlayback");
@@ -455,8 +553,12 @@
       if (value?.fontId) applyAppFont(value.fontId);
       if (value?.language) setLocale(value.language);
       if (value) {
+        const nextUseAlbumColor = value.floatingUseAlbumColor ?? DEFAULT_SETTINGS.floatingUseAlbumColor;
+        const shouldRefreshAlbumColor = nextUseAlbumColor && !useAlbumColor;
         capturePreferences = value;
         configuredFillColor = value.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
+        useAlbumColor = nextUseAlbumColor;
+        if (shouldRefreshAlbumColor && displayCover) void extractColors(displayCover);
       }
     });
     eventListeners.push(unlistenSettingsChange);
@@ -1212,6 +1314,7 @@
         class="pin-btn-topbar"
         onclick={toggleAlwaysOnTop}
         aria-label={isAlwaysOnTop ? t("unpin") : t("pin")}
+        aria-pressed={isAlwaysOnTop}
         class:pinned={isAlwaysOnTop}
       >
         <Pin size={16} strokeWidth={2} />
@@ -1229,8 +1332,12 @@
     </div>
   {/if}
 
-  <div class="album-stage">
-    <div class="album-wrapper">
+  <div class="media-stage">
+    <div
+      class="album-wrapper"
+      style:width={isCompactCover ? "100%" : `${albumArtSize}px`}
+      style:height={isCompactCover ? "100%" : `${albumArtSize}px`}
+    >
       {#if displayCover}
         <img
           class="compact-cover-image"
@@ -1415,27 +1522,14 @@
 
   .bg-solid {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 60px; /* 填充到歌曲信息层上方 */
+    inset: 0 0 64px 0;
     z-index: 1;
     background: var(--floating-background);
     transition:
       background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-      top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      opacity 0.3s ease;
 
-    /* 新增：与父元素一致的圆角 */
-    border-radius: 5px;
-  }
-
-  .player.hovered .bg-solid {
-    top: 25px; /* 顶部栏出现时，填充色向下移动 */
-  }
-
-  /* 锁定时，即使 hovered 也不下滑 */
-  .player.locked .bg-solid {
-    top: 0 !important;
+    border-radius: 5px 5px 0 0;
   }
 
   /* 可拖拽的顶部栏 - 鼠标悬停时滑下 */
@@ -1500,41 +1594,64 @@
 
   /* 顶部栏置顶按钮 */
   .pin-btn-topbar {
-    background: none;
-    border: none;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     outline: none;
-    padding: 6px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.06);
     cursor: pointer;
-    color: #dfdfdf;
+    color: rgba(255, 255, 255, 0.68);
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
     transition:
       color 0.15s ease,
       transform 0.15s ease,
-      background 0.15s ease;
+      background 0.15s ease,
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
     flex-shrink: 0; /* 不被压缩 */
   }
 
   .pin-btn-topbar:hover {
     color: #fff;
-    transform: scale(1.1);
-    background: transparent;
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.24);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
 
   .pin-btn-topbar:active {
-    transform: scale(0.9);
-    background: transparent;
+    transform: scale(0.94);
+    background: rgba(255, 255, 255, 0.2);
   }
 
   .pin-btn-topbar.pinned {
-    color: #fff;
-    transform: rotate(45deg);
+    color: #111113;
+    background: #fff;
+    border-color: #fff;
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.24),
+      0 0 0 1px rgba(255, 255, 255, 0.18);
   }
 
   .pin-btn-topbar.pinned:hover {
-    background: rgba(255, 255, 255, 0.1);
+    color: #111113;
+    background: #fff;
+    border-color: #fff;
+    box-shadow:
+      0 6px 16px rgba(0, 0, 0, 0.28),
+      0 0 0 1px rgba(255, 255, 255, 0.24);
+  }
+
+  .pin-btn-topbar :global(svg) {
+    transition: transform 0.18s ease;
+  }
+
+  .pin-btn-topbar.pinned :global(svg) {
+    transform: rotate(45deg);
   }
 
   /* 顶部栏关闭按钮 */
@@ -1568,26 +1685,19 @@
   }
 
   /* ==================== 专辑封面 ==================== */
-  .album-stage {
+  .media-stage {
     position: absolute;
-    top: 25px; /* 留出顶部栏的空间（25px） */
-    bottom: 60px; /* 与填充色底部对齐 */
-    left: 0;
-    right: 0;
-    z-index: 3;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 12px; /* 减小内边距，让图片更大 */
+    inset: 0 0 64px 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
     perspective: 1200px; /* 3D 透视效果 */
   }
 
   .album-wrapper {
-    width: 100%;
-    height: 100%;
     aspect-ratio: 1 / 1;
-    max-width: min(calc(100% - 24px), calc(100vh - 100px - 24px), 600px);
-    max-height: min(calc(100% - 24px), calc(100vh - 100px - 24px), 600px);
+    flex: none;
     position: relative;
     box-shadow:
       0 8px 32px rgba(0, 0, 0, 0.3),
@@ -1662,7 +1772,7 @@
   }
 
   /* At the 200 x 200 minimum size the floating player becomes a cover tile. */
-  .player.compact-cover .album-stage {
+  .player.compact-cover .media-stage {
     inset: 0;
     padding: 0;
   }
@@ -1842,16 +1952,21 @@
   /* ==================== 歌曲信息层 ==================== */
   .track-info-layer {
     position: absolute;
-    bottom: 8px; /* 往下移动，更靠近底部 */
-    left: 0;
     right: 0;
+    bottom: 0;
+    left: 0;
+    height: 64px;
     z-index: 5;
-    padding: 0 5px; /* 减小左右内边距，让文字更靠左 */
+    box-sizing: border-box;
+    padding: 8px 8px 7px;
     display: flex;
     flex-direction: column;
+    justify-content: center;
     gap: 3px;
     text-align: left;
     pointer-events: auto;
+    overflow: hidden;
+    background: #121212;
   }
 
   .track-title {
@@ -1920,7 +2035,7 @@
   .progress-layer {
     position: absolute;
     top: 0;
-    bottom: 0;
+    bottom: 64px;
     left: 0;
     right: 0;
     z-index: 251;
@@ -1938,7 +2053,7 @@
   .shared-progress {
     position: absolute;
     right: 16px;
-    bottom: 56px;
+    bottom: 8px;
     left: 16px;
     pointer-events: auto;
   }
@@ -1946,10 +2061,10 @@
   /* 控制按钮遮罩层 */
   .controls-overlay {
     position: absolute;
-    top: 25px; /* 从顶部栏下方开始 */
+    top: 0;
     left: 0;
     right: 0;
-    bottom: 60px; /* 到歌曲信息层上方结束 */
+    bottom: 64px; /* 到歌曲信息层上方结束 */
     background: linear-gradient(
       to bottom,
       rgba(0, 0, 0, 0),

@@ -247,6 +247,7 @@
         <input aria-label={t("shoulder")} type="range" min="0" max="16" step="1" bind:value={draftShoulderRadius} onchange={commitShoulderRadius}/>
          <label class="range-label"><span>{t("expandedRadius")}</span><output>{draftExpandedRadius}px</output></label>
          <input aria-label={t("expandedRadius")} type="range" min="0" max="80" step="1" bind:value={draftExpandedRadius} onchange={commitRadius}/>
+         <div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.floatingUseAlbumColor} aria-pressed={settings.floatingUseAlbumColor} onclick={()=>updatePreference({floatingUseAlbumColor:!settings.floatingUseAlbumColor})}><span class="choice-mark" aria-hidden="true">{settings.floatingUseAlbumColor?"✓":""}</span><span class="choice-copy"><strong>{t("useAlbumColor")}</strong><small>{t("useAlbumColorHint")}</small></span></button></div>
          <label class="select-row color-row"><span>{t("floatingBackground")}</span><input aria-label={t("floatingBackground")} type="color" value={settings.floatingFillColor} onchange={(e)=>updatePreference({floatingFillColor:e.currentTarget.value})}/></label>
          <p class="hint">{t("floatingBackgroundHint")}</p>
        </section>
