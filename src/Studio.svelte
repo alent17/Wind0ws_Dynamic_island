@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import { spring } from "svelte/motion";
   import { Play,Pause,ImageOff,Type,RotateCcw,Trash2,ExternalLink,Monitor,ArrowUp,ArrowRight,ArrowDown,ArrowLeft,RefreshCw,ChevronUp,ChevronDown,Plus,X,Search } from "lucide-svelte";
   import IslandSurface from "$lib/IslandSurface.svelte";
@@ -28,6 +29,9 @@
   let draftCompactLength=$state(DEFAULT_SETTINGS.compactLength);
   let draftShoulderRadius=$state(DEFAULT_SETTINGS.edgeShoulderRadius);
   let draftExpandedRadius=$state(DEFAULT_SETTINGS.expandedCornerRadius);
+  let appBehaviorSection:HTMLElement|null=null;
+  let autoStartLoaded=false;
+  let studioDisposed=false;
   const previewBars=[.45,.78,.58,.96,.7,.38];
   let scenarioMedia=$derived.by<MediaState>(()=>{const base={...DEMO_MEDIA,positionMs:244000*progress/100,lastUpdatedTimestamp:Date.now()};if(scenario==="paused")return{...base,isPlaying:false};if(scenario==="no-art")return{...base,albumArt:""};if(scenario==="long-title")return{...base,title:"宇宙尽头的浪漫主义与一场不会结束的午夜公路旅行",artist:"The Extremely Long Artist Name · 特别长的专辑名称"};return base});
   let sample=$derived(nativeRuntime&&followingLive?liveMedia:scenarioMedia);
@@ -45,14 +49,27 @@
     draftShoulderRadius=settings.edgeShoulderRadius;
     draftExpandedRadius=settings.expandedCornerRadius;
   }
+  function loadAutoStart(){
+    if(studioDisposed||!nativeRuntime||autoStartLoaded)return;
+    autoStartLoaded=true;
+    void settingsApi.getAutoStart().then(autoStart=>{if(!studioDisposed)settings={...settings,autoStart}}).catch(()=>{if(!studioDisposed)autoStartLoaded=false});
+  }
   onMount(()=>{
+    studioDisposed=false;
     nativeRuntime=Boolean((window as any).__TAURI_INTERNALS__);
     const unsubscribe=media.subscribe(value=>liveMedia=value);
     let disconnect:undefined|(()=>void);
     let disposed=false;
     let deferredFrame=0;
-    let deferredTimer:ReturnType<typeof setTimeout>|undefined;
+    let deferredTimers:ReturnType<typeof setTimeout>[]=[];
+    let autoStartObserver:IntersectionObserver|undefined;
+    let closePromise:Promise<()=>void>|undefined;
     if(nativeRuntime){
+      const appWindow=getCurrentWindow();
+      closePromise=appWindow.onCloseRequested(async(event)=>{
+        event.preventDefault();
+        await appWindow.hide();
+      });
       void (async()=>{
         try{
           settings={...DEFAULT_SETTINGS,...await settingsApi.getPreferences()};
@@ -61,21 +78,37 @@
           setLocale(settings.language);
         }catch{}
         if(disposed)return;
+        if(appBehaviorSection){
+          autoStartObserver=new IntersectionObserver(entries=>{
+            if(entries.some(entry=>entry.isIntersecting)){
+              loadAutoStart();
+              autoStartObserver?.disconnect();
+              autoStartObserver=undefined;
+            }
+          },{threshold:0});
+          autoStartObserver.observe(appBehaviorSection);
+        }
         deferredFrame=requestAnimationFrame(()=>{
-          deferredTimer=setTimeout(()=>{
-            if(disposed)return;
-            void connectMedia().then(stop=>{if(disposed)stop();else disconnect=stop}).catch(()=>{});
-            void settingsApi.getAutoStart().then(autoStart=>{if(!disposed)settings={...settings,autoStart}}).catch(()=>{});
-            void windowApi.getMonitors().then(value=>{if(!disposed)monitors=value}).catch(()=>{});
-            void refreshSessions();
-          },0);
+          deferredTimers=[
+            setTimeout(()=>{
+              if(disposed)return;
+              void connectMedia().then(stop=>{if(disposed)stop();else disconnect=stop}).catch(()=>{});
+            },100),
+            setTimeout(()=>{
+              if(disposed)return;
+              void windowApi.getMonitors().then(value=>{if(!disposed)monitors=value}).catch(()=>{});
+            },250),
+          ];
         });
       })();
     }
     return()=>{
       disposed=true;
+      studioDisposed=true;
       if(deferredFrame)cancelAnimationFrame(deferredFrame);
-      if(deferredTimer)clearTimeout(deferredTimer);
+      deferredTimers.forEach(timer=>clearTimeout(timer));
+      autoStartObserver?.disconnect();
+      if(closePromise)void closePromise.then(unlisten=>unlisten()).catch(()=>{});
       if(textCommitTimer){clearTimeout(textCommitTimer);textCommitTimer=undefined;commitPreference({idleItems:settings.idleItems})}
       if(idlePreferenceRaf){cancelAnimationFrame(idlePreferenceRaf);idlePreferenceRaf=0}
       queuedIdlePreference={};
@@ -207,7 +240,7 @@
         <label class="toggle-row"><span><strong>{t("hdCover")}</strong><small>{t("hdCoverHint")}</small></span><input type="checkbox" checked={settings.enableHdCover} onchange={(e)=>updatePreference({enableHdCover:e.currentTarget.checked})}/></label>
         <label class="toggle-row"><span><strong>{t("mvPlayback")}</strong><small>{t("mvPlaybackHint")}</small></span><input type="checkbox" checked={settings.enableMvPlayback} onchange={(e)=>updatePreference({enableMvPlayback:e.currentTarget.checked})}/></label>
       </section>
-      <section><h2>{t("appBehavior")}</h2>
+      <section bind:this={appBehaviorSection}><h2>{t("appBehavior")}</h2>
         <label class="toggle-row"><span><strong>{t("alwaysOnTop")}</strong><small>{t("alwaysOnTopHint")}</small></span><input type="checkbox" checked={settings.alwaysOnTop} disabled={!nativeRuntime} onchange={(e)=>setAlwaysOnTop(e.currentTarget.checked)}/></label>
         <label class="toggle-row"><span><strong>{t("autoStart")}</strong><small>{t("autoStartHint")}</small></span><input type="checkbox" checked={settings.autoStart} disabled={!nativeRuntime} onchange={(e)=>setAutoStart(e.currentTarget.checked)}/></label>
         <label class="select-row"><span><Monitor size={17}/>{t("monitor")}</span><select value={settings.monitorIndex} disabled={!nativeRuntime} onchange={(e)=>updatePreference({monitorIndex:Number(e.currentTarget.value)})}>{#each monitors as monitor}<option value={monitor.index}>{monitor.name}</option>{/each}{#if !monitors.length}<option>{t("primaryMonitor")}</option>{/if}</select></label>
