@@ -1529,7 +1529,7 @@
       background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       opacity 0.3s ease;
 
-    border-radius: 5px 5px 0 0;
+    border-radius: 5px;
   }
 
   /* 可拖拽的顶部栏 - 鼠标悬停时滑下 */
@@ -1959,6 +1959,7 @@
     pointer-events: auto;
     overflow: hidden;
     background: #121212;
+    border-radius: 0 0 5px 5px;
   }
 
   .track-title {
