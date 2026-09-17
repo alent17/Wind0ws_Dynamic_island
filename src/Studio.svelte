@@ -4,7 +4,8 @@
   import { spring } from "svelte/motion";
   import { Play,Pause,ImageOff,Type,RotateCcw,Trash2,ExternalLink,Monitor,ArrowUp,ArrowRight,ArrowDown,ArrowLeft,RefreshCw,ChevronUp,ChevronDown,Plus,X,Search } from "lucide-svelte";
   import IslandSurface from "$lib/IslandSurface.svelte";
-  import { hostFor, type IslandEdge, type IslandMode, type IslandStyle } from "$lib/islandGeometry";
+  import StudioSlider from "$lib/StudioSlider.svelte";
+  import { geometryFor, hostFor, type IslandMode } from "$lib/islandGeometry";
   import { DEMO_MEDIA, media, connectMedia } from "$lib/mediaStore";
   import { settingsApi } from "$lib/api/settings";
   import { windowApi } from "$lib/api/window";
@@ -13,47 +14,88 @@
   import { idleApi } from "$lib/api/idle";
   import { applyAppFont, FONT_OPTIONS } from "$lib/font";
   import { locale, setLocale, translate, type TranslationKey } from "$lib/i18n";
-  import { DEFAULT_SETTINGS, type AppLanguage, type AppPreferences, type IdleContentItem, type IslandTheme, type MediaSessionInfo, type MediaState, type MonitorInfo, type WeatherLocationCandidate } from "$lib/api/types";
+  import { DEFAULT_SETTINGS, type AppLanguage, type AppPreferences, type IdleContentItem, type MediaSessionInfo, type MediaState, type MonitorInfo, type WeatherLocationCandidate } from "$lib/api/types";
   import type { IslandTool } from "$lib/featureRail";
 
   type Scenario="playing"|"paused"|"no-art"|"long-title";
+  type PreviewTarget="shape"|"edge"|"position"|"compactLength"|"shoulder"|"radius"|"background"|"spectrum"|null;
+  type AppearanceDraft=Pick<AppPreferences,"islandStyle"|"islandEdge"|"islandEdgePosition"|"compactLength"|"edgeShoulderRadius"|"expandedCornerRadius"|"showSpectrum"|"spectrumMode"|"floatingUseAlbumColor"|"floatingFillColor">;
+
+  function createAppearanceDraft(source:AppPreferences):AppearanceDraft{
+    return {
+      islandStyle:source.islandStyle,
+      islandEdge:source.islandEdge,
+      islandEdgePosition:source.islandEdgePosition,
+      compactLength:source.compactLength,
+      edgeShoulderRadius:source.edgeShoulderRadius,
+      expandedCornerRadius:source.expandedCornerRadius,
+      showSpectrum:source.showSpectrum,
+      spectrumMode:source.spectrumMode,
+      floatingUseAlbumColor:source.floatingUseAlbumColor,
+      floatingFillColor:source.floatingFillColor,
+    };
+  }
+
   let mode=$state<IslandMode>("expanded"); let scenario=$state<Scenario>("playing"); let progress=$state(50); let settings=$state<AppPreferences>({...DEFAULT_SETTINGS}); let monitors=$state<MonitorInfo[]>([]); let cacheMessage=$state("");
-  let nativeRuntime=$state(false); let followingLive=$state(true); let liveMedia=$state<MediaState>(DEMO_MEDIA); let stageWidth=$state(0); let stageHeight=$state(0);
+  let nativeRuntime=$state(false); let followingLive=$state(false); let liveMedia=$state<MediaState>(DEMO_MEDIA); let liveMediaDisconnect:undefined|(()=>void); let stageWidth=$state(0); let stageHeight=$state(0);
   let sessions=$state<MediaSessionInfo[]>([]); let weatherQuery=$state(""); let weatherResults=$state<WeatherLocationCandidate[]>([]); let weatherMessage=$state("");
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let textCommitTimer: ReturnType<typeof setTimeout> | undefined;
   let persistInFlight: Promise<void> | undefined;
   let persistPending=false;
+  let pendingSettingsPatch:Partial<AppPreferences>={};
   let idlePreferenceRaf=0;
   let queuedIdlePreference:Partial<AppPreferences>={};
-  let draftEdgePosition=$state(DEFAULT_SETTINGS.islandEdgePosition);
-  let draftCompactLength=$state(DEFAULT_SETTINGS.compactLength);
-  let draftShoulderRadius=$state(DEFAULT_SETTINGS.edgeShoulderRadius);
-  let draftExpandedRadius=$state(DEFAULT_SETTINGS.expandedCornerRadius);
+  let appearanceDraft=$state<AppearanceDraft>(createAppearanceDraft(DEFAULT_SETTINGS));
+  let previewTarget=$state<PreviewTarget>(null);
+  let applyingAppearance=$state(false);
+  let appearanceDirty=$derived.by(()=>{
+    return appearanceDraft.islandStyle!==settings.islandStyle||
+      appearanceDraft.islandEdge!==settings.islandEdge||
+      appearanceDraft.islandEdgePosition!==settings.islandEdgePosition||
+      appearanceDraft.compactLength!==settings.compactLength||
+      appearanceDraft.edgeShoulderRadius!==settings.edgeShoulderRadius||
+      appearanceDraft.expandedCornerRadius!==settings.expandedCornerRadius||
+      appearanceDraft.showSpectrum!==settings.showSpectrum||
+      appearanceDraft.spectrumMode!==settings.spectrumMode||
+      appearanceDraft.floatingUseAlbumColor!==settings.floatingUseAlbumColor||
+      appearanceDraft.floatingFillColor!==settings.floatingFillColor;
+  });
   let appBehaviorSection:HTMLElement|null=null;
   let autoStartLoaded=false;
   let studioDisposed=false;
   const previewBars=[.45,.78,.58,.96,.7,.38];
   let scenarioMedia=$derived.by<MediaState>(()=>{const base={...DEMO_MEDIA,positionMs:244000*progress/100,lastUpdatedTimestamp:Date.now()};if(scenario==="paused")return{...base,isPlaying:false};if(scenario==="no-art")return{...base,albumArt:""};if(scenario==="long-title")return{...base,title:"宇宙尽头的浪漫主义与一场不会结束的午夜公路旅行",artist:"The Extremely Long Artist Name · 特别长的专辑名称"};return base});
   let sample=$derived(nativeRuntime&&followingLive?liveMedia:scenarioMedia);
-  let previewHost=$derived(hostFor(settings.islandStyle,settings.islandEdge,draftCompactLength));
+  let previewHost=$derived(hostFor(appearanceDraft.islandStyle,appearanceDraft.islandEdge,appearanceDraft.compactLength));
+  let currentGeometry=$derived(geometryFor(mode,appearanceDraft.expandedCornerRadius,appearanceDraft.islandEdge,appearanceDraft.compactLength));
+  // Keep the island at the current preview scale while the surrounding stage changes width.
+  const previewScaleFloor=.79;
   let previewTools=$derived.by<IslandTool[]>(()=>[
     ...(settings.showFloatingTool?["floating"]:[]),
-    ...(settings.showVolumeTool?["volume"]:[]),
     ...(settings.showTimerTool?["timer"]:[]),
   ] as IslandTool[]);
-  let previewScale=$derived(Math.min(.72,Math.max(.56,stageWidth>0?stageWidth/(previewHost.width*1.4):.64)));
+  let previewScale=$derived(previewScaleFloor);
   const previewPosition=spring(50,{stiffness:.1,damping:.7,precision:.1});
-  $effect(()=>{previewPosition.set(draftEdgePosition,{hard:!settings.enableAnimations||settings.reduceAnimations})});
-  let previewPositionStyle=$derived.by(()=>{const p=$previewPosition/100;const scaledWidth=previewHost.width*previewScale;const scaledHeight=previewHost.height*previewScale;const horizontal=settings.islandEdge==="top"||settings.islandEdge==="bottom";const x=horizontal?Math.max(0,stageWidth-scaledWidth)*p:settings.islandEdge==="right"?Math.max(0,stageWidth-scaledWidth):0;const y=horizontal?(settings.islandEdge==="bottom"?Math.max(0,stageHeight-scaledHeight):0):Math.max(0,stageHeight-scaledHeight)*p;return `transform:translate3d(${x}px,${y}px,0) scale(${previewScale})`});
-  function selectScenario(next:Scenario){scenario=next;followingLive=false}
+  $effect(()=>{previewPosition.set(appearanceDraft.islandEdgePosition,{hard:!settings.enableAnimations||settings.reduceAnimations})});
+  let previewPositionStyle=$derived.by(()=>{const p=$previewPosition/100;const scaledWidth=previewHost.width*previewScale;const scaledHeight=previewHost.height*previewScale;const horizontal=appearanceDraft.islandEdge==="top"||appearanceDraft.islandEdge==="bottom";const x=horizontal?Math.max(0,stageWidth-scaledWidth)*p:appearanceDraft.islandEdge==="right"?Math.max(0,stageWidth-scaledWidth):0;const y=horizontal?(appearanceDraft.islandEdge==="bottom"?Math.max(0,stageHeight-scaledHeight):0):Math.max(0,stageHeight-scaledHeight)*p;return `transform:translate3d(${x}px,${y}px,0) scale(${previewScale})`});
+  function stopLivePreview(){
+    followingLive=false;
+    liveMediaDisconnect?.();
+    liveMediaDisconnect=undefined;
+  }
+  function selectScenario(next:Scenario){scenario=next;stopLivePreview()}
+  async function enableLivePreview(){
+    if(!nativeRuntime)return;
+    followingLive=true;
+    if(liveMediaDisconnect)return;
+    try{liveMediaDisconnect=await connectMedia();}catch{liveMediaDisconnect=undefined}
+  }
   const t=(key:TranslationKey,values:Record<string,string|number>={})=>translate(key,values,$locale);
   const enumLabel=(value:string)=>t(value as TranslationKey);
+  const previewTargetLabel=(target:PreviewTarget)=>target? t(({shape:"shape",edge:"screenEdge",position:"edgePosition",compactLength:"compactLength",shoulder:"shoulder",radius:"expandedRadius",background:"floatingBackground",spectrum:"spectrum"} as const)[target]):t("previewReady");
   function syncAppearanceDrafts(){
-    draftEdgePosition=settings.islandEdgePosition;
-    draftCompactLength=settings.compactLength;
-    draftShoulderRadius=settings.edgeShoulderRadius;
-    draftExpandedRadius=settings.expandedCornerRadius;
+    appearanceDraft=createAppearanceDraft(settings);
   }
   function loadAutoStart(){
     if(studioDisposed||!nativeRuntime||autoStartLoaded)return;
@@ -64,7 +106,6 @@
     studioDisposed=false;
     nativeRuntime=Boolean((window as any).__TAURI_INTERNALS__);
     const unsubscribe=media.subscribe(value=>liveMedia=value);
-    let disconnect:undefined|(()=>void);
     let disposed=false;
     let deferredFrame=0;
     let deferredTimers:ReturnType<typeof setTimeout>[]=[];
@@ -98,10 +139,6 @@
           deferredTimers=[
             setTimeout(()=>{
               if(disposed)return;
-              void connectMedia().then(stop=>{if(disposed)stop();else disconnect=stop}).catch(()=>{});
-            },100),
-            setTimeout(()=>{
-              if(disposed)return;
               void windowApi.getMonitors().then(value=>{if(!disposed)monitors=value}).catch(()=>{});
               void refreshSessions();
             },250),
@@ -122,7 +159,8 @@
       if(saveTimer)clearTimeout(saveTimer);
       void persist();
       unsubscribe();
-      disconnect?.();
+      liveMediaDisconnect?.();
+      liveMediaDisconnect=undefined;
     };
   });
   async function persist(){
@@ -133,8 +171,9 @@
     persistInFlight=(async()=>{
       while(persistPending){
         persistPending=false;
-        const snapshot={...settings};
-        await settingsApi.savePreferences(snapshot).catch(()=>{});
+        const patch={...pendingSettingsPatch};
+        pendingSettingsPatch={};
+        if(Object.keys(patch).length) await settingsApi.updateSettings(patch).catch(()=>{});
       }
     })().finally(()=>{persistInFlight=undefined});
     await persistInFlight;
@@ -155,19 +194,24 @@
     if(idlePreferenceRaf){cancelAnimationFrame(idlePreferenceRaf);idlePreferenceRaf=0}
     flushQueuedIdlePreference();
     settings={...settings,...patch};
+    pendingSettingsPatch={...pendingSettingsPatch,...patch};
     if(!nativeRuntime)return;
     schedulePersist();
   }
   function updatePreference(patch:Partial<AppPreferences>){commitPreference(patch)}
   async function setAlwaysOnTop(value:boolean){settings={...settings,alwaysOnTop:value};if(!nativeRuntime)return;await settingsApi.setAlwaysOnTop(value).catch(()=>{})}
   async function setAutoStart(value:boolean){settings={...settings,autoStart:value};if(nativeRuntime)await settingsApi.setAutoStart(value).catch(()=>{})}
-  function setIslandStyle(value:IslandStyle){updatePreference({islandStyle:value})}
-  function setIslandEdge(value:IslandEdge){updatePreference({islandEdge:value})}
-  function setIslandTheme(value:IslandTheme){updatePreference({islandTheme:value})}
-  function commitEdgePosition(){commitPreference({islandEdgePosition:draftEdgePosition})}
-  function commitCompactLength(){commitPreference({compactLength:draftCompactLength})}
-  function commitShoulderRadius(){commitPreference({edgeShoulderRadius:draftShoulderRadius})}
-  function commitRadius(){commitPreference({expandedCornerRadius:draftExpandedRadius})}
+  function resetAppearanceDraft(){appearanceDraft=createAppearanceDraft(settings);previewTarget=null}
+  async function applyAppearance(){
+    if(!appearanceDirty||applyingAppearance)return;
+    applyingAppearance=true;
+    try{
+      commitPreference({...appearanceDraft});
+      await persist();
+      syncAppearanceDrafts();
+      previewTarget=null;
+    }finally{applyingAppearance=false}
+  }
   function setFont(value:AppPreferences["fontId"]){applyAppFont(value);updatePreference({fontId:value})}
   function setLanguage(value:AppLanguage){setLocale(value);updatePreference({language:value})}
   function mergePlayerOrderIds(existing:string[],available:MediaSessionInfo[],selected:string[]|null){
@@ -227,50 +271,68 @@
   <div class="workspace">
     <section class="stage" aria-label={t("previewLabel")} bind:clientWidth={stageWidth} bind:clientHeight={stageHeight}>
       <div class="preview-host" style={`width:${previewHost.width}px;height:${previewHost.height}px;${previewPositionStyle}`}>
-        <IslandSurface media={sample} {mode} islandStyle={settings.islandStyle} edge={settings.islandEdge} position={sample.positionMs} expandedRadius={draftExpandedRadius} edgeShoulderRadius={draftShoulderRadius} compactLength={draftCompactLength} showSpectrum={settings.showSpectrum} spectrumMode={settings.spectrumMode} theme={settings.islandTheme} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} hardwareAcceleration={settings.hardwareAcceleration} accentColor="#fe2c55" secondaryColor="#5e5ce6" previewSpectrum={settings.spectrumMode==="realtime"?previewBars:undefined} frameRate={15} interactive simulateHidden isHidden={mode==="hidden"} enabledTools={previewTools} onTimerOpen={()=>{if(nativeRuntime)void windowApi.openTimerWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{followingLive=false;if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
+        <IslandSurface media={sample} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedRadius={appearanceDraft.expandedCornerRadius} edgeShoulderRadius={appearanceDraft.edgeShoulderRadius} compactLength={appearanceDraft.compactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} background={appearanceDraft.floatingUseAlbumColor ? "#000" : appearanceDraft.floatingFillColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} onTimerOpen={()=>{if(nativeRuntime)void windowApi.openTimerWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{stopLivePreview();if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
+      </div>
+      <div class="stage-caption" class:editing={previewTarget!==null} aria-live="polite">
+        <strong>{previewTarget?t("previewEditing"):t("previewReady")}{previewTarget?`：${previewTargetLabel(previewTarget)}`:""}</strong>
+        <span>{enumLabel(mode)} · {enumLabel(appearanceDraft.islandStyle)} · {enumLabel(appearanceDraft.islandEdge)} · {currentGeometry.width} × {currentGeometry.height} · r{currentGeometry.radius}</span>
       </div>
     </section>
     <aside>
       <section><h2>{t("previewState")}</h2><div class="segmented">{#each ["compact","hover","expanded","hidden"] as item}<button class:active={mode===item} onclick={()=>mode=item as IslandMode}>{enumLabel(item)}</button>{/each}</div></section>
       <section><h2>{t("islandLayout")}</h2>
-        <div class="field-label"><span>{t("shape")}</span><small>{t("shapeHint")}</small></div>
-        <div class="segmented two"><button aria-pressed={settings.islandStyle==="floating"} class:active={settings.islandStyle==="floating"} onclick={()=>setIslandStyle("floating")}>{t("floating")}</button><button aria-pressed={settings.islandStyle==="edge"} class:active={settings.islandStyle==="edge"} onclick={()=>setIslandStyle("edge")}>{t("attached")}</button></div>
-        <div class="field-label"><span>{t("screenEdge")}</span><small>{t("screenEdgeHint")}</small></div>
-        <div class="edge-grid">
-          <button aria-label={t("screenTop")} aria-pressed={settings.islandEdge==="top"} class:active={settings.islandEdge==="top"} onclick={()=>setIslandEdge("top")}><ArrowUp size={16}/>{t("top")}</button>
-          <button aria-label={t("screenRight")} aria-pressed={settings.islandEdge==="right"} class:active={settings.islandEdge==="right"} onclick={()=>setIslandEdge("right")}><ArrowRight size={16}/>{t("right")}</button>
-          <button aria-label={t("screenBottom")} aria-pressed={settings.islandEdge==="bottom"} class:active={settings.islandEdge==="bottom"} onclick={()=>setIslandEdge("bottom")}><ArrowDown size={16}/>{t("bottom")}</button>
-          <button aria-label={t("screenLeft")} aria-pressed={settings.islandEdge==="left"} class:active={settings.islandEdge==="left"} onclick={()=>setIslandEdge("left")}><ArrowLeft size={16}/>{t("left")}</button>
+        <div class="preview-setting" role="group" data-preview-target="shape" onmouseenter={()=>previewTarget="shape"} onfocusin={()=>previewTarget="shape"}>
+          <div class="field-label"><span>{t("shape")}</span><small>{t("shapeHint")}</small></div>
+          <div class="segmented two"><button aria-pressed={appearanceDraft.islandStyle==="floating"} class:active={appearanceDraft.islandStyle==="floating"} onclick={()=>{appearanceDraft.islandStyle="floating";previewTarget="shape"}}>{t("floating")}</button><button aria-pressed={appearanceDraft.islandStyle==="edge"} class:active={appearanceDraft.islandStyle==="edge"} onclick={()=>{appearanceDraft.islandStyle="edge";previewTarget="shape"}}>{t("attached")}</button></div>
         </div>
-        <label class="range-label"><span>{t("edgePosition")}</span><output>{draftEdgePosition}%</output></label>
-        <input aria-label={t("edgePosition")} type="range" min="0" max="100" step="1" bind:value={draftEdgePosition} onchange={commitEdgePosition}/>
-        <button class="center-button" onclick={()=>{draftEdgePosition=50;commitPreference({islandEdgePosition:50})}}>{t("center")}</button>
-        <label class="range-label"><span>{t("compactLength")}</span><output>{draftCompactLength}px</output></label>
-        <input aria-label={t("compactLength")} type="range" min="80" max="300" step="1" bind:value={draftCompactLength} onchange={commitCompactLength}/>
-        <label class="range-label"><span>{t("shoulder")}</span><output>{draftShoulderRadius}px</output></label>
-        <input aria-label={t("shoulder")} type="range" min="0" max="16" step="1" bind:value={draftShoulderRadius} onchange={commitShoulderRadius}/>
-         <label class="range-label"><span>{t("expandedRadius")}</span><output>{draftExpandedRadius}px</output></label>
-         <input aria-label={t("expandedRadius")} type="range" min="0" max="80" step="1" bind:value={draftExpandedRadius} onchange={commitRadius}/>
-         <div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.floatingUseAlbumColor} aria-pressed={settings.floatingUseAlbumColor} onclick={()=>updatePreference({floatingUseAlbumColor:!settings.floatingUseAlbumColor})}><span class="choice-mark" aria-hidden="true">{settings.floatingUseAlbumColor?"✓":""}</span><span class="choice-copy"><strong>{t("useAlbumColor")}</strong><small>{t("useAlbumColorHint")}</small></span></button></div>
-         <label class="select-row color-row"><span>{t("floatingBackground")}</span><input aria-label={t("floatingBackground")} type="color" value={settings.floatingFillColor} onchange={(e)=>updatePreference({floatingFillColor:e.currentTarget.value})}/></label>
-         <p class="hint">{t("floatingBackgroundHint")}</p>
-       </section>
-      <section><h2>{t("theme")}</h2><p class="hint">{t("themeHint")}</p><div class="segmented theme-options"><button aria-pressed={settings.islandTheme==="original"} class:active={settings.islandTheme==="original"} onclick={()=>setIslandTheme("original")}>{t("themeOriginal")}</button><button aria-pressed={settings.islandTheme==="shader-dial"} class:active={settings.islandTheme==="shader-dial"} onclick={()=>setIslandTheme("shader-dial")}>{t("themeShaderDial")}</button><button aria-pressed={settings.islandTheme==="album-reactive"} class:active={settings.islandTheme==="album-reactive"} onclick={()=>setIslandTheme("album-reactive")}>{t("themeAlbumReactive")}</button></div></section>
-      <section><h2>{t("language")}</h2><label class="select-row"><span>{t("language")}</span><select value={settings.language} onchange={(e)=>setLanguage(e.currentTarget.value as AppLanguage)}><option value="system">{t("systemLanguage")}</option><option value="zh-CN">{t("chinese")}</option><option value="en">{t("english")}</option><option value="ja">{t("japanese")}</option></select></label></section>
-      <section><h2>{t("clock")}</h2><label class="select-row"><span>{t("clock")}</span><select value={settings.clockTimeZone} onchange={(e)=>updatePreference({clockTimeZone:e.currentTarget.value})}><option value="system">{t("systemLanguage")}</option><option value="Asia/Taipei">Asia/Taipei</option><option value="Asia/Tokyo">Asia/Tokyo</option><option value="America/New_York">America/New_York</option><option value="Europe/London">Europe/London</option><option value="UTC">UTC</option></select></label></section>
-      <section><h2>{t("font")}</h2><label class="select-row"><span><Type size={17}/>{t("appFont")}</span><select value={settings.fontId} onchange={(e)=>setFont(e.currentTarget.value as AppPreferences["fontId"])}>{#each FONT_OPTIONS as font}<option value={font.id}>{font.id==="system"?t("systemDefault"):font.label}</option>{/each}</select></label><p class="hint">{t("fontHint")}</p></section>
+        <div class="preview-setting" role="group" data-preview-target="edge" onmouseenter={()=>previewTarget="edge"} onfocusin={()=>previewTarget="edge"}>
+          <div class="field-label"><span>{t("screenEdge")}</span><small>{t("screenEdgeHint")}</small></div>
+          <div class="edge-grid">
+            <button aria-label={t("screenTop")} aria-pressed={appearanceDraft.islandEdge==="top"} class:active={appearanceDraft.islandEdge==="top"} onclick={()=>{appearanceDraft.islandEdge="top";previewTarget="edge"}}><ArrowUp size={16}/>{t("top")}</button>
+            <button aria-label={t("screenRight")} aria-pressed={appearanceDraft.islandEdge==="right"} class:active={appearanceDraft.islandEdge==="right"} onclick={()=>{appearanceDraft.islandEdge="right";previewTarget="edge"}}><ArrowRight size={16}/>{t("right")}</button>
+            <button aria-label={t("screenBottom")} aria-pressed={appearanceDraft.islandEdge==="bottom"} class:active={appearanceDraft.islandEdge==="bottom"} onclick={()=>{appearanceDraft.islandEdge="bottom";previewTarget="edge"}}><ArrowDown size={16}/>{t("bottom")}</button>
+            <button aria-label={t("screenLeft")} aria-pressed={appearanceDraft.islandEdge==="left"} class:active={appearanceDraft.islandEdge==="left"} onclick={()=>{appearanceDraft.islandEdge="left";previewTarget="edge"}}><ArrowLeft size={16}/>{t("left")}</button>
+          </div>
+        </div>
+        <StudioSlider label={t("edgePosition")} min={0} max={100} unit="%" bind:value={appearanceDraft.islandEdgePosition} previewTarget={previewTarget === "position" ? "position" : null} onPreviewStart={()=>previewTarget="position"} onPreviewMove={()=>previewTarget="position"}/>
+        <button class="center-button" onclick={()=>{appearanceDraft.islandEdgePosition=50;previewTarget="position"}}>{t("center")}</button>
+        <StudioSlider label={t("compactLength")} hint={t("shapeHint")} min={80} max={300} unit="px" bind:value={appearanceDraft.compactLength} previewTarget={previewTarget === "compactLength" ? "compactLength" : null} onPreviewStart={()=>previewTarget="compactLength"} onPreviewMove={()=>previewTarget="compactLength"}/>
+        <StudioSlider label={t("shoulder")} min={0} max={16} unit="px" bind:value={appearanceDraft.edgeShoulderRadius} previewTarget={previewTarget === "shoulder" ? "shoulder" : null} onPreviewStart={()=>previewTarget="shoulder"} onPreviewMove={()=>previewTarget="shoulder"}/>
+        <StudioSlider label={t("expandedRadius")} min={0} max={80} unit="px" bind:value={appearanceDraft.expandedCornerRadius} previewTarget={previewTarget === "radius" ? "radius" : null} onPreviewStart={()=>previewTarget="radius"} onPreviewMove={()=>previewTarget="radius"}/>
+        <div class="preview-setting" role="group" data-preview-target="background" onmouseenter={()=>previewTarget="background"} onfocusin={()=>previewTarget="background"}>
+          <div class="setting-grid single"><button type="button" class="setting-choice" class:active={appearanceDraft.floatingUseAlbumColor} aria-pressed={appearanceDraft.floatingUseAlbumColor} onclick={()=>{appearanceDraft.floatingUseAlbumColor=!appearanceDraft.floatingUseAlbumColor;previewTarget="background"}}><span class="choice-mark" aria-hidden="true">{appearanceDraft.floatingUseAlbumColor?"✓":""}</span><span class="choice-copy"><strong>{t("useAlbumColor")}</strong><small>{t("useAlbumColorHint")}</small></span></button></div>
+          <label class="select-row color-row"><span>{t("floatingBackground")}</span><input aria-label={t("floatingBackground")} type="color" bind:value={appearanceDraft.floatingFillColor} oninput={()=>previewTarget="background"}/></label>
+          <p class="hint">{t("floatingBackgroundHint")}</p>
+        </div>
+        <div class="appearance-apply-bar" class:dirty={appearanceDirty}>
+          <div class="apply-state"><i aria-hidden="true"></i><span>{appearanceDirty?t("appearancePreviewing"):t("appearanceApplied")}</span></div>
+          <div class="apply-actions"><button type="button" class="reset-button" disabled={!appearanceDirty} onclick={resetAppearanceDraft}>{t("resetAppearance")}</button><button type="button" class="apply-button" disabled={!appearanceDirty||applyingAppearance} onclick={applyAppearance}>{applyingAppearance?t("applyingAppearance"):t("applyAppearance")}</button></div>
+        </div>
+      </section>
+      <section class="compact-select-section"><label class="compact-select-row"><span>{t("language")}</span><select aria-label={t("language")} value={settings.language} onchange={(e)=>setLanguage(e.currentTarget.value as AppLanguage)}><option value="system">{t("systemLanguage")}</option><option value="zh-CN">{t("chinese")}</option><option value="en">{t("english")}</option><option value="ja">{t("japanese")}</option></select></label></section>
+      <section class="compact-select-section"><label class="compact-select-row"><span>{t("clock")}</span><select aria-label={t("clock")} value={settings.clockTimeZone} onchange={(e)=>updatePreference({clockTimeZone:e.currentTarget.value})}><option value="system">{t("systemLanguage")}</option><option value="Asia/Taipei">Asia/Taipei</option><option value="Asia/Tokyo">Asia/Tokyo</option><option value="America/New_York">America/New_York</option><option value="Europe/London">Europe/London</option><option value="UTC">UTC</option></select></label></section>
+      <section class="compact-select-section"><label class="compact-select-row"><span>{t("font")}</span><select aria-label={t("font")} value={settings.fontId} onchange={(e)=>setFont(e.currentTarget.value as AppPreferences["fontId"])}>{#each FONT_OPTIONS as font}<option value={font.id}>{font.id==="system"?t("systemDefault"):font.label}</option>{/each}</select></label></section>
       <section><h2>{t("mediaScene")}</h2><div class="scenario-grid">
         <button class:active={!followingLive&&scenario==="playing"} onclick={()=>selectScenario("playing")}><Play size={17}/>{t("play")}</button><button class:active={!followingLive&&scenario==="paused"} onclick={()=>selectScenario("paused")}><Pause size={17}/>{t("pause")}</button><button class:active={!followingLive&&scenario==="no-art"} onclick={()=>selectScenario("no-art")}><ImageOff size={17}/>{t("noCover")}</button><button class:active={!followingLive&&scenario==="long-title"} onclick={()=>selectScenario("long-title")}><Type size={17}/>{t("longTitle")}</button>
-      </div>{#if nativeRuntime}<button class="follow-live" class:active={followingLive} onclick={()=>followingLive=true}>{t("followMusic")}</button>{/if}<label class="progress-label"><span>{t("playbackProgress",{percent:progress})}</span><output>{progress}%</output></label><input type="range" min="0" max="100" value={progress} oninput={(e)=>{progress=Number(e.currentTarget.value);followingLive=false}}/><div class="endpoints"><button onclick={()=>{progress=0;followingLive=false}}>0%</button><button onclick={()=>{progress=50;followingLive=false}}>50%</button><button onclick={()=>{progress=100;followingLive=false}}>100%</button></div></section>
-      <section><h2>{t("spectrum")}</h2><div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.showSpectrum} aria-pressed={settings.showSpectrum} onclick={()=>updatePreference({showSpectrum:!settings.showSpectrum})}><span class="choice-mark" aria-hidden="true">{settings.showSpectrum?"✓":""}</span><span class="choice-copy"><strong>{t("showSpectrum")}</strong><small>{t("showSpectrumHint")}</small></span></button></div>{#if settings.showSpectrum}<div class="field-label"><span>{t("animationSource")}</span><small>{t("animationSourceHint")}</small></div><div class="segmented two"><button aria-pressed={settings.spectrumMode==="realtime"} class:active={settings.spectrumMode==="realtime"} onclick={()=>updatePreference({spectrumMode:"realtime"})}>{t("realtime")}</button><button aria-pressed={settings.spectrumMode==="random"} class:active={settings.spectrumMode==="random"} onclick={()=>updatePreference({spectrumMode:"random"})}>{t("random")}</button></div>{/if}</section>
-      <section><h2>{t("featureTools")}</h2><p class="hint">{t("featureToolsHint")}</p><div class="setting-grid"><button type="button" class="setting-choice" class:active={settings.showFloatingTool} aria-pressed={settings.showFloatingTool} onclick={()=>updatePreference({showFloatingTool:!settings.showFloatingTool})}><span class="choice-mark" aria-hidden="true">{settings.showFloatingTool?"✓":""}</span><span class="choice-copy"><strong>{t("floatingTool")}</strong></span></button><button type="button" class="setting-choice" class:active={settings.showVolumeTool} aria-pressed={settings.showVolumeTool} onclick={()=>updatePreference({showVolumeTool:!settings.showVolumeTool})}><span class="choice-mark" aria-hidden="true">{settings.showVolumeTool?"✓":""}</span><span class="choice-copy"><strong>{t("volumeTool")}</strong></span></button><button type="button" class="setting-choice" class:active={settings.showTimerTool} aria-pressed={settings.showTimerTool} onclick={()=>updatePreference({showTimerTool:!settings.showTimerTool})}><span class="choice-mark" aria-hidden="true">{settings.showTimerTool?"✓":""}</span><span class="choice-copy"><strong>{t("timerTool")}</strong></span></button></div></section>
+      </div><StudioSlider label={t("playbackProgress",{percent:progress})} hideLabel showValue={false} min={0} max={100} bind:value={progress} onPreviewMove={stopLivePreview}/><div class="endpoints"><button onclick={()=>{progress=0;stopLivePreview()}}>0%</button><button onclick={()=>{progress=50;stopLivePreview()}}>50%</button><button onclick={()=>{progress=100;stopLivePreview()}}>100%</button></div></section>
+      <section><h2>{t("spectrum")}</h2><div class="preview-setting" role="group" data-preview-target="spectrum" onmouseenter={()=>previewTarget="spectrum"} onfocusin={()=>previewTarget="spectrum"}><div class="setting-grid single"><button type="button" class="setting-choice" class:active={appearanceDraft.showSpectrum} aria-pressed={appearanceDraft.showSpectrum} onclick={()=>{appearanceDraft.showSpectrum=!appearanceDraft.showSpectrum;previewTarget="spectrum"}}><span class="choice-mark" aria-hidden="true">{appearanceDraft.showSpectrum?"✓":""}</span><span class="choice-copy"><strong>{t("showSpectrum")}</strong><small>{t("showSpectrumHint")}</small></span></button></div>{#if appearanceDraft.showSpectrum}<div class="field-label"><span>{t("animationSource")}</span><small>{t("animationSourceHint")}</small></div><div class="segmented two"><button aria-pressed={appearanceDraft.spectrumMode==="realtime"} class:active={appearanceDraft.spectrumMode==="realtime"} onclick={()=>{appearanceDraft.spectrumMode="realtime";previewTarget="spectrum"}}>{t("realtime")}</button><button aria-pressed={appearanceDraft.spectrumMode==="random"} class:active={appearanceDraft.spectrumMode==="random"} onclick={()=>{appearanceDraft.spectrumMode="random";previewTarget="spectrum"}}>{t("random")}</button></div>{/if}</div></section>
+      <section><h2>{t("featureTools")}</h2><p class="hint">{t("featureToolsHint")}</p><div class="setting-grid"><button type="button" class="setting-choice" class:active={settings.showFloatingTool} aria-pressed={settings.showFloatingTool} onclick={()=>updatePreference({showFloatingTool:!settings.showFloatingTool})}><span class="choice-mark" aria-hidden="true">{settings.showFloatingTool?"✓":""}</span><span class="choice-copy"><strong>{t("floatingTool")}</strong></span></button><button type="button" class="setting-choice" class:active={settings.showTimerTool} aria-pressed={settings.showTimerTool} onclick={()=>updatePreference({showTimerTool:!settings.showTimerTool})}><span class="choice-mark" aria-hidden="true">{settings.showTimerTool?"✓":""}</span><span class="choice-copy"><strong>{t("timerTool")}</strong></span></button></div></section>
       <section><div class="section-title"><h2>{t("players")}</h2><button class="icon-button" aria-label={t("refreshPlayers")} disabled={!nativeRuntime} onclick={refreshSessions}><RefreshCw size={15}/></button></div><p class="hint">{t("playersHint")}</p>
         <div class="ordered-list">{#each playerRows.selected as player,index (player.id)}<div class="ordered-row" class:offline={!sessions.some(item=>item.id===player.id)}><button type="button" class="player-selection" role="checkbox" aria-checked="true" aria-label={t("select",{name:player.displayName})} onclick={()=>togglePlayer(player.id,false)}><span class="choice-mark" aria-hidden="true">✓</span></button><span><strong>{player.displayName}</strong><small>{player.isPlaying?t("playingNow"):sessions.some(item=>item.id===player.id)?t("detected"):t("offline")}</small></span><button aria-label={t("moveUp")} disabled={index===0} onclick={()=>movePlayer(player.id,-1)}><ChevronUp size={14}/></button><button aria-label={t("moveDown")} disabled={index===playerRows.selected.length-1} onclick={()=>movePlayer(player.id,1)}><ChevronDown size={14}/></button></div>{/each}{#each playerRows.unselected as player (player.id)}<div class="ordered-row" class:offline={!sessions.some(item=>item.id===player.id)}><button type="button" class="player-selection" role="checkbox" aria-checked="false" aria-label={t("select",{name:player.displayName})} onclick={()=>togglePlayer(player.id,true)}><span class="choice-mark" aria-hidden="true"></span></button><span><strong>{player.displayName}</strong><small>{player.isPlaying?t("playingNow"):sessions.some(item=>item.id===player.id)?t("detected"):t("offline")}</small></span></div>{/each}{#if !playerRows.selected.length&&!playerRows.unselected.length}<p class="empty">{t("noSessions")}</p>{/if}</div>
       </section>
       <section><h2>{t("idleContent")}</h2>
         <div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.idleContentEnabled} aria-pressed={settings.idleContentEnabled} onclick={()=>updatePreference({idleContentEnabled:!settings.idleContentEnabled})}><span class="choice-mark" aria-hidden="true">{settings.idleContentEnabled?"✓":""}</span><span class="choice-copy"><strong>{t("enableIdle")}</strong><small>{t("enableIdleHint")}</small></span></button></div>
         {#if settings.idleContentEnabled}
-          <label class="range-label"><span>{t("interval")}</span><output>{t("seconds",{value:settings.idleRotationSeconds})}</output></label><input aria-label={t("idleInterval")} type="range" min="2" max="60" value={settings.idleRotationSeconds} oninput={(e)=>queueIdlePreferenceUpdate({idleRotationSeconds:Number(e.currentTarget.value)})} onchange={(e)=>commitPreference({idleRotationSeconds:Number(e.currentTarget.value)})}/>
+          <StudioSlider
+            label={t("interval")}
+            hint={t("idleInterval")}
+            min={2}
+            max={60}
+            unit="s"
+            value={settings.idleRotationSeconds}
+            onPreviewMove={(value) => queueIdlePreferenceUpdate({idleRotationSeconds: value})}
+            onPreviewEnd={(value) => commitPreference({idleRotationSeconds: value})}
+          />
           <div class="ordered-list idle-list">{#each settings.idleItems as item,index (item.id)}<div class="ordered-row idle-row"><button type="button" class="mini-choice" class:active={item.enabled} role="checkbox" aria-checked={item.enabled} aria-label={t("enableItem",{name:idleLabel(item.kind)})} onclick={()=>patchIdle(item.id,{enabled:!item.enabled})}><span class="choice-mark" aria-hidden="true">{item.enabled?"✓":""}</span></button><span><strong>{idleLabel(item.kind)}</strong>{#if item.kind==="custom"}<input aria-label={t("customText")} maxlength="120" value={item.text} oninput={(e)=>updateIdleText(item.id,e.currentTarget.value)} onchange={commitIdleText} onblur={commitIdleText}/>{/if}</span><button aria-label={t("moveUp")} disabled={index===0} onclick={()=>moveIdle(item.id,-1)}><ChevronUp size={14}/></button><button aria-label={t("moveDown")} disabled={index===settings.idleItems.length-1} onclick={()=>moveIdle(item.id,1)}><ChevronDown size={14}/></button>{#if item.kind==="custom"}<button aria-label={t("deleteCustom")} onclick={()=>removeIdle(item.id)}><X size={14}/></button>{/if}</div>{/each}</div>
           <button class="center-button add-button" onclick={addCustom}><Plus size={15}/>{t("addCustom")}</button>
           <div class="weather-box"><label for="weather-city">{t("weatherCity")}</label><div class="search-row"><input id="weather-city" placeholder={t("cityExample")} bind:value={weatherQuery} onkeydown={(e)=>{if(e.key==="Enter")void searchWeather()}}/><button aria-label={t("searchCity")} onclick={searchWeather}><Search size={15}/></button></div>{#if settings.weatherLocation}<p class="selected-city">{t("currentCity",{name:settings.weatherLocation.name})}</p>{/if}{#if weatherMessage}<p class="message">{weatherMessage}</p>{/if}{#if weatherResults.length}<div class="weather-results">{#each weatherResults as item}<button onclick={()=>selectWeather(item)}><strong>{item.name}</strong><small>{weatherCandidateDetail(item)}</small></button>{/each}</div>{/if}<p class="hint">{t("weatherSource")}</p></div>
@@ -297,11 +359,10 @@
 
 <style>
   :global(html),:global(body),:global(#app){min-width:780px;min-height:600px;background:#fff;color:#111113} :global(body){overflow:auto}
-  main{min-height:100vh;padding:24px 44px 44px;box-sizing:border-box;background:#fff}.workspace{max-width:1180px;margin:auto;display:grid;grid-template-columns:minmax(420px,1fr) 320px;gap:20px;align-items:start}.workspace aside{width:100%}.stage{position:sticky;top:20px;height:340px;display:flex;align-items:center;justify-content:center;border:1px solid #e8e8eb;border-radius:24px;background:#fff;box-shadow:0 8px 24px rgba(20,20,26,.05);overflow:hidden;contain:layout paint;isolation:isolate}.preview-host{position:absolute;z-index:1;top:0;left:0;transform-origin:top left;will-change:transform}.stage :global(.island-surface){z-index:1}
-  aside{display:flex;flex-direction:column;gap:12px}aside section{padding:18px;border-radius:16px;background:#f5f5f7}h2{margin:0 0 13px;font-size:12px;letter-spacing:.01em}.segmented{display:grid;grid-template-columns:repeat(4,1fr);padding:3px;border-radius:11px;background:#e9e9ec}.segmented.two{grid-template-columns:repeat(2,1fr)}.segmented button,.endpoints button{border:0;background:transparent;color:#66666e;font-size:10px}.segmented button{min-height:32px;padding:7px 4px;border-radius:8px}.segmented button.active{color:#111;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.08)}.field-label,.range-label{display:flex;align-items:baseline;justify-content:space-between;margin:14px 0 8px;font-size:11px}.field-label:first-of-type{margin-top:0}.field-label small{color:#777780;font-size:9px}.range-label output{color:#66666e;font-variant-numeric:tabular-nums}.edge-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.edge-grid button{min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:1px solid transparent;border-radius:10px;color:#66666e;background:#fff;font-size:10px;cursor:pointer}.edge-grid button.active{color:#fff;background:#111113}.center-button{width:100%;min-height:36px;margin-top:7px;border:0;border-radius:10px;color:#414148;background:#fff;cursor:pointer}
-  input[type="range"]{width:100%;accent-color:#111113}
-   .select-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-top:1px solid #e5e5e8}.select-row span{display:flex;align-items:center;gap:8px;font-size:12px}.select-row select{max-width:160px;border:0;border-radius:8px;padding:6px 8px;background:#fff}.color-row input[type=color]{width:44px;height:28px;padding:3px;border:1px solid #d7d7dc;border-radius:8px;background:#fff;cursor:pointer}
-  .section-title{display:flex;align-items:center;justify-content:space-between}.section-title h2{margin:0}.icon-button,.ordered-row button,.search-row button{display:grid;place-items:center;border:0;border-radius:8px;background:#fff;color:#414148;cursor:pointer}.icon-button{width:30px;height:30px}.hint,.empty{margin:7px 0;color:#777780;font-size:10px;line-height:1.45}.ordered-list{display:flex;flex-direction:column;gap:6px;margin-top:11px}.ordered-row{display:flex;align-items:center;gap:7px;min-height:42px;padding:7px;border-radius:10px;background:#fff}.ordered-row.offline{opacity:.62}.ordered-row>span{min-width:0;display:flex;flex:1;flex-direction:column;gap:2px}.ordered-row strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}.ordered-row small{color:#777780;font-size:9px}.ordered-row button{width:27px;height:27px}.idle-list{margin-top:14px}.idle-row>span>input{width:100%;min-width:0;border:1px solid #dddde1;border-radius:7px;padding:5px 7px;font-size:10px}.add-button{display:flex;align-items:center;justify-content:center;gap:6px}.weather-box{margin-top:14px;padding-top:13px;border-top:1px solid #e2e2e5}.weather-box>label{font-size:11px;font-weight:600}.search-row{display:grid;grid-template-columns:1fr 34px;gap:6px;margin-top:7px}.search-row input{min-width:0;border:1px solid #dddde1;border-radius:9px;padding:8px}.selected-city{margin:7px 0 0;font-size:10px;color:#39724a}.weather-results{display:flex;flex-direction:column;gap:4px;margin-top:7px}.weather-results button{display:flex;align-items:center;justify-content:space-between;border:0;border-radius:8px;padding:8px;background:#fff;text-align:left;cursor:pointer}.weather-results small{color:#777780}.scenario-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.scenario-grid button,.tool-list button,.follow-live{display:flex;align-items:center;gap:8px;border:0;border-radius:11px;color:#414148;background:#fff;cursor:pointer}.scenario-grid button{padding:10px}.scenario-grid button.active{color:#fff;background:#111113}.follow-live{width:100%;justify-content:center;margin-top:8px;padding:9px;font-size:11px}.follow-live.active{color:#25713a;background:#eefaf0}.progress-label{display:flex;justify-content:space-between;margin-top:16px;font-size:11px}.progress-label output{font-variant-numeric:tabular-nums;color:#6b6b72}.endpoints{display:flex;justify-content:space-between}.tool-list{display:flex;flex-direction:column;gap:7px}.tool-list button{padding:10px 11px}.tool-list button:active,.scenario-grid button:active,.edge-grid button:active,.center-button:active{transform:scale(.98)}button:disabled,select:disabled,input:disabled{cursor:not-allowed;opacity:.45}.message{margin:10px 0 0;color:#39724a;font-size:11px}.segmented button:focus-visible,.scenario-grid button:focus-visible,.edge-grid button:focus-visible,.center-button:focus-visible,.tool-list button:focus-visible,.icon-button:focus-visible,.ordered-row button:focus-visible,.weather-results button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #111;outline-offset:2px}@media(max-width:848px){:global(html),:global(body),:global(#app){min-width:0}main{padding:24px}.workspace{grid-template-columns:1fr}.stage{position:relative;top:0;min-height:420px}}
+  main{min-height:100vh;padding:24px 44px 44px;box-sizing:border-box;background:#fff}.workspace{max-width:1180px;margin:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}.workspace aside{width:100%;min-width:0}.stage{position:sticky;top:20px;height:260px;display:flex;align-items:center;justify-content:center;border:1px solid #e8e8eb;border-radius:24px;background:#fff;box-shadow:0 8px 24px rgba(20,20,26,.05);overflow:hidden;contain:layout paint;isolation:isolate}.preview-host{position:absolute;z-index:1;top:0;left:0;transform-origin:top left;will-change:transform}.stage :global(.island-surface){z-index:1}.stage-caption{position:absolute;z-index:3;left:18px;right:18px;bottom:16px;display:flex;align-items:center;justify-content:center;gap:7px;min-width:0;color:#777780;font-size:9px;pointer-events:none}.stage-caption strong{max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:600}.stage-caption span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}.stage-caption.editing{color:#7c3aed}.stage-caption.editing strong{color:#6d28d9}
+  aside{display:flex;flex-direction:column;gap:12px}aside section{padding:18px;border-radius:16px;background:#f5f5f7;content-visibility:auto;contain-intrinsic-size:auto 180px}h2{margin:0 0 13px;font-size:12px;letter-spacing:.01em}.segmented{display:grid;grid-template-columns:repeat(4,1fr);padding:3px;border-radius:11px;background:#e9e9ec}.segmented.two{grid-template-columns:repeat(2,1fr)}.segmented button,.endpoints button{border:0;background:transparent;color:#66666e;font-size:10px}.segmented button{min-height:32px;padding:7px 4px;border-radius:8px}.segmented button.active{color:#111;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.08)}.field-label{display:flex;align-items:baseline;justify-content:space-between;margin:14px 0 8px;font-size:11px}.field-label:first-of-type{margin-top:0}.field-label small{color:#777780;font-size:9px}.edge-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.edge-grid button{min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:1px solid transparent;border-radius:10px;color:#66666e;background:#fff;font-size:10px;cursor:pointer}.edge-grid button.active{color:#fff;background:#111113}.center-button{width:100%;min-height:36px;margin-top:7px;border:0;border-radius:10px;color:#414148;background:#fff;cursor:pointer}
+  .select-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-top:1px solid #e5e5e8}.select-row span{display:flex;align-items:center;gap:8px;font-size:12px}.select-row select{max-width:160px;margin-left:auto;border:0;border-radius:8px;padding:6px 8px;background:#fff}.compact-select-row{display:flex;align-items:center;justify-content:space-between;gap:12px}.compact-select-row span{font-size:12px}.compact-select-row select{min-width:0;max-width:160px;margin-left:auto;border:0;border-radius:8px;padding:6px 8px;background:#fff}.color-row input[type=color]{width:44px;height:28px;padding:3px;border:1px solid #d7d7dc;border-radius:8px;background:#fff;cursor:pointer}
+  .section-title{display:flex;align-items:center;justify-content:space-between}.section-title h2{margin:0}.icon-button,.ordered-row button,.search-row button{display:grid;place-items:center;border:0;border-radius:8px;background:#fff;color:#414148;cursor:pointer}.icon-button{width:30px;height:30px}.hint,.empty{margin:7px 0;color:#777780;font-size:10px;line-height:1.45}.ordered-list{display:flex;flex-direction:column;gap:6px;margin-top:11px}.ordered-row{display:flex;align-items:center;gap:7px;min-height:42px;padding:7px;border-radius:10px;background:#fff}.ordered-row.offline{opacity:.62}.ordered-row>span{min-width:0;display:flex;flex:1;flex-direction:column;gap:2px}.ordered-row strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}.ordered-row small{color:#777780;font-size:9px}.ordered-row button{width:27px;height:27px}.idle-list{margin-top:14px}.idle-row>span>input{width:100%;min-width:0;border:1px solid #dddde1;border-radius:7px;padding:5px 7px;font-size:10px}.add-button{display:flex;align-items:center;justify-content:center;gap:6px}.weather-box{margin-top:14px;padding-top:13px;border-top:1px solid #e2e2e5}.weather-box>label{font-size:11px;font-weight:600}.search-row{display:grid;grid-template-columns:1fr 34px;gap:6px;margin-top:7px}.search-row input{min-width:0;border:1px solid #dddde1;border-radius:9px;padding:8px}.selected-city{margin:7px 0 0;font-size:10px;color:#39724a}.weather-results{display:flex;flex-direction:column;gap:4px;margin-top:7px}.weather-results button{display:flex;align-items:center;justify-content:space-between;border:0;border-radius:8px;padding:8px;background:#fff;text-align:left;cursor:pointer}.weather-results small{color:#777780}.scenario-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.scenario-grid button,.tool-list button{display:flex;align-items:center;gap:8px;border:0;border-radius:11px;color:#414148;background:#fff;cursor:pointer}.scenario-grid button{padding:10px}.scenario-grid button.active{color:#fff;background:#111113}.endpoints{display:flex;justify-content:space-between}.tool-list{display:flex;flex-direction:column;gap:7px}.tool-list button{padding:10px 11px}.tool-list button:active,.scenario-grid button:active,.edge-grid button:active,.center-button:active{transform:scale(.98)}button:disabled,select:disabled,input:disabled{cursor:not-allowed;opacity:.45}.message{margin:10px 0 0;color:#39724a;font-size:11px}.segmented button:focus-visible,.scenario-grid button:focus-visible,.edge-grid button:focus-visible,.center-button:focus-visible,.tool-list button:focus-visible,.icon-button:focus-visible,.ordered-row button:focus-visible,.weather-results button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #111;outline-offset:2px}@media(max-width:848px){:global(html),:global(body),:global(#app){min-width:0}main{padding:24px}.workspace{grid-template-columns:1fr}.stage{position:relative;top:0;min-height:300px}}
    .setting-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.setting-grid.single{grid-template-columns:1fr}.setting-choice{min-width:0;min-height:66px;display:flex;align-items:flex-start;gap:8px;padding:11px;border:1px solid #e1e1e5;border-radius:11px;color:#36363d;background:#fff;text-align:left;cursor:pointer;transition:transform 120ms ease,background 140ms ease,border-color 140ms ease,color 140ms ease}.setting-choice.active{border-color:#111113;color:#fff;background:#111113}.setting-choice:active{transform:scale(.98)}.setting-choice:disabled{cursor:not-allowed}.choice-mark{display:grid;place-items:center;flex:none;width:17px;height:17px;margin-top:1px;border:1px solid #bdbdc4;border-radius:5px;color:transparent;font-size:11px;font-weight:800;line-height:1}.setting-choice.active .choice-mark,.mini-choice.active .choice-mark,.player-selection .choice-mark{border-color:#fff;color:#111113;background:#fff}.choice-copy{min-width:0;display:flex;flex-direction:column;gap:4px}.choice-copy strong{font-size:11px;line-height:1.2}.choice-copy small{color:#777780;font-size:9px;line-height:1.35}.setting-choice.active .choice-copy small{color:rgba(255,255,255,.68)}.player-selection{width:27px!important;height:27px!important;padding:0!important;border:0!important;background:transparent!important}.player-selection .choice-mark{width:17px;height:17px;margin:0}.mini-choice{width:27px!important;height:27px!important;padding:0!important;border:0!important;background:transparent!important}.mini-choice.active .choice-mark{border-color:#111113;color:#fff;background:#111113}.setting-choice:focus-visible,.player-selection:focus-visible,.mini-choice:focus-visible{outline:2px solid #111;outline-offset:2px}.player-selection:focus-visible{outline-color:#111}.setting-choice.active:focus-visible{outline-color:#fff}
-  .segmented.theme-options{grid-template-columns:repeat(3,1fr)}
+  .appearance-apply-bar{position:sticky;bottom:12px;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:18px;padding:10px;border:1px solid #dedee3;border-radius:12px;background:#fff;box-shadow:0 8px 26px rgba(0,0,0,.08)}.apply-state{display:flex;align-items:center;gap:6px;min-width:0;color:#777780;font-size:10px}.apply-state i{width:6px;height:6px;flex:none;border-radius:50%;background:#b7b7be}.appearance-apply-bar.dirty .apply-state{color:#7c3aed}.appearance-apply-bar.dirty .apply-state i{background:#8b5cf6;box-shadow:0 0 0 4px rgba(139,92,246,.12)}.apply-actions{display:flex;gap:6px}.reset-button,.apply-button{height:30px;padding:0 12px;border:0;border-radius:8px;font:600 10px/1 var(--app-font);cursor:pointer}.reset-button{color:#55555d;background:#f0f0f2}.apply-button{color:#fff;background:#111113}.reset-button:disabled,.apply-button:disabled{opacity:.38;cursor:default}.appearance-apply-bar button:focus-visible{outline:2px solid #111;outline-offset:2px}
 </style>

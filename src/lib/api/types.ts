@@ -1,11 +1,9 @@
 export type IslandStyle = "floating" | "edge";
 export type IslandEdge = "top" | "right" | "bottom" | "left";
-export type IslandTheme = "original" | "shader-dial" | "album-reactive";
 export type SpectrumMode = "realtime" | "random";
 export type AppLanguage = "system" | "zh-CN" | "en" | "ja";
 
 export interface AppSettings {
-  islandTheme: IslandTheme;
   islandStyle: IslandStyle;
   islandEdge: IslandEdge;
   islandEdgePosition: number;
@@ -22,7 +20,6 @@ export interface AppSettings {
   enableAnimations: boolean;
   windowOpacity: number;
   alwaysOnTop: boolean;
-  hardwareAcceleration: boolean;
   reduceAnimations: boolean;
   showDebugInfo: boolean;
   logLevel: string;
@@ -41,7 +38,6 @@ export interface AppSettings {
   floatingFillColor: string;
   floatingUseAlbumColor: boolean;
   showFloatingTool: boolean;
-  showVolumeTool: boolean;
   showTimerTool: boolean;
   enableMvPlayback: boolean;
   lockFloatingWindow: boolean;
@@ -156,14 +152,13 @@ export interface AppError {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  islandTheme: "original",
   islandStyle: "floating",
   islandEdge: "top",
   islandEdgePosition: 50,
   edgeShoulderRadius: 8,
   compactLength: 80,
   language: "system",
-  fontId: "system",
+  fontId: "misans",
   captureHideOnScreenshot: true,
   captureHideOnRecording: true,
   captureHideOnFullscreen: true,
@@ -173,7 +168,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   enableAnimations: true,
   windowOpacity: 255,
   alwaysOnTop: true,
-  hardwareAcceleration: true,
   reduceAnimations: false,
   showDebugInfo: false,
   logLevel: "Info",
@@ -204,7 +198,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   floatingFillColor: "#28323c",
   floatingUseAlbumColor: true,
   showFloatingTool: true,
-  showVolumeTool: true,
   showTimerTool: true,
   enableMvPlayback: true,
   lockFloatingWindow: false,

@@ -35,6 +35,23 @@
         "visible": true,
         "focus": true,
         "center": false
+      },
+      {
+        "label": "timer_window",
+        "url": "index.html?window=timer",
+        "title": "Timer",
+        "width": 448,
+        "height": 512,
+        "minWidth": 360,
+        "minHeight": 400,
+        "resizable": true,
+        "decorations": false,
+        "shadow": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "focus": false,
+        "center": true
       }
     ]
   },

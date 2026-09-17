@@ -77,8 +77,6 @@ pub const EVENT_SETTINGS_UPDATED: &str = "settings-updated";
 /// 单个设置项变更时触发
 pub const EVENT_SETTINGS_CHANGED: &str = "settings-changed";
 
-#[allow(dead_code)]
-pub const EVENT_THEME_CHANGED: &str = "theme-changed";
 pub const EVENT_CORNER_RADIUS_CHANGED: &str = "corner-radius-changed";
 pub const EVENT_LOCK_FLOATING_WINDOW_CHANGED: &str = "lock-floating-window-changed";
 pub const EVENT_ALWAYS_ON_TOP_CHANGED: &str = "always-on-top-changed";
@@ -91,7 +89,6 @@ pub const EVENT_MV_PLAYBACK_CHANGED: &str = "mv-playback-changed";
 pub const EVENT_FLOATING_WINDOW_CLOSED: &str = "floating-window-closed";
 
 pub const EVENT_CAPTURE_MODE_CHANGED: &str = "capture-mode-changed";
-pub const EVENT_SYSTEM_AUDIO_CHANGED: &str = "system-audio-changed";
 
 // ============================================================================
 // 事件优先级

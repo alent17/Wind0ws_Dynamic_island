@@ -8,18 +8,34 @@ use serde::{Deserialize, Serialize};
 ///
 /// 记录缓存文件的详细信息
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
 #[serde(rename_all = "camelCase")]
 pub struct CacheMetadata {
     /// 缓存键（URL 哈希值）
     pub key: String,
     /// 文件路径
     pub file_path: String,
-    /// 创建时间戳（毫秒）
+    /// 创建时间戳（秒）
     pub created_at: u64,
+    /// 最近一次命中时间戳（秒）
+    pub last_accessed_at: u64,
     /// 文件大小（字节）
     pub size: u64,
     /// 内容类型（如 image/jpeg, video/mp4）
     pub content_type: String,
+}
+
+impl Default for CacheMetadata {
+    fn default() -> Self {
+        Self {
+            key: String::new(),
+            file_path: String::new(),
+            created_at: 0,
+            last_accessed_at: 0,
+            size: 0,
+            content_type: String::new(),
+        }
+    }
 }
 
 /// 缓存统计信息

@@ -35,4 +35,5 @@ temp_app.svelte
 
 # Tauri build
 src-tauri/target
+src-tauri/target-idle-fix
 src-tauri/gen

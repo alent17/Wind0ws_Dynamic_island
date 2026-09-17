@@ -8,7 +8,7 @@ const stacks: Record<FontId, string> = {
 };
 
 export function applyAppFont(fontId: FontId | string | undefined) {
-  const resolved = (fontId && fontId in stacks ? fontId : "system") as FontId;
+  const resolved = (fontId && fontId in stacks ? fontId : "misans") as FontId;
   document.documentElement.style.setProperty("--app-font", stacks[resolved]);
 }
 

@@ -9,11 +9,9 @@ export const settingsApi = {
   getSettings: () => invoke<AppSettings>("get_settings"),
   saveSettings: (settings: AppSettings) =>
     invoke<void>("save_settings", { settings }),
-  updateSettings: (settings: Partial<AppSettings>) =>
-    invoke<void>("update_settings", { settings }),
+  updateSettings: (patch: Partial<AppSettings>) =>
+    invoke<void>("update_settings", { patch }),
 
-  setTheme: (theme: string) => invoke<void>("set_theme", { theme }),
-  getTheme: () => invoke<string>("get_theme"),
   setAlwaysOnTop: (enable: boolean) =>
     invoke<void>("set_always_on_top", { enable }),
   setWindowOpacity: (opacity: number) =>

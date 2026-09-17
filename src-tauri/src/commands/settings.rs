@@ -70,7 +70,7 @@ pub async fn save_settings(
         settings.font_id.as_str(),
         "system" | "misans" | "source-han-serif-cn-bold" | "alibaba-puhuiti-heavy"
     ) {
-        settings.font_id = "system".to_string();
+        settings.font_id = "misans".to_string();
     }
     if let Some(ids) = settings.selected_player_ids.as_mut() {
         let mut seen = std::collections::HashSet::new();
@@ -198,6 +198,38 @@ pub async fn save_settings(
     Ok(())
 }
 
+/// Apply only the changed settings fields. The in-memory settings are merged
+/// first so validation, side effects, and the settings-updated event remain
+/// identical to a regular save while Studio avoids sending a full snapshot
+/// for every small preference change.
+#[tauri::command]
+pub async fn update_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    patch: serde_json::Value,
+) -> AppResult<()> {
+    let patch_object = patch
+        .as_object()
+        .ok_or_else(|| AppError::business(3001, "设置补丁必须是对象"))?;
+    let current = {
+        let settings = state
+            .settings
+            .lock()
+            .map_err(|_| AppError::lock("Failed to lock settings"))?;
+        serde_json::to_value(settings.clone()).map_err(AppError::Serialization)?
+    };
+    let mut merged = current
+        .as_object()
+        .cloned()
+        .ok_or_else(|| AppError::config("当前设置格式无效"))?;
+    for (key, value) in patch_object {
+        merged.insert(key.clone(), value.clone());
+    }
+    let settings = serde_json::from_value(serde_json::Value::Object(merged))
+        .map_err(AppError::Serialization)?;
+    save_settings(app, state, settings).await
+}
+
 /// Current Isle Studio compatibility endpoint. Both surfaces intentionally
 /// persist the same complete settings object.
 #[tauri::command]
@@ -207,28 +239,6 @@ pub async fn save_preferences(
     preferences: AppPreferences,
 ) -> AppResult<()> {
     save_settings(app, state, preferences).await
-}
-
-/// 设置主题
-#[tauri::command]
-pub fn set_theme(app: AppHandle, state: State<'_, AppState>, theme: String) -> AppResult<()> {
-    let mut settings = state
-        .settings
-        .lock()
-        .map_err(|_| AppError::lock("Failed to lock settings"))?;
-    settings.island_theme = theme.clone();
-    write_settings_file(&app, &settings)?;
-    Ok(())
-}
-
-/// 获取当前主题
-#[tauri::command]
-pub fn get_theme(state: State<'_, AppState>) -> AppResult<String> {
-    let settings = state
-        .settings
-        .lock()
-        .map_err(|_| AppError::lock("Failed to lock settings"))?;
-    Ok(settings.island_theme.clone())
 }
 
 /// 设置窗口置顶

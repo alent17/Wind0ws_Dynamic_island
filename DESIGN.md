@@ -10,11 +10,11 @@ colors:
   studio-hairline: "#e5e5e8"
 typography:
   title:
-    fontFamily: "SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontFamily: "MiSans, Segoe UI, sans-serif"
     fontSize: "18px"
     fontWeight: 700
   body:
-    fontFamily: "SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontFamily: "MiSans, Segoe UI, sans-serif"
     fontSize: "14px"
 rounded:
   island-compact: "14px"
@@ -56,7 +56,7 @@ The production player surfaces use the project's original visual language. The m
 - Compact content uses a 20 px cover and six-bar Canvas spectrum.
 - Expanded content uses a 52 px cover, marquee title, artist, larger spectrum, source progress, three playback buttons, and the floating-player button.
 - Width, height, opacity, and content changes use the original Svelte spring and drop/flip motion.
-- Original theme, configurable expanded radius, auto-hide, reduced-motion, and debug-display behavior are retained.
+- The original black visual style, configurable expanded radius, auto-hide, reduced-motion, and debug-display behavior are retained.
 
 ## Floating Player
 

@@ -1,21 +1,50 @@
-<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" rx="128" fill="#0F172A"/>
-  <!-- 灵动岛圆角矩形 -->
-  <rect x="96" y="184" width="320" height="144" rx="72" fill="url(#gradIsland)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
-    <linearGradient id="gradIsland" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
-      <stop stop-color="#2D3E5F"/>
-      <stop offset="1" stop-color="#1E2A3A"/>
+    <linearGradient id="bg" x1="54" y1="32" x2="456" y2="488" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#142A4A"/>
+      <stop offset="0.52" stop-color="#091B36"/>
+      <stop offset="1" stop-color="#050F24"/>
     </linearGradient>
+    <linearGradient id="edge" x1="120" y1="196" x2="392" y2="332" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A6B5FF"/>
+      <stop offset="0.45" stop-color="#63E8FF"/>
+      <stop offset="1" stop-color="#43B4FF"/>
+    </linearGradient>
+    <linearGradient id="island" x1="124" y1="190" x2="390" y2="324" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#162B4C"/>
+      <stop offset="1" stop-color="#020A18"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="164" y1="206" x2="308" y2="266" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D8E8FF" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#8CA9D6" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientTransform="translate(256 256) rotate(90) scale(210)">
+      <stop stop-color="#31D8FF" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#31D8FF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softGlow" x="-30%" y="-60%" width="160%" height="220%">
+      <feGaussianBlur stdDeviation="9" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="dotGlow" x="-200%" y="-200%" width="500%" height="500%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
-  <!-- 声波涟漪（从灵动岛扩散到悬浮窗） -->
-  <circle cx="256" cy="256" r="80" stroke="#5EE0FA" stroke-width="3" fill="none" stroke-dasharray="4 6"/>
-  <circle cx="256" cy="256" r="110" stroke="#5EE0FA" stroke-width="2" fill="none" stroke-dasharray="4 8"/>
-  <circle cx="256" cy="256" r="140" stroke="#5EE0FA" stroke-width="1.5" fill="none" stroke-dasharray="6 10"/>
-  <!-- 悬浮窗（回声点） -->
-  <rect x="340" y="120" width="96" height="96" rx="28" fill="#5EE0FA" opacity="0.9"/>
-  <path d="M388 168 L396 160 L404 168 L396 176 Z" fill="#0F172A"/>
-  <circle cx="396" cy="168" r="8" fill="#0F172A"/>
-  <!-- 灵动岛内音符点缀 -->
-  <path d="M200 256 L208 248 L216 264 L224 248 L232 264" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" fill="none"/>
+
+  <rect width="512" height="512" rx="128" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="128" fill="url(#halo)"/>
+  <path d="M126 355C76 314 85 235 154 190C220 147 323 143 386 174C420 191 433 219 424 246" stroke="url(#edge)" stroke-width="11" stroke-linecap="round" opacity="0.92" filter="url(#softGlow)"/>
+  <path d="M102 350C158 397 274 397 361 344" stroke="#4AD7FF" stroke-width="3" stroke-linecap="round" opacity="0.24"/>
+  <rect x="94" y="188" width="324" height="136" rx="68" fill="url(#island)" stroke="url(#edge)" stroke-width="6"/>
+  <path d="M132 244C145 215 177 204 216 204H346C371 204 388 214 396 227C357 216 302 217 238 224C186 230 151 239 132 263C129 256 129 250 132 244Z" fill="url(#shine)"/>
+  <circle cx="346" cy="256" r="16" fill="#91F6FF" opacity="0.35" filter="url(#dotGlow)"/>
+  <circle cx="346" cy="256" r="9" fill="#B9FAFF"/>
+  <circle cx="343" cy="253" r="3" fill="#FFFFFF" opacity="0.9"/>
 </svg>

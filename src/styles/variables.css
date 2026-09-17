@@ -62,9 +62,9 @@
   --spacing-xxxl: 32px;
 
   /* ========== Typography ========== */
-  --font-family-title: 'SpotifyMixUITitle', 'CircularSp-Arab', 'CircularSp-Hebr', 'CircularSp-Cyrl', 'CircularSp-Grek', 'CircularSp-Deva', 'Helvetica Neue', helvetica, arial, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Meiryo', 'MS Gothic', sans-serif;
-  --font-family-ui: 'SpotifyMixUI', 'CircularSp', 'CircularSp-Arab', 'CircularSp-Hebr', 'CircularSp-Cyrl', 'CircularSp-Grek', 'CircularSp-Deva', 'Helvetica Neue', helvetica, arial, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Meiryo', 'MS Gothic', sans-serif;
-  --font-family-body: 'SpotifyMixUI', 'CircularSp', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family-title: 'MiSans', 'Segoe UI', sans-serif;
+  --font-family-ui: 'MiSans', 'Segoe UI', sans-serif;
+  --font-family-body: 'MiSans', 'Segoe UI', sans-serif;
 
   /* Font Sizes */
   --text-xs: 10px;             /* Micro */

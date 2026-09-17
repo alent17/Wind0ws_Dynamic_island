@@ -11,6 +11,12 @@ let consumers = 0;
 let generation = 0;
 let unlisten: UnlistenFn | undefined;
 let captureCommands: Promise<unknown> = Promise.resolve();
+let stopTimer: ReturnType<typeof setTimeout> | undefined;
+
+// The compact and expanded surfaces can swap visibility during the same
+// transition. Keep the native capture alive for a short grace period so a
+// hand-off does not issue a stop/start pair on every expansion.
+const CAPTURE_STOP_GRACE_MS = 350;
 
 function queueCaptureCommand(command: "start_spectrum" | "stop_spectrum") {
   // Start and stop can cross during a quick collapse, pause, or settings
@@ -42,6 +48,10 @@ async function connect(currentGeneration: number) {
 }
 
 export function retainSpectrum(): () => void {
+  if (stopTimer) {
+    clearTimeout(stopTimer);
+    stopTimer = undefined;
+  }
   consumers += 1;
   if (consumers === 1) {
     const currentGeneration = ++generation;
@@ -61,6 +71,12 @@ export function retainSpectrum(): () => void {
     unlisten?.();
     unlisten = undefined;
     values.set(new Float32Array(NUM_BARS));
-    void queueCaptureCommand("stop_spectrum").catch(() => {});
+    const releaseGeneration = generation;
+    stopTimer = setTimeout(() => {
+      stopTimer = undefined;
+      if (consumers === 0 && releaseGeneration === generation) {
+        void queueCaptureCommand("stop_spectrum").catch(() => {});
+      }
+    }, CAPTURE_STOP_GRACE_MS);
   };
 }

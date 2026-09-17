@@ -4,7 +4,6 @@ export const Events = {
   MEDIA_UPDATE: "media-update",
   AUDIO_SPECTRUM: "audio-spectrum",
   CAPTURE_MODE_CHANGED: "capture-mode-changed",
-  SYSTEM_AUDIO_CHANGED: "system-audio-changed",
   TIMER_STATE_CHANGED: "timer-state-changed",
   TIMER_REQUEST_STATE: "timer-request-state",
   TIMER_ACTION: "timer-action",
@@ -12,7 +11,6 @@ export const Events = {
   // 设置相关
   SETTINGS_UPDATED: "settings-updated",
   SETTINGS_CHANGED: "settings-changed",
-  THEME_CHANGED: "theme-changed",
   CORNER_RADIUS_CHANGED: "corner-radius-changed",
 
   // 悬浮窗相关

@@ -59,7 +59,6 @@ fn default_idle_items() -> Vec<IdleContentItem> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppPreferences {
-    pub island_theme: String,
     pub island_style: String,
     pub island_edge: String,
     pub island_edge_position: u8,
@@ -77,7 +76,6 @@ pub struct AppPreferences {
     pub enable_animations: bool,
     pub window_opacity: u8,
     pub always_on_top: bool,
-    pub hardware_acceleration: bool,
     pub reduce_animations: bool,
     pub show_debug_info: bool,
     pub log_level: String,
@@ -96,7 +94,6 @@ pub struct AppPreferences {
     pub floating_fill_color: String,
     pub floating_use_album_color: bool,
     pub show_floating_tool: bool,
-    pub show_volume_tool: bool,
     pub show_timer_tool: bool,
     pub enable_mv_playback: bool,
     pub lock_floating_window: bool,
@@ -126,14 +123,13 @@ impl Default for AppPreferences {
         player_weights.insert("generic".to_string(), 10);
 
         Self {
-            island_theme: "original".to_string(),
             island_style: "floating".to_string(),
             island_edge: "top".to_string(),
             island_edge_position: 50,
             edge_shoulder_radius: 8,
             compact_length: 80,
             language: "system".to_string(),
-            font_id: "system".to_string(),
+            font_id: "misans".to_string(),
             capture_hide_on_screenshot: true,
             capture_hide_on_recording: true,
             capture_hide_on_fullscreen: true,
@@ -143,7 +139,6 @@ impl Default for AppPreferences {
             enable_animations: true,
             window_opacity: 255,
             always_on_top: true,
-            hardware_acceleration: true,
             reduce_animations: false,
             show_debug_info: false,
             log_level: "Info".to_string(),
@@ -162,7 +157,6 @@ impl Default for AppPreferences {
             floating_fill_color: "#28323c".to_string(),
             floating_use_album_color: true,
             show_floating_tool: true,
-            show_volume_tool: true,
             show_timer_tool: true,
             enable_mv_playback: true,
             lock_floating_window: false,
@@ -192,7 +186,7 @@ mod tests {
         assert_eq!(loaded.edge_shoulder_radius, 8);
         assert_eq!(loaded.compact_length, 80);
         assert_eq!(loaded.language, "system");
-        assert_eq!(loaded.font_id, "system");
+        assert_eq!(loaded.font_id, "misans");
         assert_eq!(loaded.spectrum_mode, "realtime");
         assert!(loaded.capture_hide_on_screenshot);
         assert!(loaded.capture_hide_on_recording);

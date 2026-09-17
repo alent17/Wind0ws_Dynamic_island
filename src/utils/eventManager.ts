@@ -3,7 +3,7 @@ import { Events, ThrottledEvents, EventPriority } from "./eventConstants";
 
 interface ListenerConfig {
   event: string;
-  handler: (payload: any) => void;
+  handler: (payload: any) => unknown;
   options?: {
     debounce?: number;
     throttle?: number;
@@ -13,6 +13,7 @@ interface ListenerConfig {
 }
 
 interface ListenerEntry {
+  id: number;
   unlisten: UnlistenFn;
   config: ListenerConfig;
 }
@@ -21,12 +22,13 @@ class EventManager {
   private listeners: Map<string, ListenerEntry[]> = new Map();
   private pendingTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private lastEmitTime: Map<string, number> = new Map();
+  private nextListenerId = 1;
   private isDestroyed = false;
 
   // 注册监听器
   async on(
     event: string,
-    handler: (payload: any) => void,
+    handler: (payload: any) => unknown,
     options?: ListenerConfig["options"]
   ): Promise<() => void> {
     if (this.isDestroyed) {
@@ -35,9 +37,11 @@ class EventManager {
     }
 
     const config: ListenerConfig = { event, handler, options };
+    const listenerId = this.nextListenerId++;
 
-    // 包装处理器，添加防抖/节流
-    const wrappedHandler = this.wrapHandler(config);
+    // 包装处理器，添加防抖/节流。状态必须按监听器隔离，避免同一事件
+    // 的两个消费者互相清掉对方的 debounce 或 throttle 状态。
+    const wrappedHandler = this.wrapHandler(config, listenerId);
 
     try {
       const unlisten = await listen(event, (e: any) => {
@@ -45,7 +49,7 @@ class EventManager {
         wrappedHandler(e.payload);
       });
 
-      const entry: ListenerEntry = { unlisten, config };
+      const entry: ListenerEntry = { id: listenerId, unlisten, config };
 
       if (!this.listeners.has(event)) {
         this.listeners.set(event, []);
@@ -63,7 +67,7 @@ class EventManager {
   // 注册一次性监听器
   async once(
     event: string,
-    handler: (payload: any) => void
+    handler: (payload: any) => unknown
   ): Promise<() => void> {
     return this.on(event, handler, { once: true });
   }
@@ -77,6 +81,7 @@ class EventManager {
     if (index > -1) {
       eventListeners.splice(index, 1);
       entry.unlisten();
+      this.clearListenerState(event, entry.id);
     }
 
     if (eventListeners.length === 0) {
@@ -89,14 +94,11 @@ class EventManager {
     const eventListeners = this.listeners.get(event);
     if (!eventListeners) return;
 
-    eventListeners.forEach((entry) => entry.unlisten());
+    eventListeners.forEach((entry) => {
+      entry.unlisten();
+      this.clearListenerState(event, entry.id);
+    });
     this.listeners.delete(event);
-
-    // 清理相关定时器
-    const timerKey = `debounce:${event}`;
-    const throttleKey = `throttle:${event}`;
-    this.clearTimer(timerKey);
-    this.clearTimer(throttleKey);
   }
 
   // 销毁所有监听器
@@ -127,27 +129,42 @@ class EventManager {
   }
 
   // 包装处理器，添加防抖/节流逻辑
-  private wrapHandler(config: ListenerConfig): (payload: any) => void {
+  private wrapHandler(config: ListenerConfig, listenerId: number): (payload: any) => void {
     const { handler, options } = config;
 
-    if (!options) return handler;
+    const invoke = (payload: any) => {
+      try {
+        const result = handler(payload);
+        if (result && typeof (result as Promise<unknown>).catch === "function") {
+          void (result as Promise<unknown>).catch((error) => {
+            console.error(`[EventManager] 监听器异步处理失败 ${config.event}:`, error);
+          });
+        }
+      } catch (error) {
+        console.error(`[EventManager] 监听器处理失败 ${config.event}:`, error);
+      }
+    };
+
+    if (!options) return invoke;
 
     // 一次性监听器
     if (options.once) {
       return (payload: any) => {
-        handler(payload);
-        this.off(config.event, this.findEntry(config) as ListenerEntry);
+        invoke(payload);
+        const entry = this.findEntryById(config.event, listenerId);
+        if (entry) this.off(config.event, entry);
       };
     }
 
     // 防抖处理
     if (options.debounce && options.debounce > 0) {
       return (payload: any) => {
-        const key = `debounce:${config.event}`;
+        const key = `debounce:${config.event}:${listenerId}`;
         this.clearTimer(key);
 
         const timer = setTimeout(() => {
-          handler(payload);
+          this.pendingTimers.delete(key);
+          invoke(payload);
         }, options.debounce);
 
         this.pendingTimers.set(key, timer);
@@ -158,12 +175,13 @@ class EventManager {
     if (options.throttle && options.throttle > 0) {
       return (payload: any) => {
         const now = Date.now();
-        const lastTime = this.lastEmitTime.get(config.event) || 0;
+        const key = `throttle:${config.event}:${listenerId}`;
+        const lastTime = this.lastEmitTime.get(key) || 0;
         const interval = options.throttle as number;
 
         if (now - lastTime >= interval) {
-          this.lastEmitTime.set(config.event, now);
-          handler(payload);
+          this.lastEmitTime.set(key, now);
+          invoke(payload);
         }
       };
     }
@@ -179,11 +197,16 @@ class EventManager {
     }
   }
 
-  private findEntry(config: ListenerConfig): ListenerEntry | undefined {
-    const eventListeners = this.listeners.get(config.event);
+  private clearListenerState(event: string, listenerId: number): void {
+    this.clearTimer(`debounce:${event}:${listenerId}`);
+    this.lastEmitTime.delete(`throttle:${event}:${listenerId}`);
+  }
+
+  private findEntryById(event: string, listenerId: number): ListenerEntry | undefined {
+    const eventListeners = this.listeners.get(event);
     if (!eventListeners) return undefined;
 
-    return eventListeners.find((entry) => entry.config === config);
+    return eventListeners.find((entry) => entry.id === listenerId);
   }
 }
 
@@ -193,7 +216,7 @@ export const eventManager = new EventManager();
 // 便捷函数：快速注册带自动节流的监听器
 export async function onThrottled(
   event: string,
-  handler: (payload: any) => void,
+  handler: (payload: any) => unknown,
   customInterval?: number
 ): Promise<() => void> {
   const throttledConfig =
@@ -206,7 +229,7 @@ export async function onThrottled(
 // 便捷函数：注册防抖监听器
 export async function onDebounced(
   event: string,
-  handler: (payload: any) => void,
+  handler: (payload: any) => unknown,
   delay: number = 300
 ): Promise<() => void> {
   return eventManager.on(event, handler, { debounce: delay });
@@ -214,14 +237,14 @@ export async function onDebounced(
 
 // 便捷函数：注册媒体更新监听器（自动节流）
 export async function onMediaUpdate(
-  handler: (payload: any) => void
+  handler: (payload: any) => unknown
 ): Promise<() => void> {
   return onThrottled(Events.MEDIA_UPDATE, handler, 500);
 }
 
 // 便捷函数：注册频谱监听器（自动节流）
 export async function onAudioSpectrum(
-  handler: (payload: any) => void
+  handler: (payload: any) => unknown
 ): Promise<() => void> {
   return onThrottled(Events.AUDIO_SPECTRUM, handler, 50);
 }

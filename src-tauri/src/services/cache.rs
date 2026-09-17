@@ -7,6 +7,7 @@ use crate::models::{CacheMetadata, CacheStats};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::Manager;
 
 /// 全局缓存目录路径
@@ -14,6 +15,91 @@ static CACHE_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 /// 全局缓存元数据列表
 static CACHE_METADATA: Mutex<Option<Vec<CacheMetadata>>> = Mutex::new(None);
+static LAST_METADATA_FLUSH_AT: AtomicU64 = AtomicU64::new(0);
+
+const MAX_CACHE_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_IMAGE_CACHE_BYTES: u64 = 128 * 1024 * 1024;
+const MAX_VIDEO_CACHE_BYTES: u64 = 384 * 1024 * 1024;
+const METADATA_FLUSH_INTERVAL_SECS: u64 = 2;
+
+fn now_seconds() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+fn persist_metadata(cache_dir: &PathBuf, metadata: &[CacheMetadata]) -> AppResult<()> {
+    let metadata_file = cache_dir.join("metadata.json");
+    let content = serde_json::to_string_pretty(metadata).map_err(AppError::Serialization)?;
+    fs::write(&metadata_file, content)
+        .map_err(|e| AppError::cache(format!("无法写入元数据：{}", e)))?;
+    LAST_METADATA_FLUSH_AT.store(now_seconds(), Ordering::Relaxed);
+    Ok(())
+}
+
+fn persist_metadata_if_due(cache_dir: &PathBuf, metadata: &[CacheMetadata]) -> AppResult<()> {
+    let now = now_seconds();
+    let last = LAST_METADATA_FLUSH_AT.load(Ordering::Relaxed);
+    if now.saturating_sub(last) >= METADATA_FLUSH_INTERVAL_SECS {
+        persist_metadata(cache_dir, metadata)?;
+    }
+    Ok(())
+}
+
+fn is_image(content_type: &str) -> bool {
+    content_type.starts_with("image/")
+}
+
+fn is_over_cache_limit(metadata: &[CacheMetadata]) -> bool {
+    let total = metadata.iter().map(|item| item.size).sum::<u64>();
+    let image_total = metadata
+        .iter()
+        .filter(|item| is_image(&item.content_type))
+        .map(|item| item.size)
+        .sum::<u64>();
+    let video_total = total.saturating_sub(image_total);
+    total > MAX_CACHE_BYTES
+        || image_total > MAX_IMAGE_CACHE_BYTES
+        || video_total > MAX_VIDEO_CACHE_BYTES
+}
+
+fn evict_to_limits(_cache_dir: &PathBuf, metadata: &mut Vec<CacheMetadata>) {
+    while is_over_cache_limit(metadata) {
+        let total = metadata.iter().map(|item| item.size).sum::<u64>();
+        let image_total = metadata
+            .iter()
+            .filter(|item| is_image(&item.content_type))
+            .map(|item| item.size)
+            .sum::<u64>();
+        let video_total = total.saturating_sub(image_total);
+        let image_over = image_total > MAX_IMAGE_CACHE_BYTES;
+        let video_over = video_total > MAX_VIDEO_CACHE_BYTES;
+
+        let oldest_index = metadata
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| {
+                if image_over {
+                    is_image(&item.content_type)
+                } else if video_over {
+                    !is_image(&item.content_type)
+                } else {
+                    true
+                }
+            })
+            .min_by_key(|(_, item)| (item.last_accessed_at, item.created_at))
+            .map(|(index, _)| index);
+
+        let Some(index) = oldest_index else { break };
+        let removed = metadata.remove(index);
+        if let Err(error) = fs::remove_file(&removed.file_path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                tracing::debug!("[Cache] 清理文件失败 {}: {}", removed.file_path, error);
+            }
+        }
+    }
+}
 
 /// 初始化缓存系统
 ///
@@ -45,20 +131,27 @@ pub fn init_cache_system(app_handle: &tauri::AppHandle) -> AppResult<()> {
 
     // 加载元数据
     let metadata_file = cache_dir.join("metadata.json");
-    let metadata = if metadata_file.exists() {
+    let mut metadata: Vec<CacheMetadata> = if metadata_file.exists() {
         let content = fs::read_to_string(&metadata_file)
             .map_err(|e| AppError::cache(format!("无法读取元数据：{}", e)))?;
         serde_json::from_str(&content).unwrap_or_default()
     } else {
         Vec::new()
     };
+    let now = now_seconds();
+    for item in &mut metadata {
+        if item.last_accessed_at == 0 {
+            item.last_accessed_at = item.created_at.max(now);
+        }
+    }
+    evict_to_limits(&cache_dir, &mut metadata);
 
     // 存储到全局状态
     {
         let mut cache_dir_global = CACHE_DIR
             .lock()
             .map_err(|_| AppError::lock("无法锁定缓存目录"))?;
-        *cache_dir_global = Some(cache_dir);
+        *cache_dir_global = Some(cache_dir.clone());
     }
 
     {
@@ -66,6 +159,12 @@ pub fn init_cache_system(app_handle: &tauri::AppHandle) -> AppResult<()> {
             .lock()
             .map_err(|_| AppError::lock("无法锁定缓存元数据"))?;
         *metadata_global = Some(metadata);
+    }
+
+    if let Ok(metadata_global) = CACHE_METADATA.lock() {
+        if let Some(metadata) = metadata_global.as_ref() {
+            let _ = persist_metadata(&cache_dir, metadata);
+        }
     }
 
     Ok(())
@@ -96,6 +195,8 @@ pub fn clear_cache() -> AppResult<()> {
                 .map_err(|_| AppError::lock("无法锁定缓存元数据"))?;
             *metadata_global = Some(Vec::new());
         }
+        LAST_METADATA_FLUSH_AT.store(0, Ordering::Relaxed);
+        persist_metadata(&cache_dir, &[])?;
     }
 
     Ok(())
@@ -105,23 +206,27 @@ pub fn clear_cache() -> AppResult<()> {
 ///
 /// 返回缓存大小、文件数量等统计数据
 pub fn get_cache_stats() -> AppResult<CacheStats> {
-    let metadata_global = CACHE_METADATA
-        .lock()
-        .map_err(|_| AppError::lock("无法锁定缓存元数据"))?;
-    let metadata = metadata_global
-        .as_ref()
-        .ok_or_else(|| AppError::cache("缓存元数据未初始化"))?;
+    let (total_size, total_files, mv_count, cover_count) = {
+        let metadata_global = CACHE_METADATA
+            .lock()
+            .map_err(|_| AppError::lock("无法锁定缓存元数据"))?;
+        let metadata = metadata_global
+            .as_ref()
+            .ok_or_else(|| AppError::cache("缓存元数据未初始化"))?;
 
-    // 计算统计数据
-    let total_size: u64 = metadata.iter().map(|m| m.size).sum();
-    let mv_count = metadata
-        .iter()
-        .filter(|m| m.content_type.starts_with("video"))
-        .count();
-    let cover_count = metadata
-        .iter()
-        .filter(|m| m.content_type.starts_with("image"))
-        .count();
+        (
+            metadata.iter().map(|m| m.size).sum::<u64>(),
+            metadata.len() as u32,
+            metadata
+                .iter()
+                .filter(|m| m.content_type.starts_with("video"))
+                .count() as u32,
+            metadata
+                .iter()
+                .filter(|m| m.content_type.starts_with("image"))
+                .count() as u32,
+        )
+    };
 
     let cache_dir = CACHE_DIR
         .lock()
@@ -131,9 +236,9 @@ pub fn get_cache_stats() -> AppResult<CacheStats> {
 
     Ok(CacheStats {
         total_size_mb: total_size as f64 / (1024.0 * 1024.0),
-        total_files: metadata.len() as u32,
-        mv_count: mv_count as u32,
-        cover_count: cover_count as u32,
+        total_files,
+        mv_count,
+        cover_count,
         cache_directory: cache_dir.to_string_lossy().to_string(),
     })
 }
@@ -150,17 +255,25 @@ pub fn get_cached_media(url: &str) -> AppResult<Option<String>> {
     url.hash(&mut hasher);
     let key = format!("{:x}", hasher.finish());
 
-    let metadata_global = CACHE_METADATA
+    let cache_dir = CACHE_DIR
+        .lock()
+        .map_err(|_| AppError::lock("无法锁定缓存目录"))?
+        .clone()
+        .ok_or_else(|| AppError::cache("缓存系统未初始化"))?;
+    let mut metadata_global = CACHE_METADATA
         .lock()
         .map_err(|_| AppError::lock("无法锁定缓存元数据"))?;
     let metadata = metadata_global
-        .as_ref()
+        .as_mut()
         .ok_or_else(|| AppError::cache("缓存元数据未初始化"))?;
 
     // 查找缓存记录
-    if let Some(meta) = metadata.iter().find(|m| m.key == key) {
+    if let Some(meta) = metadata.iter_mut().find(|m| m.key == key) {
         if PathBuf::from(&meta.file_path).exists() {
-            return Ok(Some(meta.file_path.clone()));
+            meta.last_accessed_at = now_seconds();
+            let result = meta.file_path.clone();
+            persist_metadata_if_due(&cache_dir, metadata)?;
+            return Ok(Some(result));
         }
     }
 
@@ -265,26 +378,27 @@ fn save_cache_file(url: &str, content: &[u8], content_type: &str) -> AppResult<S
 
         // 移除旧记录（如果存在）
         if let Some(pos) = metadata.iter().position(|m| m.key == key) {
-            metadata.remove(pos);
+            let old = metadata.remove(pos);
+            if old.file_path != file_path.to_string_lossy().as_ref() {
+                let _ = fs::remove_file(old.file_path);
+            }
         }
 
         // 添加新记录
+        let now = now_seconds();
         metadata.push(CacheMetadata {
             key,
             file_path: file_path.to_string_lossy().to_string(),
-            created_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
+            created_at: now,
+            last_accessed_at: now,
             size: content.len() as u64,
             content_type: content_type.to_string(),
         });
 
+        evict_to_limits(&cache_dir, metadata);
+
         // 持久化元数据
-        let metadata_file = cache_dir.join("metadata.json");
-        let content = serde_json::to_string_pretty(&*metadata).map_err(AppError::Serialization)?;
-        fs::write(&metadata_file, content)
-            .map_err(|e| AppError::cache(format!("无法写入元数据：{}", e)))?;
+        persist_metadata(&cache_dir, metadata)?;
     }
 
     Ok(file_path.to_string_lossy().to_string())

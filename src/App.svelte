@@ -1,13 +1,11 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { spring } from "svelte/motion";
   import { convertFileSrc } from "@tauri-apps/api/core";
   import { emit, listen } from "@tauri-apps/api/event";
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
   import { Events } from "./utils/eventConstants";
   import { mediaApi } from "$lib/api/media";
   import { idleApi } from "$lib/api/idle";
-  import { audioApi } from "$lib/api/audio";
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
   import IslandSurface from "$lib/IslandSurface.svelte";
@@ -26,7 +24,7 @@
     type IslandRegionChange,
     type IslandStyle,
   } from "$lib/islandGeometry";
-  import type { AppSettings, AudioDeviceInfo, IdleContentItem, IdleSnapshot, IslandTheme, MediaState, MonitorInfo, SystemAudioState } from "$lib/api/types";
+  import type { AppSettings, IdleContentItem, IdleSnapshot, MediaState, MonitorInfo } from "$lib/api/types";
   import { DEFAULT_SETTINGS } from "$lib/api/types";
   import type { IslandTool } from "$lib/featureRail";
   import { applyAppFont } from "$lib/font";
@@ -43,26 +41,6 @@
     currentMonitor,
     availableMonitors,
   } from "@tauri-apps/api/window";
-  import {
-    Music,
-    Play,
-    Pause,
-    SkipBack,
-    SkipForward,
-    Heart,
-    Monitor,
-    GalleryHorizontalEnd,
-  } from "lucide-svelte";
-
-  const platformIcons = {
-    netease: "/src/assets/icons/netease.svg",
-    spotify: "/src/assets/icons/spotify.svg",
-    bilibili: "/src/assets/icons/bilibili.svg",
-    qqmusic: "/src/assets/icons/qqmusic.svg",
-    apple: "/src/assets/icons/apple_music.svg",
-    generic: "/src/assets/icons/default_music.svg",
-  };
-
   const playerNames = {
     netease: "网易云音乐",
     spotify: "Spotify",
@@ -70,15 +48,6 @@
     qqmusic: "QQ 音乐",
     apple: "Apple Music",
     generic: "多媒体",
-  };
-
-  const playerColors = {
-    netease: "#ff2d55",
-    spotify: "#1db954",
-    bilibili: "#fb7299",
-    qqmusic: "#31c27c",
-    apple: "#fa243c",
-    generic: "#ffffff",
   };
 
   const isDev = import.meta.env?.DEV ?? false;
@@ -91,85 +60,25 @@
     debug: (...args: any[]) => isDev && console.debug("[App]", ...args),
   };
 
-  const throttle = (fn: Function, delay: number) => {
-    let lastCall = 0;
-    return (...args: any[]) => {
-      const now = Date.now();
-      if (now - lastCall >= delay) {
-        lastCall = now;
-        fn(...args);
-      }
-    };
-  };
-
-  const debounce = (fn: Function, delay: number) => {
-    let timeoutId: ReturnType<typeof setTimeout>;
-    return (...args: any[]) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => fn(...args), delay);
-    };
-  };
-
-  const playerConfigs = {
-    netease: {
-      name: "网易云音乐",
-      color: "#ff2d55",
-      icon: "/src/assets/icons/netease.svg",
-      useProgressBar: false,
-    },
-    spotify: {
-      name: "Spotify",
-      color: "#1db954",
-      icon: "/src/assets/icons/spotify.svg",
-      useProgressBar: true,
-    },
-    bilibili: {
-      name: "Bilibili",
-      color: "#fb7299",
-      icon: "/src/assets/icons/bilibili.svg",
-      useProgressBar: true,
-    },
-    qqmusic: {
-      name: "QQ 音乐",
-      color: "#31c27c",
-      icon: "/src/assets/icons/qqmusic.svg",
-      useProgressBar: true,
-    },
-    apple: {
-      name: "Apple Music",
-      color: "#fa243c",
-      icon: "/src/assets/icons/apple_music.svg",
-      useProgressBar: true,
-    },
-    generic: {
-      name: "正在播放",
-      color: "#ffffff",
-      icon: "/src/assets/icons/default_music.svg",
-      useProgressBar: true,
-    },
-  };
-
   // ========== 状态管理 ==========
   let expanded = $state(false);
   let hovering = $state(false);
-  let isAnimating = $state(false);
-  let accentColor = $state<string>("#fe2c55");
-  let secondaryColor = $state<string>("#fe2c55");
   let artworkUrl = $state<string>("");
   let rawCoverUrl = "";
-  let flipKey = $state(0);
   let trackTitle = $state<string>("");
   let artistName = $state<string>("");
   let isPlaying = $state<boolean>(false);
   let lastSongKey: string | null = null;
-  let currentTheme = $state<IslandTheme>("original");
-
   let spectrumTopColor = $state<string>("#ffffff");
   let spectrumBottomColor = $state<string>("#888888");
 
   let currentTimeMs = $state<number>(0);
   let mediaSnapshotAt = $state<number>(Date.now());
   let clockNow = $state<number>(Date.now());
+  let pageVisible = $state(true);
+  function handleVisibilityChange() {
+    pageVisible = document.visibilityState === "visible";
+  }
   let durationMs = $state<number>(0);
   let currentSource = $state<string>("generic");
   let hasMediaSession = $state(false);
@@ -198,17 +107,12 @@
     return value === "right" || value === "bottom" || value === "left" ? value : "top";
   }
 
-  function normalizedTheme(value: string): IslandTheme {
-    return value === "shader-dial" || value === "album-reactive" ? value : "original";
-  }
-
   function normalizedSettings(value: Partial<AppSettings>): AppSettings {
     const position = Number(value.islandEdgePosition ?? DEFAULT_SETTINGS.islandEdgePosition);
     const legacyAutoHide = (value as Partial<AppSettings> & { autoHide?: boolean }).autoHide;
     return {
       ...DEFAULT_SETTINGS,
       ...value,
-      islandTheme: normalizedTheme(value.islandTheme ?? DEFAULT_SETTINGS.islandTheme),
       islandStyle: normalizedStyle(value.islandStyle ?? DEFAULT_SETTINGS.islandStyle),
       islandEdge: normalizedEdge(value.islandEdge ?? DEFAULT_SETTINGS.islandEdge),
       spectrumMode: value.spectrumMode === "random" ? "random" : "realtime",
@@ -226,9 +130,26 @@
   }
 
   let interactionRegionRevision = Date.now() * 1000;
+  let lastInteractionRegionSignature = "";
   function applyIslandRegion({ geometry, radii, polygon, extraRects }: IslandRegionChange) {
     const host = hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength);
     const offset = surfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge);
+    const translatedExtraRects = (extraRects ?? []).map((rect) => ({
+      ...rect,
+      x: offset.x + rect.x,
+      y: offset.y + rect.y,
+    }));
+    const signature = JSON.stringify({
+      x: offset.x,
+      y: offset.y,
+      width: geometry.width,
+      height: geometry.height,
+      radii,
+      polygon,
+      extraRects: translatedExtraRects,
+    });
+    if (signature === lastInteractionRegionSignature) return;
+    lastInteractionRegionSignature = signature;
     windowApi.setIslandInteractionRegion({
       revision: ++interactionRegionRevision,
       x: offset.x,
@@ -237,25 +158,47 @@
       height: geometry.height,
       radii,
       polygon,
-      extraRects: (extraRects ?? []).map((rect) => ({ ...rect, x: offset.x + rect.x, y: offset.y + rect.y })),
+      extraRects: translatedExtraRects,
     }).catch((error) => logger.warn("窗口区域更新失败", error));
   }
 
   let currentTime = $state("");
+  let lastClockMinute = "";
 
-  // 优化：缓存时间格式化结果，减少字符串操作
+  // Clock text only changes once per minute. Keep the high-resolution clock
+  // for media/timer interpolation, but avoid constructing Intl formatters on
+  // every 250 ms tick.
   function updateTimeDisplay() {
+    const minuteKey = `${appSettings.clockTimeZone}|${$locale}|${Math.floor(Date.now() / 60_000)}`;
+    if (minuteKey === lastClockMinute) return;
+    lastClockMinute = minuteKey;
     currentTime = formatClock(appSettings.clockTimeZone, $locale, Date.now());
   }
 
   onMount(() => {
     updateTimeDisplay();
-    const checkInterval = setInterval(() => {
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    const intervalMs = () => !pageVisible ? 2_000 : expanded && isPlaying ? 250 : 1_000;
+    let activeClockIntervalMs = 250;
+    let checkInterval: ReturnType<typeof setInterval>;
+    const tick = () => {
       updateTimeDisplay();
       clockNow = Date.now();
-    }, 250);
+      const nextIntervalMs = intervalMs();
+      // Rebuild only when the current state crosses a cadence boundary; the
+      // timer below remains cheap while the island is compact or hidden.
+      if (nextIntervalMs !== activeClockIntervalMs) {
+        clearInterval(checkInterval);
+        activeClockIntervalMs = nextIntervalMs;
+        checkInterval = setInterval(tick, activeClockIntervalMs);
+      }
+    };
+    checkInterval = setInterval(tick, activeClockIntervalMs);
 
-    return () => clearInterval(checkInterval);
+    return () => {
+      clearInterval(checkInterval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   });
 
   const playerApps: Record<string, string> = {
@@ -281,64 +224,13 @@
     }
   }
 
-  // ===== 主题样式辅助函数 =====
-  function getThemeBackground(theme: string): string {
-    // 使用 CSS 变量，让 CSS 来控制主题颜色
-    return "var(--island-bg)";
-  }
-
-  function getThemeBackgroundSize(theme: string): string {
-    return "100% 100%";
-  }
-
-  function getThemeBackgroundPosition(theme: string): string {
-    return "0% 0%";
-  }
-
-  function getThemeBackdropFilter(theme: string): string {
-    // 所有主题都不使用毛玻璃效果
-    return "none";
-  }
-
-  function getThemeBorder(theme: string): string {
-    // 使用 CSS 变量
-    return "1px solid var(--island-border)";
-  }
-
-  function getDynamicBorderRadius(currentHeight: number): string {
-    const minHeight = 28;
-    const maxHeight = 160;
-    const minRadius = 24;
-    const maxRadius = appSettings.expandedCornerRadius || 45;
-
-    const clampedHeight = Math.max(
-      minHeight,
-      Math.min(maxHeight, currentHeight),
-    );
-
-    const progress = (clampedHeight - minHeight) / (maxHeight - minHeight);
-    const radius = minRadius + (maxRadius - minRadius) * progress;
-
-    return `${radius}px`;
-  }
-
-  function getThemeBoxShadow(
-    theme: string,
-    isHidden: boolean,
-    expanded: boolean,
-  ): string {
-    // 所有状态都没有阴影
-    return "none";
-  }
-
-  // ===== 新增：应用设置 =====
+  // ===== 应用设置 =====
   let appSettings = $state<AppSettings>({
     ...DEFAULT_SETTINGS,
   });
   let enabledFeatureTools = $derived.by<IslandTool[]>(() => {
     const tools: IslandTool[] = [];
     if (appSettings.showFloatingTool) tools.push("floating");
-    if (appSettings.showVolumeTool) tools.push("volume");
     if (appSettings.showTimerTool) tools.push("timer");
     return tools;
   });
@@ -349,94 +241,13 @@
     if (snapshot === lastSettingsSnapshot) return;
     lastSettingsSnapshot = snapshot;
     appSettings = next;
-    currentTheme = next.islandTheme;
   }
-  let systemAudio = $state<SystemAudioState | null>(null);
-  let audioDevices = $state<AudioDeviceInfo[]>([]);
-  let systemAudioTimeout: ReturnType<typeof setTimeout> | null = null;
-
-  function scheduleSystemAudioDismiss(delay = 3500) {
-    if (systemAudioTimeout) clearTimeout(systemAudioTimeout);
-    systemAudioTimeout = setTimeout(() => {
-      if (expanded) {
-        systemAudioTimeout = null;
-        return;
-      }
-
-      systemAudio = null;
-      systemAudioTimeout = null;
-    }, delay);
-  }
-
-  function showSystemAudio(state: SystemAudioState) {
-    systemAudio = state;
-    scheduleSystemAudioDismiss(expanded ? 10000 : 3500);
-    void audioApi.listDevices().then((devices) => audioDevices = devices).catch(() => undefined);
-  }
-
   function toggleIsland() {
     expanded = !expanded;
-
-    if (expanded) {
-      void handleAudioOpen();
-    } else if (systemAudio) {
-      scheduleSystemAudioDismiss(3500);
-    }
-  }
-
-  async function handleAudioVolume(volumePercent: number) {
-    const nextVolume = Math.max(0, Math.min(100, Math.round(volumePercent)));
-    let currentAudio = systemAudio;
-
-    if (!currentAudio) {
-      try {
-        currentAudio = await audioApi.getState();
-      } catch (error) {
-        logger.error("读取系统音量失败", error);
-        return;
-      }
-    }
-
-    systemAudio = {
-      ...currentAudio,
-      volumePercent: nextVolume,
-      muted: nextVolume === 0,
-    };
-
-    scheduleSystemAudioDismiss(expanded ? 10000 : 3500);
-
-    try {
-      await audioApi.setVolume(nextVolume);
-    } catch (error) {
-      logger.error("设置系统音量失败", error);
-    }
-  }
-
-  async function handleAudioDevice(deviceId: string) {
-    scheduleSystemAudioDismiss(10000);
-    try {
-      await audioApi.setDefaultDevice(deviceId);
-      const [state, devices] = await Promise.all([audioApi.getState(), audioApi.listDevices()]);
-      systemAudio = state;
-      audioDevices = devices;
-    } catch (error) {
-      logger.error("切换音频设备失败", error);
-    }
   }
 
   let countdown = $state<CountdownState>(createCountdownState());
   let timerRemainingMs = $derived(getRemainingMs(countdown, clockNow));
-
-  async function handleAudioOpen() {
-    try {
-      const [state, devices] = await Promise.all([audioApi.getState(), audioApi.listDevices()]);
-      systemAudio = state;
-      audioDevices = devices;
-      scheduleSystemAudioDismiss(10000);
-    } catch (error) {
-      logger.error("读取系统音量失败", error);
-    }
-  }
 
   function handleTimerStart(durationMs: number) {
     countdown = startCountdown(countdown, durationMs, Date.now());
@@ -467,9 +278,22 @@
     };
   }
 
+  let lastTimerBroadcast = "";
   $effect(() => {
     const snapshot = timerSnapshot();
     if (!(window as any).__TAURI_INTERNALS__) return;
+
+    // The timer window interpolates between snapshots locally. Broadcasting
+    // every 250 ms made the main window do unnecessary IPC and rendering work;
+    // one update per displayed second is enough while a timer is running.
+    const broadcastKey = JSON.stringify({
+      ...snapshot,
+      remainingMs: snapshot.status === "running"
+        ? Math.ceil(snapshot.remainingMs / 1000) * 1000
+        : snapshot.remainingMs,
+    });
+    if (broadcastKey === lastTimerBroadcast) return;
+    lastTimerBroadcast = broadcastKey;
     void emit(Events.TIMER_STATE_CHANGED, snapshot);
   });
 
@@ -547,215 +371,6 @@
   let suppressPlacementEffect = false;
   let currentHost = $derived(hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength));
 
-  // ========== 性能检测和自适应系统 ==========
-  type PerformanceLevel = "high" | "medium" | "low";
-  let performanceLevel = $state<PerformanceLevel>("high");
-  let currentFps = $state(60);
-  let fpsHistory: number[] = [];
-  let performanceCheckInterval: number | null = null;
-  let displayRefreshRate = $state(60);
-  let highFrameRateMode = $state(false);
-
-  async function detectDisplayRefreshRate(): Promise<number> {
-    return new Promise((resolve) => {
-      const frames: number[] = [];
-      let lastTime = performance.now();
-      let frameCount = 0;
-
-      function measureFrame(currentTime: number) {
-        frameCount++;
-        frames.push(currentTime);
-
-        if (frameCount < 60) {
-          requestAnimationFrame(measureFrame);
-        } else {
-          const intervals = [];
-          for (let i = 1; i < frames.length; i++) {
-            intervals.push(frames[i] - frames[i - 1]);
-          }
-
-          const avgInterval =
-            intervals.reduce((a, b) => a + b, 0) / intervals.length;
-          const refreshRate = Math.round(1000 / avgInterval);
-
-          console.log(`[性能] 显示器刷新率: ${refreshRate}Hz`);
-          resolve(refreshRate);
-        }
-      }
-
-      requestAnimationFrame(measureFrame);
-    });
-  }
-
-  function detectPerformanceLevel(): PerformanceLevel {
-    const cores = navigator.hardwareConcurrency || 4;
-    const memory = (navigator as any).deviceMemory || 8;
-    const isMobile =
-      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-        navigator.userAgent,
-      );
-    const hasHardwareAcceleration = checkHardwareAcceleration();
-
-    let score = 0;
-    if (cores >= 8) score += 3;
-    else if (cores >= 4) score += 2;
-    else score += 1;
-
-    if (memory >= 8) score += 3;
-    else if (memory >= 4) score += 2;
-    else score += 1;
-
-    if (hasHardwareAcceleration) score += 2;
-    else score += 0;
-
-    if (isMobile) score -= 2;
-
-    if (score >= 7) return "high";
-    else if (score >= 4) return "medium";
-    else return "low";
-  }
-
-  function checkHardwareAcceleration(): boolean {
-    try {
-      const canvas = document.createElement("canvas");
-      const gl =
-        canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-      if (gl && gl instanceof WebGLRenderingContext) {
-        const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
-        if (debugInfo) {
-          const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-          return (
-            !renderer.toLowerCase().includes("swiftshader") &&
-            !renderer.toLowerCase().includes("llvmpipe")
-          );
-        }
-      }
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function getOptimizedSpringParams(
-    level: PerformanceLevel,
-    refreshRate: number = 60,
-  ) {
-    const frameMultiplier = refreshRate >= 120 ? 1.2 : 1.0;
-
-    switch (level) {
-      case "high":
-        if (refreshRate >= 120) {
-          return {
-            stiffness: 0.15,
-            damping: 0.7,
-            precision: 0.1,
-          };
-        } else {
-          return {
-            stiffness: 0.18,
-            damping: 0.7,
-            precision: 0.1,
-          };
-        }
-      case "medium":
-        return {
-          stiffness: 0.2,
-          damping: 0.75,
-          precision: 0.1,
-        };
-      case "low":
-        return {
-          stiffness: 0.25,
-          damping: 0.85,
-          precision: 0.1,
-        };
-    }
-  }
-
-  function startFpsMonitoring() {
-    let lastTime = performance.now();
-    let frames = 0;
-
-    function measureFps() {
-      frames++;
-      const currentTime = performance.now();
-
-      if (currentTime - lastTime >= 1000) {
-        currentFps = Math.round((frames * 1000) / (currentTime - lastTime));
-
-        fpsHistory.push(currentFps);
-        if (fpsHistory.length > 10) {
-          fpsHistory.shift();
-        }
-
-        adjustPerformanceBasedOnFps();
-
-        frames = 0;
-        lastTime = currentTime;
-      }
-
-      requestAnimationFrame(measureFps);
-    }
-
-    requestAnimationFrame(measureFps);
-  }
-
-  function adjustPerformanceBasedOnFps() {
-    if (fpsHistory.length < 5) return;
-
-    const avgFps = fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length;
-
-    if (avgFps < 30 && performanceLevel !== "low") {
-      console.log("[性能] 帧率过低，降低性能等级");
-      performanceLevel = "low";
-      updateSpringParams();
-    } else if (avgFps < 45 && avgFps >= 30 && performanceLevel === "high") {
-      console.log("[性能] 帧率中等，调整为中等性能");
-      performanceLevel = "medium";
-      updateSpringParams();
-    } else if (avgFps >= 55 && performanceLevel !== "high") {
-      console.log("[性能] 帧率良好，提升性能等级");
-      performanceLevel = "high";
-      updateSpringParams();
-    }
-  }
-
-  function updateSpringParams() {
-    const params = getOptimizedSpringParams(
-      performanceLevel,
-      displayRefreshRate,
-    );
-
-    const currentWidth = $widthSpring;
-    const currentHeight = $heightSpring;
-    const currentOpacity = $contentOpacity;
-
-    Object.assign(widthSpring, {
-      stiffness: params.stiffness,
-      damping: params.damping,
-      precision: params.precision,
-    });
-
-    Object.assign(heightSpring, {
-      stiffness: params.stiffness,
-      damping: params.damping,
-      precision: params.precision,
-    });
-
-    Object.assign(contentOpacity, {
-      stiffness: params.stiffness * 1.2,
-      damping: params.damping * 1.2,
-      precision: params.precision,
-    });
-
-    highFrameRateMode = displayRefreshRate >= 120;
-
-    console.log(
-      `[性能] 已更新 Spring 参数: ${performanceLevel}, 刷新率: ${displayRefreshRate}Hz, 高帧率模式: ${highFrameRateMode}`,
-      params,
-    );
-  }
-
   let captureSnapshot = $state<CaptureSnapshot>({ ...EMPTY_CAPTURE_SNAPSHOT });
   let isFullscreenApp = $derived(captureSnapshot.fullscreen);
   let isMouseAtTop = $state(false);
@@ -777,39 +392,6 @@
   let lastFpsTime = 0;
   let debugRafId: number | null = null;
 
-  const currentIcon = $derived(
-    platformIcons[currentSource as keyof typeof platformIcons] ||
-      platformIcons.generic,
-  );
-
-  const currentColor = $derived(
-    playerColors[currentSource as keyof typeof playerColors] ||
-      playerColors.generic,
-  );
-
-  const currentConfig = $derived(
-    playerConfigs[currentSource as keyof typeof playerConfigs] ||
-      playerConfigs.generic,
-  );
-
-  let isLive = $derived(durationMs === 0);
-
-  let widthSpring = spring(80, {
-    stiffness: 0.2,
-    damping: 0.85,
-    precision: 0.1,
-  });
-  let heightSpring = spring(28, {
-    stiffness: 0.2,
-    damping: 0.85,
-    precision: 0.1,
-  });
-  let contentOpacity = spring(0, {
-    stiffness: 0.15,
-    damping: 0.8,
-    precision: 0.01,
-  });
-
   let win: ReturnType<typeof getCurrentWindow>;
 
   let cachedScreenWidth = 0;
@@ -820,6 +402,7 @@
   let windowReady = $state(false);
   let windowPlacementRevision = 0;
   let lastAppliedBounds = "";
+  let lastPlacementInput = "";
   let placementMonitors: MonitorInfo[] = [];
   let placementMonitorsRefreshedAt = 0;
 
@@ -835,6 +418,20 @@
     animateBounds = true,
   ) {
     if (!windowReady) return;
+    const placementInput = JSON.stringify({
+      style,
+      edge,
+      monitorIndex,
+      positionPercent,
+      hidden,
+      compactLength: appSettings.compactLength,
+    });
+    if (
+      placementInput === lastPlacementInput
+      && placementMonitors.length > 0
+      && Date.now() - placementMonitorsRefreshedAt < 5_000
+    ) return;
+    lastPlacementInput = placementInput;
     const revision = ++windowPlacementRevision;
     const shouldRefreshMonitors =
       placementMonitors.length === 0 || Date.now() - placementMonitorsRefreshedAt >= 5000;
@@ -985,7 +582,6 @@
       autoCloseTimer = setTimeout(() => {
         logger.log("自动收起计时器触发");
         expanded = false;
-        if (systemAudio) scheduleSystemAudioDismiss(3500);
         autoCloseTimer = null;
       }, delay);
     }
@@ -1006,19 +602,6 @@
       showMonitorMenu = false;
     }
   });
-
-  function handleMouseEnter() {
-    hovering = true;
-    stopAutoClose();
-  }
-
-  function handleMouseLeave() {
-    hovering = false;
-    logger.log("鼠标离开，开始自动收起计时器");
-    if (expanded) {
-      startAutoClose();
-    }
-  }
 
   async function toggleFloatingWindow() {
     try {
@@ -1052,20 +635,12 @@
     return (r + g + b) / 3;
   }
 
-  function clampColorValue(v: number): number {
-    return Math.max(80, Math.min(255, v));
-  }
-
   function formatRgb(r: number, g: number, b: number): string {
     return `rgb(${r},${g},${b})`;
   }
 
-  async function extractDominantColor(imgSrc: string) {
-    if (!imgSrc) {
-      accentColor = currentColor;
-      secondaryColor = currentColor;
-      return;
-    }
+  async function extractSpectrumColors(imgSrc: string) {
+    if (!imgSrc) return;
 
     try {
       const img = new Image();
@@ -1146,82 +721,23 @@
         const [topKey] = topColor;
         const [rTop, gTop, bTop] = parseColorKey(topKey);
 
-        if (topKey === bottomKey && sortedColors.length >= 3) {
-          const [secondKey] = sortedColors[1];
-          const [r2, g2, b2] = parseColorKey(secondKey);
-          accentColor = formatRgb(
-            clampColorValue(r2),
-            clampColorValue(g2),
-            clampColorValue(b2),
-          );
-        } else {
-          accentColor = formatRgb(
-            clampColorValue(rBottom),
-            clampColorValue(gBottom),
-            clampColorValue(bBottom),
-          );
-        }
-
-        secondaryColor = formatRgb(
-          clampColorValue(rTop),
-          clampColorValue(gTop),
-          clampColorValue(bTop),
-        );
-
-        spectrumBottomColor = formatRgb(
-          rBottom,
-          gBottom,
-          bBottom,
-        );
-        spectrumTopColor = formatRgb(
-          rTop,
-          gTop,
-          bTop,
-        );
+        spectrumBottomColor = formatRgb(rBottom, gBottom, bBottom);
+        spectrumTopColor = formatRgb(rTop, gTop, bTop);
       } else if (sortedColors.length === 1) {
         const [mainKey] = sortedColors[0];
         const [r, g, b] = parseColorKey(mainKey);
-        accentColor = formatRgb(r, g, b);
-        secondaryColor = accentColor;
-      } else {
-        accentColor = currentColor;
-        secondaryColor = currentColor;
+        const color = formatRgb(r, g, b);
+        spectrumBottomColor = color;
+        spectrumTopColor = color;
       }
     } catch (e) {
-      console.warn("取色失败，将使用默认颜色", e);
-      accentColor = currentColor;
-      secondaryColor = currentColor;
+      console.warn("取色失败，将保留当前频谱颜色", e);
     }
   }
 
   $effect(() => {
-    if (artworkUrl) {
-      extractDominantColor(artworkUrl);
-    } else {
-      accentColor = currentColor;
-      secondaryColor = currentColor;
-    }
+    if (artworkUrl) extractSpectrumColors(artworkUrl);
   });
-
-  // IslandSurface owns interruptible per-axis motion and derives both content
-  // layers from it, so rapid reversals cannot leave stale timers behind.
-
-  let isPressed = $state(false);
-
-  function handlePress() {
-    isPressed = true;
-  }
-
-  function handleRelease(e: MouseEvent) {
-    isPressed = false;
-
-    const target = e.target as HTMLElement;
-    if (target.closest("button") || target.closest("[data-stop-toggle]")) {
-      return;
-    }
-
-    expanded = !expanded;
-  }
 
   async function handleMediaAction(action: string, e?: MouseEvent) {
     e?.stopPropagation();
@@ -1344,11 +860,7 @@
       showMonitorMenu = false;
 
       try {
-        const savedSettings = await settingsApi.getSettings();
-        await settingsApi.saveSettings({
-          ...savedSettings,
-          monitorIndex: index,
-        });
+        await settingsApi.updateSettings({ monitorIndex: index });
         console.log("[显示器] 已保存选择到设置，索引:", index);
       } catch (saveError) {
         console.error("[显示器] 保存设置失败:", saveError);
@@ -1437,28 +949,37 @@
     (async () => {
       console.log("[App.svelte] onMount 开始监听事件");
 
-      try {
-        const savedSettings = await settingsApi.getSettings();
-        const appWindow = getCurrentWindow();
-        await appWindow.setAlwaysOnTop(savedSettings.alwaysOnTop ?? true);
-        console.log("[置顶设置] 已应用:", savedSettings.alwaysOnTop);
-      } catch (error) {
-        console.error("[置顶设置] 读取失败:", error);
-      }
+      // Register the timer bridge before any settings/monitor IPC. The timer
+      // window is preloaded at startup, so its initial state request must not
+      // race with the slower bootstrap work below.
+      const unlistenTimerRequest = await listen(
+        Events.TIMER_REQUEST_STATE,
+        () => void emit(Events.TIMER_STATE_CHANGED, timerSnapshot()),
+      );
+      cleanups.push(unlistenTimerRequest);
+
+      const unlistenTimerAction = await listen(
+        Events.TIMER_ACTION,
+        (event) => {
+          const payload = event.payload as { action?: string; durationMs?: number };
+          if (payload?.action === "start" && Number(payload.durationMs) > 0) handleTimerStart(Number(payload.durationMs));
+          else if (payload?.action === "pause") handleTimerPause();
+          else if (payload?.action === "resume") handleTimerResume();
+          else if (payload?.action === "adjust") handleTimerAdjust(Number(payload.durationMs) || 0);
+          else if (payload?.action === "reset") handleTimerReset();
+        },
+      );
+      cleanups.push(unlistenTimerAction);
 
       try {
         const loadedSettings = await settingsApi.getSettings();
+        const appWindow = getCurrentWindow();
+        await appWindow.setAlwaysOnTop(loadedSettings.alwaysOnTop ?? true);
         applySettingsIfChanged(loadedSettings);
         console.log("[设置] 已加载:", appSettings);
       } catch (error) {
         console.error("[设置] 读取失败:", error);
       }
-
-      // Keep motion timing deterministic. The old FPS monitor changed spring
-      // parameters while an animation was running, which made the same gesture
-      // feel different across machines and did not remove any expensive work.
-      performanceLevel = "high";
-      displayRefreshRate = 60;
 
       const unlistenSettings = await eventManager.on(
         Events.SETTINGS_UPDATED,
@@ -1466,10 +987,6 @@
           if (s) {
             applySettingsIfChanged(s);
             console.log("[设置] 实时更新:", appSettings);
-
-            if (s.islandTheme) {
-              currentTheme = normalizedTheme(s.islandTheme);
-            }
 
             if (s.monitorIndex !== undefined) {
               currentMonitorIndex = s.monitorIndex;
@@ -1496,8 +1013,6 @@
                 }
               })
               .catch(console.error);
-          } else if (settingName === "islandTheme") {
-            currentTheme = normalizedTheme(appSettings.islandTheme);
           } else if (settingName === "alwaysOnTop") {
           } else {
             settingsApi
@@ -1535,8 +1050,7 @@
           };
         });
 
-        const savedSettings = await settingsApi.getSettings();
-        const savedMonitorIndex = savedSettings.monitorIndex ?? 0;
+        const savedMonitorIndex = appSettings.monitorIndex ?? 0;
 
         if (savedMonitorIndex >= 0 && savedMonitorIndex < allMonitors.length) {
           currentMonitorIndex = savedMonitorIndex;
@@ -1580,47 +1094,6 @@
         },
       );
       cleanups.push(unlistenFloatingWindowClosed);
-
-      const unlistenTheme = await eventManager.on(
-        Events.THEME_CHANGED,
-        ({ islandTheme }: any) => {
-          currentTheme = normalizedTheme(islandTheme || "original");
-          console.log("[主题切换] 切换到:", currentTheme);
-        },
-      );
-      cleanups.push(unlistenTheme);
-
-      const unlistenSystemAudio = await eventManager.on(
-        Events.SYSTEM_AUDIO_CHANGED,
-        (state) => showSystemAudio(state as SystemAudioState),
-      );
-      cleanups.push(unlistenSystemAudio);
-
-      const unlistenTimerRequest = await eventManager.on(
-        Events.TIMER_REQUEST_STATE,
-        () => void emit(Events.TIMER_STATE_CHANGED, timerSnapshot()),
-      );
-      cleanups.push(unlistenTimerRequest);
-
-      const unlistenTimerAction = await eventManager.on(
-        Events.TIMER_ACTION,
-        (payload: { action?: string; durationMs?: number }) => {
-          if (payload?.action === "start" && Number(payload.durationMs) > 0) handleTimerStart(Number(payload.durationMs));
-          else if (payload?.action === "pause") handleTimerPause();
-          else if (payload?.action === "resume") handleTimerResume();
-          else if (payload?.action === "adjust") handleTimerAdjust(Number(payload.durationMs) || 0);
-          else if (payload?.action === "reset") handleTimerReset();
-        },
-      );
-      cleanups.push(unlistenTimerAction);
-
-      try {
-        const savedSettings = await settingsApi.getSettings();
-        currentTheme = normalizedTheme(savedSettings.islandTheme || "original");
-        console.log("[主题加载] 从设置加载主题:", currentTheme);
-      } catch (e) {
-        console.error("[主题加载] 失败:", e);
-      }
 
       const unlistenMediaUpdate = await onMediaUpdate((data: any) => {
         const receivedAt = Date.now();
@@ -1770,13 +1243,11 @@
                 newCover.startsWith("file://"))
             ) {
               artworkUrl = newCover;
-              flipKey += 1;
             } else if (
               newCover &&
               (newCover.includes(":\\") || newCover.includes(":/"))
             ) {
               artworkUrl = convertFileSrc(newCover);
-              flipKey += 1;
             } else {
               artworkUrl = "";
             }
@@ -1799,7 +1270,6 @@
                 image.onload = () => {
                   if (lastSongKey !== requestedTrackKey) return;
                   artworkUrl = resolvedUrl;
-                  flipKey += 1;
                 };
                 image.src = resolvedUrl;
               })
@@ -1818,7 +1288,6 @@
   onDestroy(() => {
     stopAutoClose();
     stopDebugFps();
-    if (systemAudioTimeout) clearTimeout(systemAudioTimeout);
   });
 
   function handleGlobalClick(event: MouseEvent) {
@@ -1845,22 +1314,7 @@
   });
 
   onMount(() => {
-    // 1. 初始加载设置里的主题
-    (async () => {
-      try {
-        const savedSettings = await settingsApi.getSettings();
-        currentTheme = normalizedTheme(savedSettings.islandTheme || "original");
-        console.log("[主题加载] 初始主题:", currentTheme);
-      } catch (e) {
-        console.error("[主题加载] 失败:", e);
-      }
-    })();
-
-    // 2. 监听来自设置页面的实时切换广播
-    const unlistenTheme = listen("theme-changed", (event) => {
-      currentTheme = normalizedTheme(String(event.payload ?? "original"));
-      console.log("[主题切换] 主题已切换为:", currentTheme);
-    });
+    // 初始设置由主启动流程统一加载；这里仅监听设置页实时广播。
     const workAreaTimer = setInterval(() => {
       if (windowReady) {
         void applyWindowPlacement(
@@ -1872,7 +1326,7 @@
           false,
         ).catch(() => undefined);
       }
-    }, 2000);
+    }, 30_000);
 
     // 所有捕获场景统一从 Capture Mode 状态进入，不各自维护隐藏逻辑。
     const unlistenCaptureMode = eventManager.on(
@@ -1893,8 +1347,6 @@
     document.addEventListener("mousemove", handleMouseMoveThrottled);
 
     return () => {
-      // 清理主题监听
-      unlistenTheme.then((unlisten) => unlisten());
       unlistenCaptureMode.then((unlisten) => unlisten());
 
       if (hideTimeout) {
@@ -1929,16 +1381,8 @@
     {idlePaused}
     showSpectrum={appSettings.showSpectrum}
     spectrumMode={appSettings.spectrumMode}
-    theme={currentTheme}
     enableAnimations={appSettings.enableAnimations}
     reduceAnimations={appSettings.reduceAnimations}
-    hardwareAcceleration={appSettings.hardwareAcceleration}
-    {accentColor}
-    {secondaryColor}
-    isHidden={isHidden}
-    background={getThemeBackground(currentTheme)}
-    border={getThemeBorder(currentTheme)}
-    boxShadow={getThemeBoxShadow(currentTheme, isHidden, expanded)}
     {spectrumTopColor}
     {spectrumBottomColor}
     showTime={shouldShowIdleClock(hasMediaSession)}
@@ -1955,11 +1399,6 @@
     onHoverChange={(value) => hovering = value}
     onRegionChange={applyIslandRegion}
     onIdleAction={idleAction}
-    {systemAudio}
-    {audioDevices}
-    onAudioVolume={handleAudioVolume}
-    onAudioDevice={handleAudioDevice}
-    onAudioOpen={handleAudioOpen}
     timerStatus={countdown.status}
     {timerRemainingMs}
     clockText={currentTime}
@@ -1972,758 +1411,10 @@
   />
 </div>
 
-{#if false}
-<div
-  class="fixed inset-0 flex items-start justify-center pointer-events-none"
-  style="background: transparent;"
->
-  <div
-    class="pointer-events-auto relative"
-    class:theme-original={currentTheme === "original"}
-    class:island-hidden={isHidden && !isMouseAtTop}
-    class:island-drop-animation={isMouseAtTop && isHidden}
-    class:island-visible-edge={isHidden && isMouseAtTop}
-    style="
-      width: {$widthSpring}px;
-      height: {$heightSpring}px;
-      background: {getThemeBackground(currentTheme)};
-      background-size: {getThemeBackgroundSize(currentTheme)};
-      background-position: {getThemeBackgroundPosition(currentTheme)};
-      backdrop-filter: {getThemeBackdropFilter(currentTheme)};
-      -webkit-backdrop-filter: {getThemeBackdropFilter(currentTheme)};
-      border: {getThemeBorder(currentTheme)};
-      box-shadow: {getThemeBoxShadow(currentTheme, isHidden, expanded)};
-      border-radius: {getDynamicBorderRadius($heightSpring)};
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      transform: scale({isPressed ? 0.96 : 1}) translateZ(0);
-      {isAnimating ? 'will-change: transform, width, height;' : ''}
-      transition:
-        transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
-        box-shadow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-    "
-    onmouseenter={handleMouseEnter}
-    onmouseleave={handleMouseLeave}
-    onmousedown={() => (isPressed = true)}
-    onmouseup={handleRelease}
-    onkeydown={(e) => e.key === "Enter" && (expanded = !expanded)}
-    role="button"
-    tabindex="0"
-    aria-label="Dynamic Island - Click to toggle"
-  >
-    <!-- 调试信息覆盖层 -->
-    {#if appSettings.showDebugInfo}
-      <div class="debug-overlay">
-        <span>FPS: {currentFps}</span>
-        <span>刷新率: {displayRefreshRate}Hz</span>
-        <span>高帧率: {highFrameRateMode ? "✓" : "✗"}</span>
-        <span
-          >性能: {performanceLevel === "high"
-            ? "高性能"
-            : performanceLevel === "medium"
-              ? "中等"
-              : "低性能"}</span
-        >
-        <span>Theme: {currentTheme}</span>
-        <span>Src: {currentSource}</span>
-        <span>Pos: {currentTimeMs}ms</span>
-        <span>Hidden: {isHidden}</span>
-      </div>
-    {/if}
-
-    <div class="w-full h-full relative z-10 overflow-hidden">
-      <!-- 收起态内容 -->
-      <div
-        class="collapsed-content"
-        class:is-hidden={expanded}
-        style="opacity: {1 - $contentOpacity};"
-      >
-        {#if !hasMediaSession}
-          <div
-            class="h-full w-full flex items-center justify-center select-none"
-          >
-            <div class="time-display">
-              <span>{currentTime}</span>
-            </div>
-          </div>
-        {:else}
-          <div
-            class="h-full w-full flex items-center justify-between select-none"
-          >
-            <div
-              class="w-5 h-5 rounded overflow-hidden flex-shrink-0 select-none cursor-pointer"
-              style="background-color: rgba(255, 255, 255, 0.05);"
-              role="button"
-              tabindex="0"
-              data-stop-toggle
-              onclick={(e) => {
-                e.stopPropagation();
-                openCurrentPlayer();
-              }}
-              onkeydown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.stopPropagation();
-                  openCurrentPlayer();
-                }
-              }}
-            >
-              {#if artworkUrl}
-                {#key flipKey}
-                  <img
-                    src={artworkUrl}
-                    alt=""
-                    class="w-full h-full object-cover flip-enter"
-                    onload={() => console.log("[图片加载] 成功加载封面")}
-                    onerror={(e) => {
-                      console.error("[图片加载] 封面加载失败:", artworkUrl);
-                      (e.currentTarget as HTMLImageElement).style.display =
-                        "none";
-                    }}
-                  />
-                {/key}
-              {:else}
-                <div class="w-full h-full flex items-center justify-center">
-                  <svg
-                    class="w-3 h-3 text-white/20"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"
-                    />
-                  </svg>
-                </div>
-              {/if}
-            </div>
-
-            {#if appSettings.showSpectrum}
-              <div class="spectrum-wrapper">
-                <Spectrum topColor={spectrumTopColor} bottomColor={spectrumBottomColor} />
-              </div>
-            {:else}
-              <div class="flex items-center h-4 gap-[3px]">
-                {#if isPlaying}
-                  <div
-                    class="w-[3px] h-[3px] rounded-full animate-pulse"
-                    style="background-color: {accentColor};"
-                  ></div>
-                {/if}
-              </div>
-            {/if}
-          </div>
-        {/if}
-      </div>
-
-      <!-- 展开态内容 -->
-      <div
-        class="expanded-content"
-        class:is-visible={expanded}
-        style="opacity: {$contentOpacity};"
-      >
-        <div class="ui-content-layer">
-          <!-- 顶部区域：封面 + 标题 + 频谱 -->
-          <div
-            class="flex items-center justify-between"
-            style="gap: 12px; margin-bottom: 12px;"
-          >
-            <div
-              class="w-[52px] h-[52px] rounded-[12px] overflow-hidden shadow-2xl ring-1 ring-white/10 flex-shrink-0 cursor-pointer select-none transition-all duration-300 hover:scale-105 hover:shadow-xl"
-              style="background-color: rgba(255, 255, 255, 0.05);"
-              role="button"
-              tabindex="0"
-              data-stop-toggle
-              onclick={(e) => {
-                e.stopPropagation();
-                openCurrentPlayer();
-              }}
-              onkeydown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.stopPropagation();
-                  openCurrentPlayer();
-                }
-              }}
-            >
-              {#if artworkUrl}
-                {#key flipKey}
-                  <img
-                    src={artworkUrl}
-                    alt="cover"
-                    class="w-full h-full object-cover pointer-events-none flip-enter"
-                    onload={() =>
-                      console.log("[图片加载] 成功加载封面 (展开状态)")}
-                    onerror={(e) => {
-                      console.error(
-                        "[图片加载] 封面加载失败 (展开状态):",
-                        artworkUrl,
-                      );
-                      (e.currentTarget as HTMLImageElement).style.display =
-                        "none";
-                    }}
-                  />
-                {/key}
-              {:else}
-                <div class="w-full h-full flex items-center justify-center">
-                  <svg
-                    class="w-8 h-8 text-white/20"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"
-                    />
-                  </svg>
-                </div>
-              {/if}
-            </div>
-
-            <div class="flex-1 min-w-0">
-              <div class="marquee-wrapper relative overflow-hidden">
-                <h2
-                  class="marquee-text dynamic-glass-text select-none leading-tight mb-1 whitespace-nowrap"
-                  style="font-size: clamp(12px, 4vw, 18px); font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.03em;"
-                  data-full-title={trackTitle}
-                >
-                  {trackTitle}
-                </h2>
-              </div>
-              <p
-                class="truncate dynamic-glass-text-secondary select-none leading-tight"
-                style="font-size: clamp(10px, 3vw, 14px); font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; font-weight: 500; letter-spacing: -0.01em;"
-              >
-                {artistName}
-              </p>
-            </div>
-
-            {#if appSettings.showSpectrum}
-              <div class="spectrum-wrapper-expanded">
-                <Spectrum topColor={spectrumTopColor} bottomColor={spectrumBottomColor} scale={1.5} />
-              </div>
-            {/if}
-          </div>
-
-          <!-- 中部区域：进度条 -->
-          <div
-            class="relative flex items-center justify-center"
-            style="margin-bottom: 10px; width: 100%;"
-          >
-            <div class="w-full">
-              <div class="progress-bar">
-                <div
-                  class="progress-fill"
-                  style="width: {durationMs > 0
-                    ? Math.min(100, Math.max(0, (displayedPosition / durationMs) * 100))
-                    : 0}%"
-                ></div>
-              </div>
-              <div class="flex justify-between mt-1">
-                <span class="text-[10px] text-white/60"
-                  >{formatTime(displayedPosition)}</span
-                >
-                <span class="text-[10px] text-white/60"
-                  >-{formatTime(Math.max(0, durationMs - displayedPosition))}</span
-                >
-              </div>
-            </div>
-          </div>
-
-          <!-- 中部区域：播放控制按钮 -->
-          <div
-            class="relative flex items-center justify-center"
-            style="margin-bottom: 10px; width: 100%;"
-          >
-            <div
-              class="flex items-center justify-center"
-              style="
-                gap: 20px;
-                will-change: auto;
-                transform: translate3d(0, 0, 0);
-                backface-visibility: hidden;
-                perspective: 1000px;
-              "
-            >
-              <button
-                class="flex items-center justify-center text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button bg-transparent border-none p-0"
-                style="width: 32px; height: 32px;"
-                data-stop-toggle
-                onclick={(e) => handleMediaAction("prev", e)}
-              >
-                <SkipBack size={22} fill="currentColor" />
-              </button>
-
-              <button
-                class="flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all duration-300 relative z-50 cursor-pointer media-button bg-transparent border-none p-0"
-                style="width: 40px; height: 40px;"
-                data-stop-toggle
-                onclick={(e) => handleMediaAction("play_pause", e)}
-              >
-                {#if isPlaying}
-                  <Pause size={32} fill="currentColor" />
-                {:else}
-                  <Play size={32} fill="currentColor" />
-                {/if}
-              </button>
-
-              <button
-                class="flex items-center justify-center text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button bg-transparent border-none p-0"
-                style="width: 32px; height: 32px;"
-                data-stop-toggle
-                onclick={(e) => handleMediaAction("next", e)}
-              >
-                <SkipForward size={22} fill="currentColor" />
-              </button>
-            </div>
-
-            <!-- 悬浮窗按钮 -->
-            <div class="absolute right-0" style="transform: translateZ(0);">
-              <button
-                class="w-7 h-7 flex items-center justify-center rounded-xl border border-white/10 text-white/90 hover:scale-110 active:scale-90 transition-all duration-300 relative z-50 cursor-pointer media-button hover:border-white/20"
-                style="transform: translateZ(0); backface-visibility: hidden;"
-                data-stop-toggle
-                aria-label={isFloatingWindowOpen ? "关闭悬浮窗" : "打开悬浮窗"}
-                onclick={(e) => {
-                  e.stopPropagation();
-                  toggleFloatingWindow();
-                }}
-                onkeydown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.stopPropagation();
-                    toggleFloatingWindow();
-                  }
-                }}
-              >
-                <GalleryHorizontalEnd size={18} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-{/if}
 
 <style>
-  /* ========== 全局基础样式 ========== */
-  :global(*) {
-    box-sizing: border-box;
-  }
-
-  :global(html, body) {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  .fixed-host {
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    box-sizing: border-box;
-    background: transparent;
-    pointer-events: none;
-  }
-
-  .fixed-host :global(.island-surface) {
-    pointer-events: auto;
-  }
-
-  /* ========== 时间显示 ========== */
-  .time-display {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-    animation: time-fade-in 0.5s ease-out forwards;
-  }
-
-  .time-display span {
-    font-size: 12px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.8);
-    letter-spacing: 0.05em;
-    font-variant-numeric: tabular-nums;
-    font-family:
-      "SF Pro Display",
-      -apple-system,
-      BlinkMacSystemFont,
-      "Inter",
-      sans-serif;
-  }
-
-  @keyframes time-fade-in {
-    from {
-      opacity: 0;
-      transform: scale(0.9);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-
-  /* ========== 频谱 Canvas ========== */
-  .spectrum-wrapper {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 28px;
-  }
-
-  .collapsed-content .spectrum-wrapper {
-    height: 18px;
-    overflow: hidden;
-  }
-
-  .spectrum-wrapper-expanded {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    height: 40px;
-    flex-shrink: 0;
-  }
-
-  /* ========== 进度条 ========== */
-  .progress-bar {
-    width: 100%;
-    height: 3px;
-    background: rgba(255, 255, 255, 0.12);
-    border-radius: 999px;
-    overflow: hidden;
-  }
-
-  .progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.8));
-    border-radius: 999px;
-    transition: width 0.15s linear;
-  }
-
-  /* ===== 通用文本样式 ===== */
-  .dynamic-glass-text {
-    color: #ffffff;
-    text-shadow:
-      0 0 1px rgba(0, 0, 0, 0.4),
-      0 1px 4px rgba(0, 0, 0, 0.3);
-    -webkit-font-smoothing: antialiased;
-  }
-
-  .dynamic-glass-text-secondary {
-    color: rgba(255, 255, 255, 0.8);
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-    -webkit-font-smoothing: antialiased;
-  }
-
-  .ui-content-layer {
-    position: relative;
-    z-index: 2;
-  }
-
-  /* ===== 调试信息覆盖层 ===== */
-  .debug-overlay {
-    position: absolute;
-    top: 4px;
-    left: 8px;
-    z-index: 200;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    pointer-events: none;
-    font-family: "JetBrains Mono", monospace;
-    font-size: 9px;
-    font-weight: 500;
-    color: #4ade80;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 3px 8px;
-    border-radius: 6px;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    letter-spacing: 0.02em;
-    line-height: 1.4;
-  }
-
-  .debug-overlay span {
-    white-space: nowrap;
-  }
-
-  .debug-overlay span {
-    animation: island-water-drop 0.25s cubic-bezier(0.32, 0.72, 0, 1) forwards;
-    will-change: transform, opacity;
-  }
-
-  @keyframes island-water-drop {
-    0% {
-      opacity: 0;
-      transform: translateY(-100%) scale(0.8, 0.6);
-      border-radius: 50% 50% 30% 30%;
-    }
-    40% {
-      transform: translateY(10%) scale(1.05, 0.95);
-      border-radius: 45% 45% 35% 35%;
-    }
-    70% {
-      transform: translateY(-5%) scale(0.98, 1.02);
-      border-radius: 45% 45% 40% 40%;
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0) scale(1, 1);
-      border-radius: 45px;
-    }
-  }
-
-  .island-hidden {
-    transition:
-      transform 0.35s cubic-bezier(0.32, 0.72, 0, 1),
-      opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1);
-    transform: translateY(-100%);
-    opacity: 0;
-    pointer-events: none;
-    will-change: transform, opacity;
-  }
-
-  .island-visible-edge {
-    box-shadow:
-      0 2px 15px rgba(255, 255, 255, 0.3),
-      0 0 20px rgba(255, 255, 255, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  }
-
-  .island-visible-edge::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 40px;
-    height: 2px;
-    background: linear-gradient(
-      to bottom,
-      rgba(255, 255, 255, 0.8),
-      rgba(255, 255, 255, 0.3)
-    );
-    border-radius: 0 0 2px 2px;
-    pointer-events: none;
-  }
-
-  /* 绸缎感动画核心 */
-  .expanded-content {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    padding: 20px 28px 16px 28px;
-
-    transform: translateY(30px) scale(0.92) translateZ(0);
-    will-change: transform, filter, opacity;
-    transition:
-      transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-      filter 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-      opacity 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-
-    filter: blur(8px);
-    opacity: 0;
-    pointer-events: none;
-    will-change: transform, opacity, filter;
-    transform: translate3d(0, 0, 0);
-  }
-
-  .expanded-content.is-visible {
-    transform: translateY(0) scale(1) translateZ(0);
-    filter: blur(0);
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .collapsed-content {
-    position: absolute;
-    inset: 0;
-    height: 100%;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 12px;
-
-    transition:
-      transform 0.55s cubic-bezier(0.32, 0.72, 0, 1),
-      opacity 0.55s cubic-bezier(0.32, 0.72, 0, 1);
-
-    will-change: transform, opacity;
-    transform: translate3d(0, 0, 0);
-  }
-
-  .collapsed-content.is-hidden {
-    transform: translateY(-10px);
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .expanded-content.is-visible .flex-1 {
-    animation: button-drop-in 0.4s cubic-bezier(0.32, 0.72, 0, 1) forwards;
-    opacity: 0;
-    transform: translateY(-30px) scale(0.85);
-    will-change: transform, opacity;
-  }
-
-  .expanded-content.is-visible .flex-1 {
-    animation: button-drop-in 0.4s cubic-bezier(0.32, 0.72, 0, 1) forwards;
-    opacity: 0;
-    transform: translateY(-30px) scale(0.85);
-    will-change: transform, opacity;
-  }
-
-  @keyframes button-drop-in {
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
-  .flip-enter {
-    animation: flip-enter 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    transform-origin: center;
-    will-change: transform, opacity;
-  }
-
-  @keyframes cover-fade-in {
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
-  @keyframes flip-enter {
-    0% {
-      transform: perspective(1000px) rotateY(-180deg) scale(0.8);
-      opacity: 0;
-    }
-    20% {
-      transform: perspective(1000px) rotateY(-140deg) scale(0.88);
-      opacity: 0.2;
-    }
-    40% {
-      transform: perspective(1000px) rotateY(-90deg) scale(0.93);
-      opacity: 0.4;
-    }
-    60% {
-      transform: perspective(1000px) rotateY(-50deg) scale(0.96);
-      opacity: 0.65;
-    }
-    80% {
-      transform: perspective(1000px) rotateY(-15deg) scale(0.98);
-      opacity: 0.85;
-    }
-    100% {
-      transform: perspective(1000px) rotateY(0deg) scale(1);
-      opacity: 1;
-    }
-  }
-
-  :global(html, body) {
-    background: transparent !important;
-    background-color: transparent !important;
-    border: none !important;
-    outline: none !important;
-    margin: 0;
-    padding: 0;
-    width: 100vw;
-    height: 100vh;
-    pointer-events: auto;
-    overflow: hidden;
-    -webkit-app-region: no-drag;
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-  }
-
-  :global(#app),
-  :global(main) {
-    background: transparent !important;
-  }
-
-  .pointer-events-auto {
-    -webkit-font-smoothing: antialiased;
-    transform: translate3d(0, 0, 0) !important;
-    will-change: transform;
-    backface-visibility: hidden;
-    perspective: 1000px;
-    contain: layout style;
-  }
-
-  button,
-  [data-stop-toggle],
-  .media-button {
-    transform: translate3d(0, 0, 0) !important;
-    backface-visibility: hidden !important;
-    -webkit-font-smoothing: subpixel-antialiased;
-    will-change: auto;
-    perspective: 1000px;
-    contain: layout style;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-  }
-
-  button:active {
-    transform: scale(0.92) translateZ(0) !important;
-    transition: transform 0.1s ease !important;
-  }
-
-  .expanded-content.is-visible .media-button {
-    animation: button-icon-bounce 0.2s cubic-bezier(0.32, 0.72, 0, 1) forwards;
-    opacity: 0;
-    transform: translateY(-25px) scale(0.8);
-    backface-visibility: hidden;
-    will-change: transform, opacity;
-  }
-
-  .expanded-content.is-visible .media-button:nth-child(1) {
-    animation-delay: 0.03s;
-  }
-
-  .expanded-content.is-visible .media-button:nth-child(2) {
-    animation-delay: 0.06s;
-  }
-
-  .expanded-content.is-visible .media-button:nth-child(3) {
-    animation-delay: 0.09s;
-  }
-
-  .expanded-content.is-visible .media-button:nth-child(4) {
-    animation-delay: 0.12s;
-  }
-
-  @keyframes button-icon-bounce {
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
-  /* ─── Marquee 滚动效果 ─── */
-  .marquee-wrapper {
-    position: relative;
-  }
-  .marquee-text {
-    display: inline-block;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  @keyframes marquee-scroll {
-    0% {
-      transform: translateX(0);
-    }
-    100% {
-      transform: translateX(-50%);
-    }
-  }
-  .marquee-text::after {
-    content: attr(data-full-title);
-    position: absolute;
-    left: 100%;
-    white-space: nowrap;
-  }
+  :global(*) { box-sizing: border-box; }
+  :global(html, body, #app) { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; -webkit-font-smoothing: antialiased; }
+  .fixed-host { display: flex; align-items: flex-start; justify-content: center; box-sizing: border-box; background: transparent; pointer-events: none; }
+  .fixed-host :global(.island-surface) { pointer-events: auto; }
 </style>

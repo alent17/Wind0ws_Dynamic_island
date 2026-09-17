@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { retainSpectrum, spectrumValues } from "$lib/spectrumStore";
   import { shouldAnimateSpectrum } from "$lib/spectrumRender";
+  import { createSpectrumPalette, parseSpectrumColor } from "$lib/spectrumColors";
   import type { SpectrumMode } from "$lib/api/types";
   import { locale, translate } from "$lib/i18n";
 
@@ -34,7 +35,7 @@
   let latestBars = new Float32Array(NUM_BARS);
   let randomBars = new Float32Array(NUM_BARS);
   let visibleBars = new Float32Array(NUM_BARS);
-  let barGradient: CanvasGradient | string = "#ffffff";
+  let barGradients: Array<CanvasGradient | string> = ["#ffffff"];
 
   const barWidth = $derived(2 * scale);
   const barGap = $derived(1.5 * (1 + (scale - 1) * 0.4));
@@ -43,20 +44,9 @@
   const canvasHeight = $derived(18 * scale);
   const canvasWidth = $derived(NUM_BARS * (barWidth + barGap) - barGap);
 
-  function parseColor(color: string): [number, number, number] {
-    const rgb = color.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
-    if (rgb) return [+rgb[1], +rgb[2], +rgb[3]];
-    const hex = color.replace("#", "");
-    if (hex.length === 3) return hex.split("").map((value) => parseInt(value + value, 16)) as [number, number, number];
-    return [parseInt(hex.slice(0, 2), 16) || 255, parseInt(hex.slice(2, 4), 16) || 255, parseInt(hex.slice(4, 6), 16) || 255];
-  }
-
-  const topRgb = $derived(parseColor(topColor));
-  const bottomRgb = $derived(parseColor(bottomColor));
-
   function resizeCanvas() {
     if (!canvasEl || !ctx) return;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvasEl.width = Math.round(canvasWidth * dpr);
     canvasEl.height = Math.round(canvasHeight * dpr);
     canvasEl.style.width = `${canvasWidth}px`;
@@ -67,12 +57,16 @@
 
   function rebuildGradient() {
     if (!ctx) return;
-    const [tr, tg, tb] = topRgb;
-    const [br, bg, bb] = bottomRgb;
-    const gradient = ctx.createLinearGradient(0, canvasHeight, 0, 0);
-    gradient.addColorStop(0, `rgba(${br},${bg},${bb},.9)`);
-    gradient.addColorStop(1, `rgb(${tr},${tg},${tb})`);
-    barGradient = gradient;
+    const canvasContext = ctx;
+    const palette = createSpectrumPalette(topColor, bottomColor, NUM_BARS);
+    barGradients = palette.map((color) => {
+      const [r, g, b] = parseSpectrumColor(color);
+      const gradient = canvasContext.createLinearGradient(0, canvasHeight, 0, 0);
+      gradient.addColorStop(0, `rgba(${Math.round(r * 0.72)},${Math.round(g * 0.72)},${Math.round(b * 0.72)},.9)`);
+      gradient.addColorStop(0.55, `rgb(${r},${g},${b})`);
+      gradient.addColorStop(1, `rgb(${Math.min(255, Math.round(r * 1.12))},${Math.min(255, Math.round(g * 1.12))},${Math.min(255, Math.round(b * 1.12))})`);
+      return gradient;
+    });
   }
 
   function draw() {
@@ -87,8 +81,8 @@
       const height = MIN_HEIGHT + value * (maxHeight - MIN_HEIGHT);
       const x = index * (barWidth + barGap);
       const y = (canvasHeight - height) / 2;
-      ctx.globalAlpha = 0.6 + value * 0.4;
-      ctx.fillStyle = barGradient;
+      ctx.globalAlpha = 0.78 + value * 0.22;
+      ctx.fillStyle = barGradients[index] ?? "#ffffff";
       ctx.beginPath();
       ctx.roundRect(x, y, barWidth, height, cornerRadius);
       ctx.fill();
@@ -121,7 +115,7 @@
 
   $effect(() => { active; values; mode; playing; reduceMotion; ensureRenderLoop(); });
   $effect(() => { scale; resizeCanvas(); });
-  $effect(() => { topRgb; bottomRgb; rebuildGradient(); if (values && mounted && active) draw(); });
+  $effect(() => { topColor; bottomColor; rebuildGradient(); if (values && mounted && active) draw(); });
 
   $effect(() => {
     if (!mounted || !active || !playing || values || mode !== "realtime" || reduceMotion) return;

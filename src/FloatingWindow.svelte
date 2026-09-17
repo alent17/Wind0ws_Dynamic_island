@@ -91,7 +91,11 @@
     windowSize.width <= 200.5 && windowSize.height <= 200.5,
   );
   let clockNow = $state(Date.now());
+  let pageVisible = $state(true);
   let displayedPosition = $derived(projectedPosition(mediaState, clockNow));
+  function handleVisibilityChange() {
+    pageVisible = document.visibilityState === "visible";
+  }
 
   // MV 播放相关
   let isMVPlaybackEnabled = $state(false); // MV 播放功能是否启用
@@ -442,6 +446,8 @@
   }
 
   onMount(async () => {
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     // 读取设置
     try {
       const settings = await invoke<AppSettings>("get_settings");
@@ -745,7 +751,12 @@
   });
 
   $effect(() => {
-    const interval = setInterval(() => clockNow = Date.now(), 250);
+    const intervalMs = !pageVisible
+      ? 2_000
+      : mediaState.isPlaying && !isCompactCover
+        ? 250
+        : 1_000;
+    const interval = setInterval(() => clockNow = Date.now(), intervalMs);
     return () => clearInterval(interval);
   });
 
@@ -758,6 +769,7 @@
     }
     window.removeEventListener("blur", handlePointerLeave);
     document.removeEventListener("mouseleave", handlePointerLeave);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
     if (hoverLeaveTimeout) clearTimeout(hoverLeaveTimeout);
 
     // 清理所有事件监听器
@@ -836,8 +848,10 @@
     }
   });
 
-  // 缓存处理后的图片
-  let processedImageCache = $state<{ [key: string]: string }>({}); // 缓存处理后的图片 base64
+  // 缓存处理后的图片。浮动窗可能长时间切歌，使用有上限的 LRU，避免
+  // 专辑封面 base64 无限留在 WebView 内存中。
+  const MAX_PROCESSED_IMAGES = 12;
+  const processedImageCache = new Map<string, string>();
   const processingPromises = new Map<string, Promise<string>>();
 
   // 使用后端 API 处理图片（支持像素化）
@@ -845,11 +859,15 @@
     imageUrl: string,
     enablePixelArt: boolean,
   ): Promise<string> {
-    // 如果已有缓存，直接返回
-    if (processedImageCache[imageUrl]) {
-      return processedImageCache[imageUrl];
+    const cacheKey = `${enablePixelArt ? "pixel" : "normal"}:${imageUrl}`;
+    const cached = processedImageCache.get(cacheKey);
+    if (cached) {
+      // Map insertion order is the access order used by this small LRU.
+      processedImageCache.delete(cacheKey);
+      processedImageCache.set(cacheKey, cached);
+      return cached;
     }
-    const pending = processingPromises.get(imageUrl);
+    const pending = processingPromises.get(cacheKey);
     if (pending) return pending;
 
     const processing = (async () => {
@@ -858,16 +876,21 @@
           imagePath: imageUrl,
           enablePixelArt: enablePixelArt,
         });
-        processedImageCache[imageUrl] = processedBase64;
+        processedImageCache.set(cacheKey, processedBase64);
+        while (processedImageCache.size > MAX_PROCESSED_IMAGES) {
+          const oldestKey = processedImageCache.keys().next().value;
+          if (oldestKey === undefined) break;
+          processedImageCache.delete(oldestKey);
+        }
         return processedBase64;
       } catch (error) {
         console.error("[图片处理] 后端处理失败:", error);
         return imageUrl;
       } finally {
-        processingPromises.delete(imageUrl);
+        processingPromises.delete(cacheKey);
       }
     })();
-    processingPromises.set(imageUrl, processing);
+    processingPromises.set(cacheKey, processing);
     return processing;
   }
 
@@ -1486,13 +1509,9 @@
     height: 100%;
     overflow: hidden;
     background: transparent;
-    font-family:
-      "SF Pro Display",
-      -apple-system,
-      BlinkMacSystemFont,
-      "Segoe UI",
-      system-ui,
-      sans-serif;
+    font-family: var(--app-font);
+    text-rendering: optimizeLegibility;
+    font-synthesis: none;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -1969,12 +1988,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     user-select: none;
-    font-family:
-      "SF Pro Display",
-      -apple-system,
-      BlinkMacSystemFont,
-      sans-serif;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    font-family: var(--app-font);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.24);
     transition: all 0.3s ease;
   }
 
@@ -1988,7 +2003,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     user-select: none;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
     transition: all 0.3s ease;
   }
 

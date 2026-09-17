@@ -6,29 +6,22 @@
 
 /* ========== Font Face Definitions ========== */
 @font-face {
-  font-family: 'SpotifyMixUI';
-  src: url('/fonts/fusion-pixel-12px-monospaced-latin.ttf') format('truetype');
+  font-family: 'MiSans';
+  src: url('/fonts/MiSans-Regular.ttf') format('truetype');
   font-weight: 400;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'SpotifyMixUI';
-  src: url('/fonts/fusion-pixel-12px-monospaced-latin.ttf') format('truetype');
-  font-weight: 600;
+  font-family: 'MiSans';
+  src: url('/fonts/MiSans-Medium.ttf') format('truetype');
+  font-weight: 500;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'SpotifyMixUI';
-  src: url('/fonts/fusion-pixel-12px-monospaced-latin.ttf') format('truetype');
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'SpotifyMixUITitle';
-  src: url('/fonts/fusion-pixel-12px-monospaced-latin.ttf') format('truetype');
+  font-family: 'MiSans';
+  src: url('/fonts/MiSans-Bold.ttf') format('truetype');
   font-weight: 700;
   font-display: swap;
 }
@@ -60,7 +53,7 @@
 
 /* ========== Typography ========== */
 :global(h1) {
-  font-family: var(--font-family-title);
+  font-family: var(--app-font);
   font-size: var(--text-2xl);
   font-weight: var(--font-bold);
   margin: 0 0 var(--spacing-lg) 0;
@@ -68,7 +61,7 @@
 }
 
 :global(h2) {
-  font-family: var(--font-family-title);
+  font-family: var(--app-font);
   font-size: var(--text-xl);
   font-weight: var(--font-bold);
   margin: 0 0 var(--spacing-md) 0;

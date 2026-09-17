@@ -54,7 +54,10 @@ static ISLAND_CURSOR_MONITOR_GENERATION: AtomicU64 = AtomicU64::new(0);
 static ISLAND_CURSOR_MONITOR_HEARTBEAT: AtomicU64 = AtomicU64::new(0);
 static WINDOW_MOTION_REVISION: AtomicU64 = AtomicU64::new(0);
 
-const CURSOR_MONITOR_INTERVAL_MS: u64 = 33;
+const CURSOR_MONITOR_ACTIVE_INTERVAL_MS: u64 = 33;
+const CURSOR_MONITOR_NEAR_INTERVAL_MS: u64 = 50;
+const CURSOR_MONITOR_IDLE_INTERVAL_MS: u64 = 200;
+const CURSOR_MONITOR_NEAR_DISTANCE_PX: i64 = 240;
 const CURSOR_MONITOR_RETRY_MS: u64 = 100;
 const CURSOR_MONITOR_WATCHDOG_INTERVAL_MS: u64 = 1_000;
 const CURSOR_MONITOR_STALE_MS: u64 = 3_000;
@@ -242,6 +245,34 @@ fn interaction_revision_is_current(candidate: u64, current: u64) -> bool {
     candidate >= current
 }
 
+fn cursor_monitor_interval(cursor_x: i32, cursor_y: i32, rect: &windows::Win32::Foundation::RECT, inside: bool) -> u64 {
+    if inside {
+        return CURSOR_MONITOR_ACTIVE_INTERVAL_MS;
+    }
+
+    let dx = if cursor_x < rect.left {
+        i64::from(rect.left) - i64::from(cursor_x)
+    } else if cursor_x > rect.right {
+        i64::from(cursor_x) - i64::from(rect.right)
+    } else {
+        0
+    };
+    let dy = if cursor_y < rect.top {
+        i64::from(rect.top) - i64::from(cursor_y)
+    } else if cursor_y > rect.bottom {
+        i64::from(cursor_y) - i64::from(rect.bottom)
+    } else {
+        0
+    };
+    if dx.saturating_mul(dx) + dy.saturating_mul(dy)
+        <= CURSOR_MONITOR_NEAR_DISTANCE_PX * CURSOR_MONITOR_NEAR_DISTANCE_PX
+    {
+        CURSOR_MONITOR_NEAR_INTERVAL_MS
+    } else {
+        CURSOR_MONITOR_IDLE_INTERVAL_MS
+    }
+}
+
 fn spawn_cursor_monitor(window: tauri::WebviewWindow, generation: u64) -> AppResult<()> {
     use windows::Win32::Foundation::{HWND, POINT, RECT};
     use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetWindowRect};
@@ -310,7 +341,8 @@ fn spawn_cursor_monitor(window: tauri::WebviewWindow, generation: u64) -> AppRes
                 }
                 last_ignored = Some(ignored);
             }
-            std::thread::sleep(std::time::Duration::from_millis(CURSOR_MONITOR_INTERVAL_MS));
+            let interval = cursor_monitor_interval(cursor.x, cursor.y, &window_rect, inside);
+            std::thread::sleep(std::time::Duration::from_millis(interval));
         }
 
         let _ = window.set_ignore_cursor_events(false);
@@ -407,6 +439,9 @@ pub fn set_island_interaction_region(
         revision,
         ISLAND_INTERACTION_REGION_REVISION.load(Ordering::Acquire),
     ) {
+        return Ok(());
+    }
+    if *region == next {
         return Ok(());
     }
     *region = next;
@@ -693,23 +728,7 @@ pub fn open_timer_window(app: AppHandle) -> AppResult<()> {
         return Ok(());
     }
 
-    tauri::WebviewWindowBuilder::new(
-        &app,
-        "timer_window",
-        tauri::WebviewUrl::App("index.html?window=timer".into()),
-    )
-    .title("Timer")
-    .inner_size(420.0, 360.0)
-    .min_inner_size(360.0, 300.0)
-    .resizable(true)
-    .decorations(false)
-    .transparent(true)
-    .always_on_top(true)
-    .center()
-    .build()
-    .map_err(|e| AppError::window(e.to_string()))?;
-
-    Ok(())
+    Err(AppError::window("倒计时窗口尚未初始化"))
 }
 
 #[tauri::command]

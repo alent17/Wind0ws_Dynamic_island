@@ -228,13 +228,11 @@ async function saveSettings(newSettings: Partial<AppSettings>) {
 
 ```json
 {
-  "island_theme": "original",
   "auto_hide": true,
   "show_spectrum": true,
   "enable_animations": true,
   "window_opacity": 255,
   "always_on_top": true,
-  "hardware_acceleration": true,
   "reduce_animations": false,
   "show_debug_info": false,
   "log_level": "Info",

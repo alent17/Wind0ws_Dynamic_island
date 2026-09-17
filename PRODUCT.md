@@ -27,7 +27,7 @@ The app runs as an always-available Tauri desktop utility, reads Windows media s
 - Preserve Windows media-session playback, spectrum, cover enrichment, cache, multi-monitor placement, always-on-top behavior, auto-start, and floating-window geometry.
 - The main island has Compact, Hover, Expanded, and Hidden states.
 - The old settings page remains replaced by Isle Studio, while the legacy player preference fields remain available as a compatibility layer.
-- Preserve the original source-specific progress, cover enrichment, MV, pixel-art, halftone, theme, and floating-window behavior.
+- Preserve the original source-specific progress, cover enrichment, MV, pixel-art, halftone, and floating-window behavior.
 - Apple proprietary assets and bundled SF Pro fonts are not used.
 
 ## Brand Commitments

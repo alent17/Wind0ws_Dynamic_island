@@ -202,27 +202,6 @@ fn start_media_listener(handle: AppHandle) {
     });
 }
 
-fn start_system_audio_monitor() {
-    std::thread::spawn(move || {
-        unsafe {
-            let _ = windows::Win32::System::Com::CoInitializeEx(
-                None,
-                windows::Win32::System::Com::COINIT_MULTITHREADED,
-            );
-        }
-        let mut previous = services::get_system_audio_state().ok();
-        loop {
-            if let Ok(current) = services::get_system_audio_state() {
-                if previous.as_ref() != Some(&current) {
-                    let _ = EVENT_BUS.emit(event_bus::EVENT_SYSTEM_AUDIO_CHANGED, &current);
-                    previous = Some(current);
-                }
-            }
-            std::thread::sleep(std::time::Duration::from_millis(250));
-        }
-    });
-}
-
 /// 启动统一捕获状态监控器
 ///
 /// 在后台线程中监控截图快捷键与全屏状态，并向前端发布统一快照。
@@ -426,8 +405,7 @@ pub fn run() {
             commands::save_preferences,
             commands::get_settings,
             commands::save_settings,
-            commands::set_theme,
-            commands::get_theme,
+            commands::update_settings,
             commands::set_always_on_top,
             commands::set_window_opacity,
             commands::get_player_weights,
@@ -551,7 +529,6 @@ pub fn run() {
 
             // 启动后台服务
             start_media_listener(app.handle().clone());
-            start_system_audio_monitor();
             start_capture_monitor(app.handle().clone());
 
             // 创建托盘菜单
