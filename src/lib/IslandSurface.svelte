@@ -4,11 +4,13 @@
   import { ChevronLeft, ChevronRight, Music2, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-svelte";
   import MediaProgress from "$lib/MediaProgress.svelte";
   import Spectrum from "$lib/Spectrum.svelte";
+  import ShaderSurface from "$lib/ShaderSurface.svelte";
   import FeatureRail from "$lib/FeatureRail.svelte";
-  import { FEATURE_RAIL_GAP, FEATURE_RAIL_HEIGHT, FEATURE_RAIL_WIDTH, type IslandTool } from "$lib/featureRail";
+  import ArcVolumeControl from "$lib/ArcVolumeControl.svelte";
+  import { FEATURE_RAIL_BUTTON_SIZE, FEATURE_RAIL_COLLAPSED_WIDTH, FEATURE_RAIL_GAP, FEATURE_RAIL_WIDTH, featureRailHeight, type IslandTool } from "$lib/featureRail";
   import type { CountdownStatus } from "$lib/countdown";
   import { ISLAND_MOTION, islandMorphEasing, islandSettleEasing } from "$lib/islandMotion";
-  import type { AudioDeviceInfo, MediaState, SpectrumMode, SystemAudioState } from "$lib/api/types";
+  import type { AudioDeviceInfo, IslandTheme, MediaState, SpectrumMode, SystemAudioState } from "$lib/api/types";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
   import {
     borderRadiusCss,
@@ -40,9 +42,15 @@
     idlePaused = false,
     showSpectrum = true,
     spectrumMode = "realtime",
+    theme = "original",
     enableAnimations = true,
     reduceAnimations = false,
+    hardwareAcceleration = true,
+    accentColor = "#5a7cff",
+    secondaryColor = "#30d5c8",
+    frameRate = 30,
     background = "#000",
+    railBackground = background,
     border = "1px solid rgba(255,255,255,.1)",
     boxShadow = "none",
     spectrumTopColor = "#fff",
@@ -54,6 +62,7 @@
     debugLines = [],
     interactive = true,
     simulateHidden = false,
+    isHidden = false,
     systemAudio = null,
     audioDevices = [],
     onToggle,
@@ -67,6 +76,7 @@
     onAudioVolume,
     onAudioDevice,
     onAudioOpen,
+    onTimerOpen,
     onTimerStart,
     onTimerPause,
     onTimerResume,
@@ -76,6 +86,7 @@
     timerRemainingMs = 0,
     clockText = "00:00",
     clockTimeZone = "system",
+    enabledTools = ["floating", "volume", "timer"],
   } = $props<{
     media: MediaState;
     mode?: IslandMode;
@@ -91,9 +102,15 @@
     idlePaused?: boolean;
     showSpectrum?: boolean;
     spectrumMode?: SpectrumMode;
+    theme?: IslandTheme;
     enableAnimations?: boolean;
     reduceAnimations?: boolean;
+    hardwareAcceleration?: boolean;
+    accentColor?: string;
+    secondaryColor?: string;
+    frameRate?: number;
     background?: string;
+    railBackground?: string;
     border?: string;
     boxShadow?: string;
     spectrumTopColor?: string;
@@ -105,6 +122,7 @@
     debugLines?: string[];
     interactive?: boolean;
     simulateHidden?: boolean;
+    isHidden?: boolean;
     systemAudio?: SystemAudioState | null;
     audioDevices?: AudioDeviceInfo[];
     onToggle?: () => void;
@@ -118,6 +136,7 @@
     onAudioVolume?: (volumePercent: number) => void | Promise<void>;
     onAudioDevice?: (deviceId: string) => void | Promise<void>;
     onAudioOpen?: () => void | Promise<void>;
+    onTimerOpen?: () => void;
     onTimerStart?: (durationMs: number) => void;
     onTimerPause?: () => void;
     onTimerResume?: () => void;
@@ -127,6 +146,7 @@
     timerRemainingMs?: number;
     clockText?: string;
     clockTimeZone?: string;
+    enabledTools?: IslandTool[];
   }>();
   const t = (key: TranslationKey, values: Record<string, string | number> = {}) => translate(key, values, $locale);
 
@@ -153,15 +173,16 @@
   const size = $derived({ width: animatedWidth, height: animatedHeight, radius: animatedRadius });
   let activeTool = $state<IslandTool | null>(null);
   const expandedGeometry = $derived(geometryFor("expanded", expandedRadius, edge, compactLength));
-  const railWidth = $derived(activeTool ? FEATURE_RAIL_WIDTH : 38);
+  const railHeight = $derived(featureRailHeight(enabledTools.length));
+  const railWidth = $derived(activeTool ? FEATURE_RAIL_WIDTH : FEATURE_RAIL_COLLAPSED_WIDTH);
   const railExtraRects = $derived.by(() => {
-    if (mode !== "expanded") return [];
+    if (mode !== "expanded" || enabledTools.length === 0) return [];
     return [{
       x: edge === "right" ? -railWidth - FEATURE_RAIL_GAP : expandedGeometry.width + FEATURE_RAIL_GAP,
-      y: (expandedGeometry.height - FEATURE_RAIL_HEIGHT) / 2,
+      y: (expandedGeometry.height - railHeight) / 2,
       width: railWidth,
-      height: FEATURE_RAIL_HEIGHT,
-      radius: 19,
+      height: railHeight,
+      radius: FEATURE_RAIL_BUTTON_SIZE / 2,
     }];
   });
 
@@ -238,7 +259,12 @@
     });
   });
   $effect(() => {
-    if (mode !== "expanded" && activeTool !== null) activeTool = null;
+    if ((mode !== "expanded" || (activeTool !== null && !enabledTools.includes(activeTool))) && activeTool !== null) activeTool = null;
+  });
+  $effect(() => {
+    const extraRects = railExtraRects;
+    if (mode !== "expanded" || enabledTools.length === 0) return;
+    onRegionChange?.({ geometry: activeEnvelope, radii: radiiFor(activeEnvelope, islandStyle, edge), polygon: shapePolygonFor(activeEnvelope, islandStyle, edge, edgeShoulderRadius), extraRects, settled: true });
   });
   $effect(() => {
     const hard = !enableAnimations || reduceAnimations || prefersReducedMotion;
@@ -287,9 +313,10 @@
   const expandedOpacity = $derived(Math.min(1, Math.max(0, (outwardProgress - 0.18) / 0.42)));
   const secondaryOpacity = $derived(Math.min(1, Math.max(0, (outwardProgress - 0.42) / 0.38)));
   const compactOpacity = $derived(Math.min(1, Math.max(0, 1 - outwardProgress * 4)));
-  const railVisible = $derived(mode === "expanded" && outwardProgress > 0.82);
+  const railVisible = $derived(mode === "expanded" && enabledTools.length > 0 && outwardProgress > 0.82);
   const surfaceBackground = $derived(mode === "expanded" ? background : "#000");
   const surfaceBorder = $derived(mode === "expanded" ? border : "1px solid transparent");
+  const shaderVisible = $derived(!isHidden && !(simulateHidden && mode === "hidden"));
   function toggleFromSurface(event: MouseEvent | KeyboardEvent) {
     const target = event.target as HTMLElement;
     if (!interactive || target.closest("button,[data-stop-toggle]")) return;
@@ -346,6 +373,24 @@
     onclick={toggleFromSurface}
     onkeydown={keyToggle}
   >
+    {#if theme !== "original"}
+      <ShaderSurface
+        {theme}
+        width={size.width}
+        height={size.height}
+        playing={media.isPlaying}
+        {accentColor}
+        {secondaryColor}
+        {spectrumMode}
+        {previewSpectrum}
+        expandProgress={outwardProgress}
+        {frameRate}
+        {enableAnimations}
+        reduceMotion={reduceAnimations || prefersReducedMotion}
+        {hardwareAcceleration}
+        visible={shaderVisible}
+      />
+    {/if}
     {#if showDebugInfo}
       <div class="debug-overlay" aria-hidden="true">
         {#each debugLines as line}<span>{line}</span>{/each}
@@ -427,32 +472,38 @@
         </div>
         <span class="control-spacer"></span>
       </div>
+
+      <div
+        class="expanded-volume-control"
+        style={`opacity:${secondaryOpacity};left:${Math.max(18, Math.min(34, size.radius * 0.42))}px`}
+      >
+        <ArcVolumeControl
+          volume={systemAudio?.volumePercent ?? 50}
+          muted={systemAudio?.muted ?? false}
+          onOpen={onAudioOpen}
+          onVolume={onAudioVolume}
+        />
+      </div>
       {/if}
     </div>
   </div>
 
   <div
     class="feature-rail-anchor"
-    style={`left:${edge === "right" ? -railWidth - FEATURE_RAIL_GAP : expandedGeometry.width + FEATURE_RAIL_GAP}px;top:${(expandedGeometry.height - FEATURE_RAIL_HEIGHT) / 2}px`}
+    style={`left:${edge === "right" ? -railWidth - FEATURE_RAIL_GAP : expandedGeometry.width + FEATURE_RAIL_GAP}px;top:${(expandedGeometry.height - railHeight) / 2}px`}
   >
     <FeatureRail
       visible={railVisible}
       {activeTool}
+      {enabledTools}
+      {railBackground}
       volume={systemAudio?.volumePercent ?? 0}
       muted={systemAudio?.muted ?? false}
-      timerStatus={timerStatus}
-      timerRemainingMs={timerRemainingMs}
-      {clockText}
-      timeZone={clockTimeZone}
       onTool={(tool) => activeTool = tool}
       onFloating={onToggleFloating}
+      onTimerOpen={onTimerOpen}
       onAudioOpen={onAudioOpen}
       onVolume={onAudioVolume}
-      onTimerStart={onTimerStart}
-      onTimerPause={onTimerPause}
-      onTimerResume={onTimerResume}
-      onTimerAdjust={onTimerAdjust}
-      onTimerReset={onTimerReset}
     />
   </div>
   </div>
@@ -471,6 +522,7 @@
   .expanded-layer{left:50%;top:0;width:300px;height:160px;padding:16px 28px 20px;display:flex;flex-direction:column;transition:opacity 120ms linear;will-change:transform,opacity}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.top-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;min-height:52px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata strong,.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata strong{font-size:13px;line-height:1.15;font-weight:700;letter-spacing:-.03em;margin-bottom:4px}.metadata span{font-size:11px;line-height:1.15;font-weight:500;color:rgba(255,255,255,.65)}.progress-block,.control-row,.idle-controls{opacity:var(--secondary-opacity);transition:opacity 100ms linear}
   .progress-block{width:100%;margin-bottom:4px}
   .control-row{position:relative;display:grid;grid-template-columns:28px 1fr 28px;align-items:center;width:100%;height:40px}.control-spacer{width:28px}.controls{display:flex;align-items:center;justify-content:center;gap:20px}.controls button{display:grid;place-items:center;width:40px;height:40px;padding:0;color:rgba(255,255,255,.9);background:transparent;border:0;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease}.controls .side{width:32px;height:32px}.controls .play{color:#fff}.controls button:active,.cover:active{transform:scale(.94)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .expanded-volume-control{position:absolute;z-index:3;bottom:13px;width:48px;height:38px;pointer-events:auto;transition:opacity 100ms linear,left 180ms cubic-bezier(.22,1,.36,1)}
   @media (hover:hover) and (pointer:fine){.controls button:hover{transform:scale(1.06);color:#fff}.cover:hover{filter:brightness(1.08)}}
   @media (prefers-reduced-motion:reduce){.surface-anchor{transition:none!important}.island-surface,.expanded-layer,.controls button{transition-duration:120ms!important}.island-surface{transition-property:opacity,box-shadow!important}.expanded-layer{transform:translateX(-50%)!important}.cover-image,.compact-disc{animation:none}}
 </style>

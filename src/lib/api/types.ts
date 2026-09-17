@@ -1,10 +1,11 @@
 export type IslandStyle = "floating" | "edge";
 export type IslandEdge = "top" | "right" | "bottom" | "left";
+export type IslandTheme = "original" | "shader-dial" | "album-reactive";
 export type SpectrumMode = "realtime" | "random";
 export type AppLanguage = "system" | "zh-CN" | "en" | "ja";
 
 export interface AppSettings {
-  islandTheme: string;
+  islandTheme: IslandTheme;
   islandStyle: IslandStyle;
   islandEdge: IslandEdge;
   islandEdgePosition: number;
@@ -39,6 +40,9 @@ export interface AppSettings {
   floatingWindowHeight: number | null;
   floatingFillColor: string;
   floatingUseAlbumColor: boolean;
+  showFloatingTool: boolean;
+  showVolumeTool: boolean;
+  showTimerTool: boolean;
   enableMvPlayback: boolean;
   lockFloatingWindow: boolean;
   enableHdCover: boolean;
@@ -199,6 +203,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   floatingWindowHeight: null,
   floatingFillColor: "#28323c",
   floatingUseAlbumColor: true,
+  showFloatingTool: true,
+  showVolumeTool: true,
+  showTimerTool: true,
   enableMvPlayback: true,
   lockFloatingWindow: false,
   enableHdCover: true,

@@ -15,6 +15,10 @@ export const windowApi = {
     return invoke("open_floating_window");
   },
 
+  async openTimerWindow(): Promise<void> {
+    return invoke("open_timer_window");
+  },
+
   async closeFloatingWindow(): Promise<void> {
     return invoke("close_floating_window");
   },

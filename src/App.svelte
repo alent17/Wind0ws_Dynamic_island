@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { spring } from "svelte/motion";
   import { convertFileSrc } from "@tauri-apps/api/core";
-  import { listen } from "@tauri-apps/api/event";
+  import { emit, listen } from "@tauri-apps/api/event";
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
   import { Events } from "./utils/eventConstants";
   import { mediaApi } from "$lib/api/media";
@@ -26,8 +26,9 @@
     type IslandRegionChange,
     type IslandStyle,
   } from "$lib/islandGeometry";
-  import type { AppSettings, AudioDeviceInfo, IdleContentItem, IdleSnapshot, MediaState, MonitorInfo, SystemAudioState } from "$lib/api/types";
+  import type { AppSettings, AudioDeviceInfo, IdleContentItem, IdleSnapshot, IslandTheme, MediaState, MonitorInfo, SystemAudioState } from "$lib/api/types";
   import { DEFAULT_SETTINGS } from "$lib/api/types";
+  import type { IslandTool } from "$lib/featureRail";
   import { applyAppFont } from "$lib/font";
   import { locale, setLocale, translate, type TranslationKey } from "$lib/i18n";
   import {
@@ -161,7 +162,7 @@
   let artistName = $state<string>("");
   let isPlaying = $state<boolean>(false);
   let lastSongKey: string | null = null;
-  let currentTheme = $state<string>("original");
+  let currentTheme = $state<IslandTheme>("original");
 
   let spectrumTopColor = $state<string>("#ffffff");
   let spectrumBottomColor = $state<string>("#888888");
@@ -197,12 +198,17 @@
     return value === "right" || value === "bottom" || value === "left" ? value : "top";
   }
 
+  function normalizedTheme(value: string): IslandTheme {
+    return value === "shader-dial" || value === "album-reactive" ? value : "original";
+  }
+
   function normalizedSettings(value: Partial<AppSettings>): AppSettings {
     const position = Number(value.islandEdgePosition ?? DEFAULT_SETTINGS.islandEdgePosition);
     const legacyAutoHide = (value as Partial<AppSettings> & { autoHide?: boolean }).autoHide;
     return {
       ...DEFAULT_SETTINGS,
       ...value,
+      islandTheme: normalizedTheme(value.islandTheme ?? DEFAULT_SETTINGS.islandTheme),
       islandStyle: normalizedStyle(value.islandStyle ?? DEFAULT_SETTINGS.islandStyle),
       islandEdge: normalizedEdge(value.islandEdge ?? DEFAULT_SETTINGS.islandEdge),
       spectrumMode: value.spectrumMode === "random" ? "random" : "realtime",
@@ -329,6 +335,13 @@
   let appSettings = $state<AppSettings>({
     ...DEFAULT_SETTINGS,
   });
+  let enabledFeatureTools = $derived.by<IslandTool[]>(() => {
+    const tools: IslandTool[] = [];
+    if (appSettings.showFloatingTool) tools.push("floating");
+    if (appSettings.showVolumeTool) tools.push("volume");
+    if (appSettings.showTimerTool) tools.push("timer");
+    return tools;
+  });
   let lastSettingsSnapshot = "";
   function applySettingsIfChanged(value: AppSettings) {
     const next = normalizedSettings(value);
@@ -336,6 +349,7 @@
     if (snapshot === lastSettingsSnapshot) return;
     lastSettingsSnapshot = snapshot;
     appSettings = next;
+    currentTheme = next.islandTheme;
   }
   let systemAudio = $state<SystemAudioState | null>(null);
   let audioDevices = $state<AudioDeviceInfo[]>([]);
@@ -344,6 +358,11 @@
   function scheduleSystemAudioDismiss(delay = 3500) {
     if (systemAudioTimeout) clearTimeout(systemAudioTimeout);
     systemAudioTimeout = setTimeout(() => {
+      if (expanded) {
+        systemAudioTimeout = null;
+        return;
+      }
+
       systemAudio = null;
       systemAudioTimeout = null;
     }, delay);
@@ -357,14 +376,40 @@
 
   function toggleIsland() {
     expanded = !expanded;
-    if (systemAudio) scheduleSystemAudioDismiss(expanded ? 10000 : 3500);
+
+    if (expanded) {
+      void handleAudioOpen();
+    } else if (systemAudio) {
+      scheduleSystemAudioDismiss(3500);
+    }
   }
 
   async function handleAudioVolume(volumePercent: number) {
-    if (!systemAudio) return;
-    systemAudio = { ...systemAudio, volumePercent, muted: volumePercent === 0 };
-    scheduleSystemAudioDismiss(10000);
-    await audioApi.setVolume(volumePercent).catch((error) => logger.error("设置系统音量失败", error));
+    const nextVolume = Math.max(0, Math.min(100, Math.round(volumePercent)));
+    let currentAudio = systemAudio;
+
+    if (!currentAudio) {
+      try {
+        currentAudio = await audioApi.getState();
+      } catch (error) {
+        logger.error("读取系统音量失败", error);
+        return;
+      }
+    }
+
+    systemAudio = {
+      ...currentAudio,
+      volumePercent: nextVolume,
+      muted: nextVolume === 0,
+    };
+
+    scheduleSystemAudioDismiss(expanded ? 10000 : 3500);
+
+    try {
+      await audioApi.setVolume(nextVolume);
+    } catch (error) {
+      logger.error("设置系统音量失败", error);
+    }
   }
 
   async function handleAudioDevice(deviceId: string) {
@@ -412,6 +457,21 @@
   function handleTimerReset() {
     countdown = resetCountdown(countdown);
   }
+
+  function timerSnapshot() {
+    return {
+      status: countdown.status,
+      durationMs: countdown.durationMs,
+      remainingMs: timerRemainingMs,
+      label: countdown.label,
+    };
+  }
+
+  $effect(() => {
+    const snapshot = timerSnapshot();
+    if (!(window as any).__TAURI_INTERNALS__) return;
+    void emit(Events.TIMER_STATE_CHANGED, snapshot);
+  });
 
   $effect(() => {
     applyAppFont(appSettings.fontId);
@@ -925,6 +985,7 @@
       autoCloseTimer = setTimeout(() => {
         logger.log("自动收起计时器触发");
         expanded = false;
+        if (systemAudio) scheduleSystemAudioDismiss(3500);
         autoCloseTimer = null;
       }, delay);
     }
@@ -967,9 +1028,18 @@
       } else {
         await windowApi.openFloatingWindow();
         isFloatingWindowOpen = true;
+        void emit(Events.MEDIA_UPDATE, islandMedia);
       }
     } catch (error) {
       logger.error("切换悬浮窗失败:", error);
+    }
+  }
+
+  async function openTimerWindow() {
+    try {
+      await windowApi.openTimerWindow();
+    } catch (error) {
+      logger.error("打开倒计时窗口失败:", error);
     }
   }
 
@@ -1099,14 +1169,14 @@
         );
 
         spectrumBottomColor = formatRgb(
-          clampColorValue(rBottom),
-          clampColorValue(gBottom),
-          clampColorValue(bBottom),
+          rBottom,
+          gBottom,
+          bBottom,
         );
         spectrumTopColor = formatRgb(
-          clampColorValue(rTop),
-          clampColorValue(gTop),
-          clampColorValue(bTop),
+          rTop,
+          gTop,
+          bTop,
         );
       } else if (sortedColors.length === 1) {
         const [mainKey] = sortedColors[0];
@@ -1398,7 +1468,7 @@
             console.log("[设置] 实时更新:", appSettings);
 
             if (s.islandTheme) {
-              currentTheme = s.islandTheme;
+              currentTheme = normalizedTheme(s.islandTheme);
             }
 
             if (s.monitorIndex !== undefined) {
@@ -1427,7 +1497,7 @@
               })
               .catch(console.error);
           } else if (settingName === "islandTheme") {
-            currentTheme = appSettings.islandTheme;
+            currentTheme = normalizedTheme(appSettings.islandTheme);
           } else if (settingName === "alwaysOnTop") {
           } else {
             settingsApi
@@ -1514,7 +1584,7 @@
       const unlistenTheme = await eventManager.on(
         Events.THEME_CHANGED,
         ({ islandTheme }: any) => {
-          currentTheme = islandTheme || "original";
+          currentTheme = normalizedTheme(islandTheme || "original");
           console.log("[主题切换] 切换到:", currentTheme);
         },
       );
@@ -1526,9 +1596,27 @@
       );
       cleanups.push(unlistenSystemAudio);
 
+      const unlistenTimerRequest = await eventManager.on(
+        Events.TIMER_REQUEST_STATE,
+        () => void emit(Events.TIMER_STATE_CHANGED, timerSnapshot()),
+      );
+      cleanups.push(unlistenTimerRequest);
+
+      const unlistenTimerAction = await eventManager.on(
+        Events.TIMER_ACTION,
+        (payload: { action?: string; durationMs?: number }) => {
+          if (payload?.action === "start" && Number(payload.durationMs) > 0) handleTimerStart(Number(payload.durationMs));
+          else if (payload?.action === "pause") handleTimerPause();
+          else if (payload?.action === "resume") handleTimerResume();
+          else if (payload?.action === "adjust") handleTimerAdjust(Number(payload.durationMs) || 0);
+          else if (payload?.action === "reset") handleTimerReset();
+        },
+      );
+      cleanups.push(unlistenTimerAction);
+
       try {
         const savedSettings = await settingsApi.getSettings();
-        currentTheme = savedSettings.islandTheme || "original";
+        currentTheme = normalizedTheme(savedSettings.islandTheme || "original");
         console.log("[主题加载] 从设置加载主题:", currentTheme);
       } catch (e) {
         console.error("[主题加载] 失败:", e);
@@ -1761,7 +1849,7 @@
     (async () => {
       try {
         const savedSettings = await settingsApi.getSettings();
-        currentTheme = savedSettings.islandTheme || "original";
+        currentTheme = normalizedTheme(savedSettings.islandTheme || "original");
         console.log("[主题加载] 初始主题:", currentTheme);
       } catch (e) {
         console.error("[主题加载] 失败:", e);
@@ -1770,7 +1858,7 @@
 
     // 2. 监听来自设置页面的实时切换广播
     const unlistenTheme = listen("theme-changed", (event) => {
-      currentTheme = event.payload as string;
+      currentTheme = normalizedTheme(String(event.payload ?? "original"));
       console.log("[主题切换] 主题已切换为:", currentTheme);
     });
     const workAreaTimer = setInterval(() => {
@@ -1841,8 +1929,13 @@
     {idlePaused}
     showSpectrum={appSettings.showSpectrum}
     spectrumMode={appSettings.spectrumMode}
+    theme={currentTheme}
     enableAnimations={appSettings.enableAnimations}
     reduceAnimations={appSettings.reduceAnimations}
+    hardwareAcceleration={appSettings.hardwareAcceleration}
+    {accentColor}
+    {secondaryColor}
+    isHidden={isHidden}
     background={getThemeBackground(currentTheme)}
     border={getThemeBorder(currentTheme)}
     boxShadow={getThemeBoxShadow(currentTheme, isHidden, expanded)}
@@ -1857,6 +1950,8 @@
     onMediaAction={(action) => handleMediaAction(action)}
     onSeek={handleSeek}
     onToggleFloating={toggleFloatingWindow}
+    enabledTools={enabledFeatureTools}
+    onTimerOpen={openTimerWindow}
     onHoverChange={(value) => hovering = value}
     onRegionChange={applyIslandRegion}
     onIdleAction={idleAction}
@@ -2004,7 +2099,7 @@
 
             {#if appSettings.showSpectrum}
               <div class="spectrum-wrapper">
-                <Spectrum topColor={spectrumBottomColor} bottomColor={spectrumTopColor} />
+                <Spectrum topColor={spectrumTopColor} bottomColor={spectrumBottomColor} />
               </div>
             {:else}
               <div class="flex items-center h-4 gap-[3px]">
@@ -2102,7 +2197,7 @@
 
             {#if appSettings.showSpectrum}
               <div class="spectrum-wrapper-expanded">
-                <Spectrum topColor={spectrumBottomColor} bottomColor={spectrumTopColor} scale={1.5} />
+                <Spectrum topColor={spectrumTopColor} bottomColor={spectrumBottomColor} scale={1.5} />
               </div>
             {/if}
           </div>

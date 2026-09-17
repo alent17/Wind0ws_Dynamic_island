@@ -442,6 +442,7 @@ pub fn run() {
             commands::show_studio_window,
             commands::toggle_floating_window,
             commands::open_floating_window,
+            commands::open_timer_window,
             commands::close_floating_window,
             commands::reset_floating_window,
             commands::sync_window_bounds,

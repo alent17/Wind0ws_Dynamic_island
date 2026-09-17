@@ -1497,27 +1497,19 @@
   }
 
   .player {
+    --floating-radius: 5px;
     position: relative;
     width: 100vw;
     height: 100vh;
     overflow: hidden;
-    border-radius: 5px;
-    background: var(--floating-background);
+    border-radius: var(--floating-radius);
+    background: transparent;
     user-select: none;
     -webkit-user-select: none;
     border: 3px solid #000; /* 缩小边框 */
     box-sizing: border-box;
-    box-shadow:
-      0 12px 48px rgba(0, 0, 0, 0.5),
-      0 0 0 0.5px rgba(255, 255, 255, 0.05);
-
-    /* 原有的 clip-path 保留 */
-    clip-path: inset(0 round 5px);
-
-    /* 新增：修复 Webview 绝对定位子元素圆角溢出的核心代码 */
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
     isolation: isolate;
-    mask-image: radial-gradient(white, black);
-    -webkit-mask-image: -webkit-radial-gradient(white, black);
   }
 
   .bg-solid {
@@ -1529,7 +1521,8 @@
       background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       opacity 0.3s ease;
 
-    border-radius: 5px;
+    border-radius: calc(var(--floating-radius) - 3px)
+      calc(var(--floating-radius) - 3px) 0 0;
   }
 
   /* 可拖拽的顶部栏 - 鼠标悬停时滑下 */
@@ -1594,13 +1587,13 @@
 
   /* 顶部栏置顶按钮 */
   .pin-btn-topbar {
-    width: 28px;
+    width: 32px;
     height: 28px;
-    padding: 0;
-    border: 0;
+    padding: 0 8px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
     outline: none;
-    border-radius: 50%;
-    background: transparent;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
     cursor: pointer;
     color: rgba(255, 255, 255, 0.58);
     display: flex;
@@ -1609,13 +1602,16 @@
     transition:
       color 0.15s ease,
       transform 0.15s ease,
-      background 0.15s ease;
+      background 0.15s ease,
+      border-color 0.15s ease;
     flex-shrink: 0; /* 不被压缩 */
   }
 
   .pin-btn-topbar:hover {
     color: #fff;
     background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.1);
+    transform: scale(1.02);
   }
 
   .pin-btn-topbar:active {
@@ -1959,7 +1955,8 @@
     pointer-events: auto;
     overflow: hidden;
     background: #121212;
-    border-radius: 0 0 5px 5px;
+    border-radius: 0 0 calc(var(--floating-radius) - 3px)
+      calc(var(--floating-radius) - 3px);
   }
 
   .track-title {

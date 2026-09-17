@@ -2,6 +2,7 @@ import './app.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
 import FloatingWindow from './FloatingWindow.svelte';
+import TimerWindow from './TimerWindow.svelte';
 
 // 获取目标挂载点
 const targetElement = document.getElementById('app');
@@ -20,6 +21,10 @@ let app;
 if (windowType === 'floating') {
   // 渲染独立悬浮窗
   app = mount(FloatingWindow, {
+    target: targetElement,
+  });
+} else if (windowType === 'timer') {
+  app = mount(TimerWindow, {
     target: targetElement,
   });
 } else {

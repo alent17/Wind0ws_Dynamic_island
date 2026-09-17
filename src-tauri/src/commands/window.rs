@@ -632,6 +632,9 @@ pub fn toggle_floating_window(_app: AppHandle) -> AppResult<()> {
 #[tauri::command]
 pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("floating_player") {
+        window
+            .set_shadow(false)
+            .map_err(|e| AppError::window(e.to_string()))?;
         window.show().map_err(|e| AppError::window(e.to_string()))?;
         window
             .set_focus()
@@ -663,6 +666,7 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
     .resizable(true)
     .decorations(false)
     .transparent(true)
+    .shadow(false)
     .always_on_top(true);
 
     if let (Some(x), Some(y), Some(w), Some(h)) = saved_position {
@@ -675,6 +679,35 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
     builder
         .build()
         .map_err(|e| AppError::window(e.to_string()))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_timer_window(app: AppHandle) -> AppResult<()> {
+    if let Some(window) = app.get_webview_window("timer_window") {
+        window.show().map_err(|e| AppError::window(e.to_string()))?;
+        window
+            .set_focus()
+            .map_err(|e| AppError::window(e.to_string()))?;
+        return Ok(());
+    }
+
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        "timer_window",
+        tauri::WebviewUrl::App("index.html?window=timer".into()),
+    )
+    .title("Timer")
+    .inner_size(420.0, 360.0)
+    .min_inner_size(360.0, 300.0)
+    .resizable(true)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .center()
+    .build()
+    .map_err(|e| AppError::window(e.to_string()))?;
 
     Ok(())
 }
