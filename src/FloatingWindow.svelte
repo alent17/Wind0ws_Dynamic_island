@@ -60,19 +60,10 @@
   let slideDirection = $state<"left" | "right" | "">("");
   let isAnimating = $state(false); // 动画进行中标志
   let animationTimeoutId: ReturnType<typeof setTimeout> | null = null; // 动画定时器ID
-  // Keep the configured base fill separate from the artwork-derived accent.
-  // The current floating-player design follows album color by default; the
-  // separate states prevent color extraction from overwriting a future manual
-  // fill preference.
-  let configuredFillColor = $state("rgb(40, 50, 60)");
-  let albumAccentColor = $state("rgb(40, 50, 60)");
-  let albumAccentGradient = $state(
-    "radial-gradient(circle at 50% 50%, rgb(40, 50, 60), rgb(30, 40, 50))",
-  );
-  let useAlbumColor = $state(true);
-  let effectiveBackground = $derived(
-    useAlbumColor ? albumAccentGradient : configuredFillColor,
-  );
+  // The floating player's body uses only the persisted fill color. Artwork
+  // extraction must never be allowed to replace this background.
+  let configuredFillColor = $state(DEFAULT_SETTINGS.floatingFillColor);
+  let effectiveBackground = $derived(configuredFillColor);
   let windowSize = $state<WindowSize>({ width: 0, height: 0 });
   let isCompactCover = $derived(
     windowSize.width <= 200.5 && windowSize.height <= 200.5,
@@ -200,104 +191,6 @@
     }
   }
 
-  async function extractColors(imgSrc: string) {
-    const DEFAULT_COLOR = { r: 60, g: 80, b: 100 };
-
-    // 保存当前颜色
-    const currentColor = parseColor(albumAccentColor);
-
-    try {
-      const [r, g, b] = await invoke<[number, number, number]>(
-        "extract_dominant_color",
-        { imagePath: imgSrc },
-      );
-
-      if (
-        r === DEFAULT_COLOR.r &&
-        g === DEFAULT_COLOR.g &&
-        b === DEFAULT_COLOR.b
-      ) {
-        animateColorTransition(currentColor, { r: 40, g: 50, b: 60 });
-        return;
-      }
-
-      // 避免黑色：确保 RGB 值不低于最小亮度
-      const MIN_BRIGHTNESS = 30; // 最小亮度值
-      const adjustedR = Math.max(r, MIN_BRIGHTNESS);
-      const adjustedG = Math.max(g, MIN_BRIGHTNESS);
-      const adjustedB = Math.max(b, MIN_BRIGHTNESS);
-
-      // 检查整体亮度，如果太暗则提升
-      const brightness = (adjustedR + adjustedG + adjustedB) / 3;
-      if (brightness < 50) {
-        const scale = 50 / brightness;
-        const finalR = Math.min(Math.round(adjustedR * scale), 255);
-        const finalG = Math.min(Math.round(adjustedG * scale), 255);
-        const finalB = Math.min(Math.round(adjustedB * scale), 255);
-
-        const targetColor = {
-          r: Math.min(finalR + 12, 255),
-          g: Math.min(finalG + 12, 255),
-          b: Math.min(finalB + 12, 255),
-        };
-        animateColorTransition(currentColor, targetColor);
-      } else {
-        const targetColor = {
-          r: Math.min(adjustedR + 12, 255),
-          g: Math.min(adjustedG + 12, 255),
-          b: Math.min(adjustedB + 12, 255),
-        };
-        animateColorTransition(currentColor, targetColor);
-      }
-
-    } catch (error) {
-      console.error("[颜色提取] 失败:", error);
-      animateColorTransition(currentColor, { r: 40, g: 50, b: 60 });
-    }
-  }
-
-  // 解析颜色字符串为 RGB 对象
-  function parseColor(colorStr: string): { r: number; g: number; b: number } {
-    const match = colorStr.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-    if (match) {
-      return {
-        r: parseInt(match[1]),
-        g: parseInt(match[2]),
-        b: parseInt(match[3]),
-      };
-    }
-    return { r: 40, g: 50, b: 60 }; // 默认颜色
-  }
-
-  // 颜色渐变动画
-  function animateColorTransition(
-    from: { r: number; g: number; b: number },
-    to: { r: number; g: number; b: number },
-  ) {
-    const startTime = Date.now();
-    const duration = 300;
-
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = easeInOutCubic(progress);
-
-      // 插值计算新颜色
-      const currentR = Math.round(from.r + (to.r - from.r) * eased);
-      const currentG = Math.round(from.g + (to.g - from.g) * eased);
-      const currentB = Math.round(from.b + (to.b - from.b) * eased);
-
-      albumAccentColor = `rgb(${currentR}, ${currentG}, ${currentB})`;
-      albumAccentGradient = `radial-gradient(circle at 50% 50%, rgb(${Math.min(currentR + 8, 255)}, ${Math.min(currentG + 8, 255)}, ${Math.min(currentB + 8, 255)}), rgb(${Math.max(currentR - 15, 0)}, ${Math.max(currentG - 15, 0)}, ${Math.max(currentB - 15, 0)}))`;
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }
-
   // 封面切换函数（无动画）
   function transitionCover(
     newCover: string,
@@ -309,7 +202,6 @@
     }
 
     displayCover = newCover;
-    if (newCover) extractColors(newCover);
     previousCover = "";
     slideDirection = "";
     isAnimating = false;
@@ -457,6 +349,7 @@
     try {
       const settings = await invoke<AppSettings>("get_settings");
       capturePreferences = settings;
+      configuredFillColor = settings.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
       applyAppFont(settings.fontId);
       setLocale(settings.language);
       PLACEHOLDER_TITLE = t("waitingPlayback");
@@ -561,7 +454,10 @@
     const unlistenSettingsChange = await eventManager.on(Events.SETTINGS_UPDATED, (value: AppSettings) => {
       if (value?.fontId) applyAppFont(value.fontId);
       if (value?.language) setLocale(value.language);
-      if (value) capturePreferences = value;
+      if (value) {
+        capturePreferences = value;
+        configuredFillColor = value.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
+      }
     });
     eventListeners.push(unlistenSettingsChange);
     const unlistenCaptureMode = await eventManager.on(
@@ -1274,10 +1170,9 @@
   onpointerleave={handlePointerLeave}
   role="region"
   aria-label={t("mediaPlayer")}
-  style:--bg={configuredFillColor}
-  style:--bg-gradient={effectiveBackground}
+  style:--floating-background={effectiveBackground}
 >
-  <div class="bg-solid" style:background={effectiveBackground}></div>
+  <div class="bg-solid"></div>
 
   {#if isCompactCover && isHovered}
     <div class="compact-controls">
@@ -1500,7 +1395,7 @@
     height: 100vh;
     overflow: hidden;
     border-radius: 5px;
-    background: #000;
+    background: var(--floating-background);
     user-select: none;
     -webkit-user-select: none;
     border: 3px solid #000; /* 缩小边框 */
@@ -1525,7 +1420,7 @@
     right: 0;
     bottom: 60px; /* 填充到歌曲信息层上方 */
     z-index: 1;
-    background: var(--bg-gradient);
+    background: var(--floating-background);
     transition:
       background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       top 0.3s cubic-bezier(0.4, 0, 0.2, 1);

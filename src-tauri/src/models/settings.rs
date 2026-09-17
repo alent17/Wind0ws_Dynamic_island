@@ -93,6 +93,7 @@ pub struct AppPreferences {
     pub floating_window_y: Option<i32>,
     pub floating_window_width: Option<u32>,
     pub floating_window_height: Option<u32>,
+    pub floating_fill_color: String,
     pub enable_mv_playback: bool,
     pub lock_floating_window: bool,
     pub enable_hd_cover: bool,
@@ -153,6 +154,7 @@ impl Default for AppPreferences {
             floating_window_y: None,
             floating_window_width: None,
             floating_window_height: None,
+            floating_fill_color: "#28323c".to_string(),
             enable_mv_playback: true,
             lock_floating_window: false,
             enable_hd_cover: true,
@@ -187,6 +189,7 @@ mod tests {
         assert!(loaded.capture_hide_on_fullscreen);
         assert!(loaded.capture_hide_on_screen_share);
         assert!(loaded.selected_player_ids.is_none());
+        assert_eq!(loaded.floating_fill_color, "#28323c");
         assert_eq!(loaded.idle_items.len(), 7);
     }
 
