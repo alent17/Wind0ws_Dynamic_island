@@ -53,7 +53,7 @@
   }
 </script>
 
-<div class="feature-rail" class:visible aria-hidden={!visible}>
+<div class="feature-rail" class:visible aria-hidden={!visible} inert={!visible}>
   <button class="tool-circle" type="button" aria-label={t("toggleFloating")} onclick={(event) => { event.stopPropagation(); onFloating?.(); }}>
     <GalleryHorizontalEnd size={18} />
   </button>

@@ -152,12 +152,13 @@
 
   const size = $derived({ width: animatedWidth, height: animatedHeight, radius: animatedRadius });
   let activeTool = $state<IslandTool | null>(null);
+  const expandedGeometry = $derived(geometryFor("expanded", expandedRadius, edge, compactLength));
   const railWidth = $derived(activeTool ? FEATURE_RAIL_WIDTH : 38);
   const railExtraRects = $derived.by(() => {
     if (mode !== "expanded") return [];
     return [{
-      x: edge === "right" ? -railWidth - FEATURE_RAIL_GAP : size.width + FEATURE_RAIL_GAP,
-      y: (size.height - FEATURE_RAIL_HEIGHT) / 2,
+      x: edge === "right" ? -railWidth - FEATURE_RAIL_GAP : expandedGeometry.width + FEATURE_RAIL_GAP,
+      y: (expandedGeometry.height - FEATURE_RAIL_HEIGHT) / 2,
       width: railWidth,
       height: FEATURE_RAIL_HEIGHT,
       radius: 19,
@@ -229,11 +230,11 @@
     const hard = !enableAnimations || reduceAnimations || prefersReducedMotion;
     const revision = ++transitionRevision;
     activeEnvelope = stableEnvelope(activeEnvelope, target);
-    onRegionChange?.({ geometry: activeEnvelope, radii: radiiFor(activeEnvelope, islandStyle, edge), polygon: shapePolygonFor(activeEnvelope, islandStyle, edge, edgeShoulderRadius), extraRects: railExtraRects, settled: false });
+    onRegionChange?.({ geometry: activeEnvelope, radii: radiiFor(activeEnvelope, islandStyle, edge), polygon: shapePolygonFor(activeEnvelope, islandStyle, edge, edgeShoulderRadius), extraRects: untrack(() => railExtraRects), settled: false });
     animateGeometry(target, hard, revision).then(() => {
       if (revision !== transitionRevision) return;
       activeEnvelope = target;
-      onRegionChange?.({ geometry: target, radii: radiiFor(target, islandStyle, edge), polygon: shapePolygonFor(target, islandStyle, edge, edgeShoulderRadius), extraRects: railExtraRects, settled: true });
+      onRegionChange?.({ geometry: target, radii: radiiFor(target, islandStyle, edge), polygon: shapePolygonFor(target, islandStyle, edge, edgeShoulderRadius), extraRects: untrack(() => railExtraRects), settled: true });
     });
   });
   $effect(() => {
@@ -286,6 +287,7 @@
   const expandedOpacity = $derived(Math.min(1, Math.max(0, (outwardProgress - 0.18) / 0.42)));
   const secondaryOpacity = $derived(Math.min(1, Math.max(0, (outwardProgress - 0.42) / 0.38)));
   const compactOpacity = $derived(Math.min(1, Math.max(0, 1 - outwardProgress * 4)));
+  const railVisible = $derived(mode === "expanded" && outwardProgress > 0.82);
   const surfaceBackground = $derived(mode === "expanded" ? background : "#000");
   const surfaceBorder = $derived(mode === "expanded" ? border : "1px solid transparent");
   function toggleFromSurface(event: MouseEvent | KeyboardEvent) {
@@ -300,6 +302,14 @@
       onToggle?.();
     }
   }
+
+  function handleAnchorFocusOut(event: FocusEvent) {
+    const anchor = event.currentTarget;
+    const nextTarget = event.relatedTarget;
+    if (!(anchor instanceof HTMLElement) || !(nextTarget instanceof Node) || !anchor.contains(nextTarget)) {
+      onHoverChange?.(false);
+    }
+  }
 </script>
 
 <div
@@ -311,7 +321,15 @@
   class:edge-left={edge === "left"}
   class:simulate-hidden={simulateHidden && mode === "hidden"}
 >
-  <div class="surface-anchor" style:transform={anchorTransform}>
+  <div
+    class="surface-anchor"
+    style:transform={anchorTransform}
+    role="group"
+    onmouseenter={() => onHoverChange?.(true)}
+    onmouseleave={() => onHoverChange?.(false)}
+    onfocusin={() => onHoverChange?.(true)}
+    onfocusout={handleAnchorFocusOut}
+  >
   <div
     class="island-surface"
     style:width={`${size.width}px`}
@@ -325,10 +343,6 @@
     aria-expanded={mode === "expanded"}
     tabindex={interactive ? 0 : undefined}
     aria-label={t("dynamicIsland")}
-    onmouseenter={() => onHoverChange?.(true)}
-    onmouseleave={() => onHoverChange?.(false)}
-    onfocusin={() => onHoverChange?.(true)}
-    onfocusout={() => onHoverChange?.(false)}
     onclick={toggleFromSurface}
     onkeydown={keyToggle}
   >
@@ -415,32 +429,31 @@
       </div>
       {/if}
     </div>
-    {#if mode === "expanded"}
-      <div
-        class="feature-rail-anchor"
-        style={`left:${edge === "right" ? -railWidth - FEATURE_RAIL_GAP : size.width + FEATURE_RAIL_GAP}px;top:${size.height / 2}px`}
-      >
-        <FeatureRail
-          visible={mode === "expanded"}
-          {activeTool}
-          volume={systemAudio?.volumePercent ?? 0}
-          muted={systemAudio?.muted ?? false}
-          timerStatus={timerStatus}
-          timerRemainingMs={timerRemainingMs}
-          {clockText}
-          timeZone={clockTimeZone}
-          onTool={(tool) => activeTool = tool}
-          onFloating={onToggleFloating}
-          onAudioOpen={onAudioOpen}
-          onVolume={onAudioVolume}
-          onTimerStart={onTimerStart}
-          onTimerPause={onTimerPause}
-          onTimerResume={onTimerResume}
-          onTimerAdjust={onTimerAdjust}
-          onTimerReset={onTimerReset}
-        />
-      </div>
-    {/if}
+  </div>
+
+  <div
+    class="feature-rail-anchor"
+    style={`left:${edge === "right" ? -railWidth - FEATURE_RAIL_GAP : expandedGeometry.width + FEATURE_RAIL_GAP}px;top:${(expandedGeometry.height - FEATURE_RAIL_HEIGHT) / 2}px`}
+  >
+    <FeatureRail
+      visible={railVisible}
+      {activeTool}
+      volume={systemAudio?.volumePercent ?? 0}
+      muted={systemAudio?.muted ?? false}
+      timerStatus={timerStatus}
+      timerRemainingMs={timerRemainingMs}
+      {clockText}
+      timeZone={clockTimeZone}
+      onTool={(tool) => activeTool = tool}
+      onFloating={onToggleFloating}
+      onAudioOpen={onAudioOpen}
+      onVolume={onAudioVolume}
+      onTimerStart={onTimerStart}
+      onTimerPause={onTimerPause}
+      onTimerResume={onTimerResume}
+      onTimerAdjust={onTimerAdjust}
+      onTimerReset={onTimerReset}
+    />
   </div>
   </div>
 </div>
