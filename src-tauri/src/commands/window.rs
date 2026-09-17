@@ -24,6 +24,16 @@ pub struct InteractionPoint {
     y: f64,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct InteractionExtraRect {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    radius: f64,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 struct IslandInteractionRegion {
     x: f64,
@@ -32,6 +42,7 @@ struct IslandInteractionRegion {
     height: f64,
     radii: InteractionCornerRadii,
     polygon: Vec<InteractionPoint>,
+    extra_rects: Vec<InteractionExtraRect>,
     enabled: bool,
 }
 
@@ -68,6 +79,7 @@ fn normalized_interaction_region(
     height: f64,
     radii: InteractionCornerRadii,
     polygon: Vec<InteractionPoint>,
+    extra_rects: Vec<InteractionExtraRect>,
 ) -> Result<IslandInteractionRegion, &'static str> {
     if !x.is_finite()
         || !y.is_finite()
@@ -82,6 +94,15 @@ fn normalized_interaction_region(
         || polygon
             .iter()
             .any(|point| !point.x.is_finite() || !point.y.is_finite())
+        || extra_rects.iter().any(|rect| {
+            !rect.x.is_finite()
+                || !rect.y.is_finite()
+                || !rect.width.is_finite()
+                || !rect.height.is_finite()
+                || !rect.radius.is_finite()
+                || rect.width <= 0.0
+                || rect.height <= 0.0
+        })
     {
         return Err("Invalid island interaction region");
     }
@@ -100,6 +121,7 @@ fn normalized_interaction_region(
             bottom_left: clamp(radii.bottom_left),
         },
         polygon,
+        extra_rects,
         enabled: true,
     })
 }
@@ -121,36 +143,84 @@ fn point_in_polygon(x: f64, y: f64, points: &[InteractionPoint]) -> bool {
     inside
 }
 
+fn point_in_rect(x: f64, y: f64, rect: &InteractionExtraRect) -> bool {
+    if x < rect.x || y < rect.y || x > rect.x + rect.width || y > rect.y + rect.height {
+        return false;
+    }
+    let radius = rect.radius.max(0.0).min(rect.width.min(rect.height) / 2.0);
+    if radius <= 0.0 {
+        return true;
+    }
+    let corners = [
+        (rect.x + radius, rect.y + radius, x, y),
+        (rect.x + rect.width - radius, rect.y + radius, x, y),
+        (
+            rect.x + rect.width - radius,
+            rect.y + rect.height - radius,
+            x,
+            y,
+        ),
+        (rect.x + radius, rect.y + rect.height - radius, x, y),
+    ];
+    for (corner_x, corner_y, point_x, point_y) in corners {
+        let in_corner_x = (point_x < rect.x + radius && corner_x == rect.x + radius)
+            || (point_x > rect.x + rect.width - radius && corner_x == rect.x + rect.width - radius);
+        let in_corner_y = (point_y < rect.y + radius && corner_y == rect.y + radius)
+            || (point_y > rect.y + rect.height - radius
+                && corner_y == rect.y + rect.height - radius);
+        if in_corner_x && in_corner_y {
+            let dx = point_x - corner_x;
+            let dy = point_y - corner_y;
+            return dx * dx + dy * dy <= radius * radius;
+        }
+    }
+    true
+}
+
 fn point_in_rounded_rect(x: f64, y: f64, region: &IslandInteractionRegion) -> bool {
     if !region.enabled {
         return false;
     }
     let local_x = x - region.x;
     let local_y = y - region.y;
-    if local_x < 0.0 || local_y < 0.0 || local_x > region.width || local_y > region.height {
-        return false;
-    }
-    if region.polygon.len() >= 3 {
-        return point_in_polygon(local_x, local_y, &region.polygon);
-    }
-    let corners = [
-        (region.radii.top_left, local_x, local_y),
-        (region.radii.top_right, region.width - local_x, local_y),
-        (
-            region.radii.bottom_right,
-            region.width - local_x,
-            region.height - local_y,
-        ),
-        (region.radii.bottom_left, local_x, region.height - local_y),
-    ];
-    for (radius, corner_x, corner_y) in corners {
-        if radius > 0.0 && corner_x < radius && corner_y < radius {
-            let dx = corner_x - radius;
-            let dy = corner_y - radius;
-            return dx * dx + dy * dy <= radius * radius;
+    if local_x >= 0.0 && local_y >= 0.0 && local_x <= region.width && local_y <= region.height {
+        if region.polygon.len() >= 3 {
+            if point_in_polygon(local_x, local_y, &region.polygon) {
+                return true;
+            }
+        } else {
+            let corners = [
+                (region.radii.top_left, local_x, local_y),
+                (region.radii.top_right, region.width - local_x, local_y),
+                (
+                    region.radii.bottom_right,
+                    region.width - local_x,
+                    region.height - local_y,
+                ),
+                (region.radii.bottom_left, local_x, region.height - local_y),
+            ];
+            let mut inside_base = true;
+            for (radius, corner_x, corner_y) in corners {
+                if radius > 0.0 && corner_x < radius && corner_y < radius {
+                    let dx = corner_x - radius;
+                    let dy = corner_y - radius;
+                    inside_base = dx * dx + dy * dy <= radius * radius;
+                    break;
+                }
+            }
+            if inside_base {
+                return true;
+            }
         }
     }
-    true
+    if region
+        .extra_rects
+        .iter()
+        .any(|rect| point_in_rect(x, y, rect))
+    {
+        return true;
+    }
+    false
 }
 
 fn unix_millis() -> u64 {
@@ -288,8 +358,16 @@ pub fn install_island_cursor_passthrough(window: &tauri::WebviewWindow) -> AppRe
         bottom_right: 14.0,
         bottom_left: 14.0,
     };
-    let initial = normalized_interaction_region(110.0, 22.0, 80.0, 28.0, initial_radii, Vec::new())
-        .map_err(AppError::window)?;
+    let initial = normalized_interaction_region(
+        110.0,
+        22.0,
+        80.0,
+        28.0,
+        initial_radii,
+        Vec::new(),
+        Vec::new(),
+    )
+    .map_err(AppError::window)?;
     ISLAND_INTERACTION_REGION.get_or_init(|| Mutex::new(initial));
 
     ensure_cursor_watchdog(window);
@@ -316,8 +394,9 @@ pub fn set_island_interaction_region(
     height: f64,
     radii: InteractionCornerRadii,
     polygon: Vec<InteractionPoint>,
+    extra_rects: Vec<InteractionExtraRect>,
 ) -> AppResult<()> {
-    let next = normalized_interaction_region(x, y, width, height, radii, polygon)
+    let next = normalized_interaction_region(x, y, width, height, radii, polygon, extra_rects)
         .map_err(AppError::window)?;
     ISLAND_INTERACTION_REGION_REVISION.fetch_max(revision, Ordering::AcqRel);
     let mut region = ISLAND_INTERACTION_REGION
@@ -339,7 +418,7 @@ mod interaction_region_tests {
     use super::{
         cursor_monitor_is_stale, interaction_revision_is_current, monitor_owns_generation,
         normalized_interaction_region, point_in_rounded_rect, InteractionCornerRadii,
-        InteractionPoint,
+        InteractionExtraRect, InteractionPoint,
     };
 
     fn radii(value: f64) -> InteractionCornerRadii {
@@ -353,9 +432,16 @@ mod interaction_region_tests {
 
     #[test]
     fn accepts_the_pill_and_rejects_its_transparent_corners() {
-        let region =
-            normalized_interaction_region(110.0, 22.0, 80.0, 28.0, radii(14.0), Vec::new())
-                .expect("valid region");
+        let region = normalized_interaction_region(
+            110.0,
+            22.0,
+            80.0,
+            28.0,
+            radii(14.0),
+            Vec::new(),
+            Vec::new(),
+        )
+        .expect("valid region");
         assert!(point_in_rounded_rect(150.0, 36.0, &region));
         assert!(point_in_rounded_rect(111.0, 36.0, &region));
         assert!(!point_in_rounded_rect(110.0, 22.0, &region));
@@ -364,8 +450,16 @@ mod interaction_region_tests {
 
     #[test]
     fn clamps_corner_radius_to_half_the_short_edge() {
-        let region = normalized_interaction_region(0.0, 0.0, 80.0, 20.0, radii(99.0), Vec::new())
-            .expect("valid region");
+        let region = normalized_interaction_region(
+            0.0,
+            0.0,
+            80.0,
+            20.0,
+            radii(99.0),
+            Vec::new(),
+            Vec::new(),
+        )
+        .expect("valid region");
         assert_eq!(region.radii.top_left, 10.0);
         assert_eq!(region.radii.bottom_right, 10.0);
     }
@@ -384,6 +478,7 @@ mod interaction_region_tests {
                 bottom_left: 14.0,
             },
             Vec::new(),
+            Vec::new(),
         )
         .expect("valid region");
         assert!(point_in_rounded_rect(0.0, 0.0, &region));
@@ -393,16 +488,36 @@ mod interaction_region_tests {
 
     #[test]
     fn rejects_invalid_dimensions() {
-        assert!(
-            normalized_interaction_region(0.0, 0.0, 0.0, 20.0, radii(4.0), Vec::new()).is_err()
-        );
-        assert!(
-            normalized_interaction_region(0.0, 0.0, 20.0, -1.0, radii(4.0), Vec::new()).is_err()
-        );
-        assert!(
-            normalized_interaction_region(f64::NAN, 0.0, 20.0, 20.0, radii(4.0), Vec::new())
-                .is_err()
-        );
+        assert!(normalized_interaction_region(
+            0.0,
+            0.0,
+            0.0,
+            20.0,
+            radii(4.0),
+            Vec::new(),
+            Vec::new()
+        )
+        .is_err());
+        assert!(normalized_interaction_region(
+            0.0,
+            0.0,
+            20.0,
+            -1.0,
+            radii(4.0),
+            Vec::new(),
+            Vec::new()
+        )
+        .is_err());
+        assert!(normalized_interaction_region(
+            f64::NAN,
+            0.0,
+            20.0,
+            20.0,
+            radii(4.0),
+            Vec::new(),
+            Vec::new()
+        )
+        .is_err());
     }
 
     #[test]
@@ -415,11 +530,34 @@ mod interaction_region_tests {
             InteractionPoint { x: 10.0, y: 28.0 },
             InteractionPoint { x: 10.0, y: 8.0 },
         ];
-        let region = normalized_interaction_region(0.0, 0.0, 80.0, 28.0, radii(0.0), polygon)
-            .expect("valid polygon region");
+        let region =
+            normalized_interaction_region(0.0, 0.0, 80.0, 28.0, radii(0.0), polygon, Vec::new())
+                .expect("valid polygon region");
         assert!(point_in_rounded_rect(40.0, 14.0, &region));
         assert!(point_in_rounded_rect(2.0, 1.0, &region));
         assert!(!point_in_rounded_rect(2.0, 12.0, &region));
+    }
+
+    #[test]
+    fn accepts_an_extra_feature_rect_outside_the_island_bounds() {
+        let region = normalized_interaction_region(
+            0.0,
+            0.0,
+            80.0,
+            28.0,
+            radii(14.0),
+            Vec::new(),
+            vec![InteractionExtraRect {
+                x: 88.0,
+                y: -51.0,
+                width: 38.0,
+                height: 130.0,
+                radius: 19.0,
+            }],
+        )
+        .expect("valid rail region");
+        assert!(point_in_rounded_rect(100.0, 0.0, &region));
+        assert!(!point_in_rounded_rect(130.0, 0.0, &region));
     }
 
     #[test]

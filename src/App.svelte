@@ -36,6 +36,7 @@
     type CaptureSnapshot,
   } from "$lib/captureMode";
   import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition, shouldShowIdleClock } from "$lib/mediaClock";
+  import { adjustCountdown, createCountdownState, formatClock, getRemainingMs, pauseCountdown, resetCountdown, resumeCountdown, startCountdown, type CountdownState } from "$lib/countdown";
   import {
     getCurrentWindow,
     currentMonitor,
@@ -212,11 +213,14 @@
       compactLength: Math.min(300, Math.max(80, Number(value.compactLength ?? 80))),
       idleRotationSeconds: Math.min(60, Math.max(2, Number(value.idleRotationSeconds ?? 5))),
       idleItems: Array.isArray(value.idleItems) ? value.idleItems : DEFAULT_SETTINGS.idleItems,
+      clockTimeZone: typeof value.clockTimeZone === "string" && value.clockTimeZone.trim().length > 0
+        ? value.clockTimeZone.trim()
+        : DEFAULT_SETTINGS.clockTimeZone,
     };
   }
 
   let interactionRegionRevision = Date.now() * 1000;
-  function applyIslandRegion({ geometry, radii, polygon }: IslandRegionChange) {
+  function applyIslandRegion({ geometry, radii, polygon, extraRects }: IslandRegionChange) {
     const host = hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength);
     const offset = surfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge);
     windowApi.setIslandInteractionRegion({
@@ -227,6 +231,7 @@
       height: geometry.height,
       radii,
       polygon,
+      extraRects: (extraRects ?? []).map((rect) => ({ ...rect, x: offset.x + rect.x, y: offset.y + rect.y })),
     }).catch((error) => logger.warn("窗口区域更新失败", error));
   }
 
@@ -234,11 +239,7 @@
 
   // 优化：缓存时间格式化结果，减少字符串操作
   function updateTimeDisplay() {
-    const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    // 使用模板字符串比 padStart 更高效
-    currentTime = `${hours < 10 ? "0" : ""}${hours}:${minutes < 10 ? "0" : ""}${minutes}`;
+    currentTime = formatClock(appSettings.clockTimeZone, $locale, Date.now());
   }
 
   onMount(() => {
@@ -377,6 +378,41 @@
       logger.error("切换音频设备失败", error);
     }
   }
+
+  let countdown = $state<CountdownState>(createCountdownState());
+  let timerRemainingMs = $derived(getRemainingMs(countdown, clockNow));
+
+  async function handleAudioOpen() {
+    try {
+      const [state, devices] = await Promise.all([audioApi.getState(), audioApi.listDevices()]);
+      systemAudio = state;
+      audioDevices = devices;
+      scheduleSystemAudioDismiss(10000);
+    } catch (error) {
+      logger.error("读取系统音量失败", error);
+    }
+  }
+
+  function handleTimerStart(durationMs: number) {
+    countdown = startCountdown(countdown, durationMs, Date.now());
+  }
+
+  function handleTimerPause() {
+    countdown = pauseCountdown(countdown, Date.now());
+  }
+
+  function handleTimerResume() {
+    countdown = resumeCountdown(countdown, Date.now());
+  }
+
+  function handleTimerAdjust(deltaMs: number) {
+    countdown = adjustCountdown(countdown, deltaMs, Date.now());
+  }
+
+  function handleTimerReset() {
+    countdown = resetCountdown(countdown);
+  }
+
   $effect(() => {
     applyAppFont(appSettings.fontId);
     setLocale(appSettings.language);
@@ -1828,6 +1864,16 @@
     {audioDevices}
     onAudioVolume={handleAudioVolume}
     onAudioDevice={handleAudioDevice}
+    onAudioOpen={handleAudioOpen}
+    timerStatus={countdown.status}
+    {timerRemainingMs}
+    clockText={currentTime}
+    clockTimeZone={appSettings.clockTimeZone}
+    onTimerStart={handleTimerStart}
+    onTimerPause={handleTimerPause}
+    onTimerResume={handleTimerResume}
+    onTimerAdjust={handleTimerAdjust}
+    onTimerReset={handleTimerReset}
   />
 </div>
 

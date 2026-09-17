@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { MonitorInfo } from "./types";
-import type { CornerRadii, Point } from "$lib/islandGeometry";
+import type { CornerRadii, InteractionExtraRect, Point } from "$lib/islandGeometry";
 
 export const windowApi = {
   async showMainWindow(): Promise<void> {
@@ -39,8 +39,9 @@ export const windowApi = {
     height: number;
     radii: CornerRadii;
     polygon: Point[];
+    extraRects?: InteractionExtraRect[];
   }): Promise<void> {
-    return invoke("set_island_interaction_region", region);
+    return invoke("set_island_interaction_region", { ...region, extraRects: region.extraRects ?? [] });
   },
 
   async setFloatingWindowResizable(resizable: boolean): Promise<void> {

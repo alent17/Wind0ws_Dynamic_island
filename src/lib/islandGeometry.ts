@@ -14,11 +14,13 @@ export type HostGeometry = { width: number; height: number };
 export type Point = { x: number; y: number };
 export type MonitorBounds = Point & { width: number; height: number };
 export type WindowBounds = MonitorBounds;
+export type InteractionExtraRect = { x: number; y: number; width: number; height: number; radius: number };
 
 export type IslandRegionChange = {
   geometry: IslandGeometry;
   radii: CornerRadii;
   polygon: Point[];
+  extraRects?: InteractionExtraRect[];
   settled: boolean;
 };
 
@@ -31,7 +33,8 @@ export const ISLAND_GEOMETRY = {
 
 export const ISLAND_GAP = 22;
 export const ISLAND_OVERSHOOT = 4;
-export const ISLAND_HOST = { width: 300, height: 186, top: ISLAND_GAP } as const;
+export const FEATURE_RAIL_RESERVE = 176;
+export const ISLAND_HOST = { width: ISLAND_GEOMETRY.expanded.width + FEATURE_RAIL_RESERVE * 2, height: 186, top: ISLAND_GAP } as const;
 
 export function isVerticalEdge(edge: IslandEdge) {
   return edge === "left" || edge === "right";
@@ -95,8 +98,8 @@ export function hostFor(_style: IslandStyle, edge: IslandEdge, compactLength = 8
   const gap = ISLAND_GAP;
   const length = clampCompactLength(compactLength);
   return isVerticalEdge(edge)
-    ? { width: ISLAND_GEOMETRY.expanded.width + gap + ISLAND_OVERSHOOT, height: Math.max(ISLAND_GEOMETRY.expanded.height, length) }
-    : { width: ISLAND_GEOMETRY.expanded.width, height: ISLAND_GEOMETRY.expanded.height + gap + ISLAND_OVERSHOOT };
+    ? { width: ISLAND_GEOMETRY.expanded.width + FEATURE_RAIL_RESERVE * 2, height: Math.max(ISLAND_GEOMETRY.expanded.height, length) }
+    : { width: ISLAND_GEOMETRY.expanded.width + FEATURE_RAIL_RESERVE * 2, height: ISLAND_GEOMETRY.expanded.height + gap + ISLAND_OVERSHOOT };
 }
 
 function cubicPoint(a: Point, b: Point, c: Point, d: Point, t: number): Point {

@@ -107,6 +107,7 @@ pub struct AppPreferences {
     pub hide_floating_window: bool,
     pub expanded_corner_radius: u32,
     pub always_show_top_bar: bool,
+    pub clock_time_zone: String,
 }
 
 pub type AppSettings = AppPreferences;
@@ -169,6 +170,7 @@ impl Default for AppPreferences {
             hide_floating_window: false,
             expanded_corner_radius: 45,
             always_show_top_bar: true,
+            clock_time_zone: "system".to_string(),
         }
     }
 }

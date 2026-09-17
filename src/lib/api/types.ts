@@ -51,6 +51,7 @@ export interface AppSettings {
   hideFloatingWindow: boolean;
   expandedCornerRadius: number;
   alwaysShowTopBar: boolean;
+  clockTimeZone: string;
 }
 
 export type FontId = "system" | "misans" | "source-han-serif-cn-bold" | "alibaba-puhuiti-heavy";
@@ -210,6 +211,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hideFloatingWindow: false,
   expandedCornerRadius: 45,
   alwaysShowTopBar: true,
+  clockTimeZone: "system",
 };
 
 export const DEFAULT_PREFERENCES = DEFAULT_SETTINGS;
