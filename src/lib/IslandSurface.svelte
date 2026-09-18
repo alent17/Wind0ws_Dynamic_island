@@ -416,7 +416,6 @@
           onStart={onTimerStart}
           onPause={onTimerPause}
           onResume={onTimerResume}
-          onAdjust={onTimerAdjust}
           onReset={onTimerReset}
         />
       {:else}

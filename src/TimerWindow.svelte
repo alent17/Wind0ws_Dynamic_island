@@ -476,8 +476,6 @@
       <div class="footer-actions" class:visible={active}>
         {#if active}
           <span class="dial-caption">{paused ? t("timerPaused") : t("timerRunning")}</span>
-          <button type="button" class="quiet-action" onclick={() => send("adjust", 60_000)}><Plus size={14} />{t("addMinute")}</button>
-          <button type="button" class="quiet-action" onclick={() => send("adjust", 300_000)}><Plus size={14} />{t("addFiveMinutes")}</button>
           <button type="button" class="reset-action" aria-label={t("cancelTimer")} onclick={() => send("reset")}><RotateCcw size={14} /></button>
         {:else}
           <span class="dial-caption">{t("selectedDuration", { value: selectedLabel })}</span>
@@ -958,7 +956,7 @@
   .footer-actions.visible { justify-content: flex-end; }
   .footer-actions:not(.visible) { justify-content: flex-start; }
 
-  .quiet-action, .reset-action {
+  .reset-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -975,8 +973,8 @@
   }
 
   .reset-action { width: 28px; padding: 0; }
-  .quiet-action:hover, .reset-action:hover { color: #fff; background: rgba(255,255,255,.1); }
-  .quiet-action:active, .reset-action:active { transform: scale(.95); }
+  .reset-action:hover { color: #fff; background: rgba(255,255,255,.1); }
+  .reset-action:active { transform: scale(.95); }
   .dial-caption { overflow: hidden; min-width: 0; margin-right: auto; color: #59636e; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 
   button:focus-visible, input:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }

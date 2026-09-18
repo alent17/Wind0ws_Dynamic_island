@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Pause, Play, Plus, RotateCcw } from "lucide-svelte";
+  import { Pause, Play, RotateCcw } from "lucide-svelte";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
 
@@ -9,7 +9,6 @@
     onStart,
     onPause,
     onResume,
-    onAdjust,
     onReset,
   } = $props<{
     status?: CountdownStatus;
@@ -17,13 +16,20 @@
     onStart?: (durationMs: number) => void;
     onPause?: () => void;
     onResume?: () => void;
-    onAdjust?: (deltaMs: number) => void;
     onReset?: () => void;
   }>();
 
   const t = (key: TranslationKey, values: Record<string, string | number> = {}) => translate(key, values, $locale);
+  const minuteStepPx = 12;
+  const maxMinutes = 24 * 60;
   const active = $derived((status === "running" || status === "paused") && remainingMs > 0);
   let selectedMinutes = $state(20);
+  let rulerElement: HTMLDivElement;
+  let dragging = $state(false);
+  let dragPointerId: number | null = null;
+  let dragStartX = 0;
+  let dragStartMinutes = 20;
+  let suppressClick = false;
   let centerMinutes = $derived(active ? Math.max(1, Math.ceil(remainingMs / 60_000)) : selectedMinutes);
   let rulerValues = $derived.by(() => {
     const start = Math.max(1, centerMinutes - 15);
@@ -35,7 +41,57 @@
 
   function chooseMinutes(minutes: number) {
     if (active) return;
-    selectedMinutes = Math.max(1, Math.min(24 * 60, minutes));
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
+    selectedMinutes = Math.max(1, Math.min(maxMinutes, Math.round(minutes)));
+  }
+
+  function updateFromDrag(clientX: number) {
+    const deltaMinutes = Math.round((dragStartX - clientX) / minuteStepPx);
+    selectedMinutes = Math.max(1, Math.min(maxMinutes, dragStartMinutes + deltaMinutes));
+  }
+
+  function handlePointerDown(event: PointerEvent) {
+    if (active || (event.pointerType === "mouse" && event.button !== 0)) return;
+    dragPointerId = event.pointerId;
+    dragStartX = event.clientX;
+    dragStartMinutes = selectedMinutes;
+    dragging = false;
+    suppressClick = false;
+    rulerElement?.setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: PointerEvent) {
+    if (active || dragPointerId !== event.pointerId) return;
+    const distance = event.clientX - dragStartX;
+    if (Math.abs(distance) >= 3) dragging = true;
+    if (!dragging) return;
+    event.preventDefault();
+    updateFromDrag(event.clientX);
+  }
+
+  function endPointer(event: PointerEvent) {
+    if (dragPointerId !== event.pointerId) return;
+    if (dragging) suppressClick = true;
+    if (rulerElement?.hasPointerCapture(event.pointerId)) rulerElement.releasePointerCapture(event.pointerId);
+    dragPointerId = null;
+    dragging = false;
+  }
+
+  function handleRulerKeydown(event: KeyboardEvent) {
+    if (active) return;
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      if (event.key === "Home") selectedMinutes = 1;
+      else if (event.key === "End") selectedMinutes = maxMinutes;
+      else {
+        const direction = event.key === "ArrowLeft" ? 1 : -1;
+        const step = event.shiftKey ? 5 : 1;
+        selectedMinutes = Math.max(1, Math.min(maxMinutes, selectedMinutes + direction * step));
+      }
+    }
   }
 
   function handleMainAction() {
@@ -52,7 +108,23 @@
 </script>
 
 <div class="timer-panel" data-stop-toggle>
-  <div class="timer-ruler" aria-label={t("selectDuration")}>
+  <div
+    bind:this={rulerElement}
+    class="timer-ruler"
+    class:dragging
+    role="slider"
+    tabindex="0"
+    aria-label={t("selectDuration")}
+    aria-valuemin="1"
+    aria-valuemax={maxMinutes}
+    aria-valuenow={centerMinutes}
+    aria-valuetext={`${centerMinutes} ${t("minutesShort")}`}
+    onpointerdown={handlePointerDown}
+    onpointermove={handlePointerMove}
+    onpointerup={endPointer}
+    onpointercancel={endPointer}
+    onkeydown={handleRulerKeydown}
+  >
     <div class="ruler-track" style={`--active-index:${activeIndex}`}>
       {#each rulerValues as minutes}
         <button
@@ -79,10 +151,6 @@
         {#if active}{#if status === "running"}<Pause size={13} fill="currentColor" />{:else}<Play size={13} fill="currentColor" />{/if}{/if}
         <span>{mainLabel}</span>
       </button>
-      {#if active}
-        <button class="timer-mini-button" type="button" aria-label={t("addMinute")} onclick={(event) => { event.stopPropagation(); onAdjust?.(60_000); }}><Plus size={13} />1m</button>
-        <button class="timer-mini-button" type="button" aria-label={t("addFiveMinutes")} onclick={(event) => { event.stopPropagation(); onAdjust?.(300_000); }}><Plus size={13} />5m</button>
-      {/if}
     </div>
 
     <div class="timer-readout" aria-live="polite">
@@ -114,9 +182,15 @@
     height: 69px;
     margin: 0 -10px;
     overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    cursor: grab;
     mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
     -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
   }
+
+  .timer-ruler.dragging { cursor: grabbing; }
+  .timer-ruler.dragging .ruler-track { transition: none; }
 
   .ruler-track {
     position: absolute;
@@ -141,7 +215,7 @@
     border: 0;
     color: transparent;
     background: transparent;
-    cursor: pointer;
+    cursor: inherit;
     text-transform: none;
   }
 
@@ -172,7 +246,7 @@
 
   .timer-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-top: auto; }
   .timer-actions { display: flex; align-items: center; gap: 5px; min-width: 0; }
-  .timer-main-button, .timer-mini-button {
+  .timer-main-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -191,9 +265,8 @@
   }
 
   .timer-main-button { padding: 0 13px; }
-  .timer-mini-button { height: 27px; padding: 0 7px; border: 1px solid rgba(242,139,49,.18); color: rgba(255,196,124,.8); background: rgba(242,139,49,.07); font-size: 9px; }
-  .timer-main-button:hover, .timer-mini-button:hover { color: #ffd096; background: rgba(242, 139, 49, .22); }
-  .timer-main-button:active, .timer-mini-button:active { transform: scale(.95); }
+  .timer-main-button:hover { color: #ffd096; background: rgba(242, 139, 49, .22); }
+  .timer-main-button:active { transform: scale(.95); }
 
   .timer-readout { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
   .timer-readout strong { color: #f28b31; font: 300 clamp(36px, 11vw, 50px)/.84 var(--app-font, "Segoe UI", sans-serif); letter-spacing: -.075em; white-space: nowrap; }
@@ -204,6 +277,6 @@
   button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
   @media (prefers-reduced-motion: reduce) {
-    .ruler-track, .tick, .timer-main-button, .timer-mini-button { transition: none; }
+    .ruler-track, .tick, .timer-main-button { transition: none; }
   }
 </style>
