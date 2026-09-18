@@ -47,6 +47,13 @@ describe("island geometry", () => {
       .toEqual({ x: 250, y: 78 });
   });
 
+  it("expands the native envelope only for the optional function panel", () => {
+    expect(geometryFor("compact", 45, "top", 80, 300)).toEqual({ width: 80, height: 28, radius: 14 });
+    expect(geometryFor("expanded", 45, "top", 80, 300)).toEqual({ width: 600, height: 160, radius: 45 });
+    expect(hostFor("floating", "top", 80, 300)).toEqual({ width: 600, height: 236 });
+    expect(hostFor("floating", "left", 300, 300)).toEqual({ width: 600, height: 300 });
+  });
+
   it("supports an adjustable compact long axis and caps hover at expanded width", () => {
     expect(geometryFor("compact", 45, "top", 200)).toEqual({ width: 200, height: 28, radius: 14 });
     expect(geometryFor("hover", 45, "top", 200)).toEqual({ width: 210, height: 30, radius: 15 });

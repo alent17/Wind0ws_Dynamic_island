@@ -40,9 +40,7 @@ impl Default for IdleContentItem {
 }
 
 fn default_idle_items() -> Vec<IdleContentItem> {
-    [
-        "clock", "date", "weather", "network", "cpu", "memory", "battery",
-    ]
+    ["clock", "weather"]
     .into_iter()
     .map(|kind| IdleContentItem {
         id: kind.to_string(),
@@ -97,6 +95,7 @@ pub struct AppPreferences {
     pub show_floating_tool: bool,
     pub show_volume_tool: bool,
     pub show_timer_tool: bool,
+    pub show_custom_function_panel: bool,
     pub enable_mv_playback: bool,
     pub lock_floating_window: bool,
     pub enable_hd_cover: bool,
@@ -162,6 +161,7 @@ impl Default for AppPreferences {
             show_floating_tool: true,
             show_volume_tool: true,
             show_timer_tool: true,
+            show_custom_function_panel: true,
             enable_mv_playback: true,
             lock_floating_window: false,
             enable_hd_cover: true,
@@ -200,7 +200,8 @@ mod tests {
         assert_eq!(loaded.floating_fill_color, "#28323c");
         assert!(loaded.floating_use_album_color);
         assert!(loaded.show_settings_tool);
-        assert_eq!(loaded.idle_items.len(), 7);
+        assert!(loaded.show_custom_function_panel);
+        assert_eq!(loaded.idle_items.len(), 2);
     }
 
     #[test]

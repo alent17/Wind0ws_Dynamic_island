@@ -12,6 +12,7 @@
   import IslandSurface from "$lib/IslandSurface.svelte";
   import Spectrum from "$lib/Spectrum.svelte";
   import {
+    CUSTOM_PANEL_WIDTH,
     clampExpandedRadius,
     clampShoulderRadius,
     geometryFor,
@@ -25,7 +26,7 @@
     type IslandRegionChange,
     type IslandStyle,
   } from "$lib/islandGeometry";
-  import type { AppSettings, IdleContentItem, IdleSnapshot, MediaState, MonitorInfo, SystemAudioState } from "$lib/api/types";
+  import type { AppSettings, IdleSnapshot, MediaState, MonitorInfo, SystemAudioState } from "$lib/api/types";
   import { DEFAULT_SETTINGS } from "$lib/api/types";
   import type { IslandTool } from "$lib/featureRail";
   import { applyAppFont } from "$lib/font";
@@ -35,7 +36,7 @@
     EMPTY_CAPTURE_SNAPSHOT,
     type CaptureSnapshot,
   } from "$lib/captureMode";
-  import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition, shouldShowIdleClock } from "$lib/mediaClock";
+  import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition } from "$lib/mediaClock";
   import { adjustCountdown, completeCountdown, createCountdownState, formatClock, getRemainingMs, pauseCountdown, resetCountdown, resumeCountdown, startCountdown, type CountdownState } from "$lib/countdown";
   import {
     getCurrentWindow,
@@ -133,7 +134,7 @@
   let interactionRegionRevision = Date.now() * 1000;
   let lastInteractionRegionSignature = "";
   function applyIslandRegion({ geometry, radii, polygon, extraRects }: IslandRegionChange) {
-    const host = hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength);
+    const host = hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength, customPanelExtraWidth);
     const offset = surfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge);
     const translatedExtraRects = (extraRects ?? []).map((rect) => ({
       ...rect,
@@ -237,6 +238,8 @@
     if (appSettings.showTimerTool) tools.push("timer");
     return tools;
   });
+  let customPanelEnabled = $derived(appSettings.showCustomFunctionPanel && enabledFeatureTools.length > 0);
+  let customPanelExtraWidth = $derived(customPanelEnabled ? CUSTOM_PANEL_WIDTH : 0);
   let lastSettingsSnapshot = "";
   function applySettingsIfChanged(value: AppSettings) {
     const next = normalizedSettings(value);
@@ -280,29 +283,50 @@
 
   let countdown = $state<CountdownState>(createCountdownState());
   let timerRemainingMs = $derived(getRemainingMs(countdown, clockNow));
+  let timerFinished = $state(false);
+  let timerFinishedTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function clearTimerFinished() {
+    timerFinished = false;
+    if (timerFinishedTimeout !== null) {
+      clearTimeout(timerFinishedTimeout);
+      timerFinishedTimeout = null;
+    }
+  }
 
   function handleTimerStart(durationMs: number) {
+    clearTimerFinished();
     countdown = startCountdown(countdown, durationMs, Date.now());
   }
 
   function handleTimerPause() {
+    clearTimerFinished();
     countdown = pauseCountdown(countdown, Date.now());
   }
 
   function handleTimerResume() {
+    clearTimerFinished();
     countdown = resumeCountdown(countdown, Date.now());
   }
 
   function handleTimerAdjust(deltaMs: number) {
+    clearTimerFinished();
     countdown = adjustCountdown(countdown, deltaMs, Date.now());
   }
 
   function handleTimerReset() {
+    clearTimerFinished();
     countdown = resetCountdown(countdown);
   }
 
   $effect(() => {
     if (countdown.status !== "running" || timerRemainingMs > 0) return;
+    timerFinished = true;
+    if (timerFinishedTimeout !== null) clearTimeout(timerFinishedTimeout);
+    timerFinishedTimeout = setTimeout(() => {
+      timerFinished = false;
+      timerFinishedTimeout = null;
+    }, 2_800);
     countdown = completeCountdown(countdown, clockNow);
   });
 
@@ -339,64 +363,14 @@
     setLocale(appSettings.language);
   });
   let idleSnapshot = $state<IdleSnapshot>({ cpuPercent: 0, memoryPercent: 0, uploadBytesPerSecond: 0, downloadBytesPerSecond: 0, batteryPercent: null, batteryCharging: null, weatherTemperature: null, weatherCode: null, weatherUpdatedAt: null });
-  let idleIndex = $state(0);
-  let idlePaused = $state(false);
-  let activeIdleItems = $derived(appSettings.idleItems.filter((item) => item.enabled && (item.kind !== "battery" || idleSnapshot.batteryPercent !== null)));
-  let showIdle = $derived(appSettings.idleContentEnabled && !hasMediaSession && activeIdleItems.length > 0);
-
-  function compactBytes(value: number) {
-    if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB/s`;
-    if (value >= 1024) return `${Math.round(value / 1024)} KB/s`;
-    return `${Math.round(value)} B/s`;
-  }
-  function weatherLabel(code: number | null) {
-    const labels = $locale === "ja"
-      ? ["天気を待機", "晴れ", "曇り", "霧", "雨", "雪", "にわか雨", "にわか雪", "雷雨"]
-      : $locale === "en"
-        ? ["Waiting for weather", "Clear", "Cloudy", "Fog", "Rain", "Snow", "Showers", "Snow showers", "Thunderstorm"]
-        : ["等待天气", "晴", "多云", "雾", "雨", "雪", "阵雨", "阵雪", "雷雨"];
-    if (code === null) return labels[0];
-    if (code === 0) return labels[1];
-    if (code <= 3) return labels[2];
-    if (code <= 48) return labels[3];
-    if (code <= 67) return labels[4];
-    if (code <= 77) return labels[5];
-    if (code <= 82) return labels[6];
-    if (code <= 86) return labels[7];
-    return labels[8];
-  }
-  function idlePresentation(item: IdleContentItem | undefined) {
-    const now = new Date();
-    if (!item) return { title: t("waitingPlayback"), subtitle: "" };
-    if (item.kind === "clock") return { title: now.toLocaleTimeString($locale, { hour: "2-digit", minute: "2-digit" }), subtitle: now.toLocaleTimeString($locale, { second: "2-digit" }) };
-    if (item.kind === "date") return { title: now.toLocaleDateString($locale, { month: "long", day: "numeric", weekday: "short" }), subtitle: String(now.getFullYear()) };
-    if (item.kind === "network") return { title: `↓ ${compactBytes(idleSnapshot.downloadBytesPerSecond)}`, subtitle: `↑ ${compactBytes(idleSnapshot.uploadBytesPerSecond)}` };
-    if (item.kind === "cpu") return { title: `CPU ${Math.round(idleSnapshot.cpuPercent)}%`, subtitle: $locale === "ja" ? "プロセッサ使用率" : $locale === "en" ? "Processor usage" : "处理器使用率" };
-    if (item.kind === "memory") return { title: `${t("memory")} ${Math.round(idleSnapshot.memoryPercent)}%`, subtitle: $locale === "ja" ? "メモリ使用率" : $locale === "en" ? "Memory usage" : "内存使用率" };
-    if (item.kind === "battery") return { title: `${t("battery")} ${idleSnapshot.batteryPercent ?? "--"}%`, subtitle: idleSnapshot.batteryCharging ? ($locale === "ja" ? "充電中" : $locale === "en" ? "Charging" : "正在充电") : ($locale === "ja" ? "バッテリー使用中" : $locale === "en" ? "On battery" : "使用电池") };
-    if (item.kind === "weather") return { title: idleSnapshot.weatherTemperature === null ? weatherLabel(null) : `${Math.round(idleSnapshot.weatherTemperature)}° ${weatherLabel(idleSnapshot.weatherCode)}`, subtitle: appSettings.weatherLocation?.name ?? ($locale === "ja" ? "設定で都市を選択" : $locale === "en" ? "Choose a city in Settings" : "请在设置中选择城市") };
-    return { title: item.text || ($locale === "ja" ? "カスタム情報" : $locale === "en" ? "Custom content" : "自定义内容"), subtitle: "" };
-  }
-  let currentIdle = $derived(idlePresentation(activeIdleItems[idleIndex % Math.max(1, activeIdleItems.length)]));
-  function idleAction(action: "prev" | "toggle" | "next") {
-    if (action === "toggle") { idlePaused = !idlePaused; return; }
-    const count = activeIdleItems.length;
-    if (!count) return;
-    idleIndex = action === "next" ? (idleIndex + 1) % count : (idleIndex - 1 + count) % count;
-  }
+  // Idle mode is intentionally fixed: the island stays glanceable with only
+  // the local clock and the selected location's current weather.
+  let showIdle = $derived(!hasMediaSession);
   $effect(() => {
     if (!showIdle) return;
     const refresh = () => idleApi.getSnapshot().then((value) => idleSnapshot = value).catch(() => undefined);
     refresh();
-    const timer = setInterval(refresh, 1000);
-    return () => clearInterval(timer);
-  });
-  $effect(() => {
-    const seconds = appSettings.idleRotationSeconds;
-    const count = activeIdleItems.length;
-    const paused = idlePaused || hovering || appSettings.reduceAnimations;
-    if (!showIdle || paused || count < 2) return;
-    const timer = setInterval(() => idleIndex = (idleIndex + 1) % count, seconds * 1000);
+    const timer = setInterval(refresh, 30_000);
     return () => clearInterval(timer);
   });
 
@@ -406,7 +380,8 @@
   let placementAnimation: Animation | null = null;
   let placementTransitionRevision = 0;
   let suppressPlacementEffect = false;
-  let currentHost = $derived(hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength));
+  let panelInteracting = $state(false);
+  let currentHost = $derived(hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength, customPanelExtraWidth));
 
   let captureSnapshot = $state<CaptureSnapshot>({ ...EMPTY_CAPTURE_SNAPSHOT });
   let isFullscreenApp = $derived(captureSnapshot.fullscreen);
@@ -462,6 +437,7 @@
       positionPercent,
       hidden,
       compactLength: appSettings.compactLength,
+      customPanelExtraWidth,
     });
     if (
       placementInput === lastPlacementInput
@@ -483,7 +459,7 @@
     const safeIndex = Math.min(Math.max(0, monitorIndex), allMonitors.length - 1);
     const monitor = allMonitors[safeIndex];
     const dpr = monitor.scaleFactor || window.devicePixelRatio || 1;
-    const host = hostFor(style, edge, appSettings.compactLength);
+    const host = hostFor(style, edge, appSettings.compactLength, customPanelExtraWidth);
     const physicalHost = { width: Math.round(host.width * dpr), height: Math.round(host.height * dpr) };
     const baseShown = placementFor(
       { x: monitor.workX, y: monitor.workY, width: monitor.workWidth, height: monitor.workHeight },
@@ -608,12 +584,14 @@
     const style = renderedIslandStyle;
     const edge = renderedIslandEdge;
     const hidden = isHidden;
+    const panelWidth = customPanelExtraWidth;
+    void panelWidth;
     if (ready && !suppressPlacementEffect) void applyWindowPlacement(style, edge, monitorIndex, position, hidden);
   });
 
   function startAutoClose() {
     stopAutoClose();
-    if (expanded && !hovering) {
+    if (expanded && !hovering && !panelInteracting) {
       const delay = appSettings.enableAnimations ? 5000 : 3000;
       logger.log(`开始自动收起计时器: ${delay}ms`);
       autoCloseTimer = setTimeout(() => {
@@ -632,7 +610,9 @@
   }
 
   $effect(() => {
-    if (expanded) {
+    const panelActive = panelInteracting;
+    const pointerInside = hovering;
+    if (expanded && !pointerInside && !panelActive) {
       startAutoClose();
     } else {
       stopAutoClose();
@@ -663,11 +643,14 @@
     }
   }
 
-  async function toggleSettingsWindow() {
+  async function showSettingsWindow() {
     try {
-      await windowApi.toggleStudioWindow();
+      // Settings is an open/focus action. Using toggle here can hide an
+      // existing window whose visibility state is stale after a close or
+      // minimize, making the button appear to do nothing.
+      await windowApi.showStudioWindow();
     } catch (error) {
-      logger.error("切换设置窗口失败:", error);
+      logger.error("打开设置窗口失败:", error);
     }
   }
 
@@ -1333,6 +1316,7 @@
   onDestroy(() => {
     stopAutoClose();
     stopDebugFps();
+    if (timerFinishedTimeout !== null) clearTimeout(timerFinishedTimeout);
   });
 
   function handleGlobalClick(event: MouseEvent) {
@@ -1421,16 +1405,16 @@
     edgeShoulderRadius={appSettings.edgeShoulderRadius ?? 8}
     compactLength={appSettings.compactLength ?? 80}
     idle={showIdle}
-    idleTitle={currentIdle.title}
-    idleSubtitle={currentIdle.subtitle}
-    {idlePaused}
+    idleTime={currentTime}
+    idleWeatherTemperature={idleSnapshot.weatherTemperature}
+    idleWeatherCode={idleSnapshot.weatherCode}
     showSpectrum={appSettings.showSpectrum}
     spectrumMode={appSettings.spectrumMode}
     enableAnimations={appSettings.enableAnimations}
     reduceAnimations={appSettings.reduceAnimations}
     {spectrumTopColor}
     {spectrumBottomColor}
-    showTime={shouldShowIdleClock(hasMediaSession)}
+    showTime={false}
     timeText={currentTime}
     showDebugInfo={appSettings.showDebugInfo}
     debugLines={[`${fps} FPS`, currentSource, `${Math.round(displayedPosition)} ms`, isHidden ? "hidden" : islandMode]}
@@ -1439,16 +1423,18 @@
     onMediaAction={(action) => handleMediaAction(action)}
     onSeek={handleSeek}
     onToggleFloating={toggleFloatingWindow}
-    onSettingsToggle={toggleSettingsWindow}
+    onSettingsToggle={showSettingsWindow}
     enabledTools={enabledFeatureTools}
+    showCustomFunctionPanel={appSettings.showCustomFunctionPanel}
+    onPanelActivity={(active) => panelInteracting = active}
     onHoverChange={(value) => hovering = value}
     onRegionChange={applyIslandRegion}
-    onIdleAction={idleAction}
     {systemAudio}
     onAudioOpen={handleAudioOpen}
     onAudioVolume={handleAudioVolume}
     timerStatus={countdown.status}
     {timerRemainingMs}
+    {timerFinished}
     clockText={currentTime}
     clockTimeZone={appSettings.clockTimeZone}
     onTimerStart={handleTimerStart}

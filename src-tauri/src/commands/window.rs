@@ -633,6 +633,7 @@ pub fn show_studio_window(app: AppHandle) -> AppResult<()> {
         let _ = window.set_size(tauri::PhysicalSize::new(1000, 750));
         let _ = window.set_min_size(Some(tauri::PhysicalSize::new(800, 600)));
         let _ = window.center();
+        let _ = window.unminimize();
         window.show().map_err(|e| AppError::window(e.to_string()))?;
         window
             .set_focus()
@@ -663,13 +664,10 @@ pub fn toggle_studio_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("studio-window") {
         if window.is_visible().unwrap_or(false) {
             window.hide().map_err(|e| AppError::window(e.to_string()))?;
-        } else {
-            window.show().map_err(|e| AppError::window(e.to_string()))?;
-            window
-                .set_focus()
-                .map_err(|e| AppError::window(e.to_string()))?;
+            return Ok(());
         }
-        return Ok(());
+
+        return show_studio_window(app);
     }
 
     show_studio_window(app)

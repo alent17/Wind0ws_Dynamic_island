@@ -107,11 +107,12 @@
   }
 </script>
 
-<div class="timer-panel" data-stop-toggle>
+<div class="timer-panel">
   <div
     bind:this={rulerElement}
     class="timer-ruler"
     class:dragging
+    data-stop-toggle
     role="slider"
     tabindex="0"
     aria-label={t("selectDuration")}

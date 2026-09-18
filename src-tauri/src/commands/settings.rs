@@ -326,12 +326,15 @@ pub fn set_player_weights(
 
 /// 设置开机自启动
 #[tauri::command]
-pub fn set_auto_start_cmd(
+pub async fn set_auto_start_cmd(
     app: AppHandle,
     state: State<'_, AppState>,
     enable: bool,
 ) -> AppResult<()> {
-    set_auto_start(enable)?;
+    tauri::async_runtime::spawn_blocking(move || set_auto_start(enable))
+        .await
+        .map_err(|error| AppError::config(format!("更新开机启动任务失败：{}", error)))??;
+
     let settings = {
         let mut settings = state
             .settings
@@ -340,13 +343,21 @@ pub fn set_auto_start_cmd(
         settings.auto_start = enable;
         settings.clone()
     };
-    write_settings_file(&app, &settings)
+
+    let app_for_write = app.clone();
+    tauri::async_runtime::spawn_blocking(move || write_settings_file(&app_for_write, &settings))
+        .await
+        .map_err(|error| AppError::config(format!("保存设置任务失败：{}", error)))??;
+
+    Ok(())
 }
 
 /// 获取开机自启动状态
 #[tauri::command]
-pub fn get_auto_start() -> AppResult<bool> {
-    get_auto_start_service()
+pub async fn get_auto_start() -> AppResult<bool> {
+    tauri::async_runtime::spawn_blocking(get_auto_start_service)
+        .await
+        .map_err(|error| AppError::config(format!("读取开机启动状态任务失败：{}", error)))?
 }
 
 /// 保存悬浮窗口位置和大小

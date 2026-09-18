@@ -888,21 +888,29 @@ pub fn control_media(app: &AppHandle, action: &str) -> AppResult<()> {
         );
     }
 
-    if let Some((session, _, _)) = selected_session(app)? {
-        match action {
-            "play_pause" => {
-                let _ = session.TryTogglePlayPauseAsync();
-            }
-            "next" => {
-                let _ = session.TrySkipNextAsync();
-            }
-            "prev" => {
-                let _ = session.TrySkipPreviousAsync();
-            }
-            _ => {}
-        }
-    }
+    let Some((session, _, _)) = selected_session(app)? else {
+        return Err(AppError::media("未找到可控制的媒体会话"));
+    };
 
+    // GSMTC control methods return an IAsyncOperation.  Dropping that
+    // operation immediately makes the request fire-and-forget; in practice
+    // Windows can cancel it before the player receives the command.  Wait for
+    // completion so the frontend gets the real result and can restore its
+    // optimistic state when the player rejects the action.
+    let result = match action {
+        "play_pause" => session
+            .TryTogglePlayPauseAsync()
+            .and_then(|operation| operation.get()),
+        "next" => session
+            .TrySkipNextAsync()
+            .and_then(|operation| operation.get()),
+        "prev" => session
+            .TrySkipPreviousAsync()
+            .and_then(|operation| operation.get()),
+        _ => return Err(AppError::media(format!("不支持的媒体操作: {action}"))),
+    };
+
+    result.map_err(|error| AppError::media(format!("执行媒体操作 {action} 失败: {error:?}")))?;
     Ok(())
 }
 

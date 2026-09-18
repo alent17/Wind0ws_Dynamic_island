@@ -35,6 +35,7 @@ export const ISLAND_GEOMETRY = {
 
 export const ISLAND_GAP = 22;
 export const ISLAND_OVERSHOOT = 4;
+export const CUSTOM_PANEL_WIDTH = 300;
 export const FEATURE_RAIL_RESERVE = 0;
 export const ISLAND_HOST = {
   width: Math.max(ISLAND_GEOMETRY.expanded.width, FEATURE_RAIL_WIDTH),
@@ -63,10 +64,11 @@ export function geometryFor(
   expandedRadius = 45,
   edge: IslandEdge = "top",
   compactLength = 80,
+  expandedExtraWidth = 0,
 ): IslandGeometry {
   const length = clampCompactLength(compactLength);
   const geometry = mode === "expanded"
-    ? ISLAND_GEOMETRY.expanded
+    ? { ...ISLAND_GEOMETRY.expanded, width: ISLAND_GEOMETRY.expanded.width + Math.max(0, expandedExtraWidth) }
     : mode === "hover"
       ? { ...ISLAND_GEOMETRY.hover, width: Math.min(300, length + 10) }
       : { ...ISLAND_GEOMETRY[mode], width: length };
@@ -97,15 +99,16 @@ export function borderRadiusCss(radii: CornerRadii) {
   return `${radii.topLeft}px ${radii.topRight}px ${radii.bottomRight}px ${radii.bottomLeft}px`;
 }
 
-export function hostFor(_style: IslandStyle, edge: IslandEdge, compactLength = 80): HostGeometry {
+export function hostFor(_style: IslandStyle, edge: IslandEdge, compactLength = 80, expandedExtraWidth = 0): HostGeometry {
   // Floating and attached silhouettes share one native window envelope. Mode
   // changes can then stay entirely inside the compositor instead of resizing
   // the WebView on every switch. Edge mode simply leaves the gap transparent.
   const gap = ISLAND_GAP;
   const length = clampCompactLength(compactLength);
+  const hostWidth = Math.max(ISLAND_HOST.width, ISLAND_GEOMETRY.expanded.width + Math.max(0, expandedExtraWidth));
   return isVerticalEdge(edge)
-    ? { width: ISLAND_HOST.width, height: Math.max(ISLAND_HOST.height, length) }
-    : { width: ISLAND_HOST.width, height: ISLAND_HOST.height };
+    ? { width: hostWidth, height: Math.max(ISLAND_HOST.height, length) }
+    : { width: hostWidth, height: ISLAND_HOST.height };
 }
 
 function cubicPoint(a: Point, b: Point, c: Point, d: Point, t: number): Point {

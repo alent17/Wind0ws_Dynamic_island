@@ -2,10 +2,10 @@
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { spring } from "svelte/motion";
-  import { Play,Pause,ImageOff,Type,RotateCcw,Trash2,ExternalLink,Monitor,ArrowUp,ArrowRight,ArrowDown,ArrowLeft,RefreshCw,ChevronUp,ChevronDown,Plus,X,Search } from "lucide-svelte";
+  import { Play,Pause,ImageOff,Type,RotateCcw,Trash2,ExternalLink,Monitor,ArrowUp,ArrowRight,ArrowDown,ArrowLeft,RefreshCw,ChevronUp,ChevronDown,CloudSun,Search } from "lucide-svelte";
   import IslandSurface from "$lib/IslandSurface.svelte";
   import StudioSlider from "$lib/StudioSlider.svelte";
-  import { geometryFor, hostFor, type IslandMode } from "$lib/islandGeometry";
+  import { CUSTOM_PANEL_WIDTH, geometryFor, hostFor, type IslandMode } from "$lib/islandGeometry";
   import { DEMO_MEDIA, media, connectMedia } from "$lib/mediaStore";
   import { settingsApi } from "$lib/api/settings";
   import { windowApi } from "$lib/api/window";
@@ -14,7 +14,7 @@
   import { idleApi } from "$lib/api/idle";
   import { applyAppFont, FONT_OPTIONS } from "$lib/font";
   import { locale, setLocale, translate, type TranslationKey } from "$lib/i18n";
-  import { DEFAULT_SETTINGS, type AppLanguage, type AppPreferences, type IdleContentItem, type MediaSessionInfo, type MediaState, type MonitorInfo, type WeatherLocationCandidate } from "$lib/api/types";
+  import { DEFAULT_SETTINGS, type AppLanguage, type AppPreferences, type MediaSessionInfo, type MediaState, type MonitorInfo, type WeatherLocationCandidate } from "$lib/api/types";
   import type { IslandTool } from "$lib/featureRail";
 
   type Scenario="playing"|"paused"|"no-art"|"long-title";
@@ -40,12 +40,9 @@
   let nativeRuntime=$state(false); let followingLive=$state(false); let liveMedia=$state<MediaState>(DEMO_MEDIA); let liveMediaDisconnect:undefined|(()=>void); let stageWidth=$state(0); let stageHeight=$state(0);
   let sessions=$state<MediaSessionInfo[]>([]); let sessionsLoading=$state(false); let weatherQuery=$state(""); let weatherResults=$state<WeatherLocationCandidate[]>([]); let weatherMessage=$state("");
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
-  let textCommitTimer: ReturnType<typeof setTimeout> | undefined;
   let persistInFlight: Promise<void> | undefined;
   let persistPending=false;
   let pendingSettingsPatch:Partial<AppPreferences>={};
-  let idlePreferenceRaf=0;
-  let queuedIdlePreference:Partial<AppPreferences>={};
   let appearanceDraft=$state<AppearanceDraft>(createAppearanceDraft(DEFAULT_SETTINGS));
   let previewTarget=$state<PreviewTarget>(null);
   let applyingAppearance=$state(false);
@@ -61,14 +58,10 @@
       appearanceDraft.floatingUseAlbumColor!==settings.floatingUseAlbumColor||
       appearanceDraft.floatingFillColor!==settings.floatingFillColor;
   });
-  let appBehaviorSection:HTMLElement|null=null;
-  let autoStartLoaded=false;
   let studioDisposed=false;
   const previewBars=[.45,.78,.58,.96,.7,.38];
   let scenarioMedia=$derived.by<MediaState>(()=>{const base={...DEMO_MEDIA,positionMs:244000*progress/100,lastUpdatedTimestamp:Date.now()};if(scenario==="paused")return{...base,isPlaying:false};if(scenario==="no-art")return{...base,albumArt:""};if(scenario==="long-title")return{...base,title:"宇宙尽头的浪漫主义与一场不会结束的午夜公路旅行",artist:"The Extremely Long Artist Name · 特别长的专辑名称"};return base});
   let sample=$derived(nativeRuntime&&followingLive?liveMedia:scenarioMedia);
-  let previewHost=$derived(hostFor(appearanceDraft.islandStyle,appearanceDraft.islandEdge,appearanceDraft.compactLength));
-  let currentGeometry=$derived(geometryFor(mode,appearanceDraft.expandedCornerRadius,appearanceDraft.islandEdge,appearanceDraft.compactLength));
   // Keep the island at the current preview scale while the surrounding stage changes width.
   const previewScaleFloor=.79;
   let previewTools=$derived.by<IslandTool[]>(()=>[
@@ -77,6 +70,10 @@
     ...(settings.showVolumeTool?["volume"]:[]),
     ...(settings.showTimerTool?["timer"]:[]),
   ] as IslandTool[]);
+  let previewPanelVisible=$derived(settings.showCustomFunctionPanel&&previewTools.length>0);
+  let previewPanelExtraWidth=$derived(previewPanelVisible?CUSTOM_PANEL_WIDTH:0);
+  let previewHost=$derived(hostFor(appearanceDraft.islandStyle,appearanceDraft.islandEdge,appearanceDraft.compactLength,previewPanelExtraWidth));
+  let currentGeometry=$derived(geometryFor(mode,appearanceDraft.expandedCornerRadius,appearanceDraft.islandEdge,appearanceDraft.compactLength,previewPanelExtraWidth));
   let previewScale=$derived(previewScaleFloor);
   const previewPosition=spring(50,{stiffness:.1,damping:.7,precision:.1});
   $effect(()=>{previewPosition.set(appearanceDraft.islandEdgePosition,{hard:!settings.enableAnimations||settings.reduceAnimations})});
@@ -116,11 +113,6 @@
   function syncAppearanceDrafts(){
     appearanceDraft=createAppearanceDraft(settings);
   }
-  function loadAutoStart(){
-    if(studioDisposed||!nativeRuntime||autoStartLoaded)return;
-    autoStartLoaded=true;
-    void settingsApi.getAutoStart().then(autoStart=>{if(!studioDisposed)settings={...settings,autoStart}}).catch(()=>{if(!studioDisposed)autoStartLoaded=false});
-  }
   onMount(()=>{
     studioDisposed=false;
     nativeRuntime=Boolean((window as any).__TAURI_INTERNALS__);
@@ -128,7 +120,6 @@
     let disposed=false;
     let deferredFrame=0;
     let deferredTimers:ReturnType<typeof setTimeout>[]=[];
-    let autoStartObserver:IntersectionObserver|undefined;
     let closePromise:Promise<()=>void>|undefined;
     if(nativeRuntime){
       const appWindow=getCurrentWindow();
@@ -144,16 +135,6 @@
           setLocale(settings.language);
         }catch{}
         if(disposed)return;
-        if(appBehaviorSection){
-          autoStartObserver=new IntersectionObserver(entries=>{
-            if(entries.some(entry=>entry.isIntersecting)){
-              loadAutoStart();
-              autoStartObserver?.disconnect();
-              autoStartObserver=undefined;
-            }
-          },{threshold:0});
-          autoStartObserver.observe(appBehaviorSection);
-        }
         deferredFrame=requestAnimationFrame(()=>{
           deferredTimers=[
             setTimeout(()=>{
@@ -170,11 +151,7 @@
       studioDisposed=true;
       if(deferredFrame)cancelAnimationFrame(deferredFrame);
       deferredTimers.forEach(timer=>clearTimeout(timer));
-      autoStartObserver?.disconnect();
       if(closePromise)void closePromise.then(unlisten=>unlisten()).catch(()=>{});
-      if(textCommitTimer){clearTimeout(textCommitTimer);textCommitTimer=undefined;commitPreference({idleItems:settings.idleItems})}
-      if(idlePreferenceRaf){cancelAnimationFrame(idlePreferenceRaf);idlePreferenceRaf=0}
-      queuedIdlePreference={};
       if(saveTimer)clearTimeout(saveTimer);
       void persist();
       unsubscribe();
@@ -198,20 +175,7 @@
     await persistInFlight;
   }
   function schedulePersist(){if(saveTimer)clearTimeout(saveTimer);saveTimer=setTimeout(()=>void persist(),300)}
-  function flushQueuedIdlePreference(){
-    const patch=queuedIdlePreference;
-    queuedIdlePreference={};
-    if(!Object.keys(patch).length)return;
-    settings={...settings,...patch};
-  }
-  function queueIdlePreferenceUpdate(patch:Partial<AppPreferences>){
-    queuedIdlePreference={...queuedIdlePreference,...patch};
-    if(idlePreferenceRaf)return;
-    idlePreferenceRaf=requestAnimationFrame(()=>{idlePreferenceRaf=0;flushQueuedIdlePreference()});
-  }
   function commitPreference(patch:Partial<AppPreferences>){
-    if(idlePreferenceRaf){cancelAnimationFrame(idlePreferenceRaf);idlePreferenceRaf=0}
-    flushQueuedIdlePreference();
     settings={...settings,...patch};
     pendingSettingsPatch={...pendingSettingsPatch,...patch};
     if(!nativeRuntime)return;
@@ -269,17 +233,6 @@
     const selected=new Set(settings.selectedPlayerIds===null?order:settings.selectedPlayerIds);
     return {selected:order.filter(id=>selected.has(id)).map(sessionFor),unselected:order.filter(id=>!selected.has(id)).map(sessionFor)};
   });
-  const idleLabel=(kind:string)=>t((({clock:"clock",date:"date",weather:"weather",network:"network",cpu:"cpu",memory:"memory",battery:"battery",custom:"customText"} as const)[kind]??"customText") as TranslationKey);
-  function patchIdle(id:string,patch:Partial<IdleContentItem>){updatePreference({idleItems:settings.idleItems.map(item=>item.id===id?{...item,...patch}:item)})}
-  function updateIdleText(id:string,text:string){
-    queueIdlePreferenceUpdate({idleItems:settings.idleItems.map(item=>item.id===id?{...item,text}:item)});
-    if(textCommitTimer)clearTimeout(textCommitTimer);
-    textCommitTimer=setTimeout(()=>{textCommitTimer=undefined;commitPreference({idleItems:settings.idleItems})},300);
-  }
-  function commitIdleText(){if(!textCommitTimer)return;clearTimeout(textCommitTimer);textCommitTimer=undefined;commitPreference({idleItems:settings.idleItems})}
-  function moveIdle(id:string,direction:-1|1){const items=[...settings.idleItems];const from=items.findIndex(item=>item.id===id);const to=from+direction;if(from<0||to<0||to>=items.length)return;[items[from],items[to]]=[items[to],items[from]];updatePreference({idleItems:items})}
-  function addCustom(){const id=`custom-${Date.now()}`;updatePreference({idleItems:[...settings.idleItems,{id,kind:"custom",enabled:true,text:"(｡･ω･｡)ﾉ♡"}]})}
-  function removeIdle(id:string){updatePreference({idleItems:settings.idleItems.filter(item=>item.id!==id)})}
   async function searchWeather(){weatherMessage=t("searching");try{weatherResults=await idleApi.searchLocations(weatherQuery,$locale==="zh-CN"?"zh":$locale);weatherMessage=weatherResults.length?"":t("noCity")}catch{weatherMessage=t("weatherFailed")}}
   function weatherLocationLabel(item:WeatherLocationCandidate){return [...new Set([item.name,item.admin2,item.admin1,item.country].filter(Boolean))].join(" · ")}
   function weatherCandidateDetail(item:WeatherLocationCandidate){const label=[...new Set([item.admin2,item.admin1,item.country].filter(Boolean))].join(" · ");const duplicates=weatherResults.filter(other=>weatherLocationLabel(other)===weatherLocationLabel(item)).length;return duplicates>1?`${label} · ${item.latitude.toFixed(2)}, ${item.longitude.toFixed(2)}`:label}
@@ -304,7 +257,7 @@
     <section class="stage" aria-label={t("previewLabel")} bind:clientWidth={stageWidth} bind:clientHeight={stageHeight}>
       <div class="stage-topline"><span><i aria-hidden="true"></i>{t("previewLabel")}</span><small>{nativeRuntime?t("previewReady"):t("browserDemo")}</small></div>
       <div class="preview-host" style={`width:${previewHost.width}px;height:${previewHost.height}px;${previewPositionStyle}`}>
-        <IslandSurface media={sample} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedRadius={appearanceDraft.expandedCornerRadius} edgeShoulderRadius={appearanceDraft.edgeShoulderRadius} compactLength={appearanceDraft.compactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} background={appearanceDraft.floatingUseAlbumColor ? "#000" : appearanceDraft.floatingFillColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.toggleStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{stopLivePreview();if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
+        <IslandSurface media={sample} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedRadius={appearanceDraft.expandedCornerRadius} edgeShoulderRadius={appearanceDraft.edgeShoulderRadius} compactLength={appearanceDraft.compactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} background={appearanceDraft.floatingUseAlbumColor ? "#000" : appearanceDraft.floatingFillColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} showCustomFunctionPanel={settings.showCustomFunctionPanel} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.showStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{stopLivePreview();if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
       </div>
       <div class="stage-caption" class:editing={previewTarget!==null} aria-live="polite">
         <strong>{previewTarget?t("previewEditing"):t("previewReady")}{previewTarget?`：${previewTargetLabel(previewTarget)}`:""}</strong>
@@ -348,33 +301,33 @@
         <button aria-pressed={!followingLive&&scenario==="playing"} class:active={!followingLive&&scenario==="playing"} onclick={()=>selectScenario("playing")}><Play size={17}/>{t("play")}</button><button aria-pressed={!followingLive&&scenario==="paused"} class:active={!followingLive&&scenario==="paused"} onclick={()=>selectScenario("paused")}><Pause size={17}/>{t("pause")}</button><button aria-pressed={!followingLive&&scenario==="no-art"} class:active={!followingLive&&scenario==="no-art"} onclick={()=>selectScenario("no-art")}><ImageOff size={17}/>{t("noCover")}</button><button aria-pressed={!followingLive&&scenario==="long-title"} class:active={!followingLive&&scenario==="long-title"} onclick={()=>selectScenario("long-title")}><Type size={17}/>{t("longTitle")}</button>
       </div><StudioSlider label={t("playbackProgress",{percent:progress})} hideLabel showValue={false} min={0} max={100} bind:value={progress} onPreviewMove={stopLivePreview}/><div class="endpoints"><button onclick={()=>{progress=0;stopLivePreview()}}>0%</button><button onclick={()=>{progress=50;stopLivePreview()}}>50%</button><button onclick={()=>{progress=100;stopLivePreview()}}>100%</button></div></section>
       <section class="spectrum-section"><h2>{t("spectrum")}</h2><div class="preview-setting" role="group" data-preview-target="spectrum" onmouseenter={()=>previewTarget="spectrum"} onfocusin={()=>previewTarget="spectrum"}><div class="setting-grid single"><button type="button" class="setting-choice" class:active={appearanceDraft.showSpectrum} aria-pressed={appearanceDraft.showSpectrum} onclick={()=>{appearanceDraft.showSpectrum=!appearanceDraft.showSpectrum;previewTarget="spectrum"}}><span class="choice-mark" aria-hidden="true">{appearanceDraft.showSpectrum?"✓":""}</span><span class="choice-copy"><strong>{t("showSpectrum")}</strong><small>{t("showSpectrumHint")}</small></span></button></div>{#if appearanceDraft.showSpectrum}<div class="field-label"><span>{t("animationSource")}</span><small>{t("animationSourceHint")}</small></div><div class="segmented two"><button aria-pressed={appearanceDraft.spectrumMode==="realtime"} class:active={appearanceDraft.spectrumMode==="realtime"} onclick={()=>{appearanceDraft.spectrumMode="realtime";previewTarget="spectrum"}}>{t("realtime")}</button><button aria-pressed={appearanceDraft.spectrumMode==="random"} class:active={appearanceDraft.spectrumMode==="random"} onclick={()=>{appearanceDraft.spectrumMode="random";previewTarget="spectrum"}}>{t("random")}</button></div>{/if}</div></section>
-      <section class="feature-tools-section"><h2>{t("featureTools")}</h2><p class="hint">{t("featureToolsHint")}</p><div class="setting-grid"><button type="button" class="setting-choice" class:active={settings.showSettingsTool} aria-pressed={settings.showSettingsTool} onclick={()=>updatePreference({showSettingsTool:!settings.showSettingsTool})}><span class="choice-mark" aria-hidden="true">{settings.showSettingsTool?"✓":""}</span><span class="choice-copy"><strong>{t("settingsTool")}</strong></span></button><button type="button" class="setting-choice" class:active={settings.showFloatingTool} aria-pressed={settings.showFloatingTool} onclick={()=>updatePreference({showFloatingTool:!settings.showFloatingTool})}><span class="choice-mark" aria-hidden="true">{settings.showFloatingTool?"✓":""}</span><span class="choice-copy"><strong>{t("floatingTool")}</strong></span></button><button type="button" class="setting-choice" class:active={settings.showVolumeTool} aria-pressed={settings.showVolumeTool} onclick={()=>updatePreference({showVolumeTool:!settings.showVolumeTool})}><span class="choice-mark" aria-hidden="true">{settings.showVolumeTool?"✓":""}</span><span class="choice-copy"><strong>{t("volumeTool")}</strong></span></button><button type="button" class="setting-choice" class:active={settings.showTimerTool} aria-pressed={settings.showTimerTool} onclick={()=>updatePreference({showTimerTool:!settings.showTimerTool})}><span class="choice-mark" aria-hidden="true">{settings.showTimerTool?"✓":""}</span><span class="choice-copy"><strong>{t("timerTool")}</strong></span></button></div></section>
+      <section class="feature-tools-section">
+        <h2>{t("featureTools")}</h2>
+        <p class="hint">{t("featureToolsHint")}</p>
+        <button type="button" class="setting-choice panel-toggle-choice" class:active={settings.showCustomFunctionPanel} aria-pressed={settings.showCustomFunctionPanel} onclick={()=>updatePreference({showCustomFunctionPanel:!settings.showCustomFunctionPanel})}>
+          <span class="choice-mark" aria-hidden="true">{settings.showCustomFunctionPanel?"✓":""}</span>
+          <span class="choice-copy"><strong>{t("customFunctionPanel")}</strong><small>{t("customFunctionPanelHint")}</small></span>
+        </button>
+        <div class="setting-grid" class:tools-disabled={!settings.showCustomFunctionPanel}>
+          <button type="button" class="setting-choice" class:active={settings.showSettingsTool} aria-pressed={settings.showSettingsTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showSettingsTool:!settings.showSettingsTool})}><span class="choice-mark" aria-hidden="true">{settings.showSettingsTool?"✓":""}</span><span class="choice-copy"><strong>{t("settingsTool")}</strong></span></button>
+          <button type="button" class="setting-choice" class:active={settings.showFloatingTool} aria-pressed={settings.showFloatingTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showFloatingTool:!settings.showFloatingTool})}><span class="choice-mark" aria-hidden="true">{settings.showFloatingTool?"✓":""}</span><span class="choice-copy"><strong>{t("floatingTool")}</strong></span></button>
+          <button type="button" class="setting-choice" class:active={settings.showVolumeTool} aria-pressed={settings.showVolumeTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showVolumeTool:!settings.showVolumeTool})}><span class="choice-mark" aria-hidden="true">{settings.showVolumeTool?"✓":""}</span><span class="choice-copy"><strong>{t("volumeTool")}</strong></span></button>
+          <button type="button" class="setting-choice" class:active={settings.showTimerTool} aria-pressed={settings.showTimerTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showTimerTool:!settings.showTimerTool})}><span class="choice-mark" aria-hidden="true">{settings.showTimerTool?"✓":""}</span><span class="choice-copy"><strong>{t("timerTool")}</strong></span></button>
+        </div>
+      </section>
       <section class="players-section"><div class="section-title"><h2>{t("players")}</h2><button class="icon-button" aria-label={t("refreshPlayers")} disabled={!nativeRuntime} onclick={refreshSessions}><RefreshCw size={15}/></button></div><p class="hint">{t("playersHint")}</p>
         {#if sessionsLoading}<div class="ordered-list skeleton-list" aria-hidden="true">{#each [0,1,2] as row}<div class="ordered-row skeleton-row"><span><i></i><i></i></span></div>{/each}</div>{:else}<div class="ordered-list">{#each playerRows.selected as player,index (player.id)}<div class="ordered-row" class:offline={!sessions.some(item=>item.id===player.id)}><button type="button" class="player-selection" role="checkbox" aria-checked="true" aria-label={t("select",{name:player.displayName})} onclick={()=>togglePlayer(player.id,false)}><span class="choice-mark" aria-hidden="true">✓</span></button><span><strong>{player.displayName}</strong><small>{player.isPlaying?t("playingNow"):sessions.some(item=>item.id===player.id)?t("detected"):t("offline")}</small></span><button aria-label={t("moveUp")} disabled={index===0} onclick={()=>movePlayer(player.id,-1)}><ChevronUp size={14}/></button><button aria-label={t("moveDown")} disabled={index===playerRows.selected.length-1} onclick={()=>movePlayer(player.id,1)}><ChevronDown size={14}/></button></div>{/each}{#each playerRows.unselected as player (player.id)}<div class="ordered-row" class:offline={!sessions.some(item=>item.id===player.id)}><button type="button" class="player-selection" role="checkbox" aria-checked="false" aria-label={t("select",{name:player.displayName})} onclick={()=>togglePlayer(player.id,true)}><span class="choice-mark" aria-hidden="true"></span></button><span><strong>{player.displayName}</strong><small>{player.isPlaying?t("playingNow"):sessions.some(item=>item.id===player.id)?t("detected"):t("offline")}</small></span></div>{/each}{#if !playerRows.selected.length&&!playerRows.unselected.length}<p class="empty">{t("noSessions")}</p>{/if}</div>{/if}
       </section>
-      <section class="idle-section"><h2>{t("idleContent")}</h2>
-        <div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.idleContentEnabled} aria-pressed={settings.idleContentEnabled} onclick={()=>updatePreference({idleContentEnabled:!settings.idleContentEnabled})}><span class="choice-mark" aria-hidden="true">{settings.idleContentEnabled?"✓":""}</span><span class="choice-copy"><strong>{t("enableIdle")}</strong><small>{t("enableIdleHint")}</small></span></button></div>
-        {#if settings.idleContentEnabled}
-          <StudioSlider
-            label={t("interval")}
-            hint={t("idleInterval")}
-            min={2}
-            max={60}
-            unit="s"
-            value={settings.idleRotationSeconds}
-            onPreviewMove={(value) => queueIdlePreferenceUpdate({idleRotationSeconds: value})}
-            onPreviewEnd={(value) => commitPreference({idleRotationSeconds: value})}
-          />
-          <div class="ordered-list idle-list">{#each settings.idleItems as item,index (item.id)}<div class="ordered-row idle-row"><button type="button" class="mini-choice" class:active={item.enabled} role="checkbox" aria-checked={item.enabled} aria-label={t("enableItem",{name:idleLabel(item.kind)})} onclick={()=>patchIdle(item.id,{enabled:!item.enabled})}><span class="choice-mark" aria-hidden="true">{item.enabled?"✓":""}</span></button><span><strong>{idleLabel(item.kind)}</strong>{#if item.kind==="custom"}<input aria-label={t("customText")} maxlength="120" value={item.text} oninput={(e)=>updateIdleText(item.id,e.currentTarget.value)} onchange={commitIdleText} onblur={commitIdleText}/>{/if}</span><button aria-label={t("moveUp")} disabled={index===0} onclick={()=>moveIdle(item.id,-1)}><ChevronUp size={14}/></button><button aria-label={t("moveDown")} disabled={index===settings.idleItems.length-1} onclick={()=>moveIdle(item.id,1)}><ChevronDown size={14}/></button>{#if item.kind==="custom"}<button aria-label={t("deleteCustom")} onclick={()=>removeIdle(item.id)}><X size={14}/></button>{/if}</div>{/each}</div>
-          <button class="center-button add-button" onclick={addCustom}><Plus size={15}/>{t("addCustom")}</button>
-          <div class="weather-box"><label for="weather-city">{t("weatherCity")}</label><div class="search-row"><input id="weather-city" placeholder={t("cityExample")} bind:value={weatherQuery} onkeydown={(e)=>{if(e.key==="Enter")void searchWeather()}}/><button aria-label={t("searchCity")} onclick={searchWeather}><Search size={15}/></button></div>{#if settings.weatherLocation}<p class="selected-city">{t("currentCity",{name:settings.weatherLocation.name})}</p>{/if}{#if weatherMessage}<p class="message">{weatherMessage}</p>{/if}{#if weatherResults.length}<div class="weather-results">{#each weatherResults as item}<button onclick={()=>selectWeather(item)}><strong>{item.name}</strong><small>{weatherCandidateDetail(item)}</small></button>{/each}</div>{/if}<p class="hint">{t("weatherSource")}</p></div>
-        {/if}
+      <section class="idle-section"><div class="section-title"><h2>{t("idleContent")}</h2><span class="section-note">{t("idleFixedLabel")}</span></div>
+        <p class="hint idle-fixed-hint">{t("idleFixedHint")}</p>
+        <div class="idle-layout-preview" aria-hidden="true"><span>{t("clock")}</span><span><CloudSun size={14}/>{t("weather")}</span></div>
+        <div class="weather-box"><label for="weather-city">{t("weatherCity")}</label><div class="search-row"><input id="weather-city" placeholder={t("cityExample")} bind:value={weatherQuery} onkeydown={(e)=>{if(e.key==="Enter")void searchWeather()}}/><button aria-label={t("searchCity")} onclick={searchWeather}><Search size={15}/></button></div>{#if settings.weatherLocation}<p class="selected-city">{t("currentCity",{name:settings.weatherLocation.name})}</p>{/if}{#if weatherMessage}<p class="message">{weatherMessage}</p>{/if}{#if weatherResults.length}<div class="weather-results">{#each weatherResults as item}<button onclick={()=>selectWeather(item)}><strong>{item.name}</strong><small>{weatherCandidateDetail(item)}</small></button>{/each}</div>{/if}<p class="hint">{t("weatherSource")}</p></div>
       </section>
       <section class="media-features-section"><h2>{t("mediaFeatures")}</h2><div class="setting-grid">
         <button type="button" class="setting-choice" class:active={settings.enableHdCover} aria-pressed={settings.enableHdCover} onclick={()=>updatePreference({enableHdCover:!settings.enableHdCover})}><span class="choice-mark" aria-hidden="true">{settings.enableHdCover?"✓":""}</span><span class="choice-copy"><strong>{t("hdCover")}</strong><small>{t("hdCoverHint")}</small></span></button>
         <button type="button" class="setting-choice" class:active={settings.enableMvPlayback} aria-pressed={settings.enableMvPlayback} onclick={()=>updatePreference({enableMvPlayback:!settings.enableMvPlayback})}><span class="choice-mark" aria-hidden="true">{settings.enableMvPlayback?"✓":""}</span><span class="choice-copy"><strong>{t("mvPlayback")}</strong><small>{t("mvPlaybackHint")}</small></span></button>
       </div></section>
-      <section class="app-behavior-section" bind:this={appBehaviorSection}><h2>{t("appBehavior")}</h2>
+      <section class="app-behavior-section"><h2>{t("appBehavior")}</h2>
         <div class="setting-grid"><button type="button" class="setting-choice" class:active={settings.alwaysOnTop} aria-pressed={settings.alwaysOnTop} disabled={!nativeRuntime} onclick={()=>setAlwaysOnTop(!settings.alwaysOnTop)}><span class="choice-mark" aria-hidden="true">{settings.alwaysOnTop?"✓":""}</span><span class="choice-copy"><strong>{t("alwaysOnTop")}</strong><small>{t("alwaysOnTopHint")}</small></span></button><button type="button" class="setting-choice" class:active={settings.autoStart} aria-pressed={settings.autoStart} disabled={!nativeRuntime} onclick={()=>setAutoStart(!settings.autoStart)}><span class="choice-mark" aria-hidden="true">{settings.autoStart?"✓":""}</span><span class="choice-copy"><strong>{t("autoStart")}</strong><small>{t("autoStartHint")}</small></span></button></div>
         <label class="select-row"><span><Monitor size={17}/>{t("monitor")}</span><select value={settings.monitorIndex} disabled={!nativeRuntime} onchange={(e)=>updatePreference({monitorIndex:Number(e.currentTarget.value)})}>{#each monitors as monitor}<option value={monitor.index}>{monitor.name}</option>{/each}{#if !monitors.length}<option>{t("primaryMonitor")}</option>{/if}</select></label>
       </section>
@@ -407,7 +360,7 @@
   .stage-caption strong{max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600}
   .stage-caption span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-variant-numeric:tabular-nums}
   .stage-caption.editing{color:var(--studio-accent)}.stage-caption.editing strong{color:#2449ac}
-  aside>section{min-width:0;padding:17px;border:1px solid var(--studio-line);border-radius:16px;background:var(--studio-panel);content-visibility:auto;contain-intrinsic-size:auto 180px}
+  aside>section{min-width:0;padding:17px;border:1px solid var(--studio-line);border-radius:16px;background:var(--studio-panel)}
   aside>.appearance-section,aside>.preferences-section,aside>.players-section,aside>.idle-section{grid-column:1/-1}
   h2{margin:0 0 13px;color:var(--studio-ink);font-size:13px;letter-spacing:.01em;line-height:1.2}
   .section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
@@ -434,10 +387,10 @@
   .icon-button,.ordered-row button,.search-row button{display:grid;place-items:center;border:0;border-radius:8px;background:#fff;color:#414148;cursor:pointer;transition:background 140ms ease,color 140ms ease,transform 120ms ease}.icon-button{width:30px;height:30px}.icon-button:hover,.ordered-row button:hover,.search-row button:hover{background:#ececf0;color:#111113}
   .hint,.empty{margin:7px 0;color:#777780;font-size:10px;line-height:1.45}.ordered-list{display:flex;flex-direction:column;gap:6px;margin-top:11px}.ordered-row{display:flex;align-items:center;gap:7px;min-height:42px;padding:7px;border:1px solid transparent;border-radius:10px;background:#fff;transition:border-color 140ms ease,background 140ms ease}.ordered-row:hover{border-color:#dedfe4;background:#fcfcfd}.ordered-row.offline{opacity:.62}.ordered-row>span{min-width:0;display:flex;flex:1;flex-direction:column;gap:2px}.ordered-row strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}.ordered-row small{color:#777780;font-size:9px}.ordered-row button{width:27px;height:27px}
   .skeleton-list{pointer-events:none}.skeleton-row{min-height:48px}.skeleton-row>span{gap:6px}.skeleton-row i{display:block;height:7px;border-radius:99px;background:linear-gradient(90deg,#ececf0 25%,#f7f7f8 50%,#ececf0 75%);background-size:200% 100%;animation:skeleton-shimmer 1.25s ease-in-out infinite}.skeleton-row i:first-child{width:42%}.skeleton-row i:last-child{width:24%;opacity:.75}@keyframes skeleton-shimmer{to{background-position:-200% 0}}
-  .idle-list{margin-top:14px}.idle-row>span>input{width:100%;min-width:0;border:1px solid #dddde1;border-radius:7px;padding:5px 7px;font-size:10px}.add-button{display:flex;align-items:center;justify-content:center;gap:6px}.weather-box{margin-top:14px;padding-top:13px;border-top:1px solid #e2e2e5}.weather-box>label{font-size:11px;font-weight:600}.search-row{display:grid;grid-template-columns:1fr 34px;gap:6px;margin-top:7px}.search-row input{min-width:0;border:1px solid #dddde1;border-radius:9px;padding:8px}.selected-city{margin:7px 0 0;font-size:10px;color:#39724a}.weather-results{display:flex;flex-direction:column;gap:4px;margin-top:7px}.weather-results button{display:flex;align-items:center;justify-content:space-between;border:0;border-radius:8px;padding:8px;background:#fff;text-align:left;cursor:pointer}.weather-results small{color:#777780}
+  .idle-fixed-hint{max-width:58ch;margin-top:0}.idle-layout-preview{display:flex;align-items:center;justify-content:space-between;margin-top:13px;padding:10px 12px;border:1px solid #e1e1e5;border-radius:10px;background:#fff;color:#4c4d55;font-size:11px}.idle-layout-preview>span{display:flex;align-items:center;gap:6px}.idle-layout-preview :global(svg){color:#3158c8}.weather-box{margin-top:14px;padding-top:13px;border-top:1px solid #e2e2e5}.weather-box>label{font-size:11px;font-weight:600}.search-row{display:grid;grid-template-columns:1fr 34px;gap:6px;margin-top:7px}.search-row input{min-width:0;border:1px solid #dddde1;border-radius:9px;padding:8px}.selected-city{margin:7px 0 0;font-size:10px;color:#39724a}.weather-results{display:flex;flex-direction:column;gap:4px;margin-top:7px}.weather-results button{display:flex;align-items:center;justify-content:space-between;border:0;border-radius:8px;padding:8px;background:#fff;text-align:left;cursor:pointer}.weather-results small{color:#777780}
   .scenario-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.scenario-grid button,.tool-list button{display:flex;align-items:center;gap:8px;border:1px solid transparent;border-radius:11px;color:#414148;background:#fff;cursor:pointer;transition:color 140ms ease,background 140ms ease,border-color 140ms ease,transform 120ms ease}.scenario-grid button:hover,.tool-list button:hover{border-color:#d9dbe1;color:#111113;background:#fcfcfd}.scenario-grid button{padding:10px;font-size:11px}.scenario-grid button.active{border-color:#111113;color:#fff;background:#111113}.endpoints{display:flex;justify-content:space-between}.tool-list{display:flex;flex-direction:column;gap:7px}.tool-list button{padding:10px 11px;font-size:11px}.tool-list button:active,.scenario-grid button:active,.edge-grid button:active,.center-button:active,.icon-button:active,.ordered-row button:active{transform:scale(.97)}
   button:disabled,select:disabled,input:disabled{cursor:not-allowed;opacity:.45}.message{margin:10px 0 0;color:#39724a;font-size:11px}.segmented button:focus-visible,.scenario-grid button:focus-visible,.edge-grid button:focus-visible,.center-button:focus-visible,.tool-list button:focus-visible,.icon-button:focus-visible,.ordered-row button:focus-visible,.weather-results button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #111;outline-offset:2px}
-  .setting-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.setting-grid.single{grid-template-columns:1fr}.setting-choice{min-width:0;min-height:66px;display:flex;align-items:flex-start;gap:8px;padding:11px;border:1px solid #e1e1e5;border-radius:11px;color:#36363d;background:#fff;text-align:left;cursor:pointer;transition:transform 120ms ease,background 140ms ease,border-color 140ms ease,color 140ms ease}.setting-choice:hover{border-color:#cfd1d8;background:#fcfcfd}.setting-choice.active{border-color:#111113;color:#fff;background:#111113}.setting-choice.active:hover{border-color:#111113;background:#202126}.setting-choice:active{transform:scale(.98)}.setting-choice:disabled{cursor:not-allowed}.choice-mark{display:grid;place-items:center;flex:none;width:17px;height:17px;margin-top:1px;border:1px solid #bdbdc4;border-radius:5px;color:transparent;font-size:11px;font-weight:800;line-height:1}.setting-choice.active .choice-mark,.mini-choice.active .choice-mark,.player-selection .choice-mark{border-color:#fff;color:#111113;background:#fff}.choice-copy{min-width:0;display:flex;flex-direction:column;gap:4px}.choice-copy strong{font-size:11px;line-height:1.2}.choice-copy small{color:#777780;font-size:9px;line-height:1.35}.setting-choice.active .choice-copy small{color:rgba(255,255,255,.68)}.player-selection{width:27px!important;height:27px!important;padding:0!important;border:0!important;background:transparent!important}.player-selection .choice-mark{width:17px;height:17px;margin:0}.mini-choice{width:27px!important;height:27px!important;padding:0!important;border:0!important;background:transparent!important}.mini-choice.active .choice-mark{border-color:#111113;color:#fff;background:#111113}.setting-choice:focus-visible,.player-selection:focus-visible,.mini-choice:focus-visible{outline:2px solid #111;outline-offset:2px}.player-selection:focus-visible{outline-color:#111}.setting-choice.active:focus-visible{outline-color:#fff}
+  .setting-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.setting-grid.single{grid-template-columns:1fr}.setting-choice{min-width:0;min-height:66px;display:flex;align-items:flex-start;gap:8px;padding:11px;border:1px solid #e1e1e5;border-radius:11px;color:#36363d;background:#fff;text-align:left;cursor:pointer;transition:transform 120ms ease,background 140ms ease,border-color 140ms ease,color 140ms ease}.setting-choice:hover{border-color:#cfd1d8;background:#fcfcfd}.setting-choice.active{border-color:#111113;color:#fff;background:#111113}.setting-choice.active:hover{border-color:#111113;background:#202126}.setting-choice:active{transform:scale(.98)}.setting-choice:disabled{cursor:not-allowed}.panel-toggle-choice{width:100%;margin-bottom:8px}.tools-disabled{opacity:.45}.choice-mark{display:grid;place-items:center;flex:none;width:17px;height:17px;margin-top:1px;border:1px solid #bdbdc4;border-radius:5px;color:transparent;font-size:11px;font-weight:800;line-height:1}.setting-choice.active .choice-mark,.player-selection .choice-mark{border-color:#fff;color:#111113;background:#fff}.choice-copy{min-width:0;display:flex;flex-direction:column;gap:4px}.choice-copy strong{font-size:11px;line-height:1.2}.choice-copy small{color:#777780;font-size:9px;line-height:1.35}.setting-choice.active .choice-copy small{color:rgba(255,255,255,.68)}.player-selection{width:27px!important;height:27px!important;padding:0!important;border:0!important;background:transparent!important}.player-selection .choice-mark{width:17px;height:17px;margin:0}.setting-choice:focus-visible,.player-selection:focus-visible{outline:2px solid #111;outline-offset:2px}.player-selection:focus-visible{outline-color:#111}.setting-choice.active:focus-visible{outline-color:#fff}
   .appearance-apply-bar{position:sticky;bottom:12px;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:18px;padding:10px;border:1px solid #dedee3;border-radius:12px;background:rgba(255,255,255,.96);box-shadow:0 10px 28px rgba(20,20,26,.09);backdrop-filter:blur(10px)}.apply-state{display:flex;align-items:center;gap:6px;min-width:0;color:#777780;font-size:10px}.apply-state i{width:6px;height:6px;flex:none;border-radius:50%;background:#b7b7be}.appearance-apply-bar.dirty .apply-state{color:var(--studio-accent)}.appearance-apply-bar.dirty .apply-state i{background:var(--studio-accent);box-shadow:0 0 0 4px rgba(49,88,200,.13)}.apply-actions{display:flex;gap:6px}.reset-button,.apply-button{height:30px;padding:0 12px;border:0;border-radius:8px;font:600 10px/1 var(--app-font);cursor:pointer;transition:transform 120ms ease,background 140ms ease}.reset-button{color:#55555d;background:#f0f0f2}.reset-button:hover:not(:disabled){background:#e7e7eb}.apply-button{color:#fff;background:#111113}.apply-button:hover:not(:disabled){background:#2a2b31}.reset-button:disabled,.apply-button:disabled{opacity:.38;cursor:default}.appearance-apply-bar button:focus-visible{outline:2px solid #111;outline-offset:2px}
   @media(max-width:1040px){main{padding-inline:24px}.workspace{grid-template-columns:minmax(340px,.8fr) minmax(400px,1.2fr);gap:18px}}
   @media(max-width:900px){:global(html),:global(body),:global(#app){min-width:0}main{padding:22px 18px 36px}.studio-header{align-items:flex-start;flex-direction:column;gap:14px;margin-bottom:18px}.studio-status{align-self:stretch}.workspace{grid-template-columns:1fr}.stage{position:relative;top:0;height:340px}.workspace aside{grid-template-columns:repeat(2,minmax(0,1fr))}}

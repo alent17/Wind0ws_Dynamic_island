@@ -41,6 +41,7 @@ export interface AppSettings {
   showFloatingTool: boolean;
   showVolumeTool: boolean;
   showTimerTool: boolean;
+  showCustomFunctionPanel: boolean;
   enableMvPlayback: boolean;
   lockFloatingWindow: boolean;
   enableHdCover: boolean;
@@ -186,7 +187,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   selectedPlayerIds: null,
   idleContentEnabled: true,
   idleRotationSeconds: 5,
-  idleItems: ["clock", "date", "weather", "network", "cpu", "memory", "battery"].map((kind) => ({
+  idleItems: ["clock", "weather"].map((kind) => ({
     id: kind,
     kind: kind as IdleContentKind,
     enabled: true,
@@ -203,6 +204,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showFloatingTool: true,
   showVolumeTool: true,
   showTimerTool: true,
+  showCustomFunctionPanel: true,
   enableMvPlayback: true,
   lockFloatingWindow: false,
   enableHdCover: true,

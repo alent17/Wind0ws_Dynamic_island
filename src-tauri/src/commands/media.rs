@@ -2,20 +2,24 @@
 //!
 //! 提供媒体信息获取、播放控制和图片处理命令
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::event_bus::EVENT_BUS;
 use crate::models::{MediaSessionInfo, MediaState, NeteaseSong, ResolvedCover};
 use tauri::AppHandle;
 
 /// 获取当前播放的媒体信息
 #[tauri::command]
-pub fn get_media_info_cmd(app: AppHandle) -> AppResult<MediaState> {
-    crate::services::media::get_media_info(&app)
+pub async fn get_media_info_cmd(app: AppHandle) -> AppResult<MediaState> {
+    tauri::async_runtime::spawn_blocking(move || crate::services::media::get_media_info(&app))
+        .await
+        .map_err(|error| AppError::media(format!("读取媒体信息任务失败：{}", error)))?
 }
 
 #[tauri::command]
-pub fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
-    crate::services::media::list_media_sessions()
+pub async fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
+    tauri::async_runtime::spawn_blocking(crate::services::media::list_media_sessions)
+        .await
+        .map_err(|error| AppError::media(format!("读取媒体会话任务失败：{}", error)))?
 }
 
 /// 从网易云音乐获取歌曲信息
@@ -52,32 +56,20 @@ pub async fn resolve_hd_cover(
 /// 操作完成后会自动更新媒体状态并通知前端
 #[tauri::command]
 pub fn control_media(app: AppHandle, action: String) -> AppResult<()> {
-    let app_clone = app.clone();
-    let action_clone = action.clone();
+    // Wait for the GSMTC operation here. The command used to return before
+    // Windows had completed the request, which made the island appear to
+    // toggle while playback did not change and hid all backend errors.
+    crate::services::media::control_media(&app, &action)?;
 
-    // 在后台线程执行控制操作
-    std::thread::spawn(move || {
-        if let Err(e) = crate::services::media::control_media(&app_clone, &action_clone) {
-            tracing::error!("[control_media] Error: {:?}", e);
+    // Refresh play/pause state shortly after the player applies the command.
+    // This keeps the island responsive without relying solely on the 1-second
+    // media listener interval.
+    if action == "play_pause" {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        if let Ok(info) = crate::services::media::get_media_info(&app) {
+            let _ = EVENT_BUS.emit(crate::event_bus::EVENT_MEDIA_UPDATE, &info);
         }
-
-        // 播放/暂停后更新媒体状态
-        if action_clone == "play_pause" {
-            let app_for_update = app_clone.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(150));
-                unsafe {
-                    let _ = windows::Win32::System::Com::CoInitializeEx(
-                        None,
-                        windows::Win32::System::Com::COINIT_MULTITHREADED,
-                    );
-                }
-                if let Ok(info) = crate::services::media::get_media_info(&app_for_update) {
-                    let _ = EVENT_BUS.emit(crate::event_bus::EVENT_MEDIA_UPDATE, &info);
-                }
-            });
-        }
-    });
+    }
 
     Ok(())
 }

@@ -10,7 +10,13 @@ use tauri::{AppHandle, Manager};
 ///
 /// 返回显示器列表，包括名称、分辨率和是否为主显示器
 #[tauri::command]
-pub fn get_monitors(app: AppHandle) -> AppResult<Vec<MonitorInfo>> {
+pub async fn get_monitors(app: AppHandle) -> AppResult<Vec<MonitorInfo>> {
+    tauri::async_runtime::spawn_blocking(move || get_monitors_blocking(app))
+        .await
+        .map_err(|error| AppError::window(format!("读取显示器信息任务失败：{}", error)))?
+}
+
+fn get_monitors_blocking(app: AppHandle) -> AppResult<Vec<MonitorInfo>> {
     use windows::Win32::Foundation::POINT;
     use windows::Win32::Graphics::Gdi::{
         GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST,

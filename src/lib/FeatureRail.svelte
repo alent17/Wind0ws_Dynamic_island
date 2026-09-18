@@ -1,5 +1,6 @@
 <script lang="ts">
   import { GalleryHorizontalEnd, Settings, Timer, Volume2, VolumeX } from "lucide-svelte";
+  import { formatCountdown, type CountdownStatus } from "$lib/countdown";
   import type { IslandTool } from "$lib/featureRail";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
 
@@ -10,11 +11,13 @@
     railBackground = "#000",
     volume = 50,
     muted = false,
+    timerStatus = "idle",
+    timerRemainingMs = 0,
+    timerFinished = false,
     onTool,
     onSettingsToggle,
     onFloating,
     onAudioOpen,
-    onVolume,
   } = $props<{
     visible?: boolean;
     activeTool?: IslandTool | null;
@@ -22,14 +25,17 @@
     railBackground?: string;
     volume?: number;
     muted?: boolean;
+    timerStatus?: CountdownStatus;
+    timerRemainingMs?: number;
+    timerFinished?: boolean;
     onTool?: (tool: IslandTool | null) => void;
     onSettingsToggle?: () => void;
     onFloating?: () => void;
     onAudioOpen?: () => void | Promise<void>;
-    onVolume?: (volumePercent: number) => void | Promise<void>;
   }>();
 
   const t = (key: TranslationKey) => translate(key, {}, $locale);
+  const timerText = $derived(formatCountdown(timerRemainingMs));
   const labels = $derived($locale.startsWith("en")
     ? { settings: "Settings", floating: "Layout", volume: "Volume", timer: "Timer" }
     : $locale.startsWith("ja")
@@ -88,28 +94,14 @@
         onkeydown={(event) => { if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) { event.preventDefault(); selectTool("volume"); } }}
       >
         {#if muted || volume === 0}<VolumeX size={14} strokeWidth={2.1} />{:else}<Volume2 size={14} strokeWidth={2.1} />{/if}
-        {#if activeTool === "volume"}
-          <input
-            class="inline-volume"
-            aria-label={t("volume")}
-            type="range"
-            min="0"
-            max="100"
-            value={volume}
-            onclick={(event) => event.stopPropagation()}
-            oninput={(event) => void onVolume?.(Number(event.currentTarget.value))}
-          />
-          <span class="volume-value">{muted ? t("muted") : `${volume}%`}</span>
-        {:else}
-          <span>{labels.volume}</span>
-        {/if}
+        <span>{labels.volume}</span>
       </div>
     {/if}
 
     {#if enabledTools.includes("timer")}
-      <button class="feature-segment" class:active={activeTool === "timer"} type="button" aria-label={t("timerTool")} aria-pressed={activeTool === "timer"} onclick={(event) => { event.stopPropagation(); selectTool("timer"); }}>
+      <button class="feature-segment" class:active={activeTool === "timer"} class:timer-running={timerStatus === "running"} class:timer-paused={timerStatus === "paused"} type="button" aria-label={t("timerTool")} aria-pressed={activeTool === "timer"} onclick={(event) => { event.stopPropagation(); selectTool("timer"); }}>
         <Timer size={14} strokeWidth={2.1} />
-        <span>{labels.timer}</span>
+        <span>{timerFinished ? labels.timer : timerStatus === "idle" ? labels.timer : timerText}</span>
       </button>
     {/if}
   </div>
@@ -176,25 +168,17 @@
     box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), 0 3px 10px rgba(30,111,240,.28);
   }
 
-  .inline-volume {
-    width: 43px;
-    height: 3px;
-    padding: 0;
-    border: 0;
-    border-radius: 999px;
-    accent-color: #fff;
-    background: rgba(255,255,255,.24);
-    cursor: pointer;
+  .feature-segment.timer-running:not(.active) {
+    color: #f5a052;
+    background: rgba(242, 139, 49, .08);
   }
 
-  .volume-value {
-    min-width: 22px;
-    font-size: 9px;
-    font-variant-numeric: tabular-nums;
-    text-align: right;
+  .feature-segment.timer-paused:not(.active) {
+    color: rgba(245, 160, 82, .58);
+    background: rgba(242, 139, 49, .05);
   }
 
-  button:focus-visible, input:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
   @media (max-width: 360px) {
     .feature-rail, .feature-bar { width: 252px; }
