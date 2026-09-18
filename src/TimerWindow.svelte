@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { emit, listen } from "@tauri-apps/api/event";
-  import { Minus, Pause, Play, Plus, RotateCcw, X } from "lucide-svelte";
+  import { Check, Lock, Minus, Pause, Pin, Plus, RotateCcw, Unlock, X } from "lucide-svelte";
   import { Events } from "./utils/eventConstants";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
@@ -16,6 +17,9 @@
 
   const presets = [5, 10, 25, 60] as const;
   const maxCustomMinutes = 24 * 60;
+  const timerUiStorageKey = "isle.timer-window-ui";
+  const timerPositionStorageKey = "isle.timer-window-position";
+  const compactWindowLogicalSize = { width: 236, height: 58 };
   const t = (key: TranslationKey, values: Record<string, string | number> = {}) => translate(key, values, $locale);
 
   let snapshot = $state<TimerSnapshot>({ status: "idle", durationMs: 0, remainingMs: 0, label: "倒计时" });
@@ -28,10 +32,15 @@
   let customHours = $state(0);
   let customMinutes = $state(30);
   let customError = $state("");
-  let displayedTime = $state("00:00");
-  let lastWheelTime = "00:00";
+  let displayedTime = $state(formatCountdown(presets[3] * 60_000));
+  let lastWheelTime = formatCountdown(presets[3] * 60_000);
   let wheelKey = $state(0);
   let wheelDirection = $state<"down" | "up">("down");
+  let collapsed = $state(false);
+  let positionFixed = $state(false);
+  let alwaysOnTop = $state(true);
+  let windowTransitioning = $state(false);
+  let expandedBounds: { x: number; y: number; width: number; height: number } | null = null;
   let dispose: (() => void) | undefined;
 
   let remainingMs = $derived(snapshot.status === "running"
@@ -41,18 +50,13 @@
   let paused = $derived(snapshot.status === "paused" && remainingMs > 0);
   let selectedMinutes = $derived(customSelected ? customDurationMinutes : presets[selectedIndex]);
   let selectedLabel = $derived(formatDurationLabel(selectedMinutes));
-  let statusLabel = $derived(snapshot.status === "running"
-    ? t("timerRunning")
-    : snapshot.status === "paused"
-      ? t("timerPaused")
-      : t("timerReady"));
-
+  let previewRemainingMs = $derived(active ? remainingMs : selectedMinutes * 60_000);
   const localRemainingAt = (time: number) => snapshot.status === "running"
     ? Math.max(0, snapshot.remainingMs - (time - syncedAt))
     : snapshot.remainingMs;
 
-  const wheelPrevious = $derived(formatCountdown(Math.max(0, remainingMs + 1_000)));
-  const wheelNext = $derived(formatCountdown(Math.max(0, remainingMs - 1_000)));
+  const wheelPrevious = $derived(formatCountdown(Math.max(0, previewRemainingMs + 1_000)));
+  const wheelNext = $derived(formatCountdown(Math.max(0, previewRemainingMs - 1_000)));
 
   function formatDurationLabel(minutes: number) {
     const safeMinutes = Math.max(1, Math.round(minutes));
@@ -79,8 +83,19 @@
     customSelected = true;
   }
 
+  function transitionWheelTo(nextMs: number, currentMs = previewRemainingMs) {
+    const nextTime = formatCountdown(Math.max(0, nextMs));
+    if (nextTime === displayedTime) return;
+    wheelDirection = nextMs <= currentMs ? "down" : "up";
+    displayedTime = nextTime;
+    lastWheelTime = nextTime;
+    wheelKey += 1;
+  }
+
   function send(action: string, durationMs?: number) {
-    void emit(Events.TIMER_ACTION, { action, ...(durationMs === undefined ? {} : { durationMs }) });
+    void emit(Events.TIMER_ACTION, { action, ...(durationMs === undefined ? {} : { durationMs }) }).catch((error) => {
+      console.error("[倒计时] 发送操作失败:", error);
+    });
   }
 
   function startSelected() {
@@ -89,10 +104,13 @@
 
   function choosePreset(index: number) {
     if (active) return;
+    const previousMs = selectedMinutes * 60_000;
+    const nextMs = presets[index] * 60_000;
     selectedIndex = index;
     customSelected = false;
     customDurationOpen = false;
     customError = "";
+    transitionWheelTo(nextMs, previousMs);
   }
 
   function openCustomDuration() {
@@ -113,11 +131,22 @@
       customError = t("durationInvalid");
       return;
     }
+    const previousMs = selectedMinutes * 60_000;
     customDurationMinutes = total;
     customSelected = true;
     customDurationOpen = false;
     customError = "";
+    transitionWheelTo(total * 60_000, previousMs);
     send("start", total * 60_000);
+  }
+
+  function previewCustomDuration() {
+    const hours = Number.isFinite(customHours) ? Math.max(0, Math.floor(customHours)) : 0;
+    const minutes = Number.isFinite(customMinutes) ? Math.max(0, Math.floor(customMinutes)) : 0;
+    const total = hours * 60 + minutes;
+    if (total >= 1 && total <= maxCustomMinutes && minutes <= 59) {
+      transitionWheelTo(total * 60_000);
+    }
   }
 
   function handleAction() {
@@ -133,18 +162,109 @@
   }
 
   function startDragging(event: MouseEvent) {
-    if ((event.target as HTMLElement).closest("button, input, form, label")) return;
-    void getCurrentWindow().startDragging();
+    if (event.button !== 0 || positionFixed) return;
+    const target = event.target as Element | null;
+    const dragHandle = target?.closest("[data-drag-handle]");
+    if (!dragHandle && target?.closest("button, input, form, label, [data-no-drag]")) return;
+    event.preventDefault();
+    void getCurrentWindow().startDragging().catch(() => undefined);
   }
 
-  function close() {
+  async function close(event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
     // Keep the pre-created window alive so reopening it never has to build a
     // new WebView2 instance on the main UI thread.
-    void getCurrentWindow().hide();
+    try {
+      await getCurrentWindow().hide();
+    } catch (error) {
+      console.error("[倒计时] 关闭窗口失败:", error);
+    }
   }
 
-  function minimize() {
-    void getCurrentWindow().minimize();
+  async function minimize(event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      await getCurrentWindow().minimize();
+    } catch (error) {
+      console.error("[倒计时] 最小化窗口失败:", error);
+    }
+  }
+
+  function persistTimerUi(position?: { x: number; y: number }) {
+    try {
+      localStorage.setItem(timerUiStorageKey, JSON.stringify({ positionFixed, alwaysOnTop }));
+      if (position) localStorage.setItem(timerPositionStorageKey, JSON.stringify(position));
+    } catch {
+      // Local storage is optional for the pre-created timer window.
+    }
+  }
+
+  async function togglePositionFixed(event: MouseEvent) {
+    event.stopPropagation();
+    positionFixed = !positionFixed;
+    if (positionFixed) {
+      try {
+        const position = await getCurrentWindow().outerPosition();
+        persistTimerUi({ x: position.x, y: position.y });
+      } catch {
+        persistTimerUi();
+      }
+    } else {
+      persistTimerUi();
+    }
+  }
+
+  async function toggleAlwaysOnTop(event: MouseEvent) {
+    event.stopPropagation();
+    alwaysOnTop = !alwaysOnTop;
+    try {
+      await getCurrentWindow().setAlwaysOnTop(alwaysOnTop);
+      persistTimerUi();
+    } catch {
+      alwaysOnTop = !alwaysOnTop;
+    }
+  }
+
+  async function toggleCollapsed(event?: MouseEvent) {
+    event?.stopPropagation();
+    if (windowTransitioning) return;
+    const appWindow = getCurrentWindow();
+    const wasCollapsed = collapsed;
+    windowTransitioning = true;
+    try {
+      const scale = await appWindow.scaleFactor();
+      if (!collapsed) {
+        const [position, size] = await Promise.all([appWindow.outerPosition(), appWindow.outerSize()]);
+        expandedBounds = { x: position.x, y: position.y, width: size.width, height: size.height };
+        const width = Math.round(compactWindowLogicalSize.width * scale);
+        const height = Math.round(compactWindowLogicalSize.height * scale);
+        const x = positionFixed ? position.x : Math.round(position.x + (size.width - width) / 2);
+        const y = positionFixed ? position.y : Math.round(position.y + (size.height - height) / 2);
+        collapsed = true;
+        await appWindow.setResizable(false);
+        await appWindow.setSize(new PhysicalSize(width, height));
+        await appWindow.setPosition(new PhysicalPosition(x, y));
+      } else {
+        const [position, size] = await Promise.all([appWindow.outerPosition(), appWindow.outerSize()]);
+        const bounds = expandedBounds ?? {
+          x: positionFixed ? position.x : Math.round(position.x + (size.width - 448 * scale) / 2),
+          y: positionFixed ? position.y : Math.round(position.y + (size.height - 512 * scale) / 2),
+          width: Math.round(448 * scale),
+          height: Math.round(512 * scale),
+        };
+        await appWindow.setSize(new PhysicalSize(bounds.width, bounds.height));
+        await appWindow.setPosition(new PhysicalPosition(bounds.x, bounds.y));
+        await appWindow.setResizable(true);
+        collapsed = false;
+      }
+    } catch {
+      collapsed = wasCollapsed;
+      // Keep the previous visual state when a platform window operation fails.
+    } finally {
+      windowTransitioning = false;
+    }
   }
 
   onMount(() => {
@@ -155,7 +275,10 @@
         if (!value) return;
         snapshot = { ...snapshot, ...value };
         syncedAt = Date.now();
-        if (value.durationMs > 0) syncSelection(value.durationMs);
+        if (value.durationMs > 0) {
+          syncSelection(value.durationMs);
+          if (value.status !== "running") transitionWheelTo(value.remainingMs || value.durationMs);
+        }
       });
       if (disposed) {
         unlisten();
@@ -163,12 +286,34 @@
       }
       dispose = unlisten;
       await emit(Events.TIMER_REQUEST_STATE).catch(() => undefined);
+    })().catch((error) => {
+      console.error("[倒计时] 初始化事件监听失败:", error);
+    });
+
+    void (async () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(timerUiStorageKey) || "null") as { positionFixed?: boolean; alwaysOnTop?: boolean } | null;
+        positionFixed = saved?.positionFixed ?? false;
+        alwaysOnTop = await getCurrentWindow().isAlwaysOnTop();
+        if (saved?.alwaysOnTop !== undefined && saved.alwaysOnTop !== alwaysOnTop) {
+          alwaysOnTop = saved.alwaysOnTop;
+          await getCurrentWindow().setAlwaysOnTop(alwaysOnTop);
+        }
+        if (positionFixed) {
+          const savedPosition = JSON.parse(localStorage.getItem(timerPositionStorageKey) || "null") as { x?: number; y?: number } | null;
+          if (Number.isFinite(savedPosition?.x) && Number.isFinite(savedPosition?.y)) {
+            await getCurrentWindow().setPosition(new PhysicalPosition(savedPosition!.x!, savedPosition!.y!));
+          }
+        }
+      } catch {
+        // Use native defaults when the window is not running inside Tauri.
+      }
     })();
 
     const interval = window.setInterval(() => {
       const tickNow = Date.now();
       now = tickNow;
-      const nextRemaining = localRemainingAt(tickNow);
+      const nextRemaining = active ? localRemainingAt(tickNow) : selectedMinutes * 60_000;
       const nextTime = formatCountdown(nextRemaining);
       if (nextTime !== lastWheelTime) {
         wheelDirection = nextRemaining <= localRemainingAt(tickNow - 250) ? "down" : "up";
@@ -189,19 +334,33 @@
 <svelte:head><title>{t("timer")}</title></svelte:head>
 <svelte:window onmousedown={startDragging} />
 
-<main class="timer-window">
-  <section class="timer-shell" aria-label={t("timer")}>
+<main class="timer-window" class:collapsed>
+  <section
+    class="timer-shell"
+    class:collapsed
+    aria-label={t("timer")}
+  >
     <div class="window-actions" aria-label={t("windowActions")}>
-      <button type="button" class="window-button" aria-label={t("minimize")} title={t("minimize")} onclick={minimize}><Minus size={14} strokeWidth={2.2} /></button>
-      <button type="button" class="window-button close-button" aria-label={t("close")} title={t("close")} onclick={close}><X size={14} strokeWidth={2.2} /></button>
+      <button type="button" class="window-button" class:enabled={positionFixed} aria-label={positionFixed ? t("unfixPosition") : t("fixPosition")} title={positionFixed ? t("unfixPosition") : t("fixPosition")} onclick={togglePositionFixed}>
+        {#if positionFixed}<Lock size={13} strokeWidth={2.2} />{:else}<Unlock size={13} strokeWidth={2.2} />{/if}
+      </button>
+      <button type="button" class="window-button" class:enabled={alwaysOnTop} aria-label={alwaysOnTop ? t("unpin") : t("pin")} title={alwaysOnTop ? t("unpin") : t("pin")} onclick={toggleAlwaysOnTop}>
+        <Pin size={13} strokeWidth={2.2} />
+      </button>
+      <button type="button" class="window-button" data-no-drag aria-label={t("minimize")} title={t("minimize")} onclick={minimize}><Minus size={14} strokeWidth={2.2} /></button>
+      <button type="button" class="window-button close-button" data-no-drag aria-label={t("close")} title={t("close")} onclick={close}><X size={14} strokeWidth={2.2} /></button>
     </div>
 
-    <div class="timer-content">
+    {#if collapsed}
+      <button type="button" class="collapsed-surface" aria-label={t("expand")} title={t("expand")} onclick={toggleCollapsed}>
+        <strong>{displayedTime}</strong>
+        <span>{active ? t("timerRunning") : selectedLabel}</span>
+        <span class="collapsed-chevron" aria-hidden="true">⌃</span>
+      </button>
+    {:else}
+      <div class="timer-content">
+      <button type="button" class="drag-region" data-drag-handle aria-label={t("dragWindow")} title={t("dragWindow")} onmousedown={(event) => { event.stopPropagation(); startDragging(event); }}></button>
       <div class="topline">
-        <div class="status-label" class:active>
-          <span class="state-dot" aria-hidden="true"></span>
-          <span>{statusLabel}</span>
-        </div>
         <button
           type="button"
           class="action-button"
@@ -213,12 +372,21 @@
           {#if snapshot.status === "running" && remainingMs > 0}
             <Pause size={18} fill="currentColor" strokeWidth={2.4} />
           {:else}
-            <Play size={19} fill="currentColor" strokeWidth={2.4} />
+            <Check size={21} strokeWidth={2.6} />
           {/if}
         </button>
       </div>
 
-      <div class="time-wheel" aria-live="polite" aria-label={displayedTime}>
+      <div
+        class="time-wheel"
+        data-no-drag
+        role="button"
+        tabindex="0"
+        aria-expanded={!collapsed}
+        aria-label={t("collapse")}
+        onclick={toggleCollapsed}
+        onkeydown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleCollapsed(); } }}
+      >
         {#key wheelKey}
           <div class="wheel-stack" class:roll-down={wheelDirection === "down"} class:roll-up={wheelDirection === "up"}>
             <span class="wheel-value previous">{wheelPrevious}</span>
@@ -292,12 +460,12 @@
           <form class="custom-form" onsubmit={submitCustom}>
             <div class="custom-input">
               <label for="custom-hours">{t("hours")}</label>
-              <input id="custom-hours" type="number" min="0" max="24" step="1" bind:value={customHours} inputmode="numeric" />
+              <input id="custom-hours" type="number" min="0" max="24" step="1" bind:value={customHours} inputmode="numeric" oninput={previewCustomDuration} />
             </div>
             <span class="time-separator" aria-hidden="true">:</span>
             <div class="custom-input">
               <label for="custom-minutes">{t("minutes")}</label>
-              <input id="custom-minutes" type="number" min="0" max="59" step="1" bind:value={customMinutes} inputmode="numeric" />
+              <input id="custom-minutes" type="number" min="0" max="59" step="1" bind:value={customMinutes} inputmode="numeric" oninput={previewCustomDuration} />
             </div>
             <button type="submit" class="custom-submit">{t("applyDuration")}</button>
             {#if customError}<p class="custom-error" role="alert">{customError}</p>{/if}
@@ -315,7 +483,8 @@
           <span class="dial-caption">{t("selectedDuration", { value: selectedLabel })}</span>
         {/if}
       </div>
-    </div>
+      </div>
+    {/if}
   </section>
 </main>
 
@@ -346,6 +515,11 @@
     background: transparent;
   }
 
+  .timer-window.collapsed {
+    align-items: center;
+    padding: 0;
+  }
+
   .timer-shell {
     position: relative;
     width: 100%;
@@ -353,14 +527,24 @@
     aspect-ratio: 1 / 1;
     flex: none;
     overflow: hidden;
-    border-radius: 42px;
+    border-radius: 32px;
     background: #141414;
-    box-shadow: 0 18px 55px rgba(0, 0, 0, .38), inset 0 1px 0 rgba(255, 255, 255, .035);
+    border: 1px solid rgba(255,255,255,.045);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(255, 255, 255, .03);
     isolation: isolate;
     user-select: none;
     -webkit-user-select: none;
     font-variant-numeric: tabular-nums;
   }
+
+  .timer-shell.collapsed {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    border-radius: 29px;
+  }
+
+  .timer-shell.collapsed::before { background: radial-gradient(circle at 50% -80%, rgba(255,255,255,.07), transparent 68%); }
 
   .timer-shell::before {
     content: "";
@@ -378,38 +562,52 @@
     padding: 30px 33px 26px;
   }
 
+  .drag-region {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 3;
+    width: calc(100% - 92px);
+    height: 38px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: grab;
+  }
+
+  .drag-region:active { cursor: grabbing; }
+
+  .timer-shell.collapsed .timer-content { display: none; }
+
+  .collapsed-surface {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: 100%;
+    padding: 0 84px 0 18px;
+    border: 0;
+    color: #fff;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    animation: compact-enter 180ms cubic-bezier(.23, 1, .32, 1) both;
+  }
+
+  .collapsed-surface strong { font-size: 24px; letter-spacing: -.06em; line-height: 1; }
+  .collapsed-surface > span:not(.collapsed-chevron) { overflow: hidden; color: #8d98a4; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+  .collapsed-chevron { margin-left: auto; color: #2c8bfe; font-size: 22px; line-height: 1; transform: translateY(-1px); }
+
   .topline {
     position: relative;
     z-index: 4;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 18px;
-  }
-
-  .status-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: #7d858d;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: .02em;
-  }
-
-  .state-dot {
-    width: 7px;
-    height: 7px;
-    flex: none;
-    border-radius: 50%;
-    background: #59616a;
-    box-shadow: 0 0 0 4px rgba(89, 97, 106, .09);
-  }
-
-  .status-label.active .state-dot {
-    background: #2c8bfe;
-    box-shadow: 0 0 0 4px rgba(44, 139, 254, .12), 0 0 12px rgba(44, 139, 254, .35);
-    animation: status-pulse 1.8s ease-in-out infinite;
+    padding-top: 9px;
   }
 
   .action-button {
@@ -425,16 +623,18 @@
     background: #2c8bfe;
     box-shadow: 0 6px 20px rgba(44, 139, 254, .28);
     cursor: pointer;
+    --action-y: 9px;
+    transform: translateY(var(--action-y));
     transition: transform 160ms cubic-bezier(.23, 1, .32, 1), background 160ms ease, box-shadow 160ms ease;
   }
 
   .action-button:hover {
     background: #4398ff;
     box-shadow: 0 7px 25px rgba(44, 139, 254, .38);
-    transform: translateY(-1px) scale(1.03);
+    transform: translateY(calc(var(--action-y) - 1px)) scale(1.03);
   }
 
-  .action-button:active { transform: scale(.94); }
+  .action-button:active { transform: translateY(var(--action-y)) scale(.94); }
 
   .action-button.paused {
     background: #47647f;
@@ -476,6 +676,8 @@
   }
 
   .window-button:hover { color: #fff; background: rgba(255,255,255,.1); }
+  .window-button.enabled { color: #fff; background: rgba(44,139,254,.18); }
+  .window-button.enabled:hover { background: rgba(44,139,254,.28); }
   .window-button:active { transform: scale(.9); }
   .window-button.close-button:hover { color: #fff; background: rgba(255, 89, 89, .22); }
 
@@ -487,6 +689,9 @@
     height: 131px;
     overflow: hidden;
     isolation: isolate;
+    cursor: pointer;
+    user-select: none;
+    will-change: transform;
   }
 
   .wheel-stack {
@@ -611,7 +816,7 @@
     height: 74px;
     overflow: hidden;
     border: 1px solid rgba(255,255,255,.055);
-    border-radius: 17px;
+    border-radius: 14px;
     background: #0f1e2c;
     box-shadow: inset 0 0 0 1px rgba(255,255,255,.025), 0 7px 20px rgba(0,0,0,.18);
   }
@@ -638,16 +843,17 @@
     gap: 4px;
     padding: 0;
     border: 0;
-    border-radius: 12px;
+    border-radius: 10px;
     color: #8ea5bc;
     background: #16395c;
     cursor: pointer;
-    transition: background 160ms ease, color 160ms ease, transform 160ms cubic-bezier(.23, 1, .32, 1);
+    transition: background 180ms ease, color 180ms ease, opacity 180ms ease, transform 160ms cubic-bezier(.23, 1, .32, 1);
   }
 
   .dial-segments button:hover:not(:disabled) { color: #e3f1ff; background: #1c486f; }
   .dial-segments button:active:not(:disabled) { transform: scale(.97); }
-  .dial-segments button.selected { color: #fff; background: rgba(22,57,92,.32); }
+  .dial-segments button.selected { color: #fff; background: transparent; }
+  .dial-segments button:not(.selected) { opacity: .82; }
   .dial-segments button:disabled { cursor: not-allowed; }
   .dial-segments strong { font-size: 18px; line-height: 1; letter-spacing: -.03em; }
   .dial-segments span { color: currentColor; font-size: 10px; font-weight: 600; opacity: .72; }
@@ -661,20 +867,23 @@
     width: calc((100% - 20px) / 4);
     overflow: hidden;
     border: 2px solid #2c8bfe;
-    border-radius: 12px;
+    border-radius: 10px;
     background: rgba(14, 49, 82, .34);
     box-shadow: 0 0 0 1px rgba(44,139,254,.18), 0 0 12px rgba(44,139,254,.62), inset 0 0 16px rgba(44,139,254,.16);
     pointer-events: none;
     transform: translateX(calc(var(--selected-index) * (100% + 4px)));
-    transition: transform 280ms cubic-bezier(.23, 1, .32, 1), box-shadow 180ms ease;
+    will-change: transform;
+    transition: transform 300ms cubic-bezier(.77, 0, .175, 1), box-shadow 180ms ease;
   }
 
   .stripe-layer {
     position: absolute;
-    inset: 0;
+    inset: -12px;
     opacity: .62;
     background: repeating-linear-gradient(135deg, rgba(56,157,255,.72) 0 3px, rgba(44,139,254,.18) 3px 7px, transparent 7px 11px);
-    animation: stripe-flow 1.8s linear infinite;
+    background-size: 22px 22px;
+    animation: stripe-flow 820ms linear infinite;
+    will-change: transform, background-position;
   }
 
   .indicator-sheen {
@@ -692,7 +901,7 @@
     margin-top: 8px;
     padding: 6px 10px 6px 8px;
     border: 1px solid rgba(255,255,255,.08);
-    border-radius: 11px;
+    border-radius: 9px;
     color: #aab3bd;
     background: rgba(255,255,255,.035);
     text-align: left;
@@ -703,7 +912,7 @@
   .custom-toggle:hover:not(:disabled), .custom-toggle.selected { border-color: rgba(44,139,254,.42); color: #e8f4ff; background: rgba(44,139,254,.1); }
   .custom-toggle:active:not(:disabled) { transform: scale(.985); }
   .custom-toggle:disabled { cursor: not-allowed; opacity: .52; }
-  .custom-icon { display: grid; place-items: center; width: 24px; height: 24px; margin-right: 8px; border-radius: 8px; color: #80bcff; background: rgba(44,139,254,.14); }
+  .custom-icon { display: grid; place-items: center; width: 24px; height: 24px; margin-right: 8px; border-radius: 7px; color: #80bcff; background: rgba(44,139,254,.14); }
   .custom-toggle-copy { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
   .custom-toggle-copy strong { font-size: 11px; line-height: 1.1; }
   .custom-toggle-copy small { overflow: hidden; color: #707b87; font-size: 9px; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
@@ -720,17 +929,17 @@
     margin-top: 7px;
     padding: 8px;
     border: 1px solid rgba(44,139,254,.25);
-    border-radius: 12px;
+    border-radius: 10px;
     background: #182533;
     animation: form-enter 180ms cubic-bezier(.23, 1, .32, 1) both;
   }
 
   .custom-input { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .custom-input label { color: #7e8c9a; font-size: 9px; }
-  .custom-input input { width: 100%; height: 28px; padding: 0 7px; border: 1px solid rgba(255,255,255,.1); border-radius: 7px; color: #fff; background: rgba(0,0,0,.2); font-size: 12px; text-align: center; outline: none; }
+  .custom-input input { width: 100%; height: 28px; padding: 0 7px; border: 1px solid rgba(255,255,255,.1); border-radius: 6px; color: #fff; background: rgba(0,0,0,.2); font-size: 12px; text-align: center; outline: none; }
   .custom-input input:focus { border-color: #2c8bfe; box-shadow: 0 0 0 2px rgba(44,139,254,.14); }
   .time-separator { padding-bottom: 7px; color: #74808c; font-weight: 700; }
-  .custom-submit { height: 28px; padding: 0 10px; border: 0; border-radius: 7px; color: #fff; background: #2c8bfe; font-size: 10px; font-weight: 700; cursor: pointer; transition: background 140ms ease, transform 140ms cubic-bezier(.23, 1, .32, 1); }
+  .custom-submit { height: 28px; padding: 0 10px; border: 0; border-radius: 6px; color: #fff; background: #2c8bfe; font-size: 10px; font-weight: 700; cursor: pointer; transition: background 140ms ease, transform 140ms cubic-bezier(.23, 1, .32, 1); }
   .custom-submit:hover { background: #4398ff; }
   .custom-submit:active { transform: scale(.96); }
   .custom-error { grid-column: 1 / -1; margin: 0; color: #ff9a9a; font-size: 9px; line-height: 1.2; }
@@ -757,7 +966,7 @@
     height: 28px;
     padding: 0 9px;
     border: 1px solid rgba(255,255,255,.09);
-    border-radius: 9px;
+    border-radius: 8px;
     color: #84919f;
     background: rgba(255,255,255,.035);
     font: 500 10px/1 var(--app-font, "Segoe UI", sans-serif);
@@ -773,18 +982,18 @@
   button:focus-visible, input:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 
   @keyframes stripe-flow {
-    from { transform: translateX(-16px); }
-    to { transform: translateX(16px); }
-  }
-
-  @keyframes status-pulse {
-    0%, 100% { opacity: .7; }
-    50% { opacity: 1; }
+    from { background-position: 0 0; transform: translate3d(-8px, -8px, 0); }
+    to { background-position: -11px 11px; transform: translate3d(8px, 8px, 0); }
   }
 
   @keyframes form-enter {
     from { opacity: 0; transform: translateY(-5px) scale(.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes compact-enter {
+    from { opacity: 0; transform: scale(.96); }
+    to { opacity: 1; transform: scale(1); }
   }
 
   @keyframes previous-roll-down {
@@ -819,10 +1028,15 @@
 
   @media (max-width: 430px) {
     .timer-window { padding-right: 17px; padding-left: 24px; }
-    .timer-shell { border-radius: 34px; }
+    .timer-shell { border-radius: 28px; }
     .timer-content { padding-right: 25px; padding-left: 25px; }
     .duration-section, .footer-actions, .timer-copy { right: 25px; left: 25px; }
     .wheel-value { letter-spacing: -.065em; }
+  }
+
+  @media (max-width: 270px) {
+    .collapsed-surface { padding-right: 74px; gap: 7px; }
+    .collapsed-surface strong { font-size: 21px; }
   }
 
   @media (max-height: 430px) {
@@ -836,8 +1050,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .status-label.active .state-dot, .stripe-layer { animation: none; }
-    .window-actions, .window-button, .action-button, .selection-indicator, .custom-toggle, .custom-chevron, .custom-form { transition: none; animation: none; }
+    .stripe-layer { animation: none; }
+    .window-actions, .window-button, .action-button, .selection-indicator, .custom-toggle, .custom-chevron, .custom-form, .collapsed-surface { transition: none; animation: none; }
+    .action-button { transform: translateY(var(--action-y)); }
     .wheel-stack.roll-down .previous, .wheel-stack.roll-down .current, .wheel-stack.roll-down .next,
     .wheel-stack.roll-up .previous, .wheel-stack.roll-up .current, .wheel-stack.roll-up .next { animation: none; }
   }

@@ -5,7 +5,14 @@
 use crate::error::{AppError, AppResult};
 use crate::models::AppPreferences;
 use std::fs;
+use std::io::ErrorKind;
+use std::path::Path;
 use tauri::{AppHandle, Manager};
+
+const AUTOSTART_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+const AUTOSTART_VALUE: &str = "Isle";
+const LEGACY_AUTOSTART_VALUE: &str = "Wind0wsDynamicIsland";
+const AUTOSTART_ARGUMENT: &str = "--startup";
 
 /// 从配置文件读取设置
 ///
@@ -46,102 +53,119 @@ pub fn write_settings_file(app: &AppHandle, settings: &AppPreferences) -> AppRes
 
 /// 设置开机自启动
 ///
-/// 通过修改 Windows 注册表实现
-/// 添加/删除 HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run 下的启动项
+/// 通过修改当前用户的 Windows 注册表实现。
+///
+/// 启动项使用当前安装的可执行文件路径，并附带一个明确的启动参数。
+/// 这样升级后可以重新写入新路径，也不会依赖 `reg.exe` 的本地化输出格式。
 pub fn set_auto_start(enable: bool) -> AppResult<()> {
-    let exe_path = std::env::current_exe()
-        .map_err(|e| AppError::config(format!("获取可执行文件路径失败：{}", e)))?;
-    let registry_value = format!("\"{}\"", exe_path.display());
+    #[cfg(windows)]
+    {
+        use winreg::enums::HKEY_CURRENT_USER;
+        use winreg::RegKey;
 
-    if enable {
-        // 添加注册表启动项
-        let output = std::process::Command::new("reg")
-            .args([
-                "add",
-                "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
-                "/v",
-                "Wind0wsDynamicIsland",
-                "/t",
-                "REG_SZ",
-                "/d",
-                &registry_value,
-                "/f",
-            ])
-            .output()
-            .map_err(|e| AppError::config(format!("执行 reg 命令失败：{}", e)))?;
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
 
-        if !output.status.success() {
-            return Err(AppError::config(format!(
-                "添加注册表项失败：{}",
-                String::from_utf8_lossy(&output.stderr)
-            )));
-        }
-    } else {
-        // 检查并删除注册表启动项
-        let check_output = std::process::Command::new("reg")
-            .args([
-                "query",
-                "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
-                "/v",
-                "Wind0wsDynamicIsland",
-            ])
-            .output();
+        if enable {
+            let (run_key, _) = hkcu
+                .create_subkey(AUTOSTART_KEY)
+                .map_err(|e| AppError::config(format!("打开开机启动注册表失败：{}", e)))?;
+            let exe_path = std::env::current_exe()
+                .map_err(|e| AppError::config(format!("获取可执行文件路径失败：{}", e)))?;
+            let command = startup_command(&exe_path);
 
-        if let Ok(check) = check_output {
-            if check.status.success() {
-                let output = std::process::Command::new("reg")
-                    .args([
-                        "delete",
-                        "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
-                        "/v",
-                        "Wind0wsDynamicIsland",
-                        "/f",
-                    ])
-                    .output()
-                    .map_err(|e| AppError::config(format!("执行 reg delete 命令失败：{}", e)))?;
+            run_key
+                .set_value(AUTOSTART_VALUE, &command)
+                .map_err(|e| AppError::config(format!("写入开机启动项失败：{}", e)))?;
 
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    tracing::error!("删除注册表项失败：{}", stderr);
+            // 清理早期版本使用的名称，避免同一个应用登录时启动两次。
+            let _ = run_key.delete_value(LEGACY_AUTOSTART_VALUE);
+        } else {
+            match hkcu.open_subkey_with_flags(AUTOSTART_KEY, winreg::enums::KEY_SET_VALUE) {
+                Ok(run_key) => {
+                    for value_name in [AUTOSTART_VALUE, LEGACY_AUTOSTART_VALUE] {
+                        if let Err(error) = run_key.delete_value(value_name) {
+                            if error.kind() != ErrorKind::NotFound {
+                                return Err(AppError::config(format!(
+                                    "删除开机启动项失败：{}",
+                                    error
+                                )));
+                            }
+                        }
+                    }
+                }
+                Err(error) if error.kind() == ErrorKind::NotFound => {}
+                Err(error) => {
+                    return Err(AppError::config(format!(
+                        "打开开机启动注册表失败：{}",
+                        error
+                    )))
                 }
             }
         }
+
+        Ok(())
     }
 
-    Ok(())
+    #[cfg(not(windows))]
+    {
+        let _ = enable;
+        Err(AppError::config("开机启动仅支持 Windows"))
+    }
 }
 
 /// 检查是否已设置开机自启动
 ///
-/// 通过查询注册表并比较当前可执行文件路径判断启动项是否有效
+/// 通过查询注册表并比较启动命令中的可执行文件路径判断启动项是否有效。
 pub fn get_auto_start() -> AppResult<bool> {
-    let current_exe = std::env::current_exe()
-        .map_err(|e| AppError::config(format!("获取可执行文件路径失败：{}", e)))?;
-    let output = std::process::Command::new("reg")
-        .args([
-            "query",
-            "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
-            "/v",
-            "Wind0wsDynamicIsland",
-        ])
-        .output()
-        .map_err(|e| AppError::config(format!("执行 reg query 命令失败：{}", e)))?;
+    #[cfg(windows)]
+    {
+        use winreg::enums::HKEY_CURRENT_USER;
+        use winreg::RegKey;
 
-    if !output.status.success() {
-        return Ok(false);
+        let current_exe = std::env::current_exe()
+            .map_err(|e| AppError::config(format!("获取可执行文件路径失败：{}", e)))?;
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let run_key = match hkcu.open_subkey(AUTOSTART_KEY) {
+            Ok(key) => key,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+            Err(error) => {
+                return Err(AppError::config(format!(
+                    "读取开机启动注册表失败：{}",
+                    error
+                )))
+            }
+        };
+
+        for value_name in [AUTOSTART_VALUE, LEGACY_AUTOSTART_VALUE] {
+            if let Ok(command) = run_key.get_value::<String, _>(value_name) {
+                if normalize_windows_path(command_executable(&command))
+                    == normalize_windows_path(&current_exe.to_string_lossy())
+                {
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let registry_value = stdout
-        .lines()
-        .find_map(|line| {
-            line.find("REG_SZ")
-                .map(|index| line[index + "REG_SZ".len()..].trim())
-        })
-        .unwrap_or_default();
+    #[cfg(not(windows))]
+    {
+        Ok(false)
+    }
+}
 
-    Ok(normalize_windows_path(registry_value)
-        == normalize_windows_path(&current_exe.to_string_lossy()))
+fn startup_command(exe_path: &Path) -> String {
+    format!("\"{}\" {}", exe_path.display(), AUTOSTART_ARGUMENT)
+}
+
+fn command_executable(command: &str) -> &str {
+    let command = command.trim();
+    if let Some(quoted) = command.strip_prefix('"') {
+        return quoted.split('"').next().unwrap_or_default();
+    }
+
+    command.split_whitespace().next().unwrap_or_default()
 }
 
 fn normalize_windows_path(path: &str) -> String {
@@ -153,13 +177,34 @@ fn normalize_windows_path(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_windows_path;
+    use super::{command_executable, normalize_windows_path, startup_command};
+    use std::path::Path;
 
     #[test]
     fn normalizes_quoted_windows_paths_for_registry_comparison() {
         assert_eq!(
             normalize_windows_path(r#""C:/Apps/Isle/Isle.exe""#),
             r#"c:\apps\isle\isle.exe"#
+        );
+    }
+
+    #[test]
+    fn extracts_executable_from_startup_command() {
+        assert_eq!(
+            command_executable(r#""C:\\Apps\\Isle\\isle.exe" --startup"#),
+            r"C:\\Apps\\Isle\\isle.exe"
+        );
+        assert_eq!(
+            command_executable(r#"C:\\Apps\\Isle\\isle.exe --startup"#),
+            r"C:\\Apps\\Isle\\isle.exe"
+        );
+    }
+
+    #[test]
+    fn builds_quoted_startup_command() {
+        assert_eq!(
+            startup_command(Path::new(r"C:\Apps\Isle\isle.exe")),
+            r#""C:\Apps\Isle\isle.exe" --startup"#
         );
     }
 }

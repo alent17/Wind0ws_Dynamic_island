@@ -140,11 +140,7 @@ pub async fn save_settings(
         .as_ref()
         .is_some_and(|old| old.auto_start != settings.auto_start)
     {
-        if auto_start {
-            set_auto_start(true)?;
-        } else {
-            let _ = set_auto_start(false);
-        }
+        set_auto_start(auto_start)?;
     }
 
     // 发送设置变更事件

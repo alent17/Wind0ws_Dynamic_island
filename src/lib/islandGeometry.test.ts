@@ -22,7 +22,7 @@ describe("island geometry", () => {
     expect(geometryFor("expanded", 38)).toEqual({ width: 300, height: 160, radius: 38 });
     expect(geometryFor("expanded", 0)).toEqual({ width: 300, height: 160, radius: 0 });
     expect(geometryFor("hidden")).toEqual({ width: 80, height: 28, radius: 14 });
-    expect(ISLAND_HOST).toEqual({ width: 652, height: 186, top: 22 });
+    expect(ISLAND_HOST).toEqual({ width: 300, height: 236, top: 22 });
   });
 
   it("rotates compact geometry on side edges but keeps expanded content horizontal", () => {
@@ -39,12 +39,12 @@ describe("island geometry", () => {
   });
 
   it("sizes and offsets the stable native host for every edge style", () => {
-    expect(hostFor("floating", "top")).toEqual({ width: 652, height: 186 });
-    expect(hostFor("floating", "left")).toEqual({ width: 652, height: 160 });
-    expect(hostFor("edge", "bottom")).toEqual({ width: 652, height: 186 });
+    expect(hostFor("floating", "top")).toEqual({ width: 300, height: 236 });
+    expect(hostFor("floating", "left")).toEqual({ width: 300, height: 236 });
+    expect(hostFor("edge", "bottom")).toEqual({ width: 300, height: 236 });
     expect(hostFor("edge", "right")).toEqual(hostFor("floating", "right"));
     expect(surfaceOffsetFor(hostFor("floating", "right"), geometryFor("compact", 45, "right"), "floating", "right"))
-      .toEqual({ x: 602, y: 40 });
+      .toEqual({ x: 250, y: 78 });
   });
 
   it("supports an adjustable compact long axis and caps hover at expanded width", () => {
@@ -52,16 +52,16 @@ describe("island geometry", () => {
     expect(geometryFor("hover", 45, "top", 200)).toEqual({ width: 210, height: 30, radius: 15 });
     expect(geometryFor("hover", 45, "top", 300)).toEqual({ width: 300, height: 30, radius: 15 });
     expect(geometryFor("compact", 45, "left", 300)).toEqual({ width: 28, height: 300, radius: 14 });
-    expect(hostFor("edge", "left", 300)).toEqual({ width: 652, height: 300 });
+    expect(hostFor("edge", "left", 300)).toEqual({ width: 300, height: 300 });
     expect(expansionForGeometry(geometryFor("compact", 45, "top", 300), "top", 300)).toBe(0);
   });
 
   it("places the host along positive and negative-origin monitors", () => {
     const monitor = { x: -1920, y: -120, width: 1920, height: 1080 };
     const host = hostFor("edge", "top");
-    expect(placementFor(monitor, host, "top", 0)).toEqual({ x: -1920, y: -120, width: 652, height: 186 });
-    expect(placementFor(monitor, host, "top", 50)).toEqual({ x: -1286, y: -120, width: 652, height: 186 });
-    expect(placementFor(monitor, host, "bottom", 100)).toEqual({ x: -652, y: 774, width: 652, height: 186 });
+    expect(placementFor(monitor, host, "top", 0)).toEqual({ x: -1920, y: -120, width: 300, height: 236 });
+    expect(placementFor(monitor, host, "top", 50)).toEqual({ x: -1110, y: -120, width: 300, height: 236 });
+    expect(placementFor(monitor, host, "bottom", 100)).toEqual({ x: -300, y: 724, width: 300, height: 236 });
   });
 
   it("overdraws one physical pixel beyond every attached screen edge", () => {

@@ -93,7 +93,9 @@ pub struct AppPreferences {
     pub floating_window_height: Option<u32>,
     pub floating_fill_color: String,
     pub floating_use_album_color: bool,
+    pub show_settings_tool: bool,
     pub show_floating_tool: bool,
+    pub show_volume_tool: bool,
     pub show_timer_tool: bool,
     pub enable_mv_playback: bool,
     pub lock_floating_window: bool,
@@ -156,7 +158,9 @@ impl Default for AppPreferences {
             floating_window_height: None,
             floating_fill_color: "#28323c".to_string(),
             floating_use_album_color: true,
+            show_settings_tool: true,
             show_floating_tool: true,
+            show_volume_tool: true,
             show_timer_tool: true,
             enable_mv_playback: true,
             lock_floating_window: false,
@@ -195,6 +199,7 @@ mod tests {
         assert!(loaded.selected_player_ids.is_none());
         assert_eq!(loaded.floating_fill_color, "#28323c");
         assert!(loaded.floating_use_album_color);
+        assert!(loaded.show_settings_tool);
         assert_eq!(loaded.idle_items.len(), 7);
     }
 

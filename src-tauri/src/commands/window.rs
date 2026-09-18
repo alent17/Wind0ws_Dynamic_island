@@ -659,6 +659,23 @@ pub fn show_studio_window(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
+pub fn toggle_studio_window(app: AppHandle) -> AppResult<()> {
+    if let Some(window) = app.get_webview_window("studio-window") {
+        if window.is_visible().unwrap_or(false) {
+            window.hide().map_err(|e| AppError::window(e.to_string()))?;
+        } else {
+            window.show().map_err(|e| AppError::window(e.to_string()))?;
+            window
+                .set_focus()
+                .map_err(|e| AppError::window(e.to_string()))?;
+        }
+        return Ok(());
+    }
+
+    show_studio_window(app)
+}
+
+#[tauri::command]
 pub fn toggle_floating_window(_app: AppHandle) -> AppResult<()> {
     tracing::warn!("[toggle_floating_window] 命令尚未实现");
     Ok(())
@@ -725,6 +742,23 @@ pub fn open_timer_window(app: AppHandle) -> AppResult<()> {
         window
             .set_focus()
             .map_err(|e| AppError::window(e.to_string()))?;
+        return Ok(());
+    }
+
+    Err(AppError::window("倒计时窗口尚未初始化"))
+}
+
+#[tauri::command]
+pub fn toggle_timer_window(app: AppHandle) -> AppResult<()> {
+    if let Some(window) = app.get_webview_window("timer_window") {
+        if window.is_visible().unwrap_or(false) {
+            window.hide().map_err(|e| AppError::window(e.to_string()))?;
+        } else {
+            window.show().map_err(|e| AppError::window(e.to_string()))?;
+            window
+                .set_focus()
+                .map_err(|e| AppError::window(e.to_string()))?;
+        }
         return Ok(());
     }
 

@@ -11,12 +11,20 @@ export const windowApi = {
     return invoke("show_studio_window");
   },
 
+  async toggleStudioWindow(): Promise<void> {
+    return invoke("toggle_studio_window");
+  },
+
   async openFloatingWindow(): Promise<void> {
     return invoke("open_floating_window");
   },
 
   async openTimerWindow(): Promise<void> {
     return invoke("open_timer_window");
+  },
+
+  async toggleTimerWindow(): Promise<void> {
+    return invoke("toggle_timer_window");
   },
 
   async closeFloatingWindow(): Promise<void> {

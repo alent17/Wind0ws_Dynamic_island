@@ -418,9 +418,11 @@ pub fn run() {
             commands::get_floating_window_position,
             commands::show_main_window,
             commands::show_studio_window,
+            commands::toggle_studio_window,
             commands::toggle_floating_window,
             commands::open_floating_window,
             commands::open_timer_window,
+            commands::toggle_timer_window,
             commands::close_floating_window,
             commands::reset_floating_window,
             commands::sync_window_bounds,
@@ -480,6 +482,13 @@ pub fn run() {
             // 加载保存的设置
             let saved_settings = read_settings_file(app.handle());
             let initial_settings = saved_settings.unwrap_or_default();
+
+            // 启动时修复注册表中的路径，并清理旧版本留下的启动项。
+            // 注册表只保存当前安装位置，升级后需要重新写入一次。
+            if let Err(error) = set_auto_start(initial_settings.auto_start) {
+                tracing::warn!("[Setup] 同步开机启动失败: {}", error);
+            }
+
             let (show_label, studio_label, quit_label) =
                 tray_labels(resolved_ui_language(&initial_settings.language));
 

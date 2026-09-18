@@ -37,7 +37,9 @@ export interface AppSettings {
   floatingWindowHeight: number | null;
   floatingFillColor: string;
   floatingUseAlbumColor: boolean;
+  showSettingsTool: boolean;
   showFloatingTool: boolean;
+  showVolumeTool: boolean;
   showTimerTool: boolean;
   enableMvPlayback: boolean;
   lockFloatingWindow: boolean;
@@ -197,7 +199,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   floatingWindowHeight: null,
   floatingFillColor: "#28323c",
   floatingUseAlbumColor: true,
+  showSettingsTool: true,
   showFloatingTool: true,
+  showVolumeTool: true,
   showTimerTool: true,
   enableMvPlayback: true,
   lockFloatingWindow: false,

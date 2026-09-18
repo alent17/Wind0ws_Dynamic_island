@@ -6,6 +6,7 @@
   import { Events } from "./utils/eventConstants";
   import { mediaApi } from "$lib/api/media";
   import { idleApi } from "$lib/api/idle";
+  import { audioApi } from "$lib/api/audio";
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
   import IslandSurface from "$lib/IslandSurface.svelte";
@@ -24,7 +25,7 @@
     type IslandRegionChange,
     type IslandStyle,
   } from "$lib/islandGeometry";
-  import type { AppSettings, IdleContentItem, IdleSnapshot, MediaState, MonitorInfo } from "$lib/api/types";
+  import type { AppSettings, IdleContentItem, IdleSnapshot, MediaState, MonitorInfo, SystemAudioState } from "$lib/api/types";
   import { DEFAULT_SETTINGS } from "$lib/api/types";
   import type { IslandTool } from "$lib/featureRail";
   import { applyAppFont } from "$lib/font";
@@ -35,7 +36,7 @@
     type CaptureSnapshot,
   } from "$lib/captureMode";
   import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition, shouldShowIdleClock } from "$lib/mediaClock";
-  import { adjustCountdown, createCountdownState, formatClock, getRemainingMs, pauseCountdown, resetCountdown, resumeCountdown, startCountdown, type CountdownState } from "$lib/countdown";
+  import { adjustCountdown, completeCountdown, createCountdownState, formatClock, getRemainingMs, pauseCountdown, resetCountdown, resumeCountdown, startCountdown, type CountdownState } from "$lib/countdown";
   import {
     getCurrentWindow,
     currentMonitor,
@@ -230,7 +231,9 @@
   });
   let enabledFeatureTools = $derived.by<IslandTool[]>(() => {
     const tools: IslandTool[] = [];
+    if (appSettings.showSettingsTool) tools.push("settings");
     if (appSettings.showFloatingTool) tools.push("floating");
+    if (appSettings.showVolumeTool) tools.push("volume");
     if (appSettings.showTimerTool) tools.push("timer");
     return tools;
   });
@@ -244,6 +247,35 @@
   }
   function toggleIsland() {
     expanded = !expanded;
+  }
+
+  let systemAudio = $state<SystemAudioState | null>(null);
+
+  async function handleAudioOpen() {
+    if (!(window as any).__TAURI_INTERNALS__) return;
+    try {
+      systemAudio = await audioApi.getState();
+    } catch (error) {
+      logger.warn("读取系统音量失败", error);
+    }
+  }
+
+  async function handleAudioVolume(volumePercent: number) {
+    const nextVolume = Math.max(0, Math.min(100, Math.round(volumePercent)));
+    if (!systemAudio) await handleAudioOpen();
+    if (!systemAudio) return;
+
+    systemAudio = {
+      ...systemAudio,
+      volumePercent: nextVolume,
+      muted: nextVolume === 0,
+    };
+    try {
+      await audioApi.setVolume(nextVolume);
+    } catch (error) {
+      logger.error("设置系统音量失败", error);
+      void handleAudioOpen();
+    }
   }
 
   let countdown = $state<CountdownState>(createCountdownState());
@@ -268,6 +300,11 @@
   function handleTimerReset() {
     countdown = resetCountdown(countdown);
   }
+
+  $effect(() => {
+    if (countdown.status !== "running" || timerRemainingMs > 0) return;
+    countdown = completeCountdown(countdown, clockNow);
+  });
 
   function timerSnapshot() {
     return {
@@ -618,11 +655,19 @@
     }
   }
 
-  async function openTimerWindow() {
+  async function toggleTimerWindow() {
     try {
-      await windowApi.openTimerWindow();
+      await windowApi.toggleTimerWindow();
     } catch (error) {
-      logger.error("打开倒计时窗口失败:", error);
+      logger.error("切换倒计时窗口失败:", error);
+    }
+  }
+
+  async function toggleSettingsWindow() {
+    try {
+      await windowApi.toggleStudioWindow();
+    } catch (error) {
+      logger.error("切换设置窗口失败:", error);
     }
   }
 
@@ -1394,11 +1439,14 @@
     onMediaAction={(action) => handleMediaAction(action)}
     onSeek={handleSeek}
     onToggleFloating={toggleFloatingWindow}
+    onSettingsToggle={toggleSettingsWindow}
     enabledTools={enabledFeatureTools}
-    onTimerOpen={openTimerWindow}
     onHoverChange={(value) => hovering = value}
     onRegionChange={applyIslandRegion}
     onIdleAction={idleAction}
+    {systemAudio}
+    onAudioOpen={handleAudioOpen}
+    onAudioVolume={handleAudioVolume}
     timerStatus={countdown.status}
     {timerRemainingMs}
     clockText={currentTime}

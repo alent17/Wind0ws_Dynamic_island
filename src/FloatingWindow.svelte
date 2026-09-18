@@ -17,6 +17,7 @@
   import MediaProgress from "$lib/MediaProgress.svelte";
   import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition } from "$lib/mediaClock";
   import { DEFAULT_SETTINGS, type MediaState, type AppSettings } from "$lib/api/types";
+  import { clampExpandedRadius, clampShoulderRadius, polygonCss, shapePolygonFor, type IslandEdge, type IslandStyle } from "$lib/islandGeometry";
   import {
     Play,
     Pause,
@@ -77,6 +78,19 @@
     useAlbumColor ? albumAccentGradient : configuredFillColor,
   );
   let windowSize = $state<WindowSize>({ width: 0, height: 0 });
+  let islandStyle = $state<IslandStyle>(DEFAULT_SETTINGS.islandStyle);
+  let islandEdge = $state<IslandEdge>(DEFAULT_SETTINGS.islandEdge);
+  let edgeShoulderRadius = $state(DEFAULT_SETTINGS.edgeShoulderRadius);
+  let expandedCornerRadius = $state(DEFAULT_SETTINGS.expandedCornerRadius);
+  let floatingClipPath = $derived.by(() => {
+    if (islandStyle !== "edge" || windowSize.width < 1 || windowSize.height < 1) return "none";
+    const geometry = {
+      width: windowSize.width,
+      height: windowSize.height,
+      radius: Math.min(expandedCornerRadius, windowSize.width / 2, windowSize.height / 2),
+    };
+    return polygonCss(shapePolygonFor(geometry, "edge", islandEdge, edgeShoulderRadius));
+  });
   let albumArtSize = $derived(
     Math.max(
       50,
@@ -452,6 +466,10 @@
     try {
       const settings = await invoke<AppSettings>("get_settings");
       capturePreferences = settings;
+      islandStyle = settings.islandStyle === "edge" ? "edge" : "floating";
+      islandEdge = settings.islandEdge === "right" || settings.islandEdge === "bottom" || settings.islandEdge === "left" ? settings.islandEdge : "top";
+      edgeShoulderRadius = clampShoulderRadius(settings.edgeShoulderRadius);
+      expandedCornerRadius = clampExpandedRadius(settings.expandedCornerRadius);
       configuredFillColor = settings.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
       useAlbumColor = settings.floatingUseAlbumColor ?? DEFAULT_SETTINGS.floatingUseAlbumColor;
       applyAppFont(settings.fontId);
@@ -562,6 +580,10 @@
         const nextUseAlbumColor = value.floatingUseAlbumColor ?? DEFAULT_SETTINGS.floatingUseAlbumColor;
         const shouldRefreshAlbumColor = nextUseAlbumColor && !useAlbumColor;
         capturePreferences = value;
+        islandStyle = value.islandStyle === "edge" ? "edge" : "floating";
+        islandEdge = value.islandEdge === "right" || value.islandEdge === "bottom" || value.islandEdge === "left" ? value.islandEdge : "top";
+        edgeShoulderRadius = clampShoulderRadius(value.edgeShoulderRadius ?? DEFAULT_SETTINGS.edgeShoulderRadius);
+        expandedCornerRadius = clampExpandedRadius(value.expandedCornerRadius ?? DEFAULT_SETTINGS.expandedCornerRadius);
         configuredFillColor = value.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
         useAlbumColor = nextUseAlbumColor;
         if (shouldRefreshAlbumColor && displayCover) void extractColors(displayCover);
@@ -1290,12 +1312,13 @@
   class:locked={isFloatingWindowLocked}
   class:pixelated={enablePixelArt}
   class:compact-cover={isCompactCover}
+  class:edge-silhouette={islandStyle === "edge"}
   class:capture-hidden={isCaptureHidden}
   onpointerenter={handlePointerEnter}
   onpointerleave={handlePointerLeave}
   role="region"
   aria-label={t("mediaPlayer")}
-  style:--floating-background={effectiveBackground}
+  style={`--floating-background:${effectiveBackground};clip-path:${floatingClipPath}`}
 >
   <div class="bg-solid"></div>
 
@@ -1525,11 +1548,12 @@
     background: transparent;
     user-select: none;
     -webkit-user-select: none;
-    border: 3px solid #000; /* 缩小边框 */
     box-sizing: border-box;
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.26);
     isolation: isolate;
   }
+
+  .player.edge-silhouette { border-radius: 0; }
 
   .bg-solid {
     position: absolute;
@@ -1540,8 +1564,7 @@
       background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       opacity 0.3s ease;
 
-    border-radius: calc(var(--floating-radius) - 3px)
-      calc(var(--floating-radius) - 3px) 0 0;
+    border-radius: var(--floating-radius) var(--floating-radius) 0 0;
   }
 
   /* 可拖拽的顶部栏 - 鼠标悬停时滑下 */
@@ -1974,8 +1997,7 @@
     pointer-events: auto;
     overflow: hidden;
     background: #121212;
-    border-radius: 0 0 calc(var(--floating-radius) - 3px)
-      calc(var(--floating-radius) - 3px);
+    border-radius: 0 0 var(--floating-radius) var(--floating-radius);
   }
 
   .track-title {

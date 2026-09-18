@@ -8,6 +8,7 @@ colors:
   studio-ink: "#111113"
   studio-surface: "#f5f5f7"
   studio-hairline: "#e5e5e8"
+  studio-accent: "#3158c8"
 typography:
   title:
     fontFamily: "MiSans, Segoe UI, sans-serif"
@@ -68,7 +69,7 @@ The production player surfaces use the project's original visual language. The m
 
 ## Isle Studio
 
-The current white Isle Studio is authoritative and stays visually unchanged. Its white stage, gray inspector panels, preview scenarios, behavior controls, and tools remain separate from the restored legacy player implementation. Do not restore the archived Settings page or its HTML/build entry.
+The current white Isle Studio is authoritative and stays visually independent from the restored legacy player implementation. Its white stage, gray inspector panels, preview scenarios, behavior controls, and tools remain separate from the restored legacy player implementation. The muted studio accent (`#3158c8`) is reserved for live/editing state and should not become a decorative secondary palette. Do not restore the archived Settings page or its HTML/build entry.
 
 ## Compatibility
 

@@ -1,56 +1,208 @@
 <script lang="ts">
-  import { GalleryHorizontalEnd, Timer } from "lucide-svelte";
+  import { GalleryHorizontalEnd, Settings, Timer, Volume2, VolumeX } from "lucide-svelte";
   import type { IslandTool } from "$lib/featureRail";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
-
 
   let {
     visible = false,
     activeTool = null,
-    enabledTools = ["floating", "timer"],
+    enabledTools = ["settings", "floating", "volume", "timer"],
     railBackground = "#000",
+    volume = 50,
+    muted = false,
     onTool,
+    onSettingsToggle,
     onFloating,
-    onTimerOpen,
+    onAudioOpen,
+    onVolume,
   } = $props<{
     visible?: boolean;
     activeTool?: IslandTool | null;
     enabledTools?: IslandTool[];
     railBackground?: string;
+    volume?: number;
+    muted?: boolean;
     onTool?: (tool: IslandTool | null) => void;
+    onSettingsToggle?: () => void;
     onFloating?: () => void;
-    onTimerOpen?: () => void;
+    onAudioOpen?: () => void | Promise<void>;
+    onVolume?: (volumePercent: number) => void | Promise<void>;
   }>();
 
   const t = (key: TranslationKey) => translate(key, {}, $locale);
+  const labels = $derived($locale.startsWith("en")
+    ? { settings: "Settings", floating: "Layout", volume: "Volume", timer: "Timer" }
+    : $locale.startsWith("ja")
+      ? { settings: "設定", floating: "配置", volume: "音量", timer: "タイマー" }
+      : { settings: "设置", floating: "布局", volume: "音量", timer: "倒计时" });
 
-  function toggleTool(tool: IslandTool) {
+  function selectTool(tool: IslandTool) {
+    if (tool === "settings") {
+      onTool?.(null);
+      onSettingsToggle?.();
+      return;
+    }
+    if (tool === "floating") {
+      onTool?.(null);
+      onFloating?.();
+      return;
+    }
+
     const next = activeTool === tool ? null : tool;
     onTool?.(next);
-  }
-
-  function openTimer() {
-    onTool?.(null);
-    onTimerOpen?.();
+    if (tool === "volume" && next === "volume") void onAudioOpen?.();
   }
 </script>
 
-<div class="feature-rail" class:visible aria-hidden={!visible} inert={!visible} style={`--rail-background:${railBackground}`}>
-  {#if enabledTools.includes("floating")}
-    <button class="tool-circle" type="button" aria-label={t("toggleFloating")} onclick={(event) => { event.stopPropagation(); onFloating?.(); }}>
-      <GalleryHorizontalEnd size={16} />
-    </button>
-  {/if}
-
-  {#if enabledTools.includes("timer")}
-    <div class="tool-item timer-item">
-      <button class="tool-circle" type="button" aria-label={t("timer")} onclick={(event) => { event.stopPropagation(); openTimer(); }}>
-        <Timer size={16} />
+<div
+  class="feature-rail"
+  class:visible
+  aria-hidden={!visible}
+  inert={!visible}
+  style={`--rail-background:${railBackground};--tool-count:${Math.max(1, enabledTools.length)}`}
+>
+  <div class="feature-bar" data-stop-toggle>
+    {#if enabledTools.includes("settings")}
+      <button class="feature-segment" type="button" aria-label={t("settingsTool")} onclick={(event) => { event.stopPropagation(); selectTool("settings"); }}>
+        <Settings size={14} strokeWidth={2.1} />
+        <span>{labels.settings}</span>
       </button>
-    </div>
-  {/if}
+    {/if}
+
+    {#if enabledTools.includes("floating")}
+      <button class="feature-segment" type="button" aria-label={t("toggleFloating")} onclick={(event) => { event.stopPropagation(); selectTool("floating"); }}>
+        <GalleryHorizontalEnd size={14} strokeWidth={2.1} />
+        <span>{labels.floating}</span>
+      </button>
+    {/if}
+
+    {#if enabledTools.includes("volume")}
+      <div
+        class="feature-segment volume-segment"
+        class:active={activeTool === "volume"}
+        role="button"
+        tabindex="0"
+        aria-label={t("volume")}
+        aria-pressed={activeTool === "volume"}
+        onclick={(event) => { event.stopPropagation(); selectTool("volume"); }}
+        onkeydown={(event) => { if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) { event.preventDefault(); selectTool("volume"); } }}
+      >
+        {#if muted || volume === 0}<VolumeX size={14} strokeWidth={2.1} />{:else}<Volume2 size={14} strokeWidth={2.1} />{/if}
+        {#if activeTool === "volume"}
+          <input
+            class="inline-volume"
+            aria-label={t("volume")}
+            type="range"
+            min="0"
+            max="100"
+            value={volume}
+            onclick={(event) => event.stopPropagation()}
+            oninput={(event) => void onVolume?.(Number(event.currentTarget.value))}
+          />
+          <span class="volume-value">{muted ? t("muted") : `${volume}%`}</span>
+        {:else}
+          <span>{labels.volume}</span>
+        {/if}
+      </div>
+    {/if}
+
+    {#if enabledTools.includes("timer")}
+      <button class="feature-segment" class:active={activeTool === "timer"} type="button" aria-label={t("timerTool")} aria-pressed={activeTool === "timer"} onclick={(event) => { event.stopPropagation(); selectTool("timer"); }}>
+        <Timer size={14} strokeWidth={2.1} />
+        <span>{labels.timer}</span>
+      </button>
+    {/if}
+  </div>
 </div>
 
 <style>
-  .feature-rail{position:relative;z-index:4;display:flex;flex-direction:column;gap:6px;width:32px;opacity:0;transform:translateX(-8px) scale(.94);transform-origin:left center;pointer-events:none;transition:opacity 150ms ease,transform 240ms cubic-bezier(.22,1,.36,1)}.feature-rail.visible{opacity:1;transform:translateX(0) scale(1);pointer-events:auto}.tool-circle{position:relative;z-index:2;display:grid;place-items:center;flex:none;width:32px;height:32px;padding:0;color:rgba(255,255,255,.78);border:1px solid rgba(255,255,255,.12);border-radius:16px;background:var(--rail-background,#000);box-shadow:0 6px 14px rgba(0,0,0,.2);cursor:pointer;transition:color 140ms ease,filter 140ms ease,transform 140ms cubic-bezier(.23,1,.32,1)}.tool-circle:hover{color:#fff;filter:brightness(1.18);transform:scale(1.04)}.tool-circle:active{transform:scale(.94)}.tool-item{position:relative;width:32px;height:32px;flex:none}.tool-item .tool-circle{border:1px solid rgba(255,255,255,.12);box-shadow:0 6px 14px rgba(0,0,0,.2)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}@media (prefers-reduced-motion:reduce){.feature-rail,.tool-item,.tool-circle{transition-duration:120ms!important;transform:none}.feature-rail{opacity:0}.feature-rail.visible{opacity:1}}
+  .feature-rail {
+    position: relative;
+    z-index: 4;
+    width: 276px;
+    height: 40px;
+    opacity: 0;
+    transform: translateY(-8px) scale(.96);
+    transform-origin: center top;
+    pointer-events: none;
+    transition: opacity 160ms ease, transform 260ms cubic-bezier(.22, 1, .36, 1);
+  }
+
+  .feature-rail.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+  }
+
+  .feature-bar {
+    display: grid;
+    grid-template-columns: repeat(var(--tool-count, 4), minmax(0, 1fr));
+    width: 100%;
+    height: 40px;
+    padding: 3px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, .13);
+    border-radius: 22px;
+    background: rgba(18, 18, 20, .96);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .32), inset 0 1px 0 rgba(255,255,255,.08);
+    backdrop-filter: blur(16px) saturate(125%);
+    -webkit-backdrop-filter: blur(16px) saturate(125%);
+  }
+
+  .feature-segment {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    gap: 5px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 18px;
+    color: rgba(255, 255, 255, .56);
+    background: transparent;
+    font: 600 10px/1 var(--app-font, "Segoe UI", sans-serif);
+    letter-spacing: .01em;
+    text-transform: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 150ms ease, background 180ms ease, transform 150ms cubic-bezier(.23, 1, .32, 1);
+  }
+
+  .feature-segment:hover { color: rgba(255,255,255,.9); background: rgba(255,255,255,.06); }
+  .feature-segment:active { transform: scale(.96); }
+  .feature-segment.active {
+    color: #fff;
+    background: #1e6ff0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), 0 3px 10px rgba(30,111,240,.28);
+  }
+
+  .inline-volume {
+    width: 43px;
+    height: 3px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    accent-color: #fff;
+    background: rgba(255,255,255,.24);
+    cursor: pointer;
+  }
+
+  .volume-value {
+    min-width: 22px;
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  button:focus-visible, input:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  @media (max-width: 360px) {
+    .feature-rail, .feature-bar { width: 252px; }
+    .feature-segment { padding: 0 5px; gap: 3px; font-size: 9px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .feature-rail, .feature-segment { transition: none; }
+    .feature-rail { transform: none; }
+  }
 </style>

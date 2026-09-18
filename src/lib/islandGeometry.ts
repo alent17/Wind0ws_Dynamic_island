@@ -1,3 +1,5 @@
+import { FEATURE_RAIL_GAP, FEATURE_RAIL_HEIGHT, FEATURE_RAIL_WIDTH } from "$lib/featureRail";
+
 export type IslandMode = "compact" | "hover" | "expanded" | "hidden";
 export type IslandStyle = "floating" | "edge";
 export type IslandEdge = "top" | "right" | "bottom" | "left";
@@ -33,8 +35,12 @@ export const ISLAND_GEOMETRY = {
 
 export const ISLAND_GAP = 22;
 export const ISLAND_OVERSHOOT = 4;
-export const FEATURE_RAIL_RESERVE = 176;
-export const ISLAND_HOST = { width: ISLAND_GEOMETRY.expanded.width + FEATURE_RAIL_RESERVE * 2, height: 186, top: ISLAND_GAP } as const;
+export const FEATURE_RAIL_RESERVE = 0;
+export const ISLAND_HOST = {
+  width: Math.max(ISLAND_GEOMETRY.expanded.width, FEATURE_RAIL_WIDTH),
+  height: ISLAND_GEOMETRY.expanded.height + ISLAND_GAP + FEATURE_RAIL_GAP + FEATURE_RAIL_HEIGHT + ISLAND_OVERSHOOT,
+  top: ISLAND_GAP,
+} as const;
 
 export function isVerticalEdge(edge: IslandEdge) {
   return edge === "left" || edge === "right";
@@ -98,8 +104,8 @@ export function hostFor(_style: IslandStyle, edge: IslandEdge, compactLength = 8
   const gap = ISLAND_GAP;
   const length = clampCompactLength(compactLength);
   return isVerticalEdge(edge)
-    ? { width: ISLAND_GEOMETRY.expanded.width + FEATURE_RAIL_RESERVE * 2, height: Math.max(ISLAND_GEOMETRY.expanded.height, length) }
-    : { width: ISLAND_GEOMETRY.expanded.width + FEATURE_RAIL_RESERVE * 2, height: ISLAND_GEOMETRY.expanded.height + gap + ISLAND_OVERSHOOT };
+    ? { width: ISLAND_HOST.width, height: Math.max(ISLAND_HOST.height, length) }
+    : { width: ISLAND_HOST.width, height: ISLAND_HOST.height };
 }
 
 function cubicPoint(a: Point, b: Point, c: Point, d: Point, t: number): Point {

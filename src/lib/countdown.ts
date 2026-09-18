@@ -79,6 +79,16 @@ export function resetCountdown(state: CountdownState): CountdownState {
   return createCountdownState(state.label);
 }
 
+/**
+ * Collapse an elapsed running timer back to the idle state.
+ * The timer is derived from an absolute end timestamp, so callers can run
+ * this at any cadence without drifting or firing more than once.
+ */
+export function completeCountdown(state: CountdownState, now = Date.now()): CountdownState {
+  if (state.status !== "running" || getRemainingMs(state, now) > 0) return state;
+  return createCountdownState(state.label);
+}
+
 export function formatCountdown(ms: number): string {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1_000));
   const hours = Math.floor(totalSeconds / 3_600);

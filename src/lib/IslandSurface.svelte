@@ -5,7 +5,8 @@
   import MediaProgress from "$lib/MediaProgress.svelte";
   import Spectrum from "$lib/Spectrum.svelte";
   import FeatureRail from "$lib/FeatureRail.svelte";
-  import { FEATURE_RAIL_BUTTON_SIZE, FEATURE_RAIL_COLLAPSED_WIDTH, FEATURE_RAIL_GAP, FEATURE_RAIL_WIDTH, featureRailHeight, type IslandTool } from "$lib/featureRail";
+  import TimerPanel from "$lib/TimerPanel.svelte";
+  import { FEATURE_RAIL_BUTTON_SIZE, FEATURE_RAIL_GAP, FEATURE_RAIL_WIDTH, featureRailHeight, type IslandTool } from "$lib/featureRail";
   import type { CountdownStatus } from "$lib/countdown";
   import { ISLAND_MOTION, islandMorphEasing, islandSettleEasing } from "$lib/islandMotion";
   import type { MediaState, SpectrumMode } from "$lib/api/types";
@@ -67,7 +68,10 @@
     onHoverChange,
     onRegionChange,
     onIdleAction,
-    onTimerOpen,
+    systemAudio,
+    onSettingsToggle,
+    onAudioOpen,
+    onAudioVolume,
     onTimerStart,
     onTimerPause,
     onTimerResume,
@@ -77,7 +81,7 @@
     timerRemainingMs = 0,
     clockText = "00:00",
     clockTimeZone = "system",
-    enabledTools = ["floating", "timer"],
+    enabledTools = ["settings", "floating", "volume", "timer"],
   } = $props<{
     media: MediaState;
     mode?: IslandMode;
@@ -115,10 +119,13 @@
     onMediaAction?: (action: "prev" | "play_pause" | "next") => void;
     onSeek?: (positionMs: number) => void | Promise<void>;
     onToggleFloating?: () => void;
+    onSettingsToggle?: () => void;
     onHoverChange?: (hovering: boolean) => void;
     onRegionChange?: (change: IslandRegionChange) => void;
     onIdleAction?: (action: "prev" | "toggle" | "next") => void;
-    onTimerOpen?: () => void;
+    systemAudio?: { volumePercent: number; muted: boolean } | null;
+    onAudioOpen?: () => void | Promise<void>;
+    onAudioVolume?: (volumePercent: number) => void | Promise<void>;
     onTimerStart?: (durationMs: number) => void;
     onTimerPause?: () => void;
     onTimerResume?: () => void;
@@ -156,12 +163,13 @@
   let activeTool = $state<IslandTool | null>(null);
   const expandedGeometry = $derived(geometryFor("expanded", expandedRadius, edge, compactLength));
   const railHeight = $derived(featureRailHeight(enabledTools.length));
-  const railWidth = $derived(activeTool ? FEATURE_RAIL_WIDTH : FEATURE_RAIL_COLLAPSED_WIDTH);
+  const railWidth = $derived(FEATURE_RAIL_WIDTH);
+  const railTop = $derived(edge === "bottom" ? -FEATURE_RAIL_GAP - railHeight : expandedGeometry.height + FEATURE_RAIL_GAP);
   const railExtraRects = $derived.by(() => {
     if (mode !== "expanded" || enabledTools.length === 0) return [];
     return [{
-      x: edge === "right" ? -railWidth - FEATURE_RAIL_GAP : expandedGeometry.width + FEATURE_RAIL_GAP,
-      y: (expandedGeometry.height - railHeight) / 2,
+      x: (expandedGeometry.width - railWidth) / 2,
+      y: railTop,
       width: railWidth,
       height: railHeight,
       radius: FEATURE_RAIL_BUTTON_SIZE / 2,
@@ -401,6 +409,16 @@
             <button type="button" aria-label={t("nextItem")} onclick={(e) => { e.stopPropagation(); onIdleAction?.("next"); }}><ChevronRight size={18}/></button>
           </div>
         </div>
+      {:else if activeTool === "timer"}
+        <TimerPanel
+          status={timerStatus}
+          remainingMs={timerRemainingMs}
+          onStart={onTimerStart}
+          onPause={onTimerPause}
+          onResume={onTimerResume}
+          onAdjust={onTimerAdjust}
+          onReset={onTimerReset}
+        />
       {:else}
       <div class="top-row">
         <button class="cover expanded-cover" type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
@@ -476,16 +494,20 @@
 
   <div
     class="feature-rail-anchor"
-    style={`left:${edge === "right" ? -railWidth - FEATURE_RAIL_GAP : expandedGeometry.width + FEATURE_RAIL_GAP}px;top:${(expandedGeometry.height - railHeight) / 2}px`}
+    style={`left:${(expandedGeometry.width - railWidth) / 2}px;top:${railTop}px`}
   >
     <FeatureRail
       visible={railVisible}
       {activeTool}
       {enabledTools}
       {railBackground}
+      volume={systemAudio?.volumePercent ?? 0}
+      muted={systemAudio?.muted ?? false}
       onTool={(tool) => activeTool = tool}
+      onSettingsToggle={onSettingsToggle}
       onFloating={onToggleFloating}
-      onTimerOpen={onTimerOpen}
+      onAudioOpen={onAudioOpen}
+      onVolume={onAudioVolume}
     />
   </div>
   </div>

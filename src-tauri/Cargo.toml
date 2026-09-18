@@ -78,6 +78,9 @@ window-vibrancy = "0.5"
 # 全局静态变量支持
 lazy_static = "1.4"
 
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+
 [profile.release]
 strip = true
 lto = true
