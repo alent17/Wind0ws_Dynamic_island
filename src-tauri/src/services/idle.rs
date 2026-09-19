@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use crate::models::{IdleSnapshot, WeatherLocation, WeatherLocationCandidate};
+use crate::models::{IdleSnapshot, WeatherForecastDay, WeatherLocation, WeatherLocationCandidate};
 use crate::state::AppState;
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -31,6 +31,7 @@ struct WeatherCache {
     location: Option<(f64, f64)>,
     temperature: Option<f32>,
     code: Option<u16>,
+    forecast: Vec<WeatherForecastDay>,
     updated_at: Option<u64>,
     fetched: Option<Instant>,
 }
@@ -200,11 +201,39 @@ pub async fn search_weather_locations(
 #[derive(Deserialize)]
 struct ForecastResponse {
     current: Option<CurrentWeather>,
+    daily: Option<DailyForecast>,
 }
 #[derive(Deserialize)]
 struct CurrentWeather {
     temperature_2m: f32,
     weather_code: u16,
+}
+#[derive(Deserialize)]
+struct DailyForecast {
+    time: Vec<String>,
+    weather_code: Vec<u16>,
+    temperature_2m_max: Vec<f32>,
+    temperature_2m_min: Vec<f32>,
+}
+
+fn forecast_days(daily: Option<DailyForecast>) -> Vec<WeatherForecastDay> {
+    let Some(daily) = daily else {
+        return Vec::new();
+    };
+    let count = daily
+        .time
+        .len()
+        .min(daily.weather_code.len())
+        .min(daily.temperature_2m_max.len())
+        .min(daily.temperature_2m_min.len());
+    (0..count)
+        .map(|index| WeatherForecastDay {
+            date: daily.time[index].clone(),
+            weather_code: daily.weather_code[index],
+            temperature_max: daily.temperature_2m_max[index],
+            temperature_min: daily.temperature_2m_min[index],
+        })
+        .collect()
 }
 
 async fn weather_for(location: &WeatherLocation) -> AppResult<WeatherCache> {
@@ -222,7 +251,7 @@ async fn weather_for(location: &WeatherLocation) -> AppResult<WeatherCache> {
             return Ok(cache.clone());
         }
     }
-    let url = format!("https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weather_code&timezone=auto", location.latitude, location.longitude);
+    let url = format!("https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=4&timezone=auto", location.latitude, location.longitude);
     let response: ForecastResponse = reqwest::get(url)
         .await
         .map_err(|e| AppError::network(format!("Weather request failed: {}", e)))?
@@ -236,6 +265,7 @@ async fn weather_for(location: &WeatherLocation) -> AppResult<WeatherCache> {
         location: Some((location.latitude, location.longitude)),
         temperature: Some(current.temperature_2m),
         code: Some(current.weather_code),
+        forecast: forecast_days(response.daily),
         updated_at: Some(
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -278,6 +308,7 @@ pub async fn get_idle_snapshot(app: &AppHandle) -> AppResult<IdleSnapshot> {
         snapshot.weather_temperature = weather.temperature;
         snapshot.weather_code = weather.code;
         snapshot.weather_updated_at = weather.updated_at;
+        snapshot.weather_forecast = weather.forecast;
     }
     Ok(snapshot)
 }

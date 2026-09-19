@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import { spring, tweened } from "svelte/motion";
-  import { GalleryHorizontalEnd, Music2, Pause, Play, Settings, SkipBack, SkipForward, Timer, Volume2, VolumeX } from "lucide-svelte";
+  import { EyeOff, GalleryHorizontalEnd, Music2, Pause, Play, Settings, SkipBack, SkipForward, Timer, Volume2, VolumeX } from "lucide-svelte";
   import MediaProgress from "$lib/MediaProgress.svelte";
   import Spectrum from "$lib/Spectrum.svelte";
   import TimerPanel from "$lib/TimerPanel.svelte";
@@ -10,7 +10,7 @@
   import type { IslandTool } from "$lib/featureRail";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
   import { ISLAND_MOTION, islandMorphEasing, islandSettleEasing } from "$lib/islandMotion";
-  import type { MediaState, SpectrumMode } from "$lib/api/types";
+  import type { MediaState, SpectrumMode, WeatherForecastDay } from "$lib/api/types";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
   import {
     CUSTOM_PANEL_WIDTH,
@@ -43,6 +43,7 @@
     idleTime = "",
     idleWeatherTemperature = null,
     idleWeatherCode = null,
+    idleWeatherForecast = [],
     showSpectrum = true,
     spectrumMode = "realtime",
     enableAnimations = true,
@@ -67,6 +68,7 @@
     onMediaAction,
     onSeek,
     onToggleFloating,
+    onHideForTenSeconds,
     onHoverChange,
     onRegionChange,
     systemAudio,
@@ -84,7 +86,7 @@
     timerFinished = false,
     clockText = "00:00",
     clockTimeZone = "system",
-    enabledTools = ["settings", "floating", "volume", "timer"],
+    enabledTools = ["settings", "floating", "volume", "timer", "hide"],
   } = $props<{
     media: MediaState;
     mode?: IslandMode;
@@ -98,6 +100,7 @@
     idleTime?: string;
     idleWeatherTemperature?: number | null;
     idleWeatherCode?: number | null;
+    idleWeatherForecast?: WeatherForecastDay[];
     showSpectrum?: boolean;
     spectrumMode?: SpectrumMode;
     enableAnimations?: boolean;
@@ -122,6 +125,7 @@
     onMediaAction?: (action: "prev" | "play_pause" | "next") => void;
     onSeek?: (positionMs: number) => void | Promise<void>;
     onToggleFloating?: () => void;
+    onHideForTenSeconds?: () => void;
     onSettingsToggle?: () => void;
     onHoverChange?: (hovering: boolean) => void;
     onRegionChange?: (change: IslandRegionChange) => void;
@@ -149,6 +153,16 @@
   const timerFinishedText = $derived($locale.startsWith("en") ? "Timer ended" : $locale.startsWith("ja") ? "タイマー終了" : "倒计时结束");
   const effectiveCompactLength = $derived(timerActive ? Math.max(compactLength, 122) : compactLength);
   const clockLocale = $derived($locale === "zh-CN" ? "zh-CN" : $locale === "ja" ? "ja-JP" : "en-US");
+  const idleForecast = $derived.by(() => {
+    const localeId = clockLocale;
+    return idleWeatherForecast.slice(1, 4).map((day: WeatherForecastDay) => {
+      const parsedDate = new Date(`${day.date}T12:00:00`);
+      const label = Number.isNaN(parsedDate.getTime())
+        ? day.date.slice(5)
+        : new Intl.DateTimeFormat(localeId, { weekday: "short" }).format(parsedDate);
+      return { ...day, label };
+    });
+  });
   const clockDate = $derived.by(() => {
     void clockText;
     const options: Intl.DateTimeFormatOptions = {
@@ -455,12 +469,7 @@
     >
       <div class="expanded-shell" class:with-panel={panelVisible}>
         <section class="music-pane">
-          {#if idle}
-            <div class="idle-expanded-dashboard">
-              <span class="idle-expanded-time">{idleTime}</span>
-              <span class="idle-expanded-weather"><WeatherIcon code={idleWeatherCode} size={28} /><strong>{idleWeatherTemperature === null ? "--°" : `${Math.round(idleWeatherTemperature)}°`}</strong></span>
-            </div>
-          {:else}
+          {#if !idle}
             <div class="top-row">
               <button class="cover expanded-cover" type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
                 {#if media.albumArt}{#key media.albumArt}<img class="cover-image" src={media.albumArt} alt="" draggable="false" />{/key}{:else}<Music2 size={30} />{/if}
@@ -493,7 +502,7 @@
         </section>
 
         {#if panelVisible}
-          <section class="function-pane" data-stop-toggle>
+          <section class="function-pane">
             <div class="function-toolbar" role="toolbar" aria-label={t("featureTools")}>
               {#if enabledTools.includes("timer")}
                 <button
@@ -536,13 +545,21 @@
               {#if enabledTools.includes("settings")}
                 <button
                   class="function-icon settings-icon"
-                  class:active={activeTool === "settings"}
                   type="button"
                   aria-label={t("settingsTool")}
-                  aria-pressed={activeTool === "settings"}
-                  onclick={(event) => { event.stopPropagation(); activeTool = activeTool === "settings" ? null : "settings"; onSettingsToggle?.(); }}
+                  onclick={(event) => { event.stopPropagation(); onSettingsToggle?.(); }}
                 >
                   <Settings size={16} />
+                </button>
+              {/if}
+              {#if enabledTools.includes("hide")}
+                <button
+                  class="function-icon"
+                  type="button"
+                  aria-label={t("hideTool")}
+                  onclick={(event) => { event.stopPropagation(); onHideForTenSeconds?.(); }}
+                >
+                  <EyeOff size={16} />
                 </button>
               {/if}
             </div>
@@ -553,12 +570,26 @@
               {:else if activeTool === "volume"}
                 <VolumePanel volume={systemAudio?.volumePercent ?? 0} muted={systemAudio?.muted ?? false} onVolume={onAudioVolume} />
               {:else}
-                <div class="clock-dashboard">
-                  <span class="clock-greeting">{greeting}</span>
-                  <strong class="clock-main">{clockText || "00:00"}</strong>
-                  <div class="clock-meta">
-                    <span>{clockDate}</span>
+                <div class="clock-dashboard" class:with-forecast={idleForecast.length > 0}>
+                  <div class="clock-readout">
+                    <span class="clock-greeting">{greeting}</span>
+                    <strong class="clock-main">{clockText || "00:00"}</strong>
+                    <div class="clock-meta">
+                      <span>{clockDate}</span>
+                    </div>
                   </div>
+                  {#if idleForecast.length > 0}
+                    <div class="forecast-strip" aria-label={t("weatherForecast")}>
+                      {#each idleForecast as forecast}
+                        <div class="forecast-day" title={forecast.date}>
+                          <span class="forecast-day-name">{forecast.label}</span>
+                          <WeatherIcon code={forecast.weatherCode} size={14} />
+                          <strong>{Math.round(forecast.temperatureMax)}°</strong>
+                          <small>{Math.round(forecast.temperatureMin)}°</small>
+                        </div>
+                      {/each}
+                    </div>
+                  {/if}
                 </div>
               {/if}
             </div>
@@ -616,10 +647,10 @@
   .floating-style .island-surface:active{transform:scale(.97) translateZ(0)}.compact-layer,.expanded-layer{position:absolute;z-index:1;box-sizing:border-box;pointer-events:none}
   .compact-layer{inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 4px}.compact-layer.edge-inset:not(.vertical){padding-left:calc(4px + var(--shoulder-inset));padding-right:calc(8px + var(--shoulder-inset))}.compact-layer.vertical{flex-direction:column;padding:4px 0 8px}.compact-layer.edge-inset.vertical{padding-top:calc(4px + var(--shoulder-inset));padding-bottom:calc(8px + var(--shoulder-inset))}.compact-layer button,.compact-layer :global(canvas){pointer-events:auto}.time-display{width:100%;text-align:center;color:rgba(255,255,255,.8);font:500 12px/1 var(--app-font);letter-spacing:.05em;font-variant-numeric:tabular-nums;user-select:none}.cover{display:grid;place-items:center;flex:none;padding:0;overflow:hidden;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);border:0;cursor:pointer;user-select:none}.cover img{width:100%;height:100%;display:block;object-fit:cover;-webkit-user-drag:none;user-select:none}.compact-cover{width:20px;height:20px;border-radius:50%}.expanded-cover{width:52px;height:52px;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.35);outline:1px solid rgba(255,255,255,.1)}.playing-dot{width:3px;height:3px;border-radius:50%}
   .compact-disc{display:block;width:100%;height:100%;transform-origin:center;animation:compact-disc-spin 8s linear infinite;animation-play-state:paused}.compact-disc.spinning{animation-play-state:running;will-change:transform}@keyframes compact-disc-spin{to{transform:rotate(1turn)}}
-  .idle-compact-dashboard{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0 7px;color:rgba(255,255,255,.92);user-select:none}.idle-clock{font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums;letter-spacing:.02em}.idle-weather{display:flex;align-items:center;gap:4px;font:500 11px/1 var(--app-font);font-variant-numeric:tabular-nums}.idle-weather :global(svg){flex:none;color:rgba(255,255,255,.82)}.idle-compact-dashboard.vertical{flex-direction:column;padding:7px 0;gap:10px}.idle-compact-dashboard.vertical .idle-weather{flex-direction:column}.idle-expanded-dashboard{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:42px;padding:18px 28px;box-sizing:border-box}.idle-expanded-time{font:600 30px/1 var(--app-font);font-variant-numeric:tabular-nums;letter-spacing:-.03em}.idle-expanded-weather{display:flex;align-items:center;gap:9px;color:rgba(255,255,255,.88)}.idle-expanded-weather strong{font:500 25px/1 var(--app-font);font-variant-numeric:tabular-nums}.idle-expanded-weather :global(svg){color:rgba(255,255,255,.78)}
+  .idle-compact-dashboard{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0 7px;color:rgba(255,255,255,.92);user-select:none}.idle-clock{font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums;letter-spacing:.02em}.idle-weather{display:flex;align-items:center;gap:4px;font:500 11px/1 var(--app-font);font-variant-numeric:tabular-nums}.idle-weather :global(svg){flex:none;color:rgba(255,255,255,.82)}.idle-compact-dashboard.vertical{flex-direction:column;padding:7px 0;gap:10px}.idle-compact-dashboard.vertical .idle-weather{flex-direction:column}
   .cover-image{animation:cover-flip-in 420ms cubic-bezier(.23,1,.32,1)}@keyframes cover-flip-in{from{opacity:0;transform:perspective(500px) rotateY(-70deg) scale(.9)}to{opacity:1;transform:perspective(500px) rotateY(0) scale(1)}}
   .debug-overlay{position:absolute;z-index:4;top:4px;left:50%;display:flex;gap:5px;max-width:calc(100% - 12px);padding:2px 6px;border-radius:5px;transform:translateX(-50%);overflow:hidden;color:#4ade80;background:rgba(0,0,0,.75);font:500 8px/1.3 ui-monospace,monospace;white-space:nowrap;pointer-events:none}.debug-overlay span{overflow:hidden;text-overflow:ellipsis}
-  .expanded-layer{inset:0;width:100%;height:100%;padding:0;transition:opacity 120ms linear}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:160px;grid-template-columns:300px}.expanded-shell.with-panel{grid-template-columns:300px 300px}.music-pane{position:relative;width:300px;height:160px;display:flex;flex-direction:column;padding:16px 28px 20px;box-sizing:border-box}.function-pane{position:relative;width:300px;height:160px;display:flex;flex-direction:column;padding:12px 16px 14px 14px;box-sizing:border-box;border-left:1px solid rgba(255,255,255,.075)}.function-toolbar{display:flex;flex:none;align-items:center;justify-content:flex-end;height:30px;gap:5px}.function-icon{display:grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:9px;color:rgba(255,255,255,.68);background:transparent;cursor:pointer;transition:color 150ms ease,background 150ms ease,transform 140ms cubic-bezier(.23,1,.32,1),box-shadow 150ms ease}.function-icon:hover{color:#fff;background:rgba(255,255,255,.07)}.function-icon.active{color:#f59a23;background:rgba(245,154,35,.11);box-shadow:inset 0 0 0 1px rgba(245,154,35,.14)}.function-icon.timer-running:not(.active){color:#f59a23}.function-icon.timer-paused:not(.active){color:rgba(245,154,35,.7)}.function-icon:active{transform:scale(.92)}.function-content{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding-top:8px}.clock-dashboard{width:100%;height:100%;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:0 14px 8px 12px;box-sizing:border-box;color:#fff;user-select:none}.clock-greeting{margin-bottom:3px;color:rgba(255,255,255,.42);font-size:8px;font-weight:500;line-height:1;letter-spacing:.01em}.clock-main{margin:0;color:#fff;font-size:34px;font-weight:700;line-height:.98;letter-spacing:-.055em;font-variant-numeric:tabular-nums}.clock-meta{display:flex;align-items:center;gap:5px;max-width:100%;margin-top:6px;overflow:hidden;color:rgba(255,255,255,.42);font-size:8px;line-height:1;white-space:nowrap}.clock-meta span{overflow:hidden;text-overflow:ellipsis}.top-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;min-height:52px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata strong,.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata strong{font-size:13px;line-height:1.2;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}.metadata span{font-size:11px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}.progress-block,.control-row{opacity:var(--secondary-opacity);transition:opacity 100ms linear}
+  .expanded-layer{inset:0;width:100%;height:100%;padding:0;transition:opacity 120ms linear}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:160px;grid-template-columns:300px}.expanded-shell.with-panel{grid-template-columns:300px 300px}.music-pane{position:relative;width:300px;height:160px;display:flex;flex-direction:column;padding:16px 28px 20px;box-sizing:border-box}.function-pane{position:relative;width:300px;height:160px;display:flex;flex-direction:column;padding:12px 16px 14px 14px;box-sizing:border-box;border-left:1px solid rgba(255,255,255,.075)}.function-toolbar{display:flex;flex:none;align-items:center;justify-content:flex-end;height:30px;gap:5px}.function-icon{display:grid;place-items:center;width:28px;height:28px;padding:0;border:0;border-radius:9px;color:rgba(255,255,255,.68);background:transparent;cursor:pointer;transition:color 150ms ease,background 150ms ease,transform 140ms cubic-bezier(.23,1,.32,1),box-shadow 150ms ease}.function-icon:hover{color:#fff;background:rgba(255,255,255,.07)}.function-icon.active{color:#f59a23;background:rgba(245,154,35,.11);box-shadow:inset 0 0 0 1px rgba(245,154,35,.14)}.function-icon.timer-running:not(.active){color:#f59a23}.function-icon.timer-paused:not(.active){color:rgba(245,154,35,.7)}.function-icon:active{transform:scale(.92)}.function-content{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding-top:8px}.clock-dashboard{width:100%;height:100%;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:18px;padding:0 14px 8px 12px;box-sizing:border-box;color:#fff;user-select:none}.clock-dashboard.with-forecast{flex-direction:row;align-items:center;justify-content:space-between;gap:14px}.clock-readout{min-width:0;display:flex;flex-direction:column;align-items:flex-start}.clock-greeting{margin-bottom:3px;color:rgba(255,255,255,.42);font-size:8px;font-weight:500;line-height:1;letter-spacing:.01em}.clock-main{margin:0;color:#fff;font-size:34px;font-weight:700;line-height:.98;letter-spacing:-.055em;font-variant-numeric:tabular-nums}.clock-meta{display:flex;align-items:center;gap:5px;max-width:100%;margin-top:6px;overflow:hidden;color:rgba(255,255,255,.42);font-size:8px;line-height:1;white-space:nowrap}.clock-meta span{overflow:hidden;text-overflow:ellipsis}.forecast-strip{display:flex;align-items:stretch;gap:8px;margin-left:auto;padding-left:12px;border-left:1px solid rgba(255,255,255,.1)}.forecast-day{display:grid;grid-template-rows:12px 18px 12px 10px;justify-items:center;align-items:center;min-width:30px;color:rgba(255,255,255,.52);font-variant-numeric:tabular-nums}.forecast-day-name{font-size:8px;line-height:1}.forecast-day :global(svg){color:rgba(255,255,255,.78)}.forecast-day strong{color:rgba(255,255,255,.9);font-size:10px;line-height:1}.forecast-day small{color:rgba(255,255,255,.4);font-size:8px;line-height:1}.top-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;min-height:52px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata strong,.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata strong{font-size:13px;line-height:1.2;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}.metadata span{font-size:11px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}.progress-block,.control-row{opacity:var(--secondary-opacity);transition:opacity 100ms linear}
   .progress-block{width:100%;margin-bottom:4px}
   .control-row{position:relative;display:grid;grid-template-columns:28px 1fr 28px;align-items:center;width:100%;height:40px}.control-spacer{width:28px}.controls{display:flex;align-items:center;justify-content:center;gap:20px}.controls button{display:grid;place-items:center;width:40px;height:40px;padding:0;color:rgba(255,255,255,.9);background:transparent;border:0;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease}.controls .side{width:32px;height:32px}.controls .play{color:#fff}.controls button:active,.cover:active{transform:scale(.94)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .compact-timer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:0;color:#f28b31;background:transparent;cursor:pointer;font-family:var(--app-font);user-select:none}.compact-timer span{min-width:42px;font-size:12px;font-weight:600;line-height:1;letter-spacing:.015em;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}.compact-timer.finished span{min-width:0;font-size:11px}.timer-running-dot{width:4px;height:4px;flex:none;border-radius:50%;background:currentColor;box-shadow:0 0 5px rgba(242,139,49,.7)}.compact-timer.paused{color:rgba(242,139,49,.62)}.timer-pause{width:7px;height:8px;display:flex;align-items:center;justify-content:center;gap:2px}.timer-pause b{display:block;width:2px;height:7px;border-radius:1px;background:currentColor}.compact-timer.urgent{color:#ff765f}.compact-timer.urgent .timer-running-dot{animation:timer-urgent-pulse 1s ease-out infinite}@keyframes timer-urgent-pulse{0%,100%{opacity:.55;transform:scale(.85)}35%{opacity:1;transform:scale(1.25)}}

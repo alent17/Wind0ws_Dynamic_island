@@ -62,7 +62,9 @@
     barGradients = palette.map((color) => {
       const [r, g, b] = parseSpectrumColor(color);
       const gradient = canvasContext.createLinearGradient(0, canvasHeight, 0, 0);
-      gradient.addColorStop(0, `rgba(${Math.round(r * 0.72)},${Math.round(g * 0.72)},${Math.round(b * 0.72)},.9)`);
+      // Keep the lower edge opaque too: darkening it made low bars merge with
+      // the island when the extracted album color was already muted.
+      gradient.addColorStop(0, `rgb(${r},${g},${b})`);
       gradient.addColorStop(0.55, `rgb(${r},${g},${b})`);
       gradient.addColorStop(1, `rgb(${Math.min(255, Math.round(r * 1.12))},${Math.min(255, Math.round(g * 1.12))},${Math.min(255, Math.round(b * 1.12))})`);
       return gradient;
@@ -81,7 +83,7 @@
       const height = MIN_HEIGHT + value * (maxHeight - MIN_HEIGHT);
       const x = index * (barWidth + barGap);
       const y = (canvasHeight - height) / 2;
-      ctx.globalAlpha = 0.78 + value * 0.22;
+      ctx.globalAlpha = 0.9 + value * 0.1;
       ctx.fillStyle = barGradients[index] ?? "#ffffff";
       ctx.beginPath();
       ctx.roundRect(x, y, barWidth, height, cornerRadius);

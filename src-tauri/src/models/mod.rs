@@ -12,6 +12,6 @@ pub use audio::{AudioDeviceInfo, SystemAudioState};
 pub use cache::{CacheMetadata, CacheStats};
 pub use media::{
     IdleSnapshot, MediaCapabilities, MediaSessionInfo, MediaState, MonitorInfo, NeteaseSong,
-    ResolvedCover, SpectrumData, WeatherLocationCandidate,
+    ResolvedCover, SpectrumData, WeatherForecastDay, WeatherLocationCandidate,
 };
 pub use settings::{AppPreferences, AppSettings, WeatherLocation};

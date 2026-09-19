@@ -41,6 +41,7 @@ export interface AppSettings {
   showFloatingTool: boolean;
   showVolumeTool: boolean;
   showTimerTool: boolean;
+  showHideTool: boolean;
   showCustomFunctionPanel: boolean;
   enableMvPlayback: boolean;
   lockFloatingWindow: boolean;
@@ -72,6 +73,13 @@ export interface IdleSnapshot {
   weatherTemperature: number | null;
   weatherCode: number | null;
   weatherUpdatedAt: number | null;
+  weatherForecast: WeatherForecastDay[];
+}
+export interface WeatherForecastDay {
+  date: string;
+  weatherCode: number;
+  temperatureMax: number;
+  temperatureMin: number;
 }
 export interface WeatherLocationCandidate extends WeatherLocation { country: string; admin1: string; admin2: string; }
 
@@ -204,6 +212,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showFloatingTool: true,
   showVolumeTool: true,
   showTimerTool: true,
+  showHideTool: true,
   showCustomFunctionPanel: true,
   enableMvPlayback: true,
   lockFloatingWindow: false,

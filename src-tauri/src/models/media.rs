@@ -43,6 +43,16 @@ pub struct IdleSnapshot {
     pub weather_temperature: Option<f32>,
     pub weather_code: Option<u16>,
     pub weather_updated_at: Option<u64>,
+    pub weather_forecast: Vec<WeatherForecastDay>,
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeatherForecastDay {
+    pub date: String,
+    pub weather_code: u16,
+    pub temperature_max: f32,
+    pub temperature_min: f32,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

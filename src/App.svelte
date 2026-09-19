@@ -236,6 +236,7 @@
     if (appSettings.showFloatingTool) tools.push("floating");
     if (appSettings.showVolumeTool) tools.push("volume");
     if (appSettings.showTimerTool) tools.push("timer");
+    if (appSettings.showHideTool) tools.push("hide");
     return tools;
   });
   let customPanelEnabled = $derived(appSettings.showCustomFunctionPanel && enabledFeatureTools.length > 0);
@@ -253,33 +254,72 @@
   }
 
   let systemAudio = $state<SystemAudioState | null>(null);
+  let audioStateRequest: Promise<SystemAudioState | null> | null = null;
+  let pendingVolume: number | null = null;
+  let volumeWriteRequest: Promise<void> | null = null;
 
-  async function handleAudioOpen() {
-    if (!(window as any).__TAURI_INTERNALS__) return;
-    try {
-      systemAudio = await audioApi.getState();
-    } catch (error) {
-      logger.warn("读取系统音量失败", error);
-    }
+  async function handleAudioOpen(): Promise<SystemAudioState | null> {
+    if (!(window as any).__TAURI_INTERNALS__) return null;
+    if (audioStateRequest) return audioStateRequest;
+
+    const request = (async () => {
+      try {
+        const nextState = await audioApi.getState();
+        systemAudio = nextState;
+        return nextState;
+      } catch (error) {
+        logger.warn("读取系统音量失败", error);
+        return null;
+      }
+    })().finally(() => {
+      audioStateRequest = null;
+    });
+
+    audioStateRequest = request;
+    return request;
   }
 
   async function handleAudioVolume(volumePercent: number) {
     const nextVolume = Math.max(0, Math.min(100, Math.round(volumePercent)));
-    if (!systemAudio) await handleAudioOpen();
-    if (!systemAudio) return;
+    const currentAudio = systemAudio ?? await handleAudioOpen();
+    if (!currentAudio) return;
 
     systemAudio = {
-      ...systemAudio,
+      ...currentAudio,
       volumePercent: nextVolume,
       muted: nextVolume === 0,
     };
-    try {
-      await audioApi.setVolume(nextVolume);
-    } catch (error) {
-      logger.error("设置系统音量失败", error);
-      void handleAudioOpen();
-    }
+
+    // Range inputs emit many events while dragging. Keep the latest value and
+    // serialize Windows audio writes so an older request cannot win the race
+    // and snap the thumb back to a stale volume.
+    pendingVolume = nextVolume;
+    if (volumeWriteRequest) return;
+
+    volumeWriteRequest = (async () => {
+      try {
+        while (pendingVolume !== null) {
+          const value = pendingVolume;
+          pendingVolume = null;
+          await audioApi.setVolume(value);
+        }
+      } catch (error) {
+        pendingVolume = null;
+        logger.error("设置系统音量失败", error);
+        void handleAudioOpen();
+      }
+    })().finally(() => {
+      volumeWriteRequest = null;
+    });
+
+    await volumeWriteRequest;
   }
+
+  onDestroy(() => {
+    pendingVolume = null;
+    volumeWriteRequest = null;
+    audioStateRequest = null;
+  });
 
   let countdown = $state<CountdownState>(createCountdownState());
   let timerRemainingMs = $derived(getRemainingMs(countdown, clockNow));
@@ -362,12 +402,11 @@
     applyAppFont(appSettings.fontId);
     setLocale(appSettings.language);
   });
-  let idleSnapshot = $state<IdleSnapshot>({ cpuPercent: 0, memoryPercent: 0, uploadBytesPerSecond: 0, downloadBytesPerSecond: 0, batteryPercent: null, batteryCharging: null, weatherTemperature: null, weatherCode: null, weatherUpdatedAt: null });
-  // Idle mode is intentionally fixed: the island stays glanceable with only
-  // the local clock and the selected location's current weather.
+  let idleSnapshot = $state<IdleSnapshot>({ cpuPercent: 0, memoryPercent: 0, uploadBytesPerSecond: 0, downloadBytesPerSecond: 0, batteryPercent: null, batteryCharging: null, weatherTemperature: null, weatherCode: null, weatherUpdatedAt: null, weatherForecast: [] });
+  // Keep weather available for the expanded function panel even while media
+  // is playing. Compact mode still only renders it in the idle state.
   let showIdle = $derived(!hasMediaSession);
   $effect(() => {
-    if (!showIdle) return;
     const refresh = () => idleApi.getSnapshot().then((value) => idleSnapshot = value).catch(() => undefined);
     refresh();
     const timer = setInterval(refresh, 30_000);
@@ -387,6 +426,8 @@
   let isFullscreenApp = $derived(captureSnapshot.fullscreen);
   let isMouseAtTop = $state(false);
   let isHidden = $state(false);
+  let manualHideActive = $state(false);
+  let manualHideTimeout: ReturnType<typeof setTimeout> | null = null;
 
   let showMonitorMenu = $state(false);
   let monitors: Array<{
@@ -398,6 +439,7 @@
   let currentMonitorIndex = $state(0);
 
   let isFloatingWindowOpen = $state(false);
+  let settingsWindowRequest: Promise<void> | null = null;
 
   let fps = $state(0);
   let frameCount = 0;
@@ -644,13 +686,27 @@
   }
 
   async function showSettingsWindow() {
+    if (settingsWindowRequest) {
+      await settingsWindowRequest;
+      return;
+    }
+
+    const request = (async () => {
+      try {
+        // Settings is an open/focus action. Using toggle here can hide an
+        // existing window whose visibility state is stale after a close or
+        // minimize, making the button appear to do nothing.
+        await windowApi.showStudioWindow();
+      } catch (error) {
+        logger.error("打开设置窗口失败:", error);
+      }
+    })();
+
+    settingsWindowRequest = request;
     try {
-      // Settings is an open/focus action. Using toggle here can hide an
-      // existing window whose visibility state is stale after a close or
-      // minimize, making the button appear to do nothing.
-      await windowApi.showStudioWindow();
-    } catch (error) {
-      logger.error("打开设置窗口失败:", error);
+      await request;
+    } finally {
+      if (settingsWindowRequest === request) settingsWindowRequest = null;
     }
   }
 
@@ -808,9 +864,20 @@
   function syncCaptureVisibility(snapshot = captureSnapshot) {
     const reasons = activeCaptureReasons(snapshot, appSettings);
     const fullscreenPeek = isMouseAtTop && reasons.length === 1 && reasons[0] === "fullscreen";
-    const shouldHide = reasons.length > 0 && !fullscreenPeek;
+    const shouldHide = manualHideActive || (reasons.length > 0 && !fullscreenPeek);
     if (shouldHide && !isHidden) void hideWindowToTop();
     else if (!shouldHide && isHidden) void showWindow();
+  }
+
+  function hideForTenSeconds() {
+    manualHideActive = true;
+    if (manualHideTimeout !== null) clearTimeout(manualHideTimeout);
+    manualHideTimeout = setTimeout(() => {
+      manualHideTimeout = null;
+      manualHideActive = false;
+      syncCaptureVisibility();
+    }, 10_000);
+    syncCaptureVisibility();
   }
 
   function handleCaptureModeChange(snapshot: CaptureSnapshot) {
@@ -852,7 +919,7 @@
     if (isMouseAtTop !== wasMouseAtTop) {
       console.log("[鼠标检测] 鼠标在顶部:", isMouseAtTop);
 
-      if (isMouseAtTop && isHidden) {
+      if (isMouseAtTop && isHidden && !manualHideActive) {
         showWindow();
 
         if (hideTimeout) clearTimeout(hideTimeout);
@@ -1317,6 +1384,7 @@
     stopAutoClose();
     stopDebugFps();
     if (timerFinishedTimeout !== null) clearTimeout(timerFinishedTimeout);
+    if (manualHideTimeout !== null) clearTimeout(manualHideTimeout);
   });
 
   function handleGlobalClick(event: MouseEvent) {
@@ -1408,6 +1476,7 @@
     idleTime={currentTime}
     idleWeatherTemperature={idleSnapshot.weatherTemperature}
     idleWeatherCode={idleSnapshot.weatherCode}
+    idleWeatherForecast={idleSnapshot.weatherForecast}
     showSpectrum={appSettings.showSpectrum}
     spectrumMode={appSettings.spectrumMode}
     enableAnimations={appSettings.enableAnimations}
@@ -1423,6 +1492,7 @@
     onMediaAction={(action) => handleMediaAction(action)}
     onSeek={handleSeek}
     onToggleFloating={toggleFloatingWindow}
+    onHideForTenSeconds={hideForTenSeconds}
     onSettingsToggle={showSettingsWindow}
     enabledTools={enabledFeatureTools}
     showCustomFunctionPanel={appSettings.showCustomFunctionPanel}
@@ -1430,7 +1500,7 @@
     onHoverChange={(value) => hovering = value}
     onRegionChange={applyIslandRegion}
     {systemAudio}
-    onAudioOpen={handleAudioOpen}
+    onAudioOpen={() => { void handleAudioOpen(); }}
     onAudioVolume={handleAudioVolume}
     timerStatus={countdown.status}
     {timerRemainingMs}

@@ -81,6 +81,44 @@ function toCss([r, g, b]: Rgb): string {
   return `rgb(${r},${g},${b})`;
 }
 
+function relativeLuminance([r, g, b]: Rgb): number {
+  const toLinear = (channel: number) => {
+    const normalized = channel / 255;
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  };
+
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+/**
+ * Raises only the lightness of a color until it has enough contrast against
+ * the island's black surface. Keeping hue and saturation stable preserves the
+ * album-art color without allowing dark navy, burgundy, or forest tones to
+ * disappear into the background.
+ */
+function ensureReadableColor({ h, s, l }: Hsl): Rgb {
+  const minimumLuminance = 0.22;
+  let candidate = hslToRgb({ h, s, l });
+  if (relativeLuminance(candidate) >= minimumLuminance) return candidate;
+
+  let low = l;
+  let high = 1;
+  for (let step = 0; step < 8; step += 1) {
+    const midpoint = (low + high) / 2;
+    const midpointColor = hslToRgb({ h, s, l: midpoint });
+    if (relativeLuminance(midpointColor) >= minimumLuminance) {
+      high = midpoint;
+      candidate = midpointColor;
+    } else {
+      low = midpoint;
+    }
+  }
+
+  return candidate;
+}
+
 /**
  * Creates a deliberately readable ramp for six tiny canvas bars.
  * Album colors remain the endpoints, while close or muted endpoints get
@@ -102,12 +140,12 @@ export function createSpectrumPalette(
   const lightMin = Math.min(top.l, bottom.l);
   const lightMax = Math.max(top.l, bottom.l);
   const gapBoost = lightnessGap < 0.24 ? 0.14 : 0;
-  const readableBottom = clamp(lightMin - gapBoost * 0.55, hasColor ? 0.2 : 0.12, 0.64);
-  const readableTop = clamp(lightMax + gapBoost, hasColor ? 0.5 : 0.46, 0.92);
+  const readableBottom = clamp(lightMin - gapBoost * 0.55, hasColor ? 0.34 : 0.48, 0.68);
+  const readableTop = clamp(lightMax + gapBoost, hasColor ? 0.58 : 0.58, 0.94);
 
   return Array.from({ length: Math.max(1, count) }, (_, index) => {
     const amount = count <= 1 ? 1 : index / (count - 1);
-    return toCss(hslToRgb({
+    return toCss(ensureReadableColor({
       h: hasColor ? interpolateHue(bottomHue, topHue, amount) : 0,
       s: hasColor ? clamp(bottom.s + (top.s - bottom.s) * amount, minimumSaturation, 0.92) : 0,
       l: readableBottom + (readableTop - readableBottom) * amount,

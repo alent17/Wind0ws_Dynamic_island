@@ -95,6 +95,7 @@ pub struct AppPreferences {
     pub show_floating_tool: bool,
     pub show_volume_tool: bool,
     pub show_timer_tool: bool,
+    pub show_hide_tool: bool,
     pub show_custom_function_panel: bool,
     pub enable_mv_playback: bool,
     pub lock_floating_window: bool,
@@ -161,6 +162,7 @@ impl Default for AppPreferences {
             show_floating_tool: true,
             show_volume_tool: true,
             show_timer_tool: true,
+            show_hide_tool: true,
             show_custom_function_panel: true,
             enable_mv_playback: true,
             lock_floating_window: false,
@@ -200,6 +202,7 @@ mod tests {
         assert_eq!(loaded.floating_fill_color, "#28323c");
         assert!(loaded.floating_use_album_color);
         assert!(loaded.show_settings_tool);
+        assert!(loaded.show_hide_tool);
         assert!(loaded.show_custom_function_panel);
         assert_eq!(loaded.idle_items.len(), 2);
     }

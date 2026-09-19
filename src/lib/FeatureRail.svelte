@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { GalleryHorizontalEnd, Settings, Timer, Volume2, VolumeX } from "lucide-svelte";
+  import { EyeOff, GalleryHorizontalEnd, Settings, Timer, Volume2, VolumeX } from "lucide-svelte";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
   import type { IslandTool } from "$lib/featureRail";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
@@ -7,7 +7,7 @@
   let {
     visible = false,
     activeTool = null,
-    enabledTools = ["settings", "floating", "volume", "timer"],
+    enabledTools = ["settings", "floating", "volume", "timer", "hide"],
     railBackground = "#000",
     volume = 50,
     muted = false,
@@ -17,6 +17,7 @@
     onTool,
     onSettingsToggle,
     onFloating,
+    onHideForTenSeconds,
     onAudioOpen,
   } = $props<{
     visible?: boolean;
@@ -31,16 +32,17 @@
     onTool?: (tool: IslandTool | null) => void;
     onSettingsToggle?: () => void;
     onFloating?: () => void;
+    onHideForTenSeconds?: () => void;
     onAudioOpen?: () => void | Promise<void>;
   }>();
 
   const t = (key: TranslationKey) => translate(key, {}, $locale);
   const timerText = $derived(formatCountdown(timerRemainingMs));
   const labels = $derived($locale.startsWith("en")
-    ? { settings: "Settings", floating: "Layout", volume: "Volume", timer: "Timer" }
+    ? { settings: "Settings", floating: "Layout", volume: "Volume", timer: "Timer", hide: "Hide 10s" }
     : $locale.startsWith("ja")
-      ? { settings: "設定", floating: "配置", volume: "音量", timer: "タイマー" }
-      : { settings: "设置", floating: "布局", volume: "音量", timer: "倒计时" });
+      ? { settings: "設定", floating: "配置", volume: "音量", timer: "タイマー", hide: "10秒非表示" }
+      : { settings: "设置", floating: "布局", volume: "音量", timer: "倒计时", hide: "隐藏10s" });
 
   function selectTool(tool: IslandTool) {
     if (tool === "settings") {
@@ -51,6 +53,11 @@
     if (tool === "floating") {
       onTool?.(null);
       onFloating?.();
+      return;
+    }
+    if (tool === "hide") {
+      onTool?.(null);
+      onHideForTenSeconds?.();
       return;
     }
 
@@ -102,6 +109,13 @@
       <button class="feature-segment" class:active={activeTool === "timer"} class:timer-running={timerStatus === "running"} class:timer-paused={timerStatus === "paused"} type="button" aria-label={t("timerTool")} aria-pressed={activeTool === "timer"} onclick={(event) => { event.stopPropagation(); selectTool("timer"); }}>
         <Timer size={14} strokeWidth={2.1} />
         <span>{timerFinished ? labels.timer : timerStatus === "idle" ? labels.timer : timerText}</span>
+      </button>
+    {/if}
+
+    {#if enabledTools.includes("hide")}
+      <button class="feature-segment" type="button" aria-label={t("hideTool")} onclick={(event) => { event.stopPropagation(); selectTool("hide"); }}>
+        <EyeOff size={14} strokeWidth={2.1} />
+        <span>{labels.hide}</span>
       </button>
     {/if}
   </div>

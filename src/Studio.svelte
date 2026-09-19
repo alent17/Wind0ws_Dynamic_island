@@ -37,7 +37,7 @@
   }
 
   let mode=$state<IslandMode>("expanded"); let scenario=$state<Scenario>("playing"); let progress=$state(50); let settings=$state<AppPreferences>({...DEFAULT_SETTINGS}); let monitors=$state<MonitorInfo[]>([]); let cacheMessage=$state("");
-  let nativeRuntime=$state(false); let followingLive=$state(false); let liveMedia=$state<MediaState>(DEMO_MEDIA); let liveMediaDisconnect:undefined|(()=>void); let stageWidth=$state(0); let stageHeight=$state(0);
+  let nativeRuntime=$state(false); let followingLive=$state(false); let liveMedia=$state<MediaState>(DEMO_MEDIA); let liveMediaDisconnect:undefined|(()=>void); let stageWidth=$state(0); let stageHeight=$state(0); let previewReady=$state(false);
   let sessions=$state<MediaSessionInfo[]>([]); let sessionsLoading=$state(false); let weatherQuery=$state(""); let weatherResults=$state<WeatherLocationCandidate[]>([]); let weatherMessage=$state("");
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let persistInFlight: Promise<void> | undefined;
@@ -69,6 +69,7 @@
     ...(settings.showFloatingTool?["floating"]:[]),
     ...(settings.showVolumeTool?["volume"]:[]),
     ...(settings.showTimerTool?["timer"]:[]),
+    ...(settings.showHideTool?["hide"]:[]),
   ] as IslandTool[]);
   let previewPanelVisible=$derived(settings.showCustomFunctionPanel&&previewTools.length>0);
   let previewPanelExtraWidth=$derived(previewPanelVisible?CUSTOM_PANEL_WIDTH:0);
@@ -127,6 +128,24 @@
         event.preventDefault();
         await appWindow.hide();
       });
+    }
+    // Let the document paint before mounting the preview. The preview contains
+    // canvases, motion stores, and a fairly large component tree; mounting it
+    // in the same turn as a newly-created WebView can make the native window
+    // look hung even though the settings UI itself is ready.
+    deferredFrame=requestAnimationFrame(()=>{
+      if(disposed)return;
+      previewReady=true;
+      if(!nativeRuntime)return;
+      deferredTimers=[
+        setTimeout(()=>{
+          if(disposed)return;
+          void windowApi.getMonitors().then(value=>{if(!disposed)monitors=value}).catch(()=>{});
+          void refreshSessions();
+        },500),
+      ];
+    });
+    if(nativeRuntime){
       void (async()=>{
         try{
           settings={...DEFAULT_SETTINGS,...await settingsApi.getPreferences()};
@@ -134,16 +153,6 @@
           applyAppFont(settings.fontId);
           setLocale(settings.language);
         }catch{}
-        if(disposed)return;
-        deferredFrame=requestAnimationFrame(()=>{
-          deferredTimers=[
-            setTimeout(()=>{
-              if(disposed)return;
-              void windowApi.getMonitors().then(value=>{if(!disposed)monitors=value}).catch(()=>{});
-              void refreshSessions();
-            },250),
-          ];
-        });
       })();
     }
     return()=>{
@@ -257,7 +266,9 @@
     <section class="stage" aria-label={t("previewLabel")} bind:clientWidth={stageWidth} bind:clientHeight={stageHeight}>
       <div class="stage-topline"><span><i aria-hidden="true"></i>{t("previewLabel")}</span><small>{nativeRuntime?t("previewReady"):t("browserDemo")}</small></div>
       <div class="preview-host" style={`width:${previewHost.width}px;height:${previewHost.height}px;${previewPositionStyle}`}>
+        {#if previewReady}
         <IslandSurface media={sample} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedRadius={appearanceDraft.expandedCornerRadius} edgeShoulderRadius={appearanceDraft.edgeShoulderRadius} compactLength={appearanceDraft.compactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} background={appearanceDraft.floatingUseAlbumColor ? "#000" : appearanceDraft.floatingFillColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} showCustomFunctionPanel={settings.showCustomFunctionPanel} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.showStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{stopLivePreview();if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
+        {/if}
       </div>
       <div class="stage-caption" class:editing={previewTarget!==null} aria-live="polite">
         <strong>{previewTarget?t("previewEditing"):t("previewReady")}{previewTarget?`：${previewTargetLabel(previewTarget)}`:""}</strong>
@@ -313,6 +324,7 @@
           <button type="button" class="setting-choice" class:active={settings.showFloatingTool} aria-pressed={settings.showFloatingTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showFloatingTool:!settings.showFloatingTool})}><span class="choice-mark" aria-hidden="true">{settings.showFloatingTool?"✓":""}</span><span class="choice-copy"><strong>{t("floatingTool")}</strong></span></button>
           <button type="button" class="setting-choice" class:active={settings.showVolumeTool} aria-pressed={settings.showVolumeTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showVolumeTool:!settings.showVolumeTool})}><span class="choice-mark" aria-hidden="true">{settings.showVolumeTool?"✓":""}</span><span class="choice-copy"><strong>{t("volumeTool")}</strong></span></button>
           <button type="button" class="setting-choice" class:active={settings.showTimerTool} aria-pressed={settings.showTimerTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showTimerTool:!settings.showTimerTool})}><span class="choice-mark" aria-hidden="true">{settings.showTimerTool?"✓":""}</span><span class="choice-copy"><strong>{t("timerTool")}</strong></span></button>
+          <button type="button" class="setting-choice" class:active={settings.showHideTool} aria-pressed={settings.showHideTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showHideTool:!settings.showHideTool})}><span class="choice-mark" aria-hidden="true">{settings.showHideTool?"✓":""}</span><span class="choice-copy"><strong>{t("hideTool")}</strong></span></button>
         </div>
       </section>
       <section class="players-section"><div class="section-title"><h2>{t("players")}</h2><button class="icon-button" aria-label={t("refreshPlayers")} disabled={!nativeRuntime} onclick={refreshSessions}><RefreshCw size={15}/></button></div><p class="hint">{t("playersHint")}</p>

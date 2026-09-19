@@ -173,14 +173,17 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    height: 124px;
+    height: 100%;
+    min-height: 0;
+    box-sizing: border-box;
     color: #fff;
     font-variant-numeric: tabular-nums;
   }
 
   .timer-ruler {
     position: relative;
-    height: 69px;
+    flex: 0 0 50px;
+    height: 50px;
     margin: 0 -10px;
     overflow: hidden;
     touch-action: none;
@@ -200,7 +203,7 @@
     display: flex;
     align-items: flex-start;
     width: max-content;
-    height: 66px;
+    height: 47px;
     transform: translateX(calc(122px - var(--active-index) * 12px));
     transition: transform 260ms cubic-bezier(.22, 1, .36, 1);
   }
@@ -211,7 +214,7 @@
     align-items: center;
     justify-content: flex-start;
     width: 12px;
-    height: 63px;
+    height: 45px;
     padding: 0;
     border: 0;
     color: transparent;
@@ -221,11 +224,11 @@
   }
 
   .ruler-track button:disabled { cursor: default; }
-  .tick-label { height: 23px; color: rgba(242, 139, 49, .74); font: 600 10px/1 var(--app-font, "Segoe UI", sans-serif); }
+  .tick-label { height: 17px; color: rgba(242, 139, 49, .74); font: 600 9px/1 var(--app-font, "Segoe UI", sans-serif); }
   .ruler-track button:not(.major) .tick-label { opacity: 0; }
-  .tick { display: block; width: 4px; height: 25px; border-radius: 999px; background: rgba(178, 89, 31, .34); transition: height 180ms ease, background 180ms ease, box-shadow 180ms ease; }
-  .ruler-track button.major .tick { height: 31px; background: rgba(234, 119, 38, .72); }
-  .ruler-track button.selected .tick { height: 35px; background: #ffbc55; box-shadow: 0 0 9px rgba(255, 154, 48, .86); }
+  .tick { display: block; width: 4px; height: 27px; border-radius: 999px; background: rgba(178, 89, 31, .34); transform:scaleY(.667); transform-origin:center bottom; transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease; }
+  .ruler-track button.major .tick { transform:scaleY(.852); background: rgba(234, 119, 38, .72); }
+  .ruler-track button.selected .tick { transform:scaleY(1); background: #ffbc55; box-shadow: 0 0 9px rgba(255, 154, 48, .86); }
   .ruler-track button.selected .tick-label { color: #ffd18a; }
 
   .ruler-pointer {
@@ -245,7 +248,7 @@
   .ruler-fade.left { left: 0; background: linear-gradient(90deg, rgba(0,0,0,.96), transparent); }
   .ruler-fade.right { right: 0; background: linear-gradient(270deg, rgba(0,0,0,.96), transparent); }
 
-  .timer-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-top: auto; }
+  .timer-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; min-height: 0; margin-top: auto; }
   .timer-actions { display: flex; align-items: center; gap: 5px; min-width: 0; }
   .timer-main-button {
     display: inline-flex;
@@ -270,7 +273,7 @@
   .timer-main-button:active { transform: scale(.95); }
 
   .timer-readout { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
-  .timer-readout strong { color: #f28b31; font: 300 clamp(36px, 11vw, 50px)/.84 var(--app-font, "Segoe UI", sans-serif); letter-spacing: -.075em; white-space: nowrap; }
+  .timer-readout strong { color: #f28b31; font: 300 clamp(40px, 12vw, 54px)/.82 var(--app-font, "Segoe UI", sans-serif); letter-spacing: -.075em; white-space: nowrap; }
   .timer-readout small { margin-top: 6px; color: rgba(242, 139, 49, .5); font: 600 9px/1 var(--app-font, "Segoe UI", sans-serif); letter-spacing: .06em; }
   .timer-reset { position: absolute; top: -3px; right: -4px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; color: rgba(255,255,255,.45); background: transparent; cursor: pointer; }
   .timer-reset:hover { color: #fff; background: rgba(255,255,255,.1); }

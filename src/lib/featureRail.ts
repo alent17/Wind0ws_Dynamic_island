@@ -1,4 +1,4 @@
-export type IslandTool = "settings" | "floating" | "volume" | "timer";
+export type IslandTool = "settings" | "floating" | "volume" | "timer" | "hide";
 
 // The tool rail now lives beneath the expanded island as a segmented control.
 // Keep the geometry in one place so the native interaction region matches the

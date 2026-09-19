@@ -9,6 +9,9 @@ use std::sync::{
 };
 use tauri::{AppHandle, Manager};
 
+const DEFAULT_FLOATING_WINDOW_WIDTH: u32 = 260;
+const DEFAULT_FLOATING_WINDOW_HEIGHT: u32 = 360;
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct InteractionCornerRadii {
@@ -630,10 +633,14 @@ pub fn show_main_window(app: AppHandle) -> AppResult<()> {
 #[tauri::command]
 pub fn show_studio_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("studio-window") {
-        let _ = window.set_size(tauri::PhysicalSize::new(1000, 750));
-        let _ = window.set_min_size(Some(tauri::PhysicalSize::new(800, 600)));
-        let _ = window.center();
-        let _ = window.unminimize();
+        // Studio is pre-created hidden in tauri.conf.json. Reuse that WebView
+        // so the first click only has to show and focus an already initialized
+        // page instead of building a heavy Svelte/Canvas tree synchronously.
+        if window.is_minimized().unwrap_or(false) {
+            window
+                .unminimize()
+                .map_err(|e| AppError::window(e.to_string()))?;
+        }
         window.show().map_err(|e| AppError::window(e.to_string()))?;
         window
             .set_focus()
@@ -641,7 +648,9 @@ pub fn show_studio_window(app: AppHandle) -> AppResult<()> {
         return Ok(());
     }
 
-    tauri::WebviewWindowBuilder::new(
+    // Keep a fallback for older configs/dev profiles that do not have the
+    // pre-created window yet.
+    let window = tauri::WebviewWindowBuilder::new(
         &app,
         "studio-window",
         tauri::WebviewUrl::App("studio.html".into()),
@@ -655,6 +664,11 @@ pub fn show_studio_window(app: AppHandle) -> AppResult<()> {
     .transparent(false)
     .build()
     .map_err(|e| AppError::window(format!("创建设置窗口失败: {}", e)))?;
+
+    window.show().map_err(|e| AppError::window(e.to_string()))?;
+    window
+        .set_focus()
+        .map_err(|e| AppError::window(e.to_string()))?;
 
     Ok(())
 }
@@ -723,7 +737,10 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
         builder = builder.inner_size(w.max(200) as f64, h.max(200) as f64);
         builder = builder.position(x as f64, y as f64);
     } else {
-        builder = builder.inner_size(360.0, 360.0);
+        builder = builder.inner_size(
+            DEFAULT_FLOATING_WINDOW_WIDTH as f64,
+            DEFAULT_FLOATING_WINDOW_HEIGHT as f64,
+        );
     }
 
     builder
@@ -778,7 +795,10 @@ pub fn close_floating_window(app: AppHandle) -> AppResult<()> {
 pub fn reset_floating_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("floating_player") {
         window
-            .set_size(tauri::PhysicalSize::new(360, 360))
+            .set_size(tauri::PhysicalSize::new(
+                DEFAULT_FLOATING_WINDOW_WIDTH,
+                DEFAULT_FLOATING_WINDOW_HEIGHT,
+            ))
             .map_err(|e| AppError::window(e.to_string()))?;
         window
             .center()

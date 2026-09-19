@@ -17,7 +17,6 @@
   import MediaProgress from "$lib/MediaProgress.svelte";
   import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition } from "$lib/mediaClock";
   import { DEFAULT_SETTINGS, type MediaState, type AppSettings } from "$lib/api/types";
-  import { clampExpandedRadius, clampShoulderRadius, polygonCss, shapePolygonFor, type IslandEdge, type IslandStyle } from "$lib/islandGeometry";
   import {
     Play,
     Pause,
@@ -78,19 +77,6 @@
     useAlbumColor ? albumAccentGradient : configuredFillColor,
   );
   let windowSize = $state<WindowSize>({ width: 0, height: 0 });
-  let islandStyle = $state<IslandStyle>(DEFAULT_SETTINGS.islandStyle);
-  let islandEdge = $state<IslandEdge>(DEFAULT_SETTINGS.islandEdge);
-  let edgeShoulderRadius = $state(DEFAULT_SETTINGS.edgeShoulderRadius);
-  let expandedCornerRadius = $state(DEFAULT_SETTINGS.expandedCornerRadius);
-  let floatingClipPath = $derived.by(() => {
-    if (islandStyle !== "edge" || windowSize.width < 1 || windowSize.height < 1) return "none";
-    const geometry = {
-      width: windowSize.width,
-      height: windowSize.height,
-      radius: Math.min(expandedCornerRadius, windowSize.width / 2, windowSize.height / 2),
-    };
-    return polygonCss(shapePolygonFor(geometry, "edge", islandEdge, edgeShoulderRadius));
-  });
   let albumArtSize = $derived(
     Math.max(
       50,
@@ -466,10 +452,6 @@
     try {
       const settings = await invoke<AppSettings>("get_settings");
       capturePreferences = settings;
-      islandStyle = settings.islandStyle === "edge" ? "edge" : "floating";
-      islandEdge = settings.islandEdge === "right" || settings.islandEdge === "bottom" || settings.islandEdge === "left" ? settings.islandEdge : "top";
-      edgeShoulderRadius = clampShoulderRadius(settings.edgeShoulderRadius);
-      expandedCornerRadius = clampExpandedRadius(settings.expandedCornerRadius);
       configuredFillColor = settings.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
       useAlbumColor = settings.floatingUseAlbumColor ?? DEFAULT_SETTINGS.floatingUseAlbumColor;
       applyAppFont(settings.fontId);
@@ -580,10 +562,6 @@
         const nextUseAlbumColor = value.floatingUseAlbumColor ?? DEFAULT_SETTINGS.floatingUseAlbumColor;
         const shouldRefreshAlbumColor = nextUseAlbumColor && !useAlbumColor;
         capturePreferences = value;
-        islandStyle = value.islandStyle === "edge" ? "edge" : "floating";
-        islandEdge = value.islandEdge === "right" || value.islandEdge === "bottom" || value.islandEdge === "left" ? value.islandEdge : "top";
-        edgeShoulderRadius = clampShoulderRadius(value.edgeShoulderRadius ?? DEFAULT_SETTINGS.edgeShoulderRadius);
-        expandedCornerRadius = clampExpandedRadius(value.expandedCornerRadius ?? DEFAULT_SETTINGS.expandedCornerRadius);
         configuredFillColor = value.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
         useAlbumColor = nextUseAlbumColor;
         if (shouldRefreshAlbumColor && displayCover) void extractColors(displayCover);
@@ -1312,13 +1290,12 @@
   class:locked={isFloatingWindowLocked}
   class:pixelated={enablePixelArt}
   class:compact-cover={isCompactCover}
-  class:edge-silhouette={islandStyle === "edge"}
   class:capture-hidden={isCaptureHidden}
   onpointerenter={handlePointerEnter}
   onpointerleave={handlePointerLeave}
   role="region"
   aria-label={t("mediaPlayer")}
-  style={`--floating-background:${effectiveBackground};clip-path:${floatingClipPath}`}
+  style={`--floating-background:${effectiveBackground}`}
 >
   <div class="bg-solid"></div>
 
@@ -1539,13 +1516,16 @@
   }
 
   .player {
-    --floating-radius: 5px;
+    /* Small card corners from the reference player, not the island's pill radius. */
+    --floating-radius: 8px;
+    --toolbar-height: 0px;
     position: relative;
     width: 100vw;
     height: 100vh;
     overflow: hidden;
     border-radius: var(--floating-radius);
-    background: transparent;
+    border: 3px solid #121212;
+    background: #121212;
     user-select: none;
     -webkit-user-select: none;
     box-sizing: border-box;
@@ -1553,18 +1533,21 @@
     isolation: isolate;
   }
 
-  .player.edge-silhouette { border-radius: 0; }
-
   .bg-solid {
     position: absolute;
-    inset: 0 0 64px 0;
+    top: var(--toolbar-height);
+    right: 0;
+    bottom: 64px;
+    left: 0;
     z-index: 1;
     background: var(--floating-background);
     transition:
+      top 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      border-radius 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       opacity 0.3s ease;
 
-    border-radius: var(--floating-radius) var(--floating-radius) 0 0;
+    border-radius: var(--floating-radius);
   }
 
   /* 可拖拽的顶部栏 - 鼠标悬停时滑下 */
@@ -1573,20 +1556,35 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 25px; /* 调整高度为 25px */
+    height: 29px;
     z-index: 300; /* 最高层级，确保不被遮罩层盖住 */
     display: flex;
     align-items: center;
     justify-content: space-between; /* 两端对齐 */
-    padding: 0 4px; /* 左右留一点空间 */
+    padding: 3px;
     box-sizing: border-box;
     visibility: hidden; /* 完全隐藏 */
     transform: translateY(-100%);
     transition:
       visibility 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    background: #000000; /* 纯黑色 */
+    background: #121212;
+    border: 0;
+    border-radius: var(--floating-radius) var(--floating-radius) 0 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     pointer-events: auto; /* 确保可以接收鼠标事件 */
+  }
+
+  .player.hovered,
+  .player.locked {
+    --toolbar-height: 29px;
+  }
+
+  .player.hovered .bg-solid,
+  .player.locked .bg-solid {
+    border-radius: 0 0 var(--floating-radius) var(--floating-radius);
   }
 
   .player.hovered .drag-bar {
@@ -1605,7 +1603,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1px 12px 7px 12px; /* 上内边距更小，让点更靠上 */
+    padding: 0 12px;
     flex: 1; /* 占据中间空间 */
   }
 
@@ -1629,13 +1627,12 @@
 
   /* 顶部栏置顶按钮 */
   .pin-btn-topbar {
-    width: 32px;
-    height: 28px;
-    padding: 0 8px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    width: 28px;
+    height: 23px;
+    padding: 0;
+    border: 0;
     outline: none;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.04);
+    background: transparent;
     cursor: pointer;
     color: rgba(255, 255, 255, 0.58);
     display: flex;
@@ -1650,15 +1647,14 @@
   }
 
   .pin-btn-topbar:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.1);
-    transform: scale(1.02);
+    color: rgba(255, 255, 255, 0.92);
+    background: transparent;
+    transform: scale(1.08);
   }
 
   .pin-btn-topbar:active {
     transform: scale(0.94);
-    background: rgba(255, 255, 255, 0.16);
+    background: transparent;
   }
 
   .pin-btn-topbar:focus-visible {
@@ -1668,12 +1664,13 @@
 
   .pin-btn-topbar.pinned {
     color: #fff;
-    background: rgba(255, 255, 255, 0.12);
+    background: transparent;
+    box-shadow: none;
   }
 
   .pin-btn-topbar.pinned:hover {
     color: #fff;
-    background: rgba(255, 255, 255, 0.18);
+    background: transparent;
   }
 
   .pin-btn-topbar :global(svg) {
@@ -1689,13 +1686,15 @@
     background: none;
     border: none;
     outline: none;
-    padding: 6px;
+    width: 28px;
+    height: 23px;
+    padding: 0;
     cursor: pointer;
     color: #dfdfdf;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
+    border-radius: 8px;
     transition:
       color 0.15s ease,
       transform 0.15s ease,
