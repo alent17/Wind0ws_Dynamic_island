@@ -38,6 +38,7 @@
   } from "$lib/captureMode";
   import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition } from "$lib/mediaClock";
   import { adjustCountdown, completeCountdown, createCountdownState, formatClock, getRemainingMs, pauseCountdown, resetCountdown, resumeCountdown, startCountdown, type CountdownState } from "$lib/countdown";
+  import { ISLAND_MOTION } from "$lib/islandMotion";
   import {
     getCurrentWindow,
     currentMonitor,
@@ -428,6 +429,7 @@
   let isHidden = $state(false);
   let manualHideActive = $state(false);
   let manualHideTimeout: ReturnType<typeof setTimeout> | null = null;
+  let manualHideSequence = 0;
 
   let showMonitorMenu = $state(false);
   let monitors: Array<{
@@ -869,15 +871,32 @@
     else if (!shouldHide && isHidden) void showWindow();
   }
 
-  function hideForTenSeconds() {
+  async function hideForTenSeconds() {
+    const sequence = ++manualHideSequence;
+    stopAutoClose();
+    if (manualHideTimeout !== null) {
+      clearTimeout(manualHideTimeout);
+      manualHideTimeout = null;
+    }
+
+    const wasExpanded = expanded;
+    // Force the compact state before moving the native window away. This keeps
+    // the hidden placement and the rendered island geometry in sync.
+    expanded = false;
+    hovering = false;
+
+    if (wasExpanded && appSettings.enableAnimations && !appSettings.reduceAnimations && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      await new Promise((resolve) => setTimeout(resolve, ISLAND_MOTION.collapseDuration + ISLAND_MOTION.outwardDelay));
+    }
+    if (sequence !== manualHideSequence) return;
+
     manualHideActive = true;
-    if (manualHideTimeout !== null) clearTimeout(manualHideTimeout);
+    syncCaptureVisibility();
     manualHideTimeout = setTimeout(() => {
       manualHideTimeout = null;
       manualHideActive = false;
       syncCaptureVisibility();
     }, 10_000);
-    syncCaptureVisibility();
   }
 
   function handleCaptureModeChange(snapshot: CaptureSnapshot) {
