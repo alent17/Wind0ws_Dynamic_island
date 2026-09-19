@@ -17,6 +17,10 @@ typography:
   body:
     fontFamily: "MiSans, Segoe UI, sans-serif"
     fontSize: "14px"
+  display:
+    fontFamily: "Fusion Pixel, MiSans, sans-serif"
+    fontSize: "35px"
+    fontWeight: 400
 rounded:
   island-compact: "14px"
   island-expanded: "45px"

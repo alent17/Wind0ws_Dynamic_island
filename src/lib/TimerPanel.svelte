@@ -20,7 +20,7 @@
   }>();
 
   const t = (key: TranslationKey, values: Record<string, string | number> = {}) => translate(key, values, $locale);
-  const minuteStepPx = 12;
+  const minuteStepPx = 10;
   const maxMinutes = 24 * 60;
   const active = $derived((status === "running" || status === "paused") && remainingMs > 0);
   let selectedMinutes = $state(20);
@@ -182,9 +182,9 @@
 
   .timer-ruler {
     position: relative;
-    flex: 0 0 50px;
-    height: 50px;
-    margin: 0 -10px;
+    flex: 0 0 44px;
+    height: 44px;
+    margin: 0 -6px;
     overflow: hidden;
     touch-action: none;
     user-select: none;
@@ -203,8 +203,8 @@
     display: flex;
     align-items: flex-start;
     width: max-content;
-    height: 47px;
-    transform: translateX(calc(122px - var(--active-index) * 12px));
+    height: 42px;
+    transform: translateX(calc(136px - var(--active-index) * 10px));
     transition: transform 260ms cubic-bezier(.22, 1, .36, 1);
   }
 
@@ -213,8 +213,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    width: 12px;
-    height: 45px;
+    width: 10px;
+    height: 41px;
     padding: 0;
     border: 0;
     color: transparent;
@@ -224,9 +224,9 @@
   }
 
   .ruler-track button:disabled { cursor: default; }
-  .tick-label { height: 17px; color: rgba(242, 139, 49, .74); font: 600 9px/1 var(--app-font, "Segoe UI", sans-serif); }
+  .tick-label { height: 15px; color: rgba(242, 139, 49, .74); font: 600 8px/1 var(--app-font, "Segoe UI", sans-serif); }
   .ruler-track button:not(.major) .tick-label { opacity: 0; }
-  .tick { display: block; width: 4px; height: 27px; border-radius: 999px; background: rgba(178, 89, 31, .34); transform:scaleY(.667); transform-origin:center bottom; transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease; }
+  .tick { display: block; width: 3px; height: 24px; border-radius: 999px; background: rgba(178, 89, 31, .34); transform:scaleY(.667); transform-origin:center bottom; transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease; }
   .ruler-track button.major .tick { transform:scaleY(.852); background: rgba(234, 119, 38, .72); }
   .ruler-track button.selected .tick { transform:scaleY(1); background: #ffbc55; box-shadow: 0 0 9px rgba(255, 154, 48, .86); }
   .ruler-track button.selected .tick-label { color: #ffd18a; }
@@ -237,9 +237,9 @@
     left: 50%;
     width: 0;
     height: 0;
-    border-right: 6px solid transparent;
-    border-bottom: 9px solid #f28b31;
-    border-left: 6px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 8px solid #f28b31;
+    border-left: 5px solid transparent;
     transform: translateX(-50%);
     filter: drop-shadow(0 0 5px rgba(242, 139, 49, .55));
   }
@@ -248,14 +248,14 @@
   .ruler-fade.left { left: 0; background: linear-gradient(90deg, rgba(0,0,0,.96), transparent); }
   .ruler-fade.right { right: 0; background: linear-gradient(270deg, rgba(0,0,0,.96), transparent); }
 
-  .timer-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; min-height: 0; margin-top: auto; }
+  .timer-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 0; margin-top: 5px; }
   .timer-actions { display: flex; align-items: center; gap: 5px; min-width: 0; }
   .timer-main-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 5px;
-    height: 32px;
+    height: 28px;
     border: 0;
     border-radius: 17px;
     color: #f5a052;
@@ -268,13 +268,13 @@
     transition: background 150ms ease, color 150ms ease, transform 150ms cubic-bezier(.23,1,.32,1);
   }
 
-  .timer-main-button { padding: 0 13px; }
+  .timer-main-button { padding: 0 10px; font-size: 10px; }
   .timer-main-button:hover { color: #ffd096; background: rgba(242, 139, 49, .22); }
   .timer-main-button:active { transform: scale(.95); }
 
-  .timer-readout { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
-  .timer-readout strong { color: #f28b31; font: 300 clamp(40px, 12vw, 54px)/.82 var(--app-font, "Segoe UI", sans-serif); letter-spacing: -.075em; white-space: nowrap; }
-  .timer-readout small { margin-top: 6px; color: rgba(242, 139, 49, .5); font: 600 9px/1 var(--app-font, "Segoe UI", sans-serif); letter-spacing: .06em; }
+  .timer-readout { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; line-height: 1; }
+  .timer-readout strong { color: #f28b31; font: 300 clamp(31px, 9vw, 42px)/.86 var(--app-font, "Segoe UI", sans-serif); letter-spacing: -.06em; white-space: nowrap; }
+  .timer-readout small { margin-top: 3px; color: rgba(242, 139, 49, .5); font: 600 8px/1 var(--app-font, "Segoe UI", sans-serif); letter-spacing: .04em; }
   .timer-reset { position: absolute; top: -3px; right: -4px; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; color: rgba(255,255,255,.45); background: transparent; cursor: pointer; }
   .timer-reset:hover { color: #fff; background: rgba(255,255,255,.1); }
 
