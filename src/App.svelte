@@ -11,6 +11,7 @@
   import { settingsApi } from "$lib/api/settings";
   import IslandSurface from "$lib/IslandSurface.svelte";
   import Spectrum from "$lib/Spectrum.svelte";
+  import { extractSpectrumColorsFromPixels } from "$lib/spectrumColors";
   import {
     CUSTOM_PANEL_WIDTH,
     clampExpandedRadius,
@@ -26,7 +27,7 @@
     type IslandRegionChange,
     type IslandStyle,
   } from "$lib/islandGeometry";
-  import type { AppSettings, IdleSnapshot, MediaState, MonitorInfo, SystemAudioState } from "$lib/api/types";
+  import type { AppSettings, AudioDeviceInfo, IdleSnapshot, MediaState, MonitorInfo, SystemAudioState } from "$lib/api/types";
   import { DEFAULT_SETTINGS } from "$lib/api/types";
   import type { IslandTool } from "$lib/featureRail";
   import { applyAppFont } from "$lib/font";
@@ -102,6 +103,16 @@
     capabilities: mediaCapabilities,
   });
   let displayedPosition = $derived(projectedPosition(islandMedia, clockNow));
+
+  function syncFloatingMediaClock() {
+    const syncedAt = Date.now();
+    const snapshot: MediaState = {
+      ...islandMedia,
+      positionMs: projectedPosition(islandMedia, syncedAt),
+      lastUpdatedTimestamp: syncedAt,
+    };
+    return emit(Events.ISLAND_MEDIA_SYNC, snapshot);
+  }
   function normalizedStyle(value: string): IslandStyle {
     return value === "edge" ? "edge" : "floating";
   }
@@ -255,6 +266,8 @@
   }
 
   let systemAudio = $state<SystemAudioState | null>(null);
+  let audioDevices = $state<AudioDeviceInfo[]>([]);
+  let audioDeviceSwitching = $state(false);
   let audioStateRequest: Promise<SystemAudioState | null> | null = null;
   let pendingVolume: number | null = null;
   let volumeWriteRequest: Promise<void> | null = null;
@@ -265,8 +278,15 @@
 
     const request = (async () => {
       try {
-        const nextState = await audioApi.getState();
+        const [nextState, nextDevices] = await Promise.all([
+          audioApi.getState(),
+          audioApi.listDevices().catch((error) => {
+            logger.warn("读取音频输出设备失败", error);
+            return [] as AudioDeviceInfo[];
+          }),
+        ]);
         systemAudio = nextState;
+        audioDevices = nextDevices;
         return nextState;
       } catch (error) {
         logger.warn("读取系统音量失败", error);
@@ -314,6 +334,25 @@
     });
 
     await volumeWriteRequest;
+  }
+
+  async function handleAudioDevice(deviceId: string) {
+    if (audioDeviceSwitching || !deviceId || deviceId === systemAudio?.deviceId) return;
+    audioDeviceSwitching = true;
+    try {
+      await audioApi.setDefaultDevice(deviceId);
+      const [nextState, nextDevices] = await Promise.all([
+        audioApi.getState(),
+        audioApi.listDevices(),
+      ]);
+      systemAudio = nextState;
+      audioDevices = nextDevices;
+    } catch (error) {
+      logger.error("切换音频输出设备失败", error);
+      await handleAudioOpen();
+    } finally {
+      audioDeviceSwitching = false;
+    }
   }
 
   onDestroy(() => {
@@ -672,7 +711,7 @@
       } else {
         await windowApi.openFloatingWindow();
         isFloatingWindowOpen = true;
-        void emit(Events.MEDIA_UPDATE, islandMedia);
+        void syncFloatingMediaClock();
       }
     } catch (error) {
       logger.error("切换悬浮窗失败:", error);
@@ -710,15 +749,6 @@
     } finally {
       if (settingsWindowRequest === request) settingsWindowRequest = null;
     }
-  }
-
-  // 颜色提取辅助函数
-  function parseColorKey(key: string): [number, number, number] {
-    return key.split(",").map(Number) as [number, number, number];
-  }
-
-  function calculateBrightness(r: number, g: number, b: number): number {
-    return (r + g + b) / 3;
   }
 
   function formatRgb(r: number, g: number, b: number): string {
@@ -764,58 +794,14 @@
       canvas.height = 24;
       ctx.drawImage(img, 0, 0, 24, 24);
 
-      const data = ctx.getImageData(0, 0, 24, 24).data;
-
-      const colorMap: Map<string, number> = new Map();
-
-      // 统计所有颜色的出现频率
-      for (let i = 0; i < data.length; i += 4) {
-        const r = Math.floor(data[i] / 16) * 16;
-        const g = Math.floor(data[i + 1] / 16) * 16;
-        const b = Math.floor(data[i + 2] / 16) * 16;
-        const a = data[i + 3];
-
-        // 跳过透明像素
-        if (a < 128) continue;
-
-        const key = `${r},${g},${b}`;
-        colorMap.set(key, (colorMap.get(key) || 0) + 1);
-      }
-
-      const sortedColors = [...colorMap.entries()].sort((a, b) => b[1] - a[1]);
-
-      if (sortedColors.length >= 2) {
-        const [bottomKey] = sortedColors[0];
-        const [rBottom, gBottom, bBottom] = parseColorKey(bottomKey);
-
-        const bottomBrightness = calculateBrightness(rBottom, gBottom, bBottom);
-        let topColor = sortedColors[1];
-        let maxContrast = 0;
-
-        for (let i = 1; i < sortedColors.length; i++) {
-          const [colorKey] = sortedColors[i];
-          const [r, g, b] = parseColorKey(colorKey);
-          const brightness = calculateBrightness(r, g, b);
-          const contrast = Math.abs(brightness - bottomBrightness);
-
-          if (contrast > maxContrast) {
-            maxContrast = contrast;
-            topColor = sortedColors[i];
-          }
-        }
-
-        const [topKey] = topColor;
-        const [rTop, gTop, bTop] = parseColorKey(topKey);
-
-        spectrumBottomColor = formatRgb(rBottom, gBottom, bBottom);
-        spectrumTopColor = formatRgb(rTop, gTop, bTop);
-      } else if (sortedColors.length === 1) {
-        const [mainKey] = sortedColors[0];
-        const [r, g, b] = parseColorKey(mainKey);
-        const color = formatRgb(r, g, b);
-        spectrumBottomColor = color;
-        spectrumTopColor = color;
-      }
+      const colors = extractSpectrumColorsFromPixels(
+        ctx.getImageData(0, 0, 24, 24).data,
+        24,
+        24,
+      );
+      if (!colors) return;
+      spectrumTopColor = formatRgb(...colors.top);
+      spectrumBottomColor = formatRgb(...colors.bottom);
     } catch (e) {
       console.warn("取色失败，将保留当前频谱颜色", e);
     }
@@ -846,6 +832,7 @@
     const next = clampSeekPosition(positionMs, durationMs);
     currentTimeMs = next;
     mediaSnapshotAt = Date.now();
+    void syncFloatingMediaClock();
     try {
       await mediaApi.seekMedia(next);
     } catch (error) {
@@ -1268,6 +1255,7 @@
                   if (songInfo && lastSongKey === requestedTrackKey) {
                     if (songInfo.duration && songInfo.duration > 0) {
                       durationMs = songInfo.duration;
+                      void syncFloatingMediaClock();
                       console.log(
                         "[网易云 API] ✓ 获取时长成功:",
                         songInfo.duration,
@@ -1390,6 +1378,8 @@
               .catch(() => undefined);
           }
         }
+
+        void syncFloatingMediaClock();
       });
       cleanups.push(unlistenMediaUpdate);
     })();
@@ -1519,8 +1509,11 @@
     onHoverChange={(value) => hovering = value}
     onRegionChange={applyIslandRegion}
     {systemAudio}
+    {audioDevices}
+    {audioDeviceSwitching}
     onAudioOpen={() => { void handleAudioOpen(); }}
     onAudioVolume={handleAudioVolume}
+    onAudioDevice={handleAudioDevice}
     timerStatus={countdown.status}
     {timerRemainingMs}
     {timerFinished}

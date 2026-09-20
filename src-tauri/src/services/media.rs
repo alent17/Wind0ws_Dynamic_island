@@ -218,46 +218,66 @@ async fn cover_from_netease(
     title: &str,
     artist: &str,
 ) -> AppResult<Option<ResolvedCover>> {
-    let query = format!("{artist} {title}");
-    let keyword = urlencoding::encode(&query);
-    let url = format!("https://music.163.com/api/search/get/?s={keyword}&type=1&limit=5");
-    let json: Value = client
-        .get(url)
-        .header(reqwest::header::REFERER, "https://music.163.com/")
-        .send()
-        .await
-        .map_err(|error| AppError::network(format!("Netease cover request failed: {error}")))?
-        .error_for_status()
-        .map_err(|error| AppError::network(format!("Netease cover status failed: {error}")))?
-        .json()
-        .await
-        .map_err(|error| AppError::parse(format!("Netease cover response failed: {error}")))?;
-    let candidates = json["result"]["songs"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|song| {
-            let title = song["name"].as_str()?.to_string();
-            let artist = song["artists"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|item| item["name"].as_str())
-                .collect::<Vec<_>>()
-                .join(" ");
-            let url = song["album"]["picUrl"]
-                .as_str()
-                .unwrap_or_default()
-                .to_string();
-            Some(CoverCandidate {
-                title,
-                artist,
-                url,
-                source_id: song["id"].as_u64(),
+    // The legacy search endpoint often ranks covers and similarly named songs
+    // above the original recording. Search more than the first five entries,
+    // and retry without the artist because the service tokenizes CJK queries
+    // inconsistently. The score threshold below still prevents loose matches.
+    let combined_query = format!("{title} {artist}");
+    let queries = if artist.trim().is_empty() {
+        vec![title.to_string()]
+    } else {
+        vec![combined_query, title.to_string()]
+    };
+    let mut candidate = None;
+    for query in queries {
+        let keyword = urlencoding::encode(query.trim());
+        let url =
+            format!("https://music.163.com/api/search/get/?s={keyword}&type=1&limit=30&offset=0");
+        let json: Value = client
+            .get(url)
+            .header(reqwest::header::REFERER, "https://music.163.com/")
+            .send()
+            .await
+            .map_err(|error| AppError::network(format!("Netease cover request failed: {error}")))?
+            .error_for_status()
+            .map_err(|error| AppError::network(format!("Netease cover status failed: {error}")))?
+            .json()
+            .await
+            .map_err(|error| AppError::parse(format!("Netease cover response failed: {error}")))?;
+        let candidates = json["result"]["songs"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|song| {
+                let candidate_title = song["name"].as_str()?.to_string();
+                // Both shapes exist in responses from NetEase's desktop and
+                // web endpoints: artists/album and ar/al.
+                let artists = song["artists"].as_array().or_else(|| song["ar"].as_array());
+                let candidate_artist = artists
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|item| item["name"].as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let album = song.get("album").or_else(|| song.get("al"));
+                let cover_url = album
+                    .and_then(|value| value["picUrl"].as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                Some(CoverCandidate {
+                    title: candidate_title,
+                    artist: candidate_artist,
+                    url: cover_url,
+                    source_id: song["id"].as_u64(),
+                })
             })
-        })
-        .collect();
-    let Some(candidate) = best_cover_candidate(title, artist, candidates) else {
+            .collect();
+        candidate = best_cover_candidate(title, artist, candidates);
+        if candidate.is_some() {
+            break;
+        }
+    }
+    let Some(candidate) = candidate else {
         return Ok(None);
     };
     let cover_url = if candidate.url.is_empty() {

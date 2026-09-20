@@ -6,6 +6,11 @@ type Hsl = {
   l: number;
 };
 
+export type SpectrumColorPair = {
+  top: Rgb;
+  bottom: Rgb;
+};
+
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
@@ -81,6 +86,81 @@ function toCss([r, g, b]: Rgb): string {
   return `rgb(${r},${g},${b})`;
 }
 
+function hueDistance(from: number, to: number): number {
+  return Math.abs(((to - from + 540) % 360) - 180) / 180;
+}
+
+/**
+ * Finds two representative artwork colors without letting black borders,
+ * white typography, or a tiny saturated detail take over the spectrum.
+ */
+export function extractSpectrumColorsFromPixels(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+): SpectrumColorPair | null {
+  const bins = new Map<string, { rgb: Rgb; weight: number }>();
+  const safeWidth = Math.max(1, width);
+  const safeHeight = Math.max(1, height);
+
+  for (let index = 0; index < pixels.length; index += 4) {
+    if (pixels[index + 3] < 128) continue;
+    const pixelIndex = index / 4;
+    const x = pixelIndex % safeWidth;
+    const y = Math.floor(pixelIndex / safeWidth);
+    const nx = (x + 0.5) / safeWidth - 0.5;
+    const ny = (y + 0.5) / safeHeight - 0.5;
+    const centerWeight = 1 + Math.max(0, 0.3 - Math.hypot(nx, ny) * 0.42);
+    const rgb: Rgb = [
+      Math.round(pixels[index] / 24) * 24,
+      Math.round(pixels[index + 1] / 24) * 24,
+      Math.round(pixels[index + 2] / 24) * 24,
+    ].map((channel) => clamp(channel, 0, 255)) as Rgb;
+    const key = rgb.join(",");
+    const existing = bins.get(key);
+    if (existing) existing.weight += centerWeight;
+    else bins.set(key, { rgb, weight: centerWeight });
+  }
+
+  const candidates = [...bins.values()];
+  if (!candidates.length) return null;
+
+  const scored = candidates.map((candidate) => {
+    const hsl = rgbToHsl(candidate.rgb);
+    const midtone = clamp(1 - Math.abs(hsl.l - 0.5) * 1.35, 0.22, 1);
+    return {
+      ...candidate,
+      hsl,
+      score: candidate.weight * (0.32 + hsl.s * 1.18) * midtone,
+    };
+  }).sort((a, b) => b.score - a.score);
+
+  const primary = scored[0];
+  let secondary = scored.slice(1).map((candidate) => {
+    const distance = hueDistance(primary.hsl.h, candidate.hsl.h) * 0.58
+      + Math.abs(primary.hsl.l - candidate.hsl.l) * 0.42;
+    return { candidate, score: candidate.score * (0.42 + distance) };
+  }).sort((a, b) => b.score - a.score)[0]?.candidate;
+
+  const separation = secondary
+    ? hueDistance(primary.hsl.h, secondary.hsl.h) * 0.55
+      + Math.abs(primary.hsl.l - secondary.hsl.l) * 0.45
+    : 0;
+  if (!secondary || separation < 0.1) {
+    const companionLightness = primary.hsl.l > 0.58
+      ? primary.hsl.l - 0.2
+      : primary.hsl.l + 0.2;
+    secondary = {
+      ...primary,
+      rgb: hslToRgb({ ...primary.hsl, l: clamp(companionLightness, 0.18, 0.82) }),
+    };
+  }
+
+  return primary.hsl.l >= secondary.hsl.l
+    ? { top: primary.rgb, bottom: secondary.rgb }
+    : { top: secondary.rgb, bottom: primary.rgb };
+}
+
 function relativeLuminance([r, g, b]: Rgb): number {
   const toLinear = (channel: number) => {
     const normalized = channel / 255;
@@ -136,18 +216,21 @@ export function createSpectrumPalette(
   const hue = top.s >= bottom.s ? top.h : bottom.h;
   const topHue = top.s >= 0.08 ? top.h : hue;
   const bottomHue = bottom.s >= 0.08 ? bottom.h : hue;
-  const minimumSaturation = hasColor ? Math.max(top.s, bottom.s, 0.52) : 0;
+  const minimumSaturation = hasColor ? Math.max(Math.min(top.s, bottom.s), 0.16) : 0;
   const lightMin = Math.min(top.l, bottom.l);
   const lightMax = Math.max(top.l, bottom.l);
-  const gapBoost = lightnessGap < 0.24 ? 0.14 : 0;
-  const readableBottom = clamp(lightMin - gapBoost * 0.55, hasColor ? 0.34 : 0.48, 0.68);
-  const readableTop = clamp(lightMax + gapBoost, hasColor ? 0.58 : 0.58, 0.94);
+  const gapBoost = lightnessGap < 0.18 ? 0.1 : 0;
+  const readableBottom = clamp(lightMin - gapBoost * 0.35, hasColor ? 0.3 : 0.48, 0.72);
+  const readableTop = clamp(lightMax + gapBoost, hasColor ? 0.48 : 0.58, 0.9);
 
   return Array.from({ length: Math.max(1, count) }, (_, index) => {
     const amount = count <= 1 ? 1 : index / (count - 1);
+    const interpolatedSaturation = bottom.s + (top.s - bottom.s) * amount;
     return toCss(ensureReadableColor({
       h: hasColor ? interpolateHue(bottomHue, topHue, amount) : 0,
-      s: hasColor ? clamp(bottom.s + (top.s - bottom.s) * amount, minimumSaturation, 0.92) : 0,
+      // A very small chroma lift keeps adjacent two-pixel bars distinct after
+      // dark colors are raised to the same readable luminance.
+      s: hasColor ? clamp(interpolatedSaturation + amount * 0.08, minimumSaturation, 0.92) : 0,
       l: readableBottom + (readableTop - readableBottom) * amount,
     }));
   });

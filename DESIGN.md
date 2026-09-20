@@ -19,8 +19,18 @@ typography:
     fontSize: "14px"
   display:
     fontFamily: "Fusion Pixel, MiSans, sans-serif"
-    fontSize: "35px"
+    fontSize: "42px"
     fontWeight: 400
+  micro:
+    fontSize: "9px"
+  label:
+    fontSize: "10px"
+  caption:
+    fontSize: "11px"
+  data:
+    fontSize: "12px"
+  compact-title:
+    fontSize: "13px"
 rounded:
   island-compact: "14px"
   island-expanded: "45px"

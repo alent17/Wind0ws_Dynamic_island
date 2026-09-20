@@ -32,6 +32,12 @@
     height: number;
   }
 
+  type ResizeDirection =
+    | "NorthWest"
+    | "NorthEast"
+    | "SouthWest"
+    | "SouthEast";
+
   type RGB = { r: number; g: number; b: number };
   type HSL = { h: number; s: number; l: number };
 
@@ -116,6 +122,8 @@
   let enablePixelArt = $state(false); // 像素化封面
 
   let unlisten: () => void;
+  let unlistenIslandMediaSync: () => void;
+  let lastIslandMediaSyncAt = 0;
   let unlistenResize: () => void;
   let savePositionTimeout: ReturnType<typeof setTimeout> | null = null;
   let coverRequestId = 0;
@@ -635,7 +643,16 @@
     (window as any).__unlistenMoved = unlistenMoved;
 
     // 监听媒体更新事件（已内置节流）
-    const handleMediaUpdate = (payload: any) => {
+    const handleMediaUpdate = (payload: any, authoritative = false) => {
+      const receivedAt = Date.now();
+      if (authoritative) {
+        lastIslandMediaSyncAt = receivedAt;
+      } else if (receivedAt - lastIslandMediaSyncAt < 2_500) {
+        // The main island already normalized this system snapshot. Keep its
+        // timeline authoritative instead of independently correcting it again.
+        return;
+      }
+
       const newTrackKey = mediaTrackKey(payload.title || "", payload.artist || mediaState.artist);
 
       // 检查是否是空状态（播放器关闭或无媒体）
@@ -678,7 +695,10 @@
           ...mediaState,
           ...payload,
           albumArt: smtcCover,
-          lastUpdatedTimestamp: Date.now(),
+          lastUpdatedTimestamp:
+            authoritative && Number(payload.lastUpdatedTimestamp) > 0
+              ? Number(payload.lastUpdatedTimestamp)
+              : receivedAt,
         };
 
         // Stop the previous MV and show the new SMTC cover immediately. The
@@ -703,22 +723,27 @@
         if (isMVPlaybackEnabled) requestMVForCurrentTrack(newTrackKey, payload.title, payload.artist);
       } else {
         // 播放状态变化
-        const receivedAt = Date.now();
         const previousPosition = projectedPosition(mediaState, receivedAt);
         const wasPlaying = mediaState.isPlaying;
         const isPlaying = Boolean(payload.isPlaying);
+        const reportedDuration = Number(payload.durationMs) || mediaState.durationMs;
 
         mediaState = {
           ...mediaState,
           isPlaying,
-          positionMs: reconcileReportedPosition(
-            previousPosition,
-            Number(payload.positionMs) || 0,
-            Number(payload.durationMs) || mediaState.durationMs,
-            isPlaying,
-          ),
-          durationMs: Number(payload.durationMs) || mediaState.durationMs,
-          lastUpdatedTimestamp: receivedAt,
+          positionMs: authoritative
+            ? Math.max(0, Number(payload.positionMs) || 0)
+            : reconcileReportedPosition(
+                previousPosition,
+                Number(payload.positionMs) || 0,
+                reportedDuration,
+                isPlaying,
+              ),
+          durationMs: reportedDuration,
+          lastUpdatedTimestamp:
+            authoritative && Number(payload.lastUpdatedTimestamp) > 0
+              ? Number(payload.lastUpdatedTimestamp)
+              : receivedAt,
           capabilities: payload.capabilities,
         };
 
@@ -742,6 +767,10 @@
         }
       }
     };
+    unlistenIslandMediaSync = await eventManager.on(
+      Events.ISLAND_MEDIA_SYNC,
+      (payload) => handleMediaUpdate(payload, true),
+    );
     unlisten = await onMediaUpdate(handleMediaUpdate);
     try {
       handleMediaUpdate(await mediaApi.getMediaInfo());
@@ -762,6 +791,7 @@
 
   onDestroy(() => {
     if (unlisten) unlisten();
+    if (unlistenIslandMediaSync) unlistenIslandMediaSync();
     if (unlistenResize) unlistenResize();
     if ((window as any).__unlistenMoved) {
       (window as any).__unlistenMoved();
@@ -1282,6 +1312,19 @@
     }
     getCurrentWindow().startDragging();
   }
+
+  function handleCornerResize(
+    e: MouseEvent,
+    direction: ResizeDirection,
+  ) {
+    if (isFloatingWindowLocked || e.button !== 0) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    void getCurrentWindow().startResizeDragging(direction).catch((error) => {
+      console.error("[悬浮窗] 启动对角缩放失败:", error);
+    });
+  }
 </script>
 
 <div
@@ -1298,6 +1341,29 @@
   style={`--floating-background:${effectiveBackground}`}
 >
   <div class="bg-solid"></div>
+
+  {#if !isFloatingWindowLocked}
+    <div
+      class="corner-resize corner-resize-nw"
+      onmousedown={(e) => handleCornerResize(e, "NorthWest")}
+      aria-hidden="true"
+    ></div>
+    <div
+      class="corner-resize corner-resize-ne"
+      onmousedown={(e) => handleCornerResize(e, "NorthEast")}
+      aria-hidden="true"
+    ></div>
+    <div
+      class="corner-resize corner-resize-sw"
+      onmousedown={(e) => handleCornerResize(e, "SouthWest")}
+      aria-hidden="true"
+    ></div>
+    <div
+      class="corner-resize corner-resize-se"
+      onmousedown={(e) => handleCornerResize(e, "SouthEast")}
+      aria-hidden="true"
+    ></div>
+  {/if}
 
   {#if isCompactCover && isHovered}
     <div class="compact-controls">
@@ -1445,8 +1511,6 @@
     <div class="track-artist" title={mediaState.artist}>
       {mediaState.artist}
     </div>
-    <!-- 右下角拖拽识别 -->
-    <div class="resize-handle"></div>
   </div>
 
   <div class="progress-layer">
@@ -2122,41 +2186,37 @@
     flex-shrink: 0;
   }
 
-  /* 右下角拖拽识别 */
-  .resize-handle {
+  /* 无边框透明窗口的系统边缘可直接缩放；四角需要显式启动对角缩放。 */
+  .corner-resize {
     position: absolute;
-    right: 2px;
-    bottom: -2px;
-    width: 12px;
-    height: 12px;
-    cursor: se-resize;
+    z-index: 400;
+    width: 14px;
+    height: 14px;
     pointer-events: auto;
   }
 
-  .resize-handle::before {
-    content: "";
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    width: 6px;
-    height: 1px;
-    background: rgba(255, 255, 255, 0.35);
-    transform: rotate(-45deg);
-    transform-origin: right bottom;
+  .corner-resize-nw {
+    top: 0;
+    left: 0;
+    cursor: nwse-resize;
   }
 
-  .resize-handle::after {
-    content: "";
-    position: absolute;
+  .corner-resize-ne {
+    top: 0;
+    right: 0;
+    cursor: nesw-resize;
+  }
+
+  .corner-resize-sw {
+    bottom: 0;
+    left: 0;
+    cursor: nesw-resize;
+  }
+
+  .corner-resize-se {
     right: 0;
     bottom: 0;
-    width: 12px;
-    height: 1px;
-    background: rgba(255, 255, 255, 0.35);
-    transform: rotate(-45deg);
-    transform-origin: right bottom;
-    margin-right: 0px;
-    margin-bottom: 4px;
+    cursor: nwse-resize;
   }
 
   .ctrl-btn {

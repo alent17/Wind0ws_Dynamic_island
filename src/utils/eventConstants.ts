@@ -2,6 +2,7 @@
 export const Events = {
   // 媒体相关
   MEDIA_UPDATE: "media-update",
+  ISLAND_MEDIA_SYNC: "island-media-sync",
   AUDIO_SPECTRUM: "audio-spectrum",
   CAPTURE_MODE_CHANGED: "capture-mode-changed",
   TIMER_STATE_CHANGED: "timer-state-changed",

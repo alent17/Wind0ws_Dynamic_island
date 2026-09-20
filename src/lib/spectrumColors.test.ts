@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createSpectrumPalette, parseSpectrumColor } from "./spectrumColors";
+import {
+  createSpectrumPalette,
+  extractSpectrumColorsFromPixels,
+  parseSpectrumColor,
+} from "./spectrumColors";
 
 describe("spectrum colors", () => {
   it("keeps zero-valued RGB channels instead of turning them white", () => {
@@ -26,5 +30,23 @@ describe("spectrum colors", () => {
     };
 
     expect(Math.min(...palette.map(luminance))).toBeGreaterThanOrEqual(0.22);
+  });
+
+  it("prefers the artwork palette over black borders and white lettering", () => {
+    const pixels = new Uint8ClampedArray(10 * 10 * 4);
+    for (let pixel = 0; pixel < 100; pixel += 1) {
+      const offset = pixel * 4;
+      const x = pixel % 10;
+      const edge = x === 0 || x === 9;
+      const lettering = pixel === 44 || pixel === 45 || pixel === 54 || pixel === 55;
+      const color = edge ? [0, 0, 0] : lettering ? [255, 255, 255]
+        : pixel % 3 === 0 ? [210, 52, 82] : [126, 24, 58];
+      pixels.set([...color, 255], offset);
+    }
+
+    const colors = extractSpectrumColorsFromPixels(pixels, 10, 10);
+    expect(colors).not.toBeNull();
+    expect(colors!.top[0]).toBeGreaterThan(colors!.top[1] * 2);
+    expect(colors!.bottom[0]).toBeGreaterThan(colors!.bottom[2] * 1.5);
   });
 });
