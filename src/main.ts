@@ -4,6 +4,9 @@ import App from './App.svelte';
 import FloatingWindow from './FloatingWindow.svelte';
 import TimerWindow from './TimerWindow.svelte';
 
+// Keep browser-only actions out of the desktop application UI.
+document.addEventListener('contextmenu', (event) => event.preventDefault());
+
 // 获取目标挂载点
 const targetElement = document.getElementById('app');
 

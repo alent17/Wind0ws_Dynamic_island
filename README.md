@@ -1,139 +1,84 @@
+<div align="center">
+
+<img src="src-tauri/icons/128x128.png" width="96" alt="Isle icon">
+
 # Isle
 
-Isle 是一个面向 Windows 10/11 的桌面灵动岛与悬浮音乐播放器。它通过 Windows 系统媒体会话读取当前曲目、播放状态和时间线，并使用 Tauri 2、Svelte 5 与 Rust 提供轻量、常驻且可定制的播放界面。
+**让 Windows 的媒体状态，以一座灵动岛自然浮现。**
 
-> 当前项目处于早期开发阶段。不同播放器对 Windows SMTC 的支持程度不同，曲目信息、进度和可用控制可能存在差异。
+[简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
 
-## 功能
+[![Version](https://img.shields.io/badge/version-1.0.0-111111?style=flat-square)](https://github.com/alent17/Wind0ws_Dynamic_island/releases/tag/v1.0.0)
+[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?style=flat-square&logo=windows)](https://github.com/alent17/Wind0ws_Dynamic_island/releases/latest)
+[![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat-square&logo=tauri&logoColor=111111)](https://tauri.app/)
+[![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 
-- 系统媒体会话：自动读取支持 SMTC 的播放器，并提供播放、暂停、上一首、下一首和可用的进度跳转。
-- 灵动岛形态：支持收起、悬停、展开和自动隐藏状态；收起长度可在 80–300 px 之间调整。
-- 屏幕贴边：支持上、右、下、左四个方向以及沿边位置调整；贴边展开保持与屏幕边缘连接。
-- 空闲内容：没有媒体会话时，收起态显示居中时钟，展开态可轮播日期、天气、网络、CPU、内存、电池和自定义文本。
-- 天气城市：通过 Open-Meteo 搜索城市并保存精确经纬度，可区分同名地点，不申请 Windows 定位权限。
-- 音频频谱：提供系统音频实时 FFT 与平滑随机动画两种模式；暂停后频谱自然回落。
-- 高清封面：根据播放器来源优先尝试网易云或 Apple iTunes Search，并在匹配置信度不足时保留系统原始封面。
-- 悬浮播放器：独立、可调整大小的封面播放器，与主岛共享媒体时间线和进度跳转逻辑。
-- Isle Studio：集中设置布局、边缘、字体、播放器优先级、频谱、空闲内容、显示器和应用行为。
-- Capture Mode：可分别配置截图、录屏、全屏游戏和屏幕共享场景；截图/全屏触发临时收起，Windows 捕获保护会把窗口从录制或共享画面中排除。
-- 音量与输出设备：展开灵动岛后可直接调节 Windows 主音量，并在可用扬声器、耳机等播放设备间切换。
-- 系统集成：支持多显示器、始终置顶、开机启动和系统托盘。
+[下载 v1.0.0](https://github.com/alent17/Wind0ws_Dynamic_island/releases/tag/v1.0.0) · [安装指南](INSTALL.md) · [报告问题](https://github.com/alent17/Wind0ws_Dynamic_island/issues)
 
-## 近期改进
+</div>
 
-- 统一主岛与悬浮窗的媒体时钟，过滤暂停时 SMTC 偶发上报的零进度，并保持暂停前的有效位置。
-- 进度条支持拖动即时预览，释放后只提交一次跳转；不可跳转的会话仅显示进度。
-- 修复四向贴边展开缝隙，贴边交互不再使用会拉开屏幕边缘的缩放反馈。
-- 改进中文城市搜索、行政区消歧和经纬度缓存隔离。
-- 将高清封面解析集中到 Rust 后端，加入来源优先级、候选匹配、请求超时、换歌防串图、限流和 24 小时缓存。
-- 新增实时与随机频谱模式，并调整实时 FFT 的噪声底、响应速度和平滑效果。
+---
 
-## 技术栈
+Isle 是面向 Windows 10/11 的桌面灵动岛与悬浮音乐播放器。它通过 Windows 系统媒体会话读取曲目、播放状态和时间线，以轻量、常驻、可定制的界面连接你的音乐与桌面。
 
-- Tauri 2
-- Svelte 5（Runes）
-- TypeScript、Vite、Tailwind CSS
-- Rust、Windows API / SMTC
-- CPAL、RustFFT
-- Vitest
+![Isle Studio 与展开状态的灵动岛](docs/screenshots/isle-studio.png)
 
-## 环境要求
+## 亮点
 
-- Windows 10 或 Windows 11
-- Node.js 18 或更高版本
-- Rust stable 工具链
-- Visual Studio 2022 Build Tools，安装“使用 C++ 的桌面开发”工作负载
-- Microsoft Edge WebView2 Runtime
+- **系统媒体控制**：自动连接支持 SMTC 的播放器，支持播放、暂停、上一首、下一首与进度跳转。
+- **灵动岛交互**：收起、悬停、展开与自动隐藏；支持四向贴边、位置与尺寸调整。
+- **实时音频频谱**：系统音频 FFT 或平滑随机动画，暂停时自然回落。
+- **高清封面与悬浮播放器**：智能补全清晰封面，独立播放器与主岛共享播放状态。
+- **空闲信息面板**：日期、天气、网速、CPU、内存、电池和自定义文字轮播。
+- **快捷工具**：系统音量、输出设备切换、倒计时、临时隐藏与设置入口。
+- **捕获隐私**：针对截图、录屏、全屏游戏和屏幕共享分别配置隐藏行为。
+- **三语界面**：简体中文、English、日本語，可跟随系统或手动切换。
+- **Windows 集成**：多显示器、始终置顶、开机启动与系统托盘。
 
-## 本地开发
+## 界面预览
 
-安装依赖：
+| 悬浮播放器 | 紧凑尺寸 |
+|:--:|:--:|
+| ![悬浮播放器](docs/screenshots/floating-player.png) | ![紧凑悬浮播放器](docs/screenshots/floating-player-compact.png) |
+
+## 安装
+
+1. 从 [GitHub Releases](https://github.com/alent17/Wind0ws_Dynamic_island/releases/latest) 下载 `Isle_1.0.0_x64-setup.exe`。
+2. 运行安装程序；Windows 首次运行时可能显示 SmartScreen 提示。
+3. 播放任意支持 Windows 系统媒体控制的音乐，然后从系统托盘打开 Isle Studio 完成个性化设置。
+
+系统要求：Windows 10/11 x64 与 Microsoft Edge WebView2 Runtime。完整升级与故障排查见 [INSTALL.md](INSTALL.md)。
+
+## 使用
+
+点击灵动岛展开或收起；展开后可控制媒体和拖动进度。右键系统托盘图标可打开 Isle Studio、悬浮播放器或完全退出。关闭应用窗口后程序可能仍驻留托盘。
+
+不同播放器公开给 Windows SMTC 的能力不完全一致；直播流或部分浏览器可能不提供准确时长和进度跳转。
+
+## 开发与构建
+
+需要 Node.js 18+、Rust stable、Visual Studio 2022 Build Tools（“使用 C++ 的桌面开发”）。
 
 ```powershell
 npm install
-```
-
-启动完整桌面应用：
-
-```powershell
-npm run tauri dev
-```
-
-只启动前端预览：
-
-```powershell
-npm run dev
-```
-
-运行检查：
-
-```powershell
 npm run check
 npm test -- --run
 cargo test --manifest-path src-tauri/Cargo.toml
-```
-
-构建生产安装包：
-
-```powershell
 npm run bundle:windows
 ```
 
-构建结果位于 `src-tauri/target/release/bundle/nsis/`。安装完成后，可在 Isle Studio 的“应用行为”中开启“开机启动”。
+技术栈：Tauri 2、Svelte 5、TypeScript、Vite、Rust、Windows API / SMTC、CPAL、RustFFT、Vitest。安装包输出到 `src-tauri/target/release/bundle/nsis/`。
 
-完整安装、升级和故障排查请参阅 [INSTALL.md](INSTALL.md)。
+## 隐私与网络
 
-## 使用方式
-
-1. 启动任意支持 Windows 系统媒体控制的播放器并播放媒体。
-2. 点击灵动岛可展开或收起；展开后可使用媒体控制与进度条。
-3. 从系统托盘打开 Isle Studio，选择播放器、显示器、岛体形态、贴边方向和其他偏好。
-4. 如需悬浮播放器，可在 Studio 中打开，并通过窗口边缘调整尺寸。
-5. 倒计时窗口会在应用启动时预加载；点击计时器后直接显示，不会在点击瞬间创建窗口。
-6. 应用窗口关闭后仍可能驻留系统托盘；需要完全退出或加载新后端版本时，请从托盘菜单退出。
-
-## 项目结构
-
-```text
-.
-├─ src/
-│  ├─ App.svelte                 # 主灵动岛窗口
-│  ├─ FloatingWindow.svelte      # 独立悬浮播放器
-│  ├─ Studio.svelte              # 设置与交互预览
-│  ├─ lib/IslandSurface.svelte   # 主岛共享表面组件
-│  └─ lib/                       # 媒体时钟、频谱、API 与几何逻辑
-├─ src-tauri/
-│  └─ src/
-│     ├─ commands/               # Tauri 命令
-│     ├─ services/               # 媒体、天气、封面与缓存服务
-│     └─ models/                 # 前后端共享数据模型
-├─ DESIGN.md
-├─ INSTALL.md
-├─ PRODUCT.md
-└─ README.md
-```
-
-## 网络服务与隐私
-
-核心媒体控制在本机完成。启用相关功能时，应用可能访问：
-
-- Open-Meteo：城市搜索与天气数据。
-- Apple iTunes Search API：无需用户令牌的歌曲封面搜索。
-- 网易云音乐现有免鉴权搜索端点：歌曲信息与封面补全。该端点不是本项目验证的官方开放 API，可能随时不可用。
-
-天气设置只保存用户主动选择的地点名称及经纬度，不请求 Windows 定位权限。第三方服务失败时，媒体界面会尽量保留 Windows SMTC 提供的原始数据。
-
-## 已知限制
-
-- 媒体能力取决于播放器公开给 Windows SMTC 的信息。
-- 某些浏览器、直播流或播放器不会提供可跳转进度或准确时长。
-- 实时频谱依赖可用的 Windows 音频设备与驱动。
-- 高清封面依赖第三方搜索结果，匹配失败时会回退到系统封面。
+媒体控制在本机完成。天气功能使用 Open-Meteo；高清封面可能访问 Apple iTunes Search API 与网易云音乐现有免鉴权端点。Isle 不申请 Windows 定位权限，只保存你主动选择的地点及经纬度。第三方服务不可用时会尽量回退到系统媒体数据。
 
 ## 贡献
 
-欢迎提交 Issue 或 Pull Request。提交前请至少运行前端检查、前端测试和 Rust 测试，并避免提交本地缓存、构建产物或个人配置。
+欢迎提交 Issue 与 Pull Request。提交前请运行前端检查、前端测试和 Rust 测试，并不要提交缓存、构建产物或个人配置。
 
-## License
+**贡献者**：[@alent17](https://github.com/alent17) · [ChatGPT](https://chatgpt.com/)
 
-项目包元数据声明为 MIT。正式分发前建议在仓库根目录补充独立的 `LICENSE` 文件。
+## 许可证
+
+本项目使用 [MIT License](LICENSE)。
