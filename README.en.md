@@ -24,15 +24,25 @@ Isle is a Dynamic Island-inspired desktop media controller and floating player f
 - Compact, hover, expanded, and auto-hidden island states
 - Floating or four-edge attached layouts with multi-monitor support
 - Live system-audio FFT spectrum or smooth generated animation
-- High-resolution artwork matching and a resizable floating player
+- High-resolution artwork matching and a resizable floating player synchronized with the island
 - Weather, date, network, CPU, memory, battery, and custom idle content
 - System volume, output-device selection, timer, tray, and startup integration
 - Capture privacy options for screenshots, recording, games, and screen sharing
 - Simplified Chinese, English, and Japanese UI
 
-| Floating player | Compact size |
+## Floating player
+
+The floating player is an independent, immersive media view that can be opened from Isle Studio or the island's shortcut controls.
+
+- Drag it anywhere and resize it freely; compact and large layouts adapt automatically.
+- Track, play state, timeline, play/pause, previous, and next controls stay synchronized with the island.
+- Prefer high-resolution artwork, or silently loop a matched 30-second video preview when the MV option is enabled.
+- Generate a background gradient from the artwork's representative color or use a fixed custom color.
+- Supports always-on-top, close, position reset, and capture protection for screenshots, recording, and screen sharing.
+
+| Floating player | Media view |
 |:--:|:--:|
-| ![Floating player](docs/screenshots/floating-player.png) | ![Compact floating player](docs/screenshots/floating-player-compact.png) |
+| ![Floating player](docs/screenshots/floating-player.png) | ![Floating player media view](docs/screenshots/floating-player-compact.png) |
 
 ## Install
 
