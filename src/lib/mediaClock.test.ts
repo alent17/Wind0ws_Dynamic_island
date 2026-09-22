@@ -45,24 +45,18 @@ describe("shared media clock", () => {
     expect(shouldShowIdleClock(true)).toBe(false);
   });
 
-  it("keeps the last valid position when the same track reports zero on pause", () => {
-    expect(reconcileReportedPosition(42_500, 0, 180_000, false)).toBe(42_500);
-    expect(reconcileReportedPosition(42_500, 500, 180_000, false)).toBe(42_500);
-    expect(reconcileReportedPosition(42_500, 12_000, 180_000, false)).toBe(42_500);
+  it("projects across repeated snapshots instead of resetting every poll", () => {
+    expect(reconcileReportedPosition(43_500, 42_000, 180_000, true, false, 42_000)).toBe(43_500);
+    expect(reconcileReportedPosition(44_500, 42_000, 180_000, true, false, 42_000)).toBe(44_500);
   });
 
-  it("keeps the last valid position when playing media briefly reports zero", () => {
-    expect(reconcileReportedPosition(42_500, 0, 180_000, true)).toBe(42_500);
-    expect(reconcileReportedPosition(42_500, 500, 180_000, true)).toBe(42_500);
+  it("accepts backwards seeks while paused and a restart at zero", () => {
+    expect(reconcileReportedPosition(42_500, 12_000, 180_000, false, false, 42_000)).toBe(12_000);
+    expect(reconcileReportedPosition(42_500, 0, 180_000, true, false, 42_000)).toBe(0);
   });
 
-  it("allows a playing clock to accumulate from zero reports", () => {
-    expect(reconcileReportedPosition(1_000, 0, 180_000, true)).toBe(1_000);
-  });
-
-  it("accepts zero for a newly selected track", () => {
-    expect(reconcileReportedPosition(42_500, 0, 180_000, false, true)).toBe(0);
-    expect(reconcileReportedPosition(42_500, 0, 180_000, true, true)).toBe(0);
-    expect(reconcileReportedPosition(42_500, 12_000, 180_000, true, true)).toBe(12_000);
+  it("freezes repeated paused reports and resets for a different track", () => {
+    expect(reconcileReportedPosition(42_500, 42_000, 180_000, false, false, 42_000)).toBe(42_500);
+    expect(reconcileReportedPosition(42_500, 0, 180_000, false, true, 0)).toBe(0);
   });
 });

@@ -31,6 +31,7 @@
   let canvasEl: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
   let animId = 0;
+  let lastFrameTime = 0;
   let mounted = $state(false);
   let latestBars = new Float32Array(NUM_BARS);
   let randomBars = new Float32Array(NUM_BARS);
@@ -71,14 +72,17 @@
     });
   }
 
-  function draw() {
+  function draw(frameMs = 1000 / 60) {
     if (!ctx) return;
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
     for (let index = 0; index < NUM_BARS; index += 1) {
       const sourceBars = mode === "random" ? randomBars : latestBars;
       const target = !playing ? 0 : reduceMotion ? 0.18 : values?.[index] ?? sourceBars[index] ?? 0;
       if (values) visibleBars[index] = target;
-      else visibleBars[index] += (target - visibleBars[index]) * (target > visibleBars[index] ? 0.34 : 0.12);
+      else {
+        const decay = target > visibleBars[index] ? 0.66 : 0.88;
+        visibleBars[index] += (target - visibleBars[index]) * (1 - Math.pow(decay, frameMs / (1000 / 60)));
+      }
       const value = visibleBars[index];
       const height = MIN_HEIGHT + value * (maxHeight - MIN_HEIGHT);
       const x = index * (barWidth + barGap);
@@ -92,9 +96,10 @@
     ctx.globalAlpha = 1;
   }
 
-  function render() {
+  function render(timestamp: number) {
     if (!mounted || !active) { animId = 0; return; }
-    draw();
+    draw(lastFrameTime ? Math.min(50, timestamp - lastFrameTime) : 1000 / 60);
+    lastFrameTime = timestamp;
     if (values) { animId = 0; return; }
     if (!playing && visibleBars.every((value) => value < 0.01)) {
       visibleBars.fill(0);
@@ -112,7 +117,7 @@
       return;
     }
     if (shouldAnimateSpectrum(active, mounted, playing, false, visibleBars.some((value) => value >= 0.01)) && !animId) animId = requestAnimationFrame(render);
-    if (!active && animId) { cancelAnimationFrame(animId); animId = 0; }
+    if (!active && animId) { cancelAnimationFrame(animId); animId = 0; lastFrameTime = 0; }
   }
 
   $effect(() => { active; values; mode; playing; reduceMotion; ensureRenderLoop(); });

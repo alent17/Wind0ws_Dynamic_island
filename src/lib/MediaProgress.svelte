@@ -27,10 +27,12 @@
     dragging = false;
     void onSeek?.(next);
   }
+
+  function cancel() { dragging = false; }
 </script>
 
 <div class:light class="progress-block" aria-label={translate("playbackProgress",{percent:Math.round(ratio*100)},$locale)}>
-  <div class="track"><span style={`transform:scaleX(${ratio})`}></span>{#if seekable && duration > 0}<input type="range" min="0" max={duration} value={displayedPosition} aria-label={translate("seekProgress",{},$locale)} onclick={(event)=>event.stopPropagation()} oninput={preview} onchange={commit}/>{/if}</div>
+  <div class="track"><span style={`transform:scaleX(${ratio})`}></span>{#if seekable && duration > 0}<input type="range" min="0" max={duration} step="1000" value={displayedPosition} aria-label={translate("seekProgress",{},$locale)} onclick={(event)=>event.stopPropagation()} onpointerdown={(event)=>event.stopPropagation()} onpointercancel={cancel} onblur={cancel} oninput={preview} onchange={commit}/>{/if}</div>
   {#if showTimes}
     <div class="times"><span>{formatTime(displayedPosition)}</span><span>-{formatTime(Math.max(0, duration - displayedPosition))}</span></div>
   {/if}

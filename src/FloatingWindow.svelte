@@ -62,6 +62,8 @@
   });
 
   let currentTrackKey = "";
+  let lastReportedPosition: number | undefined;
+  let pendingSeekUntil = 0;
   let displayCover = $state("");
   let previousCover = $state("");
   let isHovered = $state(false);
@@ -653,7 +655,7 @@
         return;
       }
 
-      const newTrackKey = mediaTrackKey(payload.title || "", payload.artist || mediaState.artist);
+      const newTrackKey = `${payload.source || ""}|${mediaTrackKey(payload.title || "", payload.artist || "")}`;
 
       // 检查是否是空状态（播放器关闭或无媒体）
       const isEmptyState =
@@ -664,9 +666,11 @@
       if (isEmptyState) {
         // Metadata can be empty for one polling cycle while SMTC refreshes.
         // Keep the current track instead of resetting its progress to zero.
-        if (currentTrackKey) return;
+        if (currentTrackKey && payload.source) return;
         // 播放器退出，重置为等待状态
         currentTrackKey = "";
+        lastReportedPosition = undefined;
+        pendingSeekUntil = 0;
         mvRequestId += 1;
         coverRequestId += 1;
         durationRequestId += 1;
@@ -685,6 +689,8 @@
         isPlayingMV = false;
         mvUrl = "";
       } else if (newTrackKey !== currentTrackKey) {
+        lastReportedPosition = Number(payload.positionMs) || 0;
+        pendingSeekUntil = 0;
         currentTrackKey = newTrackKey;
 
         // 使用 SMTC 提供的图片作为基础
@@ -731,13 +737,15 @@
         mediaState = {
           ...mediaState,
           isPlaying,
-          positionMs: authoritative
+          positionMs: receivedAt < pendingSeekUntil ? previousPosition : authoritative
             ? Math.max(0, Number(payload.positionMs) || 0)
             : reconcileReportedPosition(
                 previousPosition,
                 Number(payload.positionMs) || 0,
                 reportedDuration,
                 isPlaying,
+                false,
+                lastReportedPosition,
               ),
           durationMs: reportedDuration,
           lastUpdatedTimestamp:
@@ -746,6 +754,7 @@
               : receivedAt,
           capabilities: payload.capabilities,
         };
+        lastReportedPosition = Number(payload.positionMs) || 0;
 
         // 根据播放状态控制 MV
         if (isPlayingMV && mvUrl) {
@@ -1270,9 +1279,17 @@
 
   async function seekTo(positionMs: number) {
     const next = clampSeekPosition(positionMs, mediaState.durationMs);
+    const previous = projectedPosition(mediaState);
+    const seekTrack = currentTrackKey;
+    pendingSeekUntil = Date.now() + 2000;
     mediaState.positionMs = next;
     mediaState.lastUpdatedTimestamp = Date.now();
     await mediaApi.seekMedia(next).catch((error) => {
+      if (seekTrack === currentTrackKey) {
+        pendingSeekUntil = 0;
+        mediaState.positionMs = previous;
+        mediaState.lastUpdatedTimestamp = Date.now();
+      }
       console.error("[进度] 调整失败:", error);
     });
   }

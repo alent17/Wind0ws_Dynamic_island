@@ -12,6 +12,8 @@ let generation = 0;
 let unlisten: UnlistenFn | undefined;
 let captureCommands: Promise<unknown> = Promise.resolve();
 let stopTimer: ReturnType<typeof setTimeout> | undefined;
+let watchdog: ReturnType<typeof setInterval> | undefined;
+let lastFrameAt = 0;
 
 // The compact and expanded surfaces can swap visibility during the same
 // transition. Keep the native capture alive for a short grace period so a
@@ -27,6 +29,7 @@ function queueCaptureCommand(command: "start_spectrum" | "stop_spectrum") {
 
 async function connect(currentGeneration: number) {
   const dispose = await listen<number[]>("spectrum-data", ({ payload }) => {
+    lastFrameAt = Date.now();
     values.set(Float32Array.from({ length: NUM_BARS }, (_, index) => payload[index] ?? 0));
   });
 
@@ -36,13 +39,21 @@ async function connect(currentGeneration: number) {
   }
 
   unlisten = dispose;
+  lastFrameAt = Date.now();
+  if (watchdog) clearInterval(watchdog);
+  watchdog = setInterval(() => {
+    if (currentGeneration !== generation || consumers === 0) return;
+    if (Date.now() - lastFrameAt > 2500) {
+      values.set(new Float32Array(NUM_BARS));
+      lastFrameAt = Date.now();
+      // A device removal can end the native stream while the UI stays mounted.
+      void queueCaptureCommand("start_spectrum").catch(() => {});
+    }
+  }, 1000);
   try {
     await queueCaptureCommand("start_spectrum");
   } catch (error) {
-    if (currentGeneration === generation) {
-      unlisten?.();
-      unlisten = undefined;
-    }
+    // Keep the listener: the watchdog retries after a device becomes available.
     console.warn("[Spectrum] 启动失败", error);
   }
 }
@@ -68,6 +79,8 @@ export function retainSpectrum(): () => void {
     if (consumers !== 0) return;
 
     generation += 1;
+    if (watchdog) clearInterval(watchdog);
+    watchdog = undefined;
     unlisten?.();
     unlisten = undefined;
     values.set(new Float32Array(NUM_BARS));

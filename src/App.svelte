@@ -73,6 +73,8 @@
   let artistName = $state<string>("");
   let isPlaying = $state<boolean>(false);
   let lastSongKey: string | null = null;
+  let lastReportedPosition: number | undefined;
+  let pendingSeekUntil = 0;
   let spectrumTopColor = $state<string>("#ffffff");
   let spectrumBottomColor = $state<string>("#888888");
 
@@ -91,8 +93,8 @@
 
   let islandMode = $derived<IslandMode>(expanded ? "expanded" : hovering ? "hover" : "compact");
   let islandMedia = $derived<MediaState>({
-    title: trackTitle,
-    artist: artistName,
+    title: hasMediaSession ? trackTitle : "",
+    artist: hasMediaSession ? artistName : "",
     albumArt: artworkUrl,
     isPlaying,
     positionMs: currentTimeMs,
@@ -830,12 +832,21 @@
 
   async function handleSeek(positionMs: number) {
     const next = clampSeekPosition(positionMs, durationMs);
+    const previous = projectedPosition(islandMedia);
+    const seekTrack = lastSongKey;
+    pendingSeekUntil = Date.now() + 2000;
     currentTimeMs = next;
     mediaSnapshotAt = Date.now();
     void syncFloatingMediaClock();
     try {
       await mediaApi.seekMedia(next);
     } catch (error) {
+      if (seekTrack === lastSongKey) {
+        pendingSeekUntil = 0;
+        currentTimeMs = previous;
+        mediaSnapshotAt = Date.now();
+        void syncFloatingMediaClock();
+      }
       console.error("调整播放进度失败:", error);
     }
   }
@@ -1198,11 +1209,30 @@
 
       const unlistenMediaUpdate = await onMediaUpdate((data: any) => {
         const receivedAt = Date.now();
+        // A removed session is an authoritative idle transition, not a metadata gap.
+        if (!data.source) {
+          hasMediaSession = false;
+          isPlaying = false;
+          currentSource = "";
+          lastSongKey = null;
+          lastReportedPosition = undefined;
+          pendingSeekUntil = 0;
+          trackTitle = "";
+          artistName = "";
+          artworkUrl = "";
+          rawCoverUrl = "";
+          currentTimeMs = 0;
+          durationMs = 0;
+          mediaSnapshotAt = receivedAt;
+          mediaCapabilities = data.capabilities;
+          void syncFloatingMediaClock();
+          return;
+        }
         // SMTC can briefly return an empty metadata snapshot while the same
         // session is refreshing. Do not turn that transient gap into a new
         // zero-position track.
         if (
-          lastSongKey &&
+          data.source && lastSongKey &&
           (!data.title || data.title === "等待播放...") &&
           trackTitle &&
           trackTitle !== "未知曲目"
@@ -1212,27 +1242,31 @@
         const previousPosition = projectedPosition(islandMedia, receivedAt);
         const nextPlaying = Boolean(data.isPlaying);
         hasMediaSession = Boolean(data.source);
-        if (data.source) currentSource = data.source;
+        currentSource = data.source || "";
         mediaCapabilities = data.capabilities;
 
-        const currentSongKey = mediaTrackKey(data.title || "", data.artist || artistName);
+        const currentSongKey = `${data.source || ""}|${mediaTrackKey(data.title || "", data.artist || "")}`;
         const songChanged = lastSongKey !== currentSongKey;
 
         const incomingDuration = Number(data.durationMs) || 0;
         const reportedDuration = songChanged
           ? incomingDuration
           : incomingDuration || durationMs;
-        currentTimeMs = reconcileReportedPosition(
+        currentTimeMs = !songChanged && receivedAt < pendingSeekUntil ? previousPosition : reconcileReportedPosition(
           previousPosition,
           Number(data.positionMs) || 0,
           reportedDuration,
           nextPlaying,
           songChanged,
+          lastReportedPosition,
         );
+        lastReportedPosition = Number(data.positionMs) || 0;
+        durationMs = reportedDuration;
         mediaSnapshotAt = receivedAt;
         isPlaying = nextPlaying;
 
         if (songChanged) {
+          pendingSeekUntil = 0;
           console.log("[歌曲变更] 检测到新歌:", data.title, "-", data.artist);
           lastSongKey = currentSongKey;
 

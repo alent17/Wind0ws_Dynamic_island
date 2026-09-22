@@ -28,7 +28,7 @@ let poll: ReturnType<typeof setInterval> | undefined;
 async function refresh() {
   try {
     const next = await mediaApi.getMediaInfo();
-    if (next.title || next.artist) media.set(next);
+    media.set(next);
   } catch {
     // Browser Studio deliberately keeps deterministic preview data.
   }

@@ -44,7 +44,7 @@ struct TimelineSnapshot {
 fn stabilize_timeline(
     previous: Option<TimelineSnapshot>,
     reported: TimelineSnapshot,
-    is_playing: bool,
+    _is_playing: bool,
 ) -> TimelineSnapshot {
     let Some(previous) = previous else {
         return reported;
@@ -54,28 +54,13 @@ fn stabilize_timeline(
     } else {
         previous.duration_ms
     };
-    let previous_position = if effective_duration > 0 {
-        previous.position_ms.min(effective_duration)
-    } else {
-        previous.position_ms
-    };
     let reported_position = if effective_duration > 0 {
         reported.position_ms.min(effective_duration)
     } else {
         reported.position_ms
     };
     TimelineSnapshot {
-        position_ms: if !is_playing {
-            previous_position
-        } else if reported_position < 1_000 && previous_position > 0 {
-            // Some SMTC providers briefly publish a zero timeline while they
-            // refresh an actively playing session. Keep the last valid value;
-            // the frontend clock will continue advancing from it until a
-            // usable snapshot arrives.
-            previous_position
-        } else {
-            reported_position
-        },
+        position_ms: reported_position,
         // A missing duration is transient for several desktop players and
         // must never replace a known duration, regardless of playback state.
         duration_ms: effective_duration,
@@ -723,8 +708,8 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
     let is_playing = playback_status.0 == 4; // Playing = 4
 
     // 计算实际播放位置（考虑时间差）
-    let dur_ms = (timeline.EndTime().unwrap_or_default().Duration / 10000) as u64;
-    let snapshot_pos_ms = (timeline.Position().unwrap_or_default().Duration / 10000) as u64;
+    let dur_ms = (timeline.EndTime().unwrap_or_default().Duration / 10000).max(0) as u64;
+    let snapshot_pos_ms = (timeline.Position().unwrap_or_default().Duration / 10000).max(0) as u64;
     // Position 已经是 SMTC 的当前快照。LastUpdatedTime 在部分播放器中是
     // 曲目创建时间或旧时间戳，用它再次外推会直接把进度推到 100%。
     // 前端收到快照后会从接收时刻继续本地计时，因此这里不再重复外推。
@@ -935,13 +920,16 @@ pub fn control_media(app: &AppHandle, action: &str) -> AppResult<()> {
 }
 
 pub fn seek_media(app: &AppHandle, position_ms: u64) -> AppResult<()> {
-    if let Some((session, _, _)) = selected_session(app)? {
-        session
-            .TryChangePlaybackPositionAsync(
-                (position_ms.saturating_mul(10_000)).min(i64::MAX as u64) as i64,
-            )
-            .and_then(|op| op.get())
-            .map_err(|e| AppError::media(format!("Seek failed: {:?}", e)))?;
+    let (session, _, _) =
+        selected_session(app)?.ok_or_else(|| AppError::media("No active media session"))?;
+    let accepted = session
+        .TryChangePlaybackPositionAsync(
+            (position_ms.saturating_mul(10_000)).min(i64::MAX as u64) as i64
+        )
+        .and_then(|op| op.get())
+        .map_err(|e| AppError::media(format!("Seek failed: {:?}", e)))?;
+    if !accepted {
+        return Err(AppError::media("Player rejected the seek request"));
     }
     Ok(())
 }
@@ -1024,19 +1012,31 @@ mod cover_tests {
     }
 
     #[test]
-    fn keeps_last_timeline_when_smtc_snapshot_resets_to_zero() {
+    fn accepts_paused_seeks_and_restart_at_zero() {
         let previous = TimelineSnapshot {
             position_ms: 42_500,
             duration_ms: 180_000,
         };
         let reset = TimelineSnapshot::default();
-        assert_eq!(stabilize_timeline(Some(previous), reset, false), previous);
-        assert_eq!(stabilize_timeline(Some(previous), reset, true), previous);
+        assert_eq!(
+            stabilize_timeline(Some(previous), reset, false),
+            TimelineSnapshot {
+                position_ms: 0,
+                ..previous
+            }
+        );
+        assert_eq!(
+            stabilize_timeline(Some(previous), reset, true),
+            TimelineSnapshot {
+                position_ms: 0,
+                ..previous
+            }
+        );
         let stale = TimelineSnapshot {
             position_ms: 12_000,
             duration_ms: 180_000,
         };
-        assert_eq!(stabilize_timeline(Some(previous), stale, false), previous);
+        assert_eq!(stabilize_timeline(Some(previous), stale, false), stale);
         assert_eq!(stabilize_timeline(Some(previous), stale, true), stale);
     }
 

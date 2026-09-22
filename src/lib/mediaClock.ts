@@ -35,16 +35,15 @@ export function reconcileReportedPosition(
   durationMs: number,
   isPlaying: boolean,
   trackChanged = false,
+  previousReportedPositionMs?: number,
 ): number {
   const previous = Math.max(0, Number.isFinite(previousPositionMs) ? previousPositionMs : 0);
   const reported = Math.max(0, Number.isFinite(reportedPositionMs) ? reportedPositionMs : 0);
   const clamp = (value: number) => durationMs > 0 ? Math.min(durationMs, value) : value;
-  // Pausing freezes the local projected clock. SMTC providers often publish
-  // 0 or a stale earlier position with the pause event; only a confirmed
-  // track change may replace the position while playback is paused.
-  if (!trackChanged && !isPlaying) return clamp(previous);
-  // Also ignore a transient zero while the same track is still playing.
-  if (!trackChanged && isPlaying && reported < 1_000 && previous > 0) return clamp(previous);
+  // A provider can publish the same snapshot for many seconds. Re-anchoring
+  // every poll freezes the projected clock. A changed report, including zero
+  // or a paused seek, is authoritative.
+  if (!trackChanged && reported === previousReportedPositionMs) return clamp(previous);
   return clamp(reported);
 }
 

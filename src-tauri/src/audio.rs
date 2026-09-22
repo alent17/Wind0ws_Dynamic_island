@@ -27,7 +27,7 @@ const BAND_GAINS: [f32; NUM_BARS] = [1.15, 1.65, 2.2, 3.4, 5.4, 8.0];
 const SMOOTH_ATTACK: f32 = 0.38;
 const SMOOTH_RELEASE: f32 = 0.82;
 
-const MIN_DB: f32 = -78.0;
+const MIN_DB: f32 = -65.0;
 const MAX_DB: f32 = -12.0;
 
 pub struct SpectrumCapture {
@@ -54,7 +54,7 @@ impl SpectrumCapture {
         let token = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
         let running = self.running.clone();
         let generation = self.generation.clone();
-        let published_bars = Arc::new(Mutex::new([0.0f32; NUM_BARS]));
+        let published_bars = Arc::new(Mutex::new(([0.0f32; NUM_BARS], std::time::Instant::now())));
 
         let publisher_running = running.clone();
         let publisher_generation = generation.clone();
@@ -65,7 +65,14 @@ impl SpectrumCapture {
                 && publisher_generation.load(Ordering::Acquire) == token
             {
                 if let Ok(values) = publisher_bars.lock() {
-                    let _ = publisher_app.emit("spectrum-data", values.to_vec());
+                    let _ = publisher_app.emit(
+                        "spectrum-data",
+                        if values.1.elapsed().as_millis() > 200 {
+                            vec![0.0; NUM_BARS]
+                        } else {
+                            values.0.to_vec()
+                        },
+                    );
                 }
                 std::thread::sleep(std::time::Duration::from_millis(50));
             }
@@ -78,7 +85,9 @@ impl SpectrumCapture {
                 Some(d) => d,
                 None => {
                     eprintln!("[Spectrum] 无法获取音频输出设备");
-                    running.store(false, Ordering::Release);
+                    if generation.load(Ordering::Acquire) == token {
+                        running.store(false, Ordering::Release);
+                    }
                     return;
                 }
             };
@@ -87,7 +96,9 @@ impl SpectrumCapture {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!("[Spectrum] 获取音频配置失败: {e}");
-                    running.store(false, Ordering::Release);
+                    if generation.load(Ordering::Acquire) == token {
+                        running.store(false, Ordering::Release);
+                    }
                     return;
                 }
             };
@@ -148,9 +159,7 @@ impl SpectrumCapture {
                             let freq_bins = FFT_SIZE / 2;
                             for (index, complex) in fft_buf[..freq_bins].iter().enumerate() {
                                 let mag = complex.norm() / FFT_SIZE as f32;
-                                let db = 20.0 * mag.max(1e-10_f32).log10();
-                                magnitudes[index] =
-                                    ((db - MIN_DB) / (MAX_DB - MIN_DB)).clamp(0.0, 1.0);
+                                magnitudes[index] = mag;
                             }
 
                             for (index, &(freq_lo, freq_hi)) in FREQ_BANDS.iter().enumerate() {
@@ -166,7 +175,7 @@ impl SpectrumCapture {
                                     .sum::<f32>()
                                     / n)
                                     .sqrt();
-                                new_bars[index] = (rms * BAND_GAINS[index]).min(1.0).sqrt();
+                                new_bars[index] = band_level(rms, BAND_GAINS[index]);
                             }
 
                             for i in 0..NUM_BARS {
@@ -180,7 +189,7 @@ impl SpectrumCapture {
                             }
 
                             if let Ok(mut values) = callback_bars.try_lock() {
-                                *values = smoothed;
+                                *values = (smoothed, std::time::Instant::now());
                             }
                         }
                     },
@@ -198,14 +207,18 @@ impl SpectrumCapture {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!("[Spectrum] {e}");
-                    running.store(false, Ordering::Release);
+                    if generation.load(Ordering::Acquire) == token {
+                        running.store(false, Ordering::Release);
+                    }
                     return;
                 }
             };
 
             if let Err(e) = stream.play() {
                 eprintln!("[Spectrum] 启动音频流失败: {e}");
-                running.store(false, Ordering::Release);
+                if generation.load(Ordering::Acquire) == token {
+                    running.store(false, Ordering::Release);
+                }
                 return;
             }
 
@@ -231,5 +244,24 @@ impl SpectrumCapture {
 impl Default for SpectrumCapture {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// Apply gain in the linear amplitude domain before converting to dB.
+// Multiplying an already normalized dB value saturated the treble bars.
+fn band_level(rms: f32, gain: f32) -> f32 {
+    let db = 20.0 * (rms * gain).max(1e-10).log10();
+    ((db - MIN_DB) / (MAX_DB - MIN_DB)).clamp(0.0, 1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::band_level;
+    #[test]
+    fn silence_and_quiet_treble_do_not_pin_the_bars() {
+        assert_eq!(band_level(0.0, 8.0), 0.0);
+        let quiet = band_level(0.001, 8.0);
+        let loud = band_level(0.01, 8.0);
+        assert!(quiet > 0.0 && quiet < loud && loud < 1.0);
     }
 }

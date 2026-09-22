@@ -5,6 +5,9 @@ colors:
   island-black: "#000000"
   island-white: "#ffffff"
   island-secondary: "rgba(255,255,255,.8)"
+  clock-orange: "#f28b31"
+  clock-minute: "#f7bd76"
+  clock-caption: "#c9c1b8"
   studio-ink: "#111113"
   studio-surface: "#f5f5f7"
   studio-hairline: "#e5e5e8"
@@ -18,9 +21,13 @@ typography:
     fontFamily: "MiSans, Segoe UI, sans-serif"
     fontSize: "14px"
   display:
-    fontFamily: "Fusion Pixel, MiSans, sans-serif"
-    fontSize: "42px"
-    fontWeight: 400
+    fontFamily: "Alibaba PuHuiTi Heavy, MiSans, sans-serif"
+    fontSize: "52px"
+    fontWeight: 900
+  clock-compact:
+    fontFamily: "Alibaba PuHuiTi Heavy, MiSans, sans-serif"
+    fontSize: "33px"
+    fontWeight: 900
   micro:
     fontSize: "9px"
   label:
@@ -88,3 +95,7 @@ The current white Isle Studio is authoritative and stays visually independent fr
 ## Compatibility
 
 The persisted settings object contains both Studio-visible preferences and the legacy player fields. Missing fields are populated from defaults during deserialization, so reduced settings files from the interim architecture remain readable. Both the current preference commands and legacy settings commands address the same stored object.
+
+## Comic Clock
+
+The function-area clock uses the bundled Alibaba PuHuiTi Heavy face, tilted tabular numbers, warm orange offset ink, and a white date strip. Use the smaller 33 px variant beside the weather forecast; keep surrounding player controls unchanged.
