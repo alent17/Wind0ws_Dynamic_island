@@ -898,6 +898,7 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
     .decorations(false)
     .transparent(true)
     .shadow(false)
+    .skip_taskbar(true)
     .always_on_top(always_on_top);
 
     if let (Some(x), Some(y), Some(w), Some(h)) = saved_position {
