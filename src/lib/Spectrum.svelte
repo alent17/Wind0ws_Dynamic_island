@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { retainSpectrum, spectrumValues } from "$lib/spectrumStore";
   import { shouldAnimateSpectrum } from "$lib/spectrumRender";
-  import { createSpectrumPalette, parseSpectrumColor } from "$lib/spectrumColors";
+  import { createSpectrumPalette } from "$lib/spectrumColors";
   import type { SpectrumMode } from "$lib/api/types";
   import { locale, translate } from "$lib/i18n";
 
@@ -36,11 +36,11 @@
   let latestBars = new Float32Array(NUM_BARS);
   let randomBars = new Float32Array(NUM_BARS);
   let visibleBars = new Float32Array(NUM_BARS);
-  let barGradients: Array<CanvasGradient | string> = ["#ffffff"];
+  let barColors: string[] = ["#ffffff", "#ffffff"];
 
   const barWidth = $derived(2 * scale);
   const barGap = $derived(1.5 * (1 + (scale - 1) * 0.4));
-  const maxHeight = $derived(14 * scale);
+  const maxHeight = $derived(16 * scale);
   const cornerRadius = $derived(scale);
   const canvasHeight = $derived(18 * scale);
   const canvasWidth = $derived(NUM_BARS * (barWidth + barGap) - barGap);
@@ -53,23 +53,13 @@
     canvasEl.style.width = `${canvasWidth}px`;
     canvasEl.style.height = `${canvasHeight}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    rebuildGradient();
+    rebuildPalette();
   }
 
-  function rebuildGradient() {
+  function rebuildPalette() {
     if (!ctx) return;
-    const canvasContext = ctx;
-    const palette = createSpectrumPalette(topColor, bottomColor, NUM_BARS);
-    barGradients = palette.map((color) => {
-      const [r, g, b] = parseSpectrumColor(color);
-      const gradient = canvasContext.createLinearGradient(0, canvasHeight, 0, 0);
-      // Keep the lower edge opaque too: darkening it made low bars merge with
-      // the island when the extracted album color was already muted.
-      gradient.addColorStop(0, `rgb(${r},${g},${b})`);
-      gradient.addColorStop(0.55, `rgb(${r},${g},${b})`);
-      gradient.addColorStop(1, `rgb(${Math.min(255, Math.round(r * 1.12))},${Math.min(255, Math.round(g * 1.12))},${Math.min(255, Math.round(b * 1.12))})`);
-      return gradient;
-    });
+    // Use only two solid colors, each shared by one half of the six bars.
+    barColors = createSpectrumPalette(topColor, bottomColor, 2);
   }
 
   function draw(frameMs = 1000 / 60) {
@@ -77,10 +67,18 @@
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
     for (let index = 0; index < NUM_BARS; index += 1) {
       const sourceBars = mode === "random" ? randomBars : latestBars;
-      const target = !playing ? 0 : reduceMotion ? 0.18 : values?.[index] ?? sourceBars[index] ?? 0;
+      const rawTarget = !playing ? 0 : reduceMotion ? 0.18 : values?.[index] ?? sourceBars[index] ?? 0;
+      // Give quiet live bands a little more presence without flattening louder peaks.
+      const target = rawTarget > 0.02 && !values && mode === "realtime"
+        ? Math.min(1, 0.025 + rawTarget * 1.12)
+        : rawTarget;
       if (values) visibleBars[index] = target;
       else {
-        const decay = target > visibleBars[index] ? 0.66 : 0.88;
+        // Faster attack catches transients; the slightly longer release keeps the bars buoyant.
+        // Small per-band differences stop all six columns from moving as one block.
+        const attacking = target > visibleBars[index];
+        const baseDecay = attacking ? 0.5 : 0.82;
+        const decay = Math.min(0.95, Math.max(0.35, baseDecay + (index % 3 - 1) * 0.035));
         visibleBars[index] += (target - visibleBars[index]) * (1 - Math.pow(decay, frameMs / (1000 / 60)));
       }
       const value = visibleBars[index];
@@ -88,7 +86,7 @@
       const x = index * (barWidth + barGap);
       const y = (canvasHeight - height) / 2;
       ctx.globalAlpha = 0.9 + value * 0.1;
-      ctx.fillStyle = barGradients[index] ?? "#ffffff";
+      ctx.fillStyle = barColors[index < NUM_BARS / 2 ? 0 : 1] ?? "#ffffff";
       ctx.beginPath();
       ctx.roundRect(x, y, barWidth, height, cornerRadius);
       ctx.fill();
@@ -122,7 +120,7 @@
 
   $effect(() => { active; values; mode; playing; reduceMotion; ensureRenderLoop(); });
   $effect(() => { scale; resizeCanvas(); });
-  $effect(() => { topColor; bottomColor; rebuildGradient(); if (values && mounted && active) draw(); });
+  $effect(() => { topColor; bottomColor; rebuildPalette(); if (values && mounted && active) draw(); });
 
   $effect(() => {
     if (!mounted || !active || !playing || values || mode !== "realtime" || reduceMotion) return;
@@ -146,14 +144,17 @@
       };
     }
     const retarget = () => {
+      const now = Date.now();
       randomBars = Float32Array.from({ length: NUM_BARS }, (_, index) => {
         if (!playing) return 0;
-        const wave = (Math.sin(Date.now() / 230 + index * 1.35) + 1) * 0.16;
-        return Math.min(1, 0.16 + wave + Math.random() * 0.48);
+        const beat = Math.max(0, Math.sin(now / 175 + index * 0.78));
+        const ripple = (Math.sin(now / 255 + index * 1.6) + 1) * 0.5;
+        const accent = Math.random() < 0.12 ? Math.random() * 0.2 : 0;
+        return Math.min(1, 0.1 + beat * 0.34 + ripple * 0.16 + Math.random() * 0.32 + accent);
       });
     };
     retarget();
-    const timer = setInterval(retarget, 170);
+    const timer = setInterval(retarget, 125);
     return () => {
       clearInterval(timer);
       randomBars = new Float32Array(NUM_BARS);

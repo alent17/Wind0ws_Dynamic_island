@@ -11,7 +11,7 @@
   import { settingsApi } from "$lib/api/settings";
   import IslandSurface from "$lib/IslandSurface.svelte";
   import Spectrum from "$lib/Spectrum.svelte";
-  import { extractSpectrumColorsFromPixels } from "$lib/spectrumColors";
+  import { extractSpectrumColorsFromImage } from "$lib/spectrumColors";
   import {
     CUSTOM_PANEL_WIDTH,
     clampExpandedRadius,
@@ -89,8 +89,6 @@
   let currentSource = $state<string>("generic");
   let hasMediaSession = $state(false);
   let mediaCapabilities = $state<MediaState["capabilities"]>();
-  let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
-
   let islandMode = $derived<IslandMode>(expanded ? "expanded" : hovering ? "hover" : "compact");
   let islandMedia = $derived<MediaState>({
     title: hasMediaSession ? trackTitle : "",
@@ -134,7 +132,8 @@
       spectrumMode: value.spectrumMode === "random" ? "random" : "realtime",
       captureHideOnFullscreen: value.captureHideOnFullscreen ?? legacyAutoHide ?? true,
       islandEdgePosition: Math.min(100, Math.max(0, Number.isFinite(position) ? position : 50)),
-      edgeShoulderRadius: clampShoulderRadius(value.edgeShoulderRadius ?? 8),
+      collapsedEdgeShoulderRadius: Math.min(16, clampShoulderRadius(value.collapsedEdgeShoulderRadius ?? (value as Partial<AppSettings> & { edgeShoulderRadius?: number }).edgeShoulderRadius ?? 8)),
+      expandedEdgeShoulderRadius: clampShoulderRadius(value.expandedEdgeShoulderRadius ?? 32),
       expandedCornerRadius: clampExpandedRadius(value.expandedCornerRadius ?? 45),
       compactLength: Math.min(300, Math.max(80, Number(value.compactLength ?? 80))),
       idleRotationSeconds: Math.min(60, Math.max(2, Number(value.idleRotationSeconds ?? 5))),
@@ -192,6 +191,9 @@
   }
 
   onMount(() => {
+    lastPlayedMedia = loadRememberedTrack();
+    const persistOnPageHide = () => rememberCurrentTrack(true);
+    window.addEventListener("pagehide", persistOnPageHide);
     updateTimeDisplay();
     document.addEventListener("visibilitychange", handleVisibilityChange);
     const intervalMs = () => !pageVisible ? 2_000 : expanded && isPlaying ? 250 : 1_000;
@@ -213,6 +215,7 @@
 
     return () => {
       clearInterval(checkInterval);
+      window.removeEventListener("pagehide", persistOnPageHide);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   });
@@ -225,6 +228,115 @@
     apple: "AppleMusic",
     generic: "",
   };
+
+  const LAST_PLAYED_MEDIA_KEY = "isle:last-played-media:v1";
+  type RememberedTrack = {
+    title: string;
+    artist: string;
+    albumArt: string;
+    source: string;
+    sourceDisplay: string;
+    positionMs: number;
+    durationMs: number;
+  };
+  let lastPlayedMedia = $state<RememberedTrack | null>(null);
+  let resumingLastTrack = $state(false);
+  let lastPersistedTrackSignature = "";
+  let lastPersistedMediaAt = 0;
+
+  function loadRememberedTrack(): RememberedTrack | null {
+    try {
+      const value = JSON.parse(window.localStorage.getItem(LAST_PLAYED_MEDIA_KEY) || "null");
+      if (
+        !value || typeof value.title !== "string" || !value.title ||
+        typeof value.artist !== "string" || typeof value.source !== "string"
+      ) return null;
+      return {
+        title: value.title,
+        artist: value.artist,
+        albumArt: typeof value.albumArt === "string" ? value.albumArt : "",
+        source: value.source,
+        sourceDisplay: typeof value.sourceDisplay === "string" ? value.sourceDisplay : "",
+        positionMs: Math.max(0, Number(value.positionMs) || 0),
+        durationMs: Math.max(0, Number(value.durationMs) || 0),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function rememberCurrentTrack(force = false) {
+    if (!hasMediaSession || !currentSource || !trackTitle || trackTitle === "未知曲目") return;
+
+    const now = Date.now();
+    const signature = `${currentSource}|${mediaTrackKey(trackTitle, artistName)}|${isPlaying}`;
+    const savedTrack: RememberedTrack = {
+      title: trackTitle,
+      artist: artistName,
+      albumArt: artworkUrl.startsWith("data:image/") && artworkUrl.length <= 900_000
+        ? artworkUrl
+        : artworkUrl.startsWith("https://") ? artworkUrl : "",
+      source: currentSource,
+      sourceDisplay: playerNames[currentSource as keyof typeof playerNames] || "多媒体",
+      positionMs: projectedPosition(islandMedia, now),
+      durationMs,
+    };
+    lastPlayedMedia = savedTrack;
+
+    // Media snapshots arrive frequently. Keep the in-memory position current,
+    // but only write to local storage on track/state changes or every 10 sec.
+    if (!force && signature === lastPersistedTrackSignature && now - lastPersistedMediaAt < 10_000) return;
+    try {
+      window.localStorage.setItem(LAST_PLAYED_MEDIA_KEY, JSON.stringify(savedTrack));
+      lastPersistedTrackSignature = signature;
+      lastPersistedMediaAt = now;
+    } catch {
+      // Remembering a track is best effort if local storage is unavailable/full.
+    }
+  }
+
+  function sameRememberedTrack(media: MediaState, saved: RememberedTrack) {
+    const savedArtist = saved.artist === "未知艺术家" ? "" : saved.artist;
+    const artistMatches = !savedArtist || !media.artist ||
+      mediaTrackKey(media.artist, "") === mediaTrackKey(savedArtist, "");
+    return media.source === saved.source && artistMatches &&
+      mediaTrackKey(media.title || "", "") === mediaTrackKey(saved.title, "");
+  }
+
+  async function resumeLastTrack() {
+    const saved = lastPlayedMedia;
+    const appName = saved ? playerApps[saved.source] : "";
+    if (!saved || !appName || resumingLastTrack) return;
+
+    resumingLastTrack = true;
+    try {
+      await windowApi.openApplication(appName);
+
+      const activateIfReady = async (current: MediaState) => {
+        if (!sameRememberedTrack(current, saved)) return false;
+        if (!current.isPlaying) await mediaApi.controlMedia("play_pause");
+        return true;
+      };
+
+      // The app may still have a paused session even though no update has
+      // reached the island yet.
+      const current = await mediaApi.getMediaInfo().catch(() => null);
+      if (current && await activateIfReady(current)) return;
+
+      const deadline = Date.now() + 12_000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        const sessions = await mediaApi.listMediaSessions().catch(() => []);
+        if (!sessions.some((session) => session.source === saved.source)) continue;
+        const reopened = await mediaApi.getMediaInfo().catch(() => null);
+        if (reopened && await activateIfReady(reopened)) return;
+      }
+    } catch (error) {
+      console.error("恢复上次播放失败:", error);
+    } finally {
+      resumingLastTrack = false;
+    }
+  }
 
   async function openCurrentPlayer() {
     try {
@@ -404,11 +516,12 @@
   $effect(() => {
     if (countdown.status !== "running" || timerRemainingMs > 0) return;
     timerFinished = true;
+    expanded = true;
     if (timerFinishedTimeout !== null) clearTimeout(timerFinishedTimeout);
     timerFinishedTimeout = setTimeout(() => {
       timerFinished = false;
       timerFinishedTimeout = null;
-    }, 2_800);
+    }, 10_000);
     countdown = completeCountdown(countdown, clockNow);
   });
 
@@ -462,7 +575,12 @@
   let placementTransitionRevision = 0;
   let suppressPlacementEffect = false;
   let panelInteracting = $state(false);
-  let currentHost = $derived(hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength, customPanelExtraWidth));
+  let currentHost = $derived(hostFor(
+    renderedIslandStyle,
+    renderedIslandEdge,
+    appSettings.compactLength,
+    customPanelExtraWidth,
+  ));
 
   let captureSnapshot = $state<CaptureSnapshot>({ ...EMPTY_CAPTURE_SNAPSHOT });
   let isFullscreenApp = $derived(captureSnapshot.fullscreen);
@@ -674,35 +792,20 @@
     if (ready && !suppressPlacementEffect) void applyWindowPlacement(style, edge, monitorIndex, position, hidden);
   });
 
-  function startAutoClose() {
-    stopAutoClose();
-    if (expanded && !hovering && !panelInteracting) {
-      const delay = appSettings.enableAnimations ? 5000 : 3000;
-      logger.log(`开始自动收起计时器: ${delay}ms`);
-      autoCloseTimer = setTimeout(() => {
-        logger.log("自动收起计时器触发");
-        expanded = false;
-        autoCloseTimer = null;
-      }, delay);
-    }
-  }
-
-  function stopAutoClose() {
-    if (autoCloseTimer) {
-      clearTimeout(autoCloseTimer);
-      autoCloseTimer = null;
-    }
-  }
-
   $effect(() => {
     const panelActive = panelInteracting;
     const pointerInside = hovering;
-    if (expanded && !pointerInside && !panelActive) {
-      startAutoClose();
-    } else {
-      stopAutoClose();
-      showMonitorMenu = false;
-    }
+    const shouldAutoClose = expanded && !pointerInside && !panelActive && !timerFinished;
+    if (!shouldAutoClose) return;
+
+    const timeout = setTimeout(() => {
+      if (expanded && !hovering && !panelInteracting && !timerFinished) {
+        expanded = false;
+        showMonitorMenu = false;
+      }
+    }, 2_000);
+
+    return () => clearTimeout(timeout);
   });
 
   async function toggleFloatingWindow() {
@@ -759,53 +862,13 @@
 
   async function extractSpectrumColors(imgSrc: string) {
     if (!imgSrc) return;
-
     try {
-      const img = new Image();
-
-      // 对于本地文件和 data URL，不设置 crossOrigin
-      if (!imgSrc.startsWith("file://") && !imgSrc.startsWith("data:")) {
-        img.crossOrigin = "Anonymous";
-      }
-      img.src = imgSrc;
-
-      // 添加超时处理
-      const loadPromise = new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(
-          () => reject(new Error("图片加载超时")),
-          5000,
-        );
-        img.onload = () => {
-          clearTimeout(timeout);
-          resolve();
-        };
-        img.onerror = () => {
-          clearTimeout(timeout);
-          reject(new Error("图片加载失败"));
-        };
-      });
-
-      await loadPromise;
-
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        throw new Error("无法获取 canvas 上下文");
-      }
-      canvas.width = 24;
-      canvas.height = 24;
-      ctx.drawImage(img, 0, 0, 24, 24);
-
-      const colors = extractSpectrumColorsFromPixels(
-        ctx.getImageData(0, 0, 24, 24).data,
-        24,
-        24,
-      );
-      if (!colors) return;
+      const colors = await extractSpectrumColorsFromImage(imgSrc);
+      if (!colors || artworkUrl !== imgSrc) return;
       spectrumTopColor = formatRgb(...colors.top);
       spectrumBottomColor = formatRgb(...colors.bottom);
-    } catch (e) {
-      console.warn("取色失败，将保留当前频谱颜色", e);
+    } catch (error) {
+      console.warn("取色失败，将保留当前频谱颜色", error);
     }
   }
 
@@ -871,7 +934,6 @@
 
   async function hideForTenSeconds() {
     const sequence = ++manualHideSequence;
-    stopAutoClose();
     if (manualHideTimeout !== null) {
       clearTimeout(manualHideTimeout);
       manualHideTimeout = null;
@@ -1211,6 +1273,7 @@
         const receivedAt = Date.now();
         // A removed session is an authoritative idle transition, not a metadata gap.
         if (!data.source) {
+          rememberCurrentTrack(true);
           hasMediaSession = false;
           isPlaying = false;
           currentSource = "";
@@ -1413,6 +1476,7 @@
           }
         }
 
+        rememberCurrentTrack(songChanged || !lastPersistedTrackSignature.endsWith(`|${isPlaying}`));
         void syncFloatingMediaClock();
       });
       cleanups.push(unlistenMediaUpdate);
@@ -1424,7 +1488,6 @@
   });
 
   onDestroy(() => {
-    stopAutoClose();
     stopDebugFps();
     if (timerFinishedTimeout !== null) clearTimeout(timerFinishedTimeout);
     if (manualHideTimeout !== null) clearTimeout(manualHideTimeout);
@@ -1513,13 +1576,17 @@
     edge={renderedIslandEdge}
     position={displayedPosition}
     expandedRadius={appSettings.expandedCornerRadius ?? 45}
-    edgeShoulderRadius={appSettings.edgeShoulderRadius ?? 8}
+    collapsedEdgeShoulderRadius={appSettings.collapsedEdgeShoulderRadius ?? 8}
+    expandedEdgeShoulderRadius={appSettings.expandedEdgeShoulderRadius ?? 32}
     compactLength={appSettings.compactLength ?? 80}
     idle={showIdle}
     idleTime={currentTime}
     idleWeatherTemperature={idleSnapshot.weatherTemperature}
     idleWeatherCode={idleSnapshot.weatherCode}
     idleWeatherForecast={idleSnapshot.weatherForecast}
+    {lastPlayedMedia}
+    canResumeLastTrack={Boolean(lastPlayedMedia && playerApps[lastPlayedMedia.source])}
+    {resumingLastTrack}
     showSpectrum={appSettings.showSpectrum}
     spectrumMode={appSettings.spectrumMode}
     enableAnimations={appSettings.enableAnimations}
@@ -1532,6 +1599,7 @@
     debugLines={[`${fps} FPS`, currentSource, `${Math.round(displayedPosition)} ms`, isHidden ? "hidden" : islandMode]}
     onToggle={toggleIsland}
     onOpenPlayer={openCurrentPlayer}
+    onResumeLastTrack={resumeLastTrack}
     onMediaAction={(action) => handleMediaAction(action)}
     onSeek={handleSeek}
     onToggleFloating={toggleFloatingWindow}
@@ -1550,7 +1618,10 @@
     onAudioDevice={handleAudioDevice}
     timerStatus={countdown.status}
     {timerRemainingMs}
+    timerDurationMs={countdown.durationMs}
+    timerLabel={countdown.label}
     {timerFinished}
+    onTimerFinishedDismiss={clearTimerFinished}
     clockText={currentTime}
     clockTimeZone={appSettings.clockTimeZone}
     onTimerStart={handleTimerStart}

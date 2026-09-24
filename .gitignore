@@ -24,6 +24,8 @@ Desktop.ini
 
 # Build artifacts
 dist/
+/test-results/
+/playwright-report/
 
 # Temporary files
 1.txt

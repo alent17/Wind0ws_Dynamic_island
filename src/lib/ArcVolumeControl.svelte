@@ -1,15 +1,18 @@
 <script lang="ts">
   import { Volume1, Volume2, VolumeX } from "lucide-svelte";
+  import RollingNumber from "$lib/RollingNumber.svelte";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
 
   let {
     volume = 50,
     muted = false,
+    reduceMotion = false,
     onVolume,
     onOpen,
   } = $props<{
     volume?: number;
     muted?: boolean;
+    reduceMotion?: boolean;
     onVolume?: (volumePercent: number) => void | Promise<void>;
     onOpen?: () => void | Promise<void>;
   }>();
@@ -124,7 +127,7 @@
     {/if}
   </span>
 
-  <span class="volume-value">{displayVolume}%</span>
+  <span class="volume-value"><RollingNumber value={String(displayVolume)} {reduceMotion} />%</span>
 </div>
 
 <style>

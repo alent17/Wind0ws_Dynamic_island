@@ -54,6 +54,10 @@ describe("island geometry", () => {
     expect(hostFor("floating", "left", 300, 300)).toEqual({ width: 600, height: 300 });
   });
 
+  it("keeps expanded content at a fixed music width", () => {
+    expect(geometryFor("expanded").width).toBe(300);
+  });
+
   it("supports an adjustable compact long axis and caps hover at expanded width", () => {
     expect(geometryFor("compact", 45, "top", 200)).toEqual({ width: 200, height: 28, radius: 14 });
     expect(geometryFor("hover", 45, "top", 200)).toEqual({ width: 210, height: 30, radius: 15 });
@@ -88,6 +92,24 @@ describe("island geometry", () => {
       expect(points.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
     }
     expect(shapePolygonFor(geometry, "edge", "top", 99)).toEqual(shapePolygonFor(geometry, "edge", "top", 16));
+  });
+
+  it("uses the shoulder radius for both inward inset and curve depth without resizing the island", () => {
+    const geometry = geometryFor("expanded");
+    const manual = shapePolygonFor(geometry, "edge", "top", 32);
+    expect(manual[8]).toEqual({ x: 32, y: 32 });
+    expect(Math.max(...manual.map(({ x }) => x))).toBe(geometry.width);
+    expect(Math.max(...manual.map(({ y }) => y))).toBe(geometry.height);
+  });
+
+  it("keeps the attached expanded shoulder outline mirrored across its centerline", () => {
+    const geometry = geometryFor("expanded");
+    for (const shoulderRadius of [0, 32]) {
+      const points = shapePolygonFor(geometry, "edge", "top", shoulderRadius);
+      const pointKeys = points.map(({ x, y }) => `${x.toFixed(2)},${y.toFixed(2)}`).sort();
+      const mirroredKeys = points.map(({ x, y }) => `${(geometry.width - x).toFixed(2)},${y.toFixed(2)}`).sort();
+      expect(mirroredKeys).toEqual(pointKeys);
+    }
   });
 
   it("interpolates silhouettes without changing their point topology", () => {

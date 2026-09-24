@@ -7,7 +7,8 @@ export interface AppSettings {
   islandStyle: IslandStyle;
   islandEdge: IslandEdge;
   islandEdgePosition: number;
-  edgeShoulderRadius: number;
+  collapsedEdgeShoulderRadius: number;
+  expandedEdgeShoulderRadius: number;
   compactLength: number;
   language: AppLanguage;
   fontId: FontId;
@@ -20,6 +21,7 @@ export interface AppSettings {
   enableAnimations: boolean;
   windowOpacity: number;
   alwaysOnTop: boolean;
+  floatingWindowAlwaysOnTop: boolean;
   reduceAnimations: boolean;
   showDebugInfo: boolean;
   logLevel: string;
@@ -46,6 +48,7 @@ export interface AppSettings {
   enableMvPlayback: boolean;
   lockFloatingWindow: boolean;
   enableHdCover: boolean;
+  floatingCircularAlbum: boolean;
   enablePixelArt: boolean;
   enableHalftone: boolean;
   cacheDirectory: string | null;
@@ -58,7 +61,7 @@ export interface AppSettings {
   clockTimeZone: string;
 }
 
-export type FontId = "system" | "misans" | "source-han-serif-cn-bold" | "alibaba-puhuiti-heavy";
+export type FontId = "misans";
 export type IdleContentKind = "clock" | "date" | "weather" | "network" | "cpu" | "memory" | "battery" | "custom";
 export interface IdleContentItem { id: string; kind: IdleContentKind; enabled: boolean; text: string; }
 export interface WeatherLocation { name: string; latitude: number; longitude: number; }
@@ -166,7 +169,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   islandStyle: "floating",
   islandEdge: "top",
   islandEdgePosition: 50,
-  edgeShoulderRadius: 8,
+  collapsedEdgeShoulderRadius: 8,
+  expandedEdgeShoulderRadius: 32,
   compactLength: 80,
   language: "system",
   fontId: "misans",
@@ -179,6 +183,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   enableAnimations: true,
   windowOpacity: 255,
   alwaysOnTop: true,
+  floatingWindowAlwaysOnTop: true,
   reduceAnimations: false,
   showDebugInfo: false,
   logLevel: "Info",
@@ -217,6 +222,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   enableMvPlayback: true,
   lockFloatingWindow: false,
   enableHdCover: true,
+  floatingCircularAlbum: false,
   enablePixelArt: false,
   enableHalftone: false,
   cacheDirectory: null,

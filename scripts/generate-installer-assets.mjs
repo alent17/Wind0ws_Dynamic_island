@@ -25,8 +25,8 @@ const sidebarBackground = Buffer.from(`
     <rect width="164" height="314" fill="url(#g)"/>
     <circle cx="82" cy="103" r="70" fill="#55c6df" opacity=".06"/>
     <circle cx="82" cy="103" r="52" fill="none" stroke="#55c6df" stroke-width="1" stroke-dasharray="2 7" opacity=".42"/>
-    <text x="82" y="224" text-anchor="middle" fill="#fff" font-family="Segoe UI, sans-serif" font-size="25" font-weight="650" letter-spacing="6">ISLE</text>
-    <text x="82" y="246" text-anchor="middle" fill="#8fa2bd" font-family="Segoe UI, sans-serif" font-size="8" letter-spacing="2">MUSIC AT A GLANCE</text>
+    <text x="82" y="224" text-anchor="middle" fill="#fff" font-family="MiSans" font-size="25" font-weight="650" letter-spacing="6">ISLE</text>
+    <text x="82" y="246" text-anchor="middle" fill="#8fa2bd" font-family="MiSans" font-size="8" letter-spacing="2">MUSIC AT A GLANCE</text>
     <rect x="53" y="273" width="58" height="3" rx="1.5" fill="#55c6df" opacity=".8"/>
   </svg>`);
 await sharp(sidebarBackground)

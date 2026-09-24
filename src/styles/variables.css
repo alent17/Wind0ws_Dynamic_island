@@ -62,9 +62,9 @@
   --spacing-xxxl: 32px;
 
   /* ========== Typography ========== */
-  --font-family-title: 'MiSans', 'Segoe UI', sans-serif;
-  --font-family-ui: 'MiSans', 'Segoe UI', sans-serif;
-  --font-family-body: 'MiSans', 'Segoe UI', sans-serif;
+  --font-family-title: 'MiSans';
+  --font-family-ui: 'MiSans';
+  --font-family-body: 'MiSans';
 
   /* Font Sizes */
   --text-xs: 10px;             /* Micro */

@@ -182,20 +182,43 @@ fn start_media_listener(handle: AppHandle) {
 
         let mut last_artwork_track = String::new();
         let mut last_artwork = String::new();
+        let mut missing_session_polls = 0u8;
+        let mut empty_state_emitted = false;
         // 持续监听媒体状态
         loop {
             if let Ok(mut info) = services::media::get_media_info(&handle) {
-                let artwork_track = format!("{}|{}|{}", info.source, info.title, info.artist);
-                if artwork_track == last_artwork_track && info.album_art == last_artwork {
-                    // Artwork is often hundreds of KB. Sending the same Base64
-                    // payload to every WebView once per second caused release
-                    // builds to stutter even though only progress had changed.
-                    info.album_art.clear();
+                if info.source.is_empty() {
+                    // GSMTC may briefly return no selected session while a
+                    // player refreshes its metadata. Confirm the removal over
+                    // two polls so one missed snapshot cannot reset progress
+                    // or stop the spectrum animation.
+                    missing_session_polls = missing_session_polls.saturating_add(1);
+                    if missing_session_polls < 2 || empty_state_emitted {
+                        std::thread::sleep(std::time::Duration::from_millis(1000));
+                        continue;
+                    }
+                    empty_state_emitted = true;
+                    last_artwork_track.clear();
+                    last_artwork.clear();
                 } else {
-                    last_artwork_track = artwork_track;
-                    last_artwork = info.album_art.clone();
+                    missing_session_polls = 0;
+                    empty_state_emitted = false;
+                    let artwork_track = format!("{}|{}|{}", info.source, info.title, info.artist);
+                    if artwork_track == last_artwork_track && info.album_art == last_artwork {
+                        // Artwork is often hundreds of KB. Sending the same Base64
+                        // payload to every WebView once per second caused release
+                        // builds to stutter even though only progress had changed.
+                        info.album_art.clear();
+                    } else {
+                        last_artwork_track = artwork_track;
+                        last_artwork = info.album_art.clone();
+                    }
                 }
                 let _ = event_bus::emit_media_update(info);
+            } else {
+                // A failed SMTC query is not proof that its session was
+                // removed, so it must break the consecutive-miss sequence.
+                missing_session_polls = 0;
             }
             std::thread::sleep(std::time::Duration::from_millis(1000));
         }
@@ -407,6 +430,7 @@ pub fn run() {
             commands::save_settings,
             commands::update_settings,
             commands::set_always_on_top,
+            commands::set_floating_window_always_on_top,
             commands::set_window_opacity,
             commands::get_player_weights,
             commands::set_player_weight,

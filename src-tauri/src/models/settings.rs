@@ -60,7 +60,9 @@ pub struct AppPreferences {
     pub island_style: String,
     pub island_edge: String,
     pub island_edge_position: u8,
-    pub edge_shoulder_radius: u8,
+    #[serde(alias = "edgeShoulderRadius")]
+    pub collapsed_edge_shoulder_radius: u8,
+    pub expanded_edge_shoulder_radius: u8,
     pub compact_length: u16,
     pub language: String,
     pub font_id: String,
@@ -74,6 +76,7 @@ pub struct AppPreferences {
     pub enable_animations: bool,
     pub window_opacity: u8,
     pub always_on_top: bool,
+    pub floating_window_always_on_top: bool,
     pub reduce_animations: bool,
     pub show_debug_info: bool,
     pub log_level: String,
@@ -100,6 +103,7 @@ pub struct AppPreferences {
     pub enable_mv_playback: bool,
     pub lock_floating_window: bool,
     pub enable_hd_cover: bool,
+    pub floating_circular_album: bool,
     pub enable_pixel_art: bool,
     pub enable_halftone: bool,
     pub cache_directory: Option<String>,
@@ -128,7 +132,8 @@ impl Default for AppPreferences {
             island_style: "floating".to_string(),
             island_edge: "top".to_string(),
             island_edge_position: 50,
-            edge_shoulder_radius: 8,
+            collapsed_edge_shoulder_radius: 8,
+            expanded_edge_shoulder_radius: 32,
             compact_length: 80,
             language: "system".to_string(),
             font_id: "misans".to_string(),
@@ -141,6 +146,7 @@ impl Default for AppPreferences {
             enable_animations: true,
             window_opacity: 255,
             always_on_top: true,
+            floating_window_always_on_top: true,
             reduce_animations: false,
             show_debug_info: false,
             log_level: "Info".to_string(),
@@ -167,6 +173,7 @@ impl Default for AppPreferences {
             enable_mv_playback: true,
             lock_floating_window: false,
             enable_hd_cover: true,
+            floating_circular_album: false,
             enable_pixel_art: false,
             enable_halftone: false,
             cache_directory: None,
@@ -187,9 +194,10 @@ mod tests {
 
     #[test]
     fn defaults_and_migrates_edge_shoulder_radius() {
-        assert_eq!(AppPreferences::default().edge_shoulder_radius, 8);
+        assert_eq!(AppPreferences::default().collapsed_edge_shoulder_radius, 8);
+        assert_eq!(AppPreferences::default().expanded_edge_shoulder_radius, 32);
         let loaded: AppPreferences = serde_json::from_str("{}").expect("defaulted settings");
-        assert_eq!(loaded.edge_shoulder_radius, 8);
+        assert_eq!(loaded.collapsed_edge_shoulder_radius, 8);
         assert_eq!(loaded.compact_length, 80);
         assert_eq!(loaded.language, "system");
         assert_eq!(loaded.font_id, "misans");

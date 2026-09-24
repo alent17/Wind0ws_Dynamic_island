@@ -52,7 +52,7 @@ export function clampExpandedRadius(radius: number) {
 }
 
 export function clampShoulderRadius(radius: number) {
-  return Math.min(16, Math.max(0, Number.isFinite(radius) ? radius : 8));
+  return Math.min(64, Math.max(0, Number.isFinite(radius) ? radius : 8));
 }
 
 export function clampCompactLength(length: number) {
@@ -68,7 +68,7 @@ export function geometryFor(
 ): IslandGeometry {
   const length = clampCompactLength(compactLength);
   const geometry = mode === "expanded"
-    ? { ...ISLAND_GEOMETRY.expanded, width: ISLAND_GEOMETRY.expanded.width + Math.max(0, expandedExtraWidth) }
+    ? { ...ISLAND_GEOMETRY.expanded, width: Math.max(200, ISLAND_GEOMETRY.expanded.width + expandedExtraWidth) }
     : mode === "hover"
       ? { ...ISLAND_GEOMETRY.hover, width: Math.min(300, length + 10) }
       : { ...ISLAND_GEOMETRY[mode], width: length };
@@ -122,7 +122,13 @@ function cubicPoint(a: Point, b: Point, c: Point, d: Point, t: number): Point {
 function canonicalTopPolygon(geometry: IslandGeometry, style: IslandStyle, shoulderRadius: number): Point[] {
   const { width: w, height: h } = geometry;
   const r = Math.min(geometry.radius, w / 2, h / 2);
-  const shoulder = style === "edge" ? Math.min(clampShoulderRadius(shoulderRadius), w / 4, h / 2) : 0;
+  const shoulder = style === "edge" ? clampShoulderRadius(shoulderRadius) : 0;
+  // Keep the window's outer dimensions fixed and narrow the clipped body by
+  // the configured shoulder radius.
+  const effectiveShoulder = shoulder;
+  const shoulderInset = style === "edge"
+    ? Math.min(effectiveShoulder, w / 4, h / 2)
+    : 0;
   const points: Point[] = [];
   const curve = (a: Point, b: Point, c: Point, d: Point) => {
     for (let index = 0; index < 9; index += 1) points.push(cubicPoint(a, b, c, d, index / 8));
@@ -132,14 +138,16 @@ function canonicalTopPolygon(geometry: IslandGeometry, style: IslandStyle, shoul
   if (style === "edge") {
     // True iPhone-notch silhouette: a wide screen seam flows through a
     // concave shoulder into a narrower, straight-sided body.
-    const bodyRadius = Math.min(r, (w - shoulder * 2) / 2, (h - shoulder) / 2);
-    curve({ x: 0, y: 0 }, { x: shoulder * .55, y: 0 }, { x: shoulder, y: shoulder * .45 }, { x: shoulder, y: shoulder });
-    curve({ x: shoulder, y: shoulder }, { x: shoulder, y: h * .35 }, { x: shoulder, y: h * .65 }, { x: shoulder, y: h - bodyRadius });
-    curve({ x: shoulder, y: h - bodyRadius }, { x: shoulder, y: h - bodyRadius * .45 }, { x: shoulder + bodyRadius * .45, y: h }, { x: shoulder + bodyRadius, y: h });
-    curve({ x: shoulder + bodyRadius, y: h }, { x: w * .35, y: h }, { x: w * .65, y: h }, { x: w - shoulder - bodyRadius, y: h });
-    curve({ x: w - shoulder - bodyRadius, y: h }, { x: w - shoulder - bodyRadius * .45, y: h }, { x: w - shoulder, y: h - bodyRadius * .45 }, { x: w - shoulder, y: h - bodyRadius });
-    curve({ x: w - shoulder, y: h - bodyRadius }, { x: w - shoulder, y: h * .65 }, { x: w - shoulder, y: h * .35 }, { x: w - shoulder, y: shoulder });
-    curve({ x: w - shoulder, y: shoulder }, { x: w - shoulder, y: shoulder * .45 }, { x: w - shoulder * .55, y: 0 }, { x: w, y: 0 });
+    const bodyRadius = Math.min(r, w / 2, h / 2);
+    const shoulderDepth = Math.min(effectiveShoulder, h / 2, h - bodyRadius);
+    const shoulderCurve = Math.min(shoulderInset, shoulderDepth);
+    curve({ x: 0, y: 0 }, { x: shoulderInset - shoulderCurve * .45, y: 0 }, { x: shoulderInset, y: shoulderDepth - shoulderCurve * .45 }, { x: shoulderInset, y: shoulderDepth });
+    curve({ x: shoulderInset, y: shoulderDepth }, { x: shoulderInset, y: h * .35 }, { x: shoulderInset, y: h * .65 }, { x: shoulderInset, y: h - bodyRadius });
+    curve({ x: shoulderInset, y: h - bodyRadius }, { x: shoulderInset, y: h - bodyRadius * .45 }, { x: shoulderInset + bodyRadius * .45, y: h }, { x: shoulderInset + bodyRadius, y: h });
+    curve({ x: shoulderInset + bodyRadius, y: h }, { x: w * .35, y: h }, { x: w * .65, y: h }, { x: w - shoulderInset - bodyRadius, y: h });
+    curve({ x: w - shoulderInset - bodyRadius, y: h }, { x: w - shoulderInset - bodyRadius * .45, y: h }, { x: w - shoulderInset, y: h - bodyRadius * .45 }, { x: w - shoulderInset, y: h - bodyRadius });
+    curve({ x: w - shoulderInset, y: h - bodyRadius }, { x: w - shoulderInset, y: h * .65 }, { x: w - shoulderInset, y: h * .35 }, { x: w - shoulderInset, y: shoulderDepth });
+    curve({ x: w - shoulderInset, y: shoulderDepth }, { x: w - shoulderInset, y: shoulderDepth - shoulderCurve * .45 }, { x: w - shoulderInset + shoulderCurve * .45, y: 0 }, { x: w, y: 0 });
     curve({ x: w, y: 0 }, { x: w * .65, y: 0 }, { x: w * .35, y: 0 }, { x: 0, y: 0 });
     return points;
   }

@@ -2,6 +2,7 @@
   import { locale, translate, type TranslationKey } from "$lib/i18n";
   import type { AudioDeviceInfo } from "$lib/api/types";
   import { Check, ChevronDown, LoaderCircle } from "lucide-svelte";
+  import RollingNumber from "$lib/RollingNumber.svelte";
 
   let {
     volume = 50,
@@ -9,6 +10,7 @@
     deviceId = "",
     devices = [],
     switchingDevice = false,
+    reduceMotion = false,
     onVolume,
     onDevice,
   } = $props<{
@@ -17,6 +19,7 @@
     deviceId?: string;
     devices?: AudioDeviceInfo[];
     switchingDevice?: boolean;
+    reduceMotion?: boolean;
     onVolume?: (volumePercent: number) => void | Promise<void>;
     onDevice?: (deviceId: string) => void | Promise<void>;
   }>();
@@ -106,7 +109,7 @@
   </div>
 
   <span class="volume-label">{muted || draftVolume === 0 ? t("muted") : t("volume")}</span>
-  <strong><span>{draftVolume}</span><small>%</small></strong>
+  <strong><RollingNumber value={String(draftVolume)} {reduceMotion} /><small>%</small></strong>
 
   <div class="volume-slider-shell">
     <input

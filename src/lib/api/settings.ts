@@ -14,6 +14,8 @@ export const settingsApi = {
 
   setAlwaysOnTop: (enable: boolean) =>
     invoke<void>("set_always_on_top", { enable }),
+  setFloatingWindowAlwaysOnTop: (enable: boolean) =>
+    invoke<void>("set_floating_window_always_on_top", { enable }),
   setWindowOpacity: (opacity: number) =>
     invoke<void>("set_window_opacity", { opacity }),
   getPlayerWeights: () =>

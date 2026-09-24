@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
 
-[Download v1.0.0](https://github.com/alent17/Wind0ws_Dynamic_island/releases/tag/v1.0.0) · [Installation](INSTALL.md) · [Report an issue](https://github.com/alent17/Wind0ws_Dynamic_island/issues)
+[Download v1.0.2](https://github.com/alent17/Wind0ws_Dynamic_island/releases/tag/v1.0.2) · [Installation](INSTALL.md) · [Report an issue](https://github.com/alent17/Wind0ws_Dynamic_island/issues)
 
 </div>
 
@@ -21,6 +21,7 @@ Isle is a Dynamic Island-inspired desktop media controller and floating player f
 ## Highlights
 
 - Windows SMTC playback controls, seeking, and player priority
+- Remembers the last track and can reopen its player to resume playback
 - Compact, hover, expanded, and auto-hidden island states
 - Floating or four-edge attached layouts with multi-monitor support
 - Live system-audio FFT spectrum or smooth generated animation
@@ -46,7 +47,7 @@ The floating player is an independent, immersive media view that can be opened f
 
 ## Install
 
-Download `Isle_1.0.0_x64-setup.exe` from [GitHub Releases](https://github.com/alent17/Wind0ws_Dynamic_island/releases/latest), run the installer, then play media from an app that supports Windows system media controls. Open Isle Studio from the system tray to customize the experience.
+Download `Isle_1.0.2_x64-setup.exe` from [GitHub Releases](https://github.com/alent17/Wind0ws_Dynamic_island/releases/latest), run the installer, then play media from an app that supports Windows system media controls. Open Isle Studio from the system tray to customize the experience.
 
 Requires Windows 10/11 x64 and Microsoft Edge WebView2 Runtime. Player capabilities vary with the information exposed through Windows SMTC.
 

@@ -8,12 +8,12 @@
 
 [简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
 
-[![Version](https://img.shields.io/badge/version-1.0.0-111111?style=flat-square)](https://github.com/alent17/Wind0ws_Dynamic_island/releases/tag/v1.0.0)
+[![Version](https://img.shields.io/badge/version-1.0.2-111111?style=flat-square)](https://github.com/alent17/Wind0ws_Dynamic_island/releases/tag/v1.0.2)
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?style=flat-square&logo=windows)](https://github.com/alent17/Wind0ws_Dynamic_island/releases/latest)
 [![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat-square&logo=tauri&logoColor=111111)](https://tauri.app/)
 [![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 
-[下载 v1.0.0](https://github.com/alent17/Wind0ws_Dynamic_island/releases/tag/v1.0.0) · [安装指南](INSTALL.md) · [报告问题](https://github.com/alent17/Wind0ws_Dynamic_island/issues)
+[下载 v1.0.2](https://github.com/alent17/Wind0ws_Dynamic_island/releases/tag/v1.0.2) · [安装指南](INSTALL.md) · [报告问题](https://github.com/alent17/Wind0ws_Dynamic_island/issues)
 
 </div>
 
@@ -26,6 +26,7 @@ Isle 是面向 Windows 10/11 的桌面灵动岛与悬浮音乐播放器。它通
 ## 亮点
 
 - **系统媒体控制**：自动连接支持 SMTC 的播放器，支持播放、暂停、上一首、下一首与进度跳转。
+- **最近播放恢复**：记住上次播放的曲目；下次可从灵动岛打开对应播放器并继续播放。
 - **灵动岛交互**：收起、悬停、展开与自动隐藏；支持四向贴边、位置与尺寸调整。
 - **实时音频频谱**：系统音频 FFT 或平滑随机动画，暂停时自然回落。
 - **高清封面与悬浮播放器**：智能补全清晰封面；独立播放器与主岛共享曲目、播放状态和时间线。
@@ -53,7 +54,7 @@ Isle 是面向 Windows 10/11 的桌面灵动岛与悬浮音乐播放器。它通
 
 ## 安装
 
-1. 从 [GitHub Releases](https://github.com/alent17/Wind0ws_Dynamic_island/releases/latest) 下载 `Isle_1.0.0_x64-setup.exe`。
+1. 从 [GitHub Releases](https://github.com/alent17/Wind0ws_Dynamic_island/releases/latest) 下载 `Isle_1.0.2_x64-setup.exe`。
 2. 运行安装程序；Windows 首次运行时可能显示 SmartScreen 提示。
 3. 播放任意支持 Windows 系统媒体控制的音乐，然后从系统托盘打开 Isle Studio 完成个性化设置。
 

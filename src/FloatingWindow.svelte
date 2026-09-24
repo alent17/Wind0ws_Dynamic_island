@@ -25,6 +25,8 @@
     X,
     Pin,
     Minimize2,
+    Lock,
+    LockOpen,
   } from "lucide-svelte";
 
   interface WindowSize {
@@ -121,6 +123,8 @@
 
   // 专辑封面设置
   let enableHDCover = $state(true); // 高清封面获取
+  let floatingCircularAlbum = $state(DEFAULT_SETTINGS.floatingCircularAlbum);
+  let circularAlbumArtSize = $derived(Math.max(50, Math.round(albumArtSize * 0.86)));
   let enablePixelArt = $state(false); // 像素化封面
 
   let unlisten: () => void;
@@ -131,6 +135,18 @@
   let coverRequestId = 0;
   let durationRequestId = 0;
   let mvRequestId = 0;
+
+  function setCircularAlbum(enabled: boolean) {
+    const wasCircular = floatingCircularAlbum;
+    floatingCircularAlbum = enabled;
+    if (enabled) {
+      mvRequestId += 1;
+      isPlayingMV = false;
+      mvUrl = "";
+    } else if (wasCircular && isMVPlaybackEnabled && currentTrackKey) {
+      requestMVForCurrentTrack(currentTrackKey, mediaState.title, mediaState.artist);
+    }
+  }
 
   function handlePointerEnter() {
     if (hoverLeaveTimeout) {
@@ -343,7 +359,7 @@
 
   // 从 Apple Music 获取 MV 链接（使用本地缓存）
   async function fetchMVFromAppleMusic(title: string, artist: string) {
-    if (!isMVPlaybackEnabled) return null; // 功能未启用，直接返回
+    if (!isMVPlaybackEnabled || floatingCircularAlbum) return null;
 
     try {
       const query = encodeURIComponent(`${title} ${artist}`);
@@ -425,7 +441,7 @@
   }
 
   async function fetchMVPreview(title: string, artist: string) {
-    if (!isMVPlaybackEnabled || !title) return null;
+    if (!isMVPlaybackEnabled || floatingCircularAlbum || !title) return null;
     try {
       // Restore the project's original NetEase MV path first. It works for
       // full MVs as well; the player below intentionally loops only 30 s.
@@ -438,10 +454,11 @@
   }
 
   function requestMVForCurrentTrack(trackKey: string, title: string, artist: string) {
+    if (floatingCircularAlbum || !isMVPlaybackEnabled) return;
     const requestId = ++mvRequestId;
     void fetchMVPreview(title, artist)
       .then((mvLink) => {
-        if (!mvLink || requestId !== mvRequestId || currentTrackKey !== trackKey || !isMVPlaybackEnabled) return;
+        if (!mvLink || requestId !== mvRequestId || currentTrackKey !== trackKey || !isMVPlaybackEnabled || floatingCircularAlbum) return;
         mvUrl = mvLink;
         isPlayingMV = true;
       })
@@ -471,13 +488,14 @@
       isMVPlaybackEnabled = settings.enableMvPlayback ?? false;
 
       // 加载置顶设置
-      isAlwaysOnTop = settings.alwaysOnTop ?? true; // 默认置顶
+      isAlwaysOnTop = settings.floatingWindowAlwaysOnTop ?? DEFAULT_SETTINGS.floatingWindowAlwaysOnTop;
 
       // 加载锁定悬浮窗设置
       isFloatingWindowLocked = settings.lockFloatingWindow ?? false;
 
       // 加载专辑封面设置
       enableHDCover = settings.enableHdCover ?? true;
+      setCircularAlbum(settings.floatingCircularAlbum ?? DEFAULT_SETTINGS.floatingCircularAlbum);
       enablePixelArt = settings.enablePixelArt ?? false;
       halftoneOverlayVisible = settings.enableHalftone ?? false;
 
@@ -486,7 +504,7 @@
     } catch (error) {
       console.error("[设置] 读取失败:", error);
       isMVPlaybackEnabled = true;
-      isAlwaysOnTop = false;
+      isAlwaysOnTop = DEFAULT_SETTINGS.floatingWindowAlwaysOnTop;
     }
 
     // 初始化事件监听器管理器
@@ -498,7 +516,7 @@
       ({ enable }: any) => {
         isMVPlaybackEnabled = enable;
         // 如果关闭了 MV 播放，停止当前播放
-        if (!isMVPlaybackEnabled) {
+        if (!isMVPlaybackEnabled || floatingCircularAlbum) {
           mvRequestId += 1;
           isPlayingMV = false;
           mvUrl = "";
@@ -572,12 +590,21 @@
         const nextUseAlbumColor = value.floatingUseAlbumColor ?? DEFAULT_SETTINGS.floatingUseAlbumColor;
         const shouldRefreshAlbumColor = nextUseAlbumColor && !useAlbumColor;
         capturePreferences = value;
+        isMVPlaybackEnabled = value.enableMvPlayback ?? DEFAULT_SETTINGS.enableMvPlayback;
+        setCircularAlbum(value.floatingCircularAlbum ?? DEFAULT_SETTINGS.floatingCircularAlbum);
         configuredFillColor = value.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
         useAlbumColor = nextUseAlbumColor;
         if (shouldRefreshAlbumColor && displayCover) void extractColors(displayCover);
       }
     });
     eventListeners.push(unlistenSettingsChange);
+    const unlistenAlwaysOnTopChange = await eventManager.on(
+      Events.FLOATING_WINDOW_ALWAYS_ON_TOP_CHANGED,
+      ({ isAlwaysOnTop: enabled }: any) => {
+        isAlwaysOnTop = Boolean(enabled);
+      },
+    );
+    eventListeners.push(unlistenAlwaysOnTopChange);
     const unlistenCaptureMode = await eventManager.on(
       Events.CAPTURE_MODE_CHANGED,
       (snapshot: CaptureSnapshot) => {
@@ -726,7 +753,7 @@
           payload.artist || "",
         );
 
-        if (isMVPlaybackEnabled) requestMVForCurrentTrack(newTrackKey, payload.title, payload.artist);
+        if (isMVPlaybackEnabled && !floatingCircularAlbum) requestMVForCurrentTrack(newTrackKey, payload.title, payload.artist);
       } else {
         // 播放状态变化
         const previousPosition = projectedPosition(mediaState, receivedAt);
@@ -1296,21 +1323,34 @@
 
   async function toggleAlwaysOnTop(e: MouseEvent) {
     e.stopPropagation();
-    isAlwaysOnTop = !isAlwaysOnTop;
-    const appWindow = getCurrentWindow();
-    await appWindow.setAlwaysOnTop(isAlwaysOnTop);
-
-    // 保存设置
+    const next = !isAlwaysOnTop;
     try {
-      await settingsApi.setAlwaysOnTop(isAlwaysOnTop);
+      await settingsApi.setFloatingWindowAlwaysOnTop(next);
+      isAlwaysOnTop = next;
     } catch (error) {
-      console.error("[置顶] 保存设置失败:", error);
+      console.error("[置顶] 应用设置失败:", error);
     }
   }
 
-  function closeWindow(e: MouseEvent) {
+  async function toggleFloatingLock(e: MouseEvent) {
     e.stopPropagation();
-    getCurrentWindow().close();
+    const nextLocked = !isFloatingWindowLocked;
+    isFloatingWindowLocked = nextLocked;
+    try {
+      await settingsApi.updateSettings({ lockFloatingWindow: nextLocked });
+    } catch (error) {
+      isFloatingWindowLocked = !nextLocked;
+      console.error("[锁定] 保存悬浮窗位置锁定状态失败:", error);
+    }
+  }
+
+  async function closeWindow(e: MouseEvent) {
+    e.stopPropagation();
+    try {
+      await windowApi.closeFloatingWindow();
+    } catch (error) {
+      console.error("[悬浮窗] 关闭失败:", error);
+    }
   }
 
   // 用于拖拽的标题栏区域 - 排除关闭按钮和置顶按钮
@@ -1323,7 +1363,8 @@
     const target = e.target as HTMLElement;
     if (
       target.closest(".close-btn-topbar") ||
-      target.closest(".pin-btn-topbar")
+      target.closest(".pin-btn-topbar") ||
+      target.closest(".lock-btn-topbar")
     ) {
       return; // 如果点击的是关闭按钮或置顶按钮，不拖拽
     }
@@ -1349,6 +1390,8 @@
   class:hovered={isHovered}
   class:locked={isFloatingWindowLocked}
   class:pixelated={enablePixelArt}
+  class:circular-album={floatingCircularAlbum}
+  class:playing={mediaState.isPlaying}
   class:compact-cover={isCompactCover}
   class:capture-hidden={isCaptureHidden}
   onpointerenter={handlePointerEnter}
@@ -1391,9 +1434,9 @@
         aria-label={mediaState.isPlaying ? t("pause") : t("play")}
       >
         {#if mediaState.isPlaying}
-          <Pause size={22} fill="black" color="black" />
+          <Pause size={20} fill="currentColor" />
         {:else}
-          <Play size={22} fill="black" color="black" style="margin-left:2px" />
+          <Play size={20} fill="currentColor" />
         {/if}
       </button>
     </div>
@@ -1416,6 +1459,15 @@
       aria-label={t("dragWindow")}
       tabindex="0"
     >
+      <button
+        class="lock-btn-topbar"
+        onclick={toggleFloatingLock}
+        aria-label={isFloatingWindowLocked ? t("unfixPosition") : t("fixPosition")}
+        aria-pressed={isFloatingWindowLocked}
+        title={isFloatingWindowLocked ? t("unfixPosition") : t("fixPosition")}
+      >
+        {#if isFloatingWindowLocked}<Lock size={15} strokeWidth={2} />{:else}<LockOpen size={15} strokeWidth={2} />{/if}
+      </button>
       <button
         class="pin-btn-topbar"
         onclick={toggleAlwaysOnTop}
@@ -1441,8 +1493,8 @@
   <div class="media-stage">
     <div
       class="album-wrapper"
-      style:width={isCompactCover ? "100%" : `${albumArtSize}px`}
-      style:height={isCompactCover ? "100%" : `${albumArtSize}px`}
+      style:width={isCompactCover ? "100%" : `${floatingCircularAlbum ? circularAlbumArtSize : albumArtSize}px`}
+      style:height={isCompactCover ? "100%" : `${floatingCircularAlbum ? circularAlbumArtSize : albumArtSize}px`}
     >
       {#if displayCover}
         <img
@@ -1452,7 +1504,7 @@
           draggable="false"
         />
         <!-- MV 视频播放 -->
-        {#if isPlayingMV && mvUrl}
+        {#if isPlayingMV && mvUrl && !floatingCircularAlbum}
           <video
             class="mv-player"
             src={mvUrl}
@@ -1552,7 +1604,7 @@
         }}
         aria-label={t("previous")}
       >
-        <SkipBack size={18} fill="currentColor" />
+        <SkipBack size={20} fill="currentColor" />
       </button>
 
       <button
@@ -1561,9 +1613,9 @@
         aria-label={mediaState.isPlaying ? t("pause") : t("play")}
       >
         {#if mediaState.isPlaying}
-          <Pause size={24} fill="black" color="black" />
+          <Pause size={20} fill="currentColor" />
         {:else}
-          <Play size={24} fill="black" color="black" style="margin-left:2px" />
+          <Play size={20} fill="currentColor" />
         {/if}
       </button>
 
@@ -1575,7 +1627,7 @@
         }}
         aria-label={t("next")}
       >
-        <SkipForward size={18} fill="currentColor" />
+        <SkipForward size={20} fill="currentColor" />
       </button>
     </div>
   </div>
@@ -1612,6 +1664,7 @@
     box-sizing: border-box;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.26);
     isolation: isolate;
+    transition: box-shadow 220ms cubic-bezier(.2,.8,.2,1);
   }
 
   .bg-solid {
@@ -1658,26 +1711,18 @@
     pointer-events: auto; /* 确保可以接收鼠标事件 */
   }
 
-  .player.hovered,
-  .player.locked {
+  .player.hovered {
     --toolbar-height: 29px;
+    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.46), 0 5px 18px rgba(0, 0, 0, 0.28);
   }
 
-  .player.hovered .bg-solid,
-  .player.locked .bg-solid {
-    border-radius: 0 0 var(--floating-radius) var(--floating-radius);
+  .player.hovered .bg-solid {
+    border-radius: var(--floating-radius);
   }
 
   .player.hovered .drag-bar {
     visibility: visible;
     transform: translateY(0);
-  }
-
-  /* 锁定状态下固定显示顶部栏 */
-  .player.locked .drag-bar {
-    visibility: visible !important;
-    transform: translateY(0) !important;
-    opacity: 0.8;
   }
 
   .drag-handle {
@@ -1689,9 +1734,14 @@
   }
 
   .drag-dots {
+    position: absolute;
+    top: 50%;
+    left: 50%;
     display: flex;
     gap: 3px;
     padding: 0;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
   }
 
   .drag-dot {
@@ -1705,6 +1755,27 @@
   .drag-bar:hover .drag-dot {
     background: rgba(255, 255, 255, 0.8);
   }
+
+  .lock-btn-topbar {
+    width: 28px;
+    height: 23px;
+    padding: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.58);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease, transform 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .lock-btn-topbar:hover { color: rgba(255, 255, 255, 0.92); transform: scale(1.08); }
+  .lock-btn-topbar:active { transform: scale(0.94); }
+  .lock-btn-topbar:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.76); outline-offset: 1px; }
+  .lock-btn-topbar[aria-pressed="true"] { color: #fff; }
 
   /* 顶部栏置顶按钮 */
   .pin-btn-topbar {
@@ -1948,7 +2019,7 @@
     z-index: 250;
     display: grid;
     place-items: center;
-    background: rgba(0, 0, 0, 0.18);
+    background: transparent;
     pointer-events: none;
   }
 
@@ -1959,17 +2030,15 @@
     height: 48px;
     padding: 0;
     border: 0;
-    border-radius: 50%;
-    color: #000;
-    background: #fff;
+    border-radius: 12px;
+    color: rgba(255, 255, 255, .9);
+    background: transparent;
     cursor: pointer;
     pointer-events: auto;
-    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.3);
+    transition: color 150ms ease, background 150ms ease, transform 140ms cubic-bezier(.23,1,.32,1);
   }
 
-  .compact-play:active {
-    transform: scale(0.94);
-  }
+  .compact-play:focus-visible { outline: 2px solid #fff; outline-offset: 2px; background: rgba(255,255,255,.1); }
 
   .compact-drag-zone {
     position: absolute;
@@ -1979,61 +2048,10 @@
     cursor: grab;
   }
 
-  /* 像素字体定义 */
-  @font-face {
-    font-family: "Fusion Pixel Latin";
-    src: url("/fonts/fusion-pixel-12px-monospaced-latin.ttf") format("truetype");
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: "Fusion Pixel Japanese";
-    src: url("/fonts/fusion-pixel-12px-monospaced-ja.ttf") format("truetype");
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: "Fusion Pixel Korean";
-    src: url("/fonts/fusion-pixel-12px-monospaced-ko.ttf") format("truetype");
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: "Fusion Pixel Simplified Chinese";
-    src: url("/fonts/fusion-pixel-12px-monospaced-zh_hans.ttf")
-      format("truetype");
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  @font-face {
-    font-family: "Fusion Pixel Traditional Chinese";
-    src: url("/fonts/fusion-pixel-12px-monospaced-zh_hant.ttf")
-      format("truetype");
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-  }
-
-  /* 通用像素字体栈 */
+  /* 像素模式仍保留图像效果，文字统一使用 MiSans。 */
   :global(.pixel-font) {
-    font-family: "Fusion Pixel Simplified Chinese",
-      "Fusion Pixel Traditional Chinese", "Fusion Pixel Japanese",
-      "Fusion Pixel Korean", "Fusion Pixel Latin", "Courier New",
-      "Lucida Console", Monaco, monospace;
-    font-weight: bold;
-    letter-spacing: 0;
-    -webkit-font-smoothing: none;
-    -moz-osx-font-smoothing: grayscale;
-    font-smooth: never;
-    text-rendering: optimizeSpeed;
+    font-family: var(--app-font);
+    font-weight: 700;
   }
 
   /* 旧图在上层，新图在下层 */
@@ -2080,6 +2098,26 @@
     border-radius: 0 0 var(--floating-radius) var(--floating-radius);
   }
 
+  .player.circular-album .album-wrapper {
+    border-radius: 50%;
+    animation: album-spin 20s linear infinite;
+    animation-play-state: paused;
+  }
+
+  .player.circular-album.playing .album-wrapper {
+    animation-play-state: running;
+  }
+
+  @keyframes album-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .player.circular-album.playing .album-wrapper {
+      animation-duration: 60s;
+    }
+  }
+
   .track-title {
     color: #dfdfdf; /* 调整字体颜色 */
     font-size: clamp(14px, 5vw, 20px);
@@ -2111,18 +2149,10 @@
 
   .player.pixelated .track-title,
   .player.pixelated .track-artist {
-    font-family: "Fusion Pixel Simplified Chinese",
-      "Fusion Pixel Traditional Chinese", "Fusion Pixel Japanese",
-      "Fusion Pixel Korean", "Fusion Pixel Latin", "Courier New",
-      "Lucida Console", Monaco, monospace;
-    font-weight: bold;
-    letter-spacing: 0;
+    font-family: var(--app-font);
+    font-weight: 700;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-    -webkit-font-smoothing: none;
-    -moz-osx-font-smoothing: grayscale;
-    font-smooth: never;
-    text-rendering: optimizeSpeed;
-    /* 优化GPU加速 */
+        /* 优化GPU加速 */
     transform: translateZ(0);
     backface-visibility: hidden;
     perspective: 1000px;
@@ -2237,56 +2267,58 @@
   }
 
   .ctrl-btn {
-    background: none;
-    border: none;
-    padding: 4px;
+    flex: none;
+    width: 48px;
+    height: 48px;
+    background: transparent;
+    border: 0;
+    padding: 0;
     cursor: pointer;
-    color: #fff;
+    color: rgba(255,255,255,.9);
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
+    border-radius: 12px;
     transition:
       color 0.15s ease,
       transform 0.15s ease,
       background 0.15s ease;
   }
 
-  .ctrl-btn:hover {
-    color: #fff;
-    transform: scale(1.12);
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  .ctrl-btn:active {
-    transform: scale(0.9);
-  }
-
   .play-btn {
-    width: 56px;
-    height: 56px;
+    flex: none;
+    width: 48px;
+    height: 48px;
     border: none;
-    border-radius: 50%;
+    border-radius: 12px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #fff;
-    color: #000;
+    background: transparent;
+    color: rgba(255,255,255,.9);
     transition:
-      background 0.2s ease,
-      transform 0.2s ease;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      background 150ms ease,
+      color 150ms ease,
+      transform 140ms cubic-bezier(.23,1,.32,1);
   }
 
-  .play-btn:hover {
-    background: #f0f0f0;
-    transform: scale(1.05);
+  @media (hover: hover) and (pointer: fine) {
+    .compact-play:hover,
+    .ctrl-btn:hover,
+    .play-btn:hover {
+      color: #fff;
+      background: rgba(255,255,255,.1);
+      transform: scale(1.06);
+    }
   }
 
-  .play-btn:active {
-    transform: scale(0.95);
-  }
+  .compact-play:active { transform: scale(.94); }
+  .ctrl-btn:active { transform: scale(.9); }
+  .play-btn:active { transform: scale(.95); }
+
+  .ctrl-btn:focus-visible,
+  .play-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; background: rgba(255,255,255,.1); }
 
   /* 专辑图片淡入动画 */
   @keyframes fade-enter {

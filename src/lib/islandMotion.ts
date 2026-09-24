@@ -6,7 +6,7 @@ export const ISLAND_MOTION = {
   outwardDuration: 300,
   settleDuration: 60,
   radiusDuration: 320,
-  collapseDuration: 240,
+  collapseDuration: 420,
   hoverDuration: 140,
   styleDuration: 180,
   overshoot: ISLAND_OVERSHOOT,

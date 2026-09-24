@@ -1,6 +1,7 @@
 <script lang="ts">
   import { EyeOff, GalleryHorizontalEnd, Settings, Timer, Volume2, VolumeX } from "lucide-svelte";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
+  import RollingNumber from "$lib/RollingNumber.svelte";
   import type { IslandTool } from "$lib/featureRail";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
 
@@ -14,6 +15,7 @@
     timerStatus = "idle",
     timerRemainingMs = 0,
     timerFinished = false,
+    reduceMotion = false,
     onTool,
     onSettingsToggle,
     onFloating,
@@ -29,6 +31,7 @@
     timerStatus?: CountdownStatus;
     timerRemainingMs?: number;
     timerFinished?: boolean;
+    reduceMotion?: boolean;
     onTool?: (tool: IslandTool | null) => void;
     onSettingsToggle?: () => void;
     onFloating?: () => void;
@@ -108,7 +111,7 @@
     {#if enabledTools.includes("timer")}
       <button class="feature-segment" class:active={activeTool === "timer"} class:timer-running={timerStatus === "running"} class:timer-paused={timerStatus === "paused"} type="button" aria-label={t("timerTool")} aria-pressed={activeTool === "timer"} onclick={(event) => { event.stopPropagation(); selectTool("timer"); }}>
         <Timer size={14} strokeWidth={2.1} />
-        <span>{timerFinished ? labels.timer : timerStatus === "idle" ? labels.timer : timerText}</span>
+        <span>{#if timerFinished || timerStatus === "idle"}{timerFinished ? t("timerComplete") : labels.timer}{:else}<RollingNumber value={timerText} {reduceMotion} />{/if}</span>
       </button>
     {/if}
 
@@ -166,7 +169,7 @@
     border-radius: 18px;
     color: rgba(255, 255, 255, .56);
     background: transparent;
-    font: 600 10px/1 var(--app-font, "Segoe UI", sans-serif);
+    font: 600 10px/1 var(--app-font);
     letter-spacing: .01em;
     text-transform: none;
     white-space: nowrap;

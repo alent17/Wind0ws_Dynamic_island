@@ -7,6 +7,7 @@
     step = 1,
     value = $bindable(0),
     unit = "",
+    disabled = false,
     showValue = true,
     hideLabel = false,
     previewTarget = null,
@@ -21,6 +22,7 @@
     step?: number;
     value?: number;
     unit?: string;
+    disabled?: boolean;
     showValue?: boolean;
     hideLabel?: boolean;
     previewTarget?: string | null;
@@ -50,7 +52,7 @@
   }
 </script>
 
-<div class="studio-slider" class:is-highlighted={previewTarget !== null} role="group" onmouseenter={() => onPreviewStart?.(value)} onfocusin={() => onPreviewStart?.(value)}>
+<div class="studio-slider" class:is-highlighted={previewTarget !== null} class:is-disabled={disabled} role="group" onmouseenter={() => onPreviewStart?.(value)} onfocusin={() => onPreviewStart?.(value)} onmouseleave={() => onPreviewEnd?.(value)} onfocusout={() => onPreviewEnd?.(value)}>
   <div class="range-label" class:hidden={hideLabel}>
     <div class="title-group">
       {#if label}<span class="label">{label}</span>{/if}
@@ -67,6 +69,7 @@
     {min}
     {max}
     {step}
+    {disabled}
     value={value}
     oninput={handleInput}
     onpointerdown={handlePointerDown}
@@ -79,8 +82,11 @@
   .studio-slider {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: 8px;
   }
+
+  .studio-slider.is-disabled { opacity: .45; }
+  .studio-slider.is-disabled input { cursor: not-allowed; }
 
   .range-label {
     display: flex;
@@ -88,8 +94,8 @@
     justify-content: space-between;
     gap: 10px;
     min-height: 17px;
-    margin: 14px 0 8px;
-    font-size: 11px;
+    margin: 0;
+    font-size: 12px;
   }
 
   .range-label.hidden {
@@ -104,37 +110,43 @@
   }
 
   .label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
-    color: #141416;
+    color: var(--studio-control-ink, #141416);
     line-height: 1.2;
   }
 
   .title-group small {
-    color: #7b7b84;
-    font-size: 9px;
+    color: var(--studio-control-muted, #7b7b84);
+    font-size: 11px;
     line-height: 1.35;
   }
 
   output {
     flex: none;
-    font-size: 10px;
-    font-weight: 400;
-    color: #66666e;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--studio-control-muted, #66666e);
     font-variant-numeric: tabular-nums;
   }
 
   input[type="range"] {
     width: 100%;
     margin: 0;
-    accent-color: #111113;
+    accent-color: var(--studio-range-accent, #15161a);
     cursor: pointer;
     color-scheme: light;
   }
 
   input[type="range"]:focus-visible {
-    outline: 2px solid #111113;
-    outline-offset: 3px;
+    outline: 2px solid var(--studio-accent, #3158c8);
+    outline-offset: 4px;
     border-radius: 4px;
+  }
+
+  .studio-slider.is-highlighted output,
+  .studio-slider:focus-within output {
+    color: var(--studio-accent, #3158c8);
+    font-weight: 700;
   }
 </style>

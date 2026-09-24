@@ -27,7 +27,7 @@ const BAND_GAINS: [f32; NUM_BARS] = [1.15, 1.65, 2.2, 3.4, 5.4, 8.0];
 const SMOOTH_ATTACK: f32 = 0.38;
 const SMOOTH_RELEASE: f32 = 0.82;
 
-const MIN_DB: f32 = -65.0;
+const MIN_DB: f32 = -78.0;
 const MAX_DB: f32 = -12.0;
 
 pub struct SpectrumCapture {

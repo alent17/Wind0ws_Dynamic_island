@@ -19,6 +19,7 @@ let lastFrameAt = 0;
 // transition. Keep the native capture alive for a short grace period so a
 // hand-off does not issue a stop/start pair on every expansion.
 const CAPTURE_STOP_GRACE_MS = 350;
+const LISTENER_RETRY_MS = 1_000;
 
 function queueCaptureCommand(command: "start_spectrum" | "stop_spectrum") {
   // Start and stop can cross during a quick collapse, pause, or settings
@@ -27,27 +28,56 @@ function queueCaptureCommand(command: "start_spectrum" | "stop_spectrum") {
   return captureCommands;
 }
 
-async function connect(currentGeneration: number) {
-  const dispose = await listen<number[]>("spectrum-data", ({ payload }) => {
-    lastFrameAt = Date.now();
-    values.set(Float32Array.from({ length: NUM_BARS }, (_, index) => payload[index] ?? 0));
-  });
+function isCurrent(currentGeneration: number) {
+  return currentGeneration === generation && consumers > 0;
+}
 
-  if (currentGeneration !== generation || consumers === 0) {
-    dispose();
-    return;
+async function attachListener(currentGeneration: number): Promise<boolean> {
+  try {
+    const dispose = await listen<number[]>("spectrum-data", ({ payload }) => {
+      if (!isCurrent(currentGeneration)) return;
+      lastFrameAt = Date.now();
+      values.set(Float32Array.from({ length: NUM_BARS }, (_, index) => payload[index] ?? 0));
+    });
+
+    if (!isCurrent(currentGeneration)) {
+      dispose();
+      return false;
+    }
+
+    const previous = unlisten;
+    unlisten = dispose;
+    previous?.();
+    lastFrameAt = Date.now();
+    return true;
+  } catch (error) {
+    console.warn("[Spectrum] 监听连接失败", error);
+    return false;
+  }
+}
+
+async function connect(currentGeneration: number) {
+  while (isCurrent(currentGeneration)) {
+    if (await attachListener(currentGeneration)) break;
+    await new Promise<void>((resolve) => {
+      setTimeout(() => resolve(), LISTENER_RETRY_MS);
+    });
   }
 
-  unlisten = dispose;
+  if (!isCurrent(currentGeneration)) return;
   lastFrameAt = Date.now();
   if (watchdog) clearInterval(watchdog);
   watchdog = setInterval(() => {
-    if (currentGeneration !== generation || consumers === 0) return;
+    if (!isCurrent(currentGeneration)) return;
     if (Date.now() - lastFrameAt > 2500) {
       values.set(new Float32Array(NUM_BARS));
       lastFrameAt = Date.now();
-      // A device removal can end the native stream while the UI stays mounted.
-      void queueCaptureCommand("start_spectrum").catch(() => {});
+      // Recover both sides: a native device change can end capture, while a
+      // WebView listener can also become detached independently.
+      void (async () => {
+        if (!(await attachListener(currentGeneration))) return;
+        await queueCaptureCommand("start_spectrum").catch(() => {});
+      })();
     }
   }, 1000);
   try {

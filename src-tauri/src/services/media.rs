@@ -444,13 +444,38 @@ fn source_display(source: &str, raw_id: &str) -> String {
         "bilibili" => "Bilibili".to_string(),
         "qqmusic" => "QQ 音乐".to_string(),
         "apple" => "Apple Music".to_string(),
-        _ => raw_id
-            .rsplit(['!', '\\'])
-            .next()
-            .unwrap_or(raw_id)
-            .trim_end_matches(".exe")
-            .to_string(),
+        _ => {
+            let lower = raw_id.to_ascii_lowercase();
+            if lower.contains("zunemusic") {
+                return "Windows 媒体播放器".to_string();
+            }
+            if lower.starts_with("chrome") {
+                return browser_display("Chrome", raw_id);
+            }
+            if lower.starts_with("msedge") {
+                return browser_display("Microsoft Edge", raw_id);
+            }
+            let app = raw_id.split('!').next().unwrap_or(raw_id)
+                .rsplit('\\').next().unwrap_or(raw_id);
+            if raw_id.contains('!') {
+                return app.split('_').next().unwrap_or(app).replace('.', " ");
+            }
+            app.trim_end_matches(".exe").to_string()
+        }
     }
+}
+
+fn browser_display(name: &str, raw_id: &str) -> String {
+    let lower = raw_id.to_ascii_lowercase();
+    if let Some(profile) = lower.find(".profile") {
+        let number = raw_id[profile + ".profile".len()..]
+            .split(|ch: char| !ch.is_ascii_digit())
+            .next().unwrap_or("");
+        if !number.is_empty() {
+            return format!("{name} · 个人资料 {number}");
+        }
+    }
+    name.to_string()
 }
 
 fn selected_player_ids(app: &AppHandle) -> Option<Vec<String>> {
@@ -470,6 +495,12 @@ fn player_order_ids(app: &AppHandle) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn ordered_selected_ids<'a>(order: &'a [String], selected: &'a [String]) -> Vec<&'a str> {
+    order.iter().filter(|id| selected.contains(id))
+        .chain(selected.iter().filter(|id| !order.contains(id)))
+        .map(String::as_str).collect()
+}
+
 fn selected_session(
     app: &AppHandle,
 ) -> AppResult<Option<(GlobalSystemMediaTransportControlsSession, String, String)>> {
@@ -480,6 +511,7 @@ fn selected_session(
         .GetSessions()
         .map_err(|e| AppError::media(format!("GetSessions failed: {:?}", e)))?;
     let filter = selected_player_ids(app);
+    let order = player_order_ids(app);
     if matches!(filter, Some(ref ids) if ids.is_empty()) {
         return Ok(None);
     }
@@ -506,10 +538,12 @@ fn selected_session(
         }
     }
     if let Some(ids) = filter {
-        for selected_id in ids {
+        // The visible priority is player_order_ids. selected_player_ids is only
+        // the allowlist; older settings may contain IDs absent from the order.
+        for selected_id in ordered_selected_ids(&order, &ids) {
             if let Some((session, raw_id, _, _)) = candidates
                 .iter()
-                .filter(|(_, id, _, _)| id == &selected_id)
+                .filter(|(_, id, _, _)| id == selected_id)
                 .max_by_key(|(_, _, playing, updated)| (*playing, *updated))
             {
                 let source = source_for_id(raw_id).to_string();
@@ -518,7 +552,6 @@ fn selected_session(
         }
         return Ok(None);
     }
-    let order = player_order_ids(app);
     if !order.is_empty() {
         for ordered_id in order {
             if let Some((session, raw_id, _, _)) = candidates
@@ -699,7 +732,9 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
             previous: controls.IsPreviousEnabled().unwrap_or(false),
             play_pause: controls.IsPlayPauseToggleEnabled().unwrap_or(false),
             next: controls.IsNextEnabled().unwrap_or(false),
-            seek: controls.IsPlaybackPositionEnabled().unwrap_or(false),
+            // 网易云未声明 seek 时也开放 UI 尝试一次 SMTC 位置变更请求；
+            // 是否成功以 seek_media 的系统调用结果为准。
+            seek: controls.IsPlaybackPositionEnabled().unwrap_or(false) || source_type == "netease",
             shuffle: controls.IsShuffleEnabled().unwrap_or(false),
             repeat: controls.IsRepeatEnabled().unwrap_or(false),
         })
@@ -975,8 +1010,23 @@ pub fn cycle_repeat(app: &AppHandle) -> AppResult<()> {
 mod cover_tests {
     use super::{
         apple_hd_url, best_cover_candidate, candidate_score, cover_provider_order, netease_hd_url,
-        normalize_media_text, stabilize_timeline, CoverCandidate, TimelineSnapshot,
+        normalize_media_text, ordered_selected_ids, source_display, stabilize_timeline,
+        CoverCandidate, TimelineSnapshot,
     };
+
+    #[test]
+    fn selected_players_follow_visible_order() {
+        let order = vec!["second".to_string(), "first".to_string()];
+        let selected = vec!["first".to_string(), "second".to_string(), "legacy".to_string()];
+        assert_eq!(ordered_selected_ids(&order, &selected), ["second", "first", "legacy"]);
+    }
+
+    #[test]
+    fn formats_common_windows_session_ids() {
+        assert_eq!(source_display("generic", "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic"), "Windows 媒体播放器");
+        assert_eq!(source_display("generic", "Chrome.UserData.Profile2"), "Chrome · 个人资料 2");
+        assert_eq!(source_display("generic", "OpenAI.Codex_2p2nqsd0c76g0!App"), "OpenAI Codex");
+    }
 
     fn candidate(title: &str, artist: &str, url: &str) -> CoverCandidate {
         CoverCandidate {

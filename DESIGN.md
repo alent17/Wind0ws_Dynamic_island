@@ -1,6 +1,6 @@
 ---
 name: Isle
-description: The restored original Windows media island with a white visual inspection studio.
+description: The Windows media island with a dark control studio and white inspection stage.
 colors:
   island-black: "#000000"
   island-white: "#ffffff"
@@ -8,34 +8,34 @@ colors:
   clock-orange: "#f28b31"
   clock-minute: "#f7bd76"
   clock-caption: "#c9c1b8"
-  studio-ink: "#111113"
-  studio-surface: "#f5f5f7"
-  studio-hairline: "#e5e5e8"
-  studio-accent: "#3158c8"
+  studio-ink: "#f5f6f7"
+  studio-surface: "#181a1e"
+  studio-hairline: "#35373d"
+  studio-accent: "#84a8ff"
 typography:
   title:
-    fontFamily: "MiSans, Segoe UI, sans-serif"
+    fontFamily: "MiSans"
     fontSize: "18px"
     fontWeight: 700
   body:
-    fontFamily: "MiSans, Segoe UI, sans-serif"
+    fontFamily: "MiSans"
     fontSize: "14px"
   display:
-    fontFamily: "Alibaba PuHuiTi Heavy, MiSans, sans-serif"
+    fontFamily: "MiSans"
     fontSize: "52px"
-    fontWeight: 900
+    fontWeight: 700
   clock-compact:
-    fontFamily: "Alibaba PuHuiTi Heavy, MiSans, sans-serif"
+    fontFamily: "MiSans"
     fontSize: "33px"
-    fontWeight: 900
+    fontWeight: 700
   micro:
-    fontSize: "9px"
-  label:
-    fontSize: "10px"
-  caption:
     fontSize: "11px"
-  data:
+  label:
     fontSize: "12px"
+  caption:
+    fontSize: "12px"
+  data:
+    fontSize: "13px"
   compact-title:
     fontSize: "13px"
 rounded:
@@ -70,7 +70,11 @@ components:
 
 ## Overview
 
-The production player surfaces use the project's original visual language. The main island is a very small black pill that grows into a 300 × 160 media controller. The separate floating player is a cover-first square stage with a compact black information strip and hover-revealed controls. Isle Studio remains a white inspection and settings surface and must not be replaced by the legacy settings page.
+The production player surfaces use the project's original visual language. The main island is a very small black pill that grows into a 300 × 160 media controller. The separate floating player is a cover-first square stage with a compact black information strip and hover-revealed controls. Isle Studio uses the island's dark shell and bright active controls around a white inspection stage. It must not be replaced by the legacy settings page.
+
+## Typography
+
+MiSans is the only shipped typeface across Studio, the island, the floating player, the timer, and pixel-art mode. Regular, Medium, and Bold weights carry hierarchy. Legacy font preferences are read for compatibility but render as MiSans. Studio labels and metadata stay legible at compact desktop sizes.
 
 ## Dynamic Island
 
@@ -90,7 +94,9 @@ The production player surfaces use the project's original visual language. The m
 
 ## Isle Studio
 
-The current white Isle Studio is authoritative and stays visually independent from the restored legacy player implementation. Its white stage, gray inspector panels, preview scenarios, behavior controls, and tools remain separate from the restored legacy player implementation. The muted studio accent (`#3158c8`) is reserved for live/editing state and should not become a decorative secondary palette. Do not restore the archived Settings page or its HTML/build entry.
+Isle Studio shares the island's black and white control language. Its white stage remains the visual test surface so clipping, corners, and radius failures are visible. Inspector panels are charcoal, selected buttons are white, and the muted blue accent (`#84a8ff`) is reserved for live/editing state and keyboard focus. The native preview follows current media and weather; the browser preview uses labeled sample data. The island preview stays black even when the floating player has a custom fill color. Do not restore the archived Settings page or its HTML/build entry.
+
+Studio uses an 8/12/16/20 px spacing rhythm: labels and controls form tight groups, related settings separate by 16 px, and inspector panels use 20 px padding on desktop. Controls distinguish rest, hover, selected, disabled, and keyboard focus with surface, border, and outline changes. On narrow windows, the Apply bar follows the controls so it cannot cover a slider.
 
 ## Compatibility
 
@@ -98,4 +104,4 @@ The persisted settings object contains both Studio-visible preferences and the l
 
 ## Comic Clock
 
-The function-area clock uses the bundled Alibaba PuHuiTi Heavy face, tilted tabular numbers, warm orange offset ink, and a white date strip. Use the smaller 33 px variant beside the weather forecast; keep surrounding player controls unchanged.
+The function-area clock uses MiSans Bold with tabular numbers, warm orange offset ink, and a white date strip. Use the smaller 33 px variant beside the weather forecast; keep surrounding player controls unchanged.

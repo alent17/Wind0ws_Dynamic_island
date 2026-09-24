@@ -27,7 +27,28 @@ pub fn read_settings_file(app: &AppHandle) -> Option<AppPreferences> {
     }
 
     let content = fs::read_to_string(config_path).ok()?;
-    serde_json::from_str(&content).ok()
+    let mut value: serde_json::Value = serde_json::from_str(&content).ok()?;
+    if let Some(settings) = value.as_object_mut() {
+        // Older releases allowed several families; keep the setting key but use MiSans everywhere.
+        settings.insert(
+            "fontId".to_string(),
+            serde_json::Value::String("misans".to_string()),
+        );
+        // Older releases shared one topmost preference between the island
+        // and floating player. Seed the new independent value from that
+        // preference once so existing users keep their current behavior.
+        if !settings.contains_key("floatingWindowAlwaysOnTop") {
+            let was_always_on_top = settings
+                .get("alwaysOnTop")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(true);
+            settings.insert(
+                "floatingWindowAlwaysOnTop".to_string(),
+                serde_json::Value::Bool(was_always_on_top),
+            );
+        }
+    }
+    serde_json::from_value(value).ok()
 }
 
 /// 将设置写入配置文件

@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
 
-[v1.0.0 をダウンロード](https://github.com/alent17/Wind0ws_Dynamic_island/releases/tag/v1.0.0) · [インストール](INSTALL.md) · [問題を報告](https://github.com/alent17/Wind0ws_Dynamic_island/issues)
+[v1.0.2 をダウンロード](https://github.com/alent17/Wind0ws_Dynamic_island/releases/tag/v1.0.2) · [インストール](INSTALL.md) · [問題を報告](https://github.com/alent17/Wind0ws_Dynamic_island/issues)
 
 </div>
 
@@ -21,6 +21,7 @@ Isle は Windows 10/11 向けの Dynamic Island 風デスクトップ・メデ�
 ## 主な機能
 
 - Windows SMTC による再生、一時停止、前後の曲、シーク操作
+- 最後に再生した曲を記憶し、アイランドからプレーヤーを開いて再生を再開
 - 収納、ホバー、展開、自動非表示の各状態
 - フローティングまたは画面四辺への接続、マルチディスプレイ対応
 - システム音声に連動する FFT スペクトラムとスムーズなランダム表示
@@ -46,7 +47,7 @@ Isle は Windows 10/11 向けの Dynamic Island 風デスクトップ・メデ�
 
 ## インストール
 
-[GitHub Releases](https://github.com/alent17/Wind0ws_Dynamic_island/releases/latest) から `Isle_1.0.0_x64-setup.exe` をダウンロードして実行します。Windows のメディアコントロールに対応したアプリで音楽を再生し、システムトレイから Isle Studio を開いて設定してください。
+[GitHub Releases](https://github.com/alent17/Wind0ws_Dynamic_island/releases/latest) から `Isle_1.0.2_x64-setup.exe` をダウンロードして実行します。Windows のメディアコントロールに対応したアプリで音楽を再生し、システムトレイから Isle Studio を開いて設定してください。
 
 Windows 10/11 x64 と Microsoft Edge WebView2 Runtime が必要です。利用できる操作は各プレーヤーの Windows SMTC 対応状況によって異なります。
 

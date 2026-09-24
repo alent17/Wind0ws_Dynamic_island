@@ -80,6 +80,8 @@ pub const EVENT_SETTINGS_CHANGED: &str = "settings-changed";
 pub const EVENT_CORNER_RADIUS_CHANGED: &str = "corner-radius-changed";
 pub const EVENT_LOCK_FLOATING_WINDOW_CHANGED: &str = "lock-floating-window-changed";
 pub const EVENT_ALWAYS_ON_TOP_CHANGED: &str = "always-on-top-changed";
+pub const EVENT_FLOATING_WINDOW_ALWAYS_ON_TOP_CHANGED: &str =
+    "floating-window-always-on-top-changed";
 pub const EVENT_HD_COVER_CHANGED: &str = "hd-cover-changed";
 pub const EVENT_PIXEL_ART_CHANGED: &str = "pixel-art-changed";
 pub const EVENT_HALFTONE_CHANGED: &str = "halftone-changed";

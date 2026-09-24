@@ -11,6 +11,8 @@ use tauri::{AppHandle, Manager};
 
 const DEFAULT_FLOATING_WINDOW_WIDTH: u32 = 260;
 const DEFAULT_FLOATING_WINDOW_HEIGHT: u32 = 360;
+const FLOATING_WINDOW_TRANSITION_MS: u64 = 260;
+static FLOATING_WINDOW_MOTION_REVISION: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -77,6 +79,132 @@ struct WindowMotionState {
 }
 
 static WINDOW_MOTION_STATE: OnceLock<Mutex<WindowMotionState>> = OnceLock::new();
+
+fn floating_window_animations_enabled(app: &AppHandle) -> bool {
+    let state = app.state::<AppState>();
+    state
+        .settings
+        .lock()
+        .map(|settings| settings.enable_animations && !settings.reduce_animations)
+        .unwrap_or(true)
+}
+
+fn monitor_left_edge_for_position(
+    window: &tauri::WebviewWindow,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+) -> i32 {
+    let Ok(monitors) = window.available_monitors() else {
+        return 0;
+    };
+    if monitors.is_empty() {
+        return 0;
+    }
+
+    let center_x = x as i64 + width as i64 / 2;
+    let center_y = y as i64 + height as i64 / 2;
+    let nearest = monitors
+        .iter()
+        .find(|monitor| {
+            let position = monitor.position();
+            let size = monitor.size();
+            center_x >= position.x as i64
+                && center_x < position.x as i64 + size.width as i64
+                && center_y >= position.y as i64
+                && center_y < position.y as i64 + size.height as i64
+        })
+        .or_else(|| {
+            monitors.iter().min_by_key(|monitor| {
+                let position = monitor.position();
+                let size = monitor.size();
+                let dx = if center_x < position.x as i64 {
+                    position.x as i64 - center_x
+                } else if center_x >= position.x as i64 + size.width as i64 {
+                    center_x - (position.x as i64 + size.width as i64 - 1)
+                } else {
+                    0
+                };
+                let dy = if center_y < position.y as i64 {
+                    position.y as i64 - center_y
+                } else if center_y >= position.y as i64 + size.height as i64 {
+                    center_y - (position.y as i64 + size.height as i64 - 1)
+                } else {
+                    0
+                };
+                dx * dx + dy * dy
+            })
+        });
+
+    nearest.map(|monitor| monitor.position().x).unwrap_or(0)
+}
+
+fn cubic_bezier_component(t: f64, first: f64, second: f64) -> f64 {
+    let inverse = 1.0 - t;
+    3.0 * inverse * inverse * t * first + 3.0 * inverse * t * t * second + t * t * t
+}
+
+fn floating_window_ease_out(progress: f64) -> f64 {
+    let mut low = 0.0;
+    let mut high = 1.0;
+    for _ in 0..16 {
+        let midpoint = (low + high) / 2.0;
+        if cubic_bezier_component(midpoint, 0.23, 0.32) < progress {
+            low = midpoint;
+        } else {
+            high = midpoint;
+        }
+    }
+    cubic_bezier_component((low + high) / 2.0, 1.0, 1.0)
+}
+
+async fn animate_floating_window_position(
+    window: tauri::WebviewWindow,
+    target_x: i32,
+    target_y: i32,
+    animate: bool,
+) -> AppResult<bool> {
+    let start = window
+        .outer_position()
+        .map_err(|error| AppError::window(error.to_string()))?;
+    let revision = FLOATING_WINDOW_MOTION_REVISION.fetch_add(1, Ordering::AcqRel) + 1;
+
+    if !animate || (start.x == target_x && start.y == target_y) {
+        window
+            .set_position(tauri::PhysicalPosition::new(target_x, target_y))
+            .map_err(|error| AppError::window(error.to_string()))?;
+        return Ok(true);
+    }
+
+    tauri::async_runtime::spawn_blocking(move || -> AppResult<bool> {
+        let started_at = std::time::Instant::now();
+        let start_x = start.x as f64;
+        let start_y = start.y as f64;
+        loop {
+            if FLOATING_WINDOW_MOTION_REVISION.load(Ordering::Acquire) != revision {
+                return Ok(false);
+            }
+
+            let progress = (started_at.elapsed().as_millis() as f64
+                / FLOATING_WINDOW_TRANSITION_MS as f64)
+                .clamp(0.0, 1.0);
+            let eased = floating_window_ease_out(progress);
+            let x = (start_x + (target_x as f64 - start_x) * eased).round() as i32;
+            let y = (start_y + (target_y as f64 - start_y) * eased).round() as i32;
+            window
+                .set_position(tauri::PhysicalPosition::new(x, y))
+                .map_err(|error| AppError::window(error.to_string()))?;
+
+            if progress >= 1.0 {
+                return Ok(true);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(16));
+        }
+    })
+    .await
+    .map_err(|error| AppError::window(format!("Floating window animation failed: {error}")))?
+}
 
 fn normalized_interaction_region(
     x: f64,
@@ -248,7 +376,12 @@ fn interaction_revision_is_current(candidate: u64, current: u64) -> bool {
     candidate >= current
 }
 
-fn cursor_monitor_interval(cursor_x: i32, cursor_y: i32, rect: &windows::Win32::Foundation::RECT, inside: bool) -> u64 {
+fn cursor_monitor_interval(
+    cursor_x: i32,
+    cursor_y: i32,
+    rect: &windows::Win32::Foundation::RECT,
+    inside: bool,
+) -> u64 {
     if inside {
         return CURSOR_MONITOR_ACTIVE_INTERVAL_MS;
     }
@@ -688,37 +821,71 @@ pub fn toggle_studio_window(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn toggle_floating_window(_app: AppHandle) -> AppResult<()> {
-    tracing::warn!("[toggle_floating_window] 命令尚未实现");
-    Ok(())
+pub async fn toggle_floating_window(app: AppHandle) -> AppResult<()> {
+    if let Some(window) = app.get_webview_window("floating_player") {
+        if window.is_visible().unwrap_or(false) {
+            return close_floating_window(app).await;
+        }
+    }
+    open_floating_window(app).await
 }
 
 #[tauri::command]
 pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
-    if let Some(window) = app.get_webview_window("floating_player") {
-        window
-            .set_shadow(false)
-            .map_err(|e| AppError::window(e.to_string()))?;
-        window.show().map_err(|e| AppError::window(e.to_string()))?;
-        window
-            .set_focus()
-            .map_err(|e| AppError::window(e.to_string()))?;
-        return Ok(());
-    }
-
+    let animate = floating_window_animations_enabled(&app);
     let state = app.state::<AppState>();
-    let saved_position = {
+    let (saved_position, always_on_top) = {
         let settings = state
             .settings
             .lock()
             .map_err(|_| AppError::lock("Failed to lock settings"))?;
         (
-            settings.floating_window_x,
-            settings.floating_window_y,
-            settings.floating_window_width,
-            settings.floating_window_height,
+            (
+                settings.floating_window_x,
+                settings.floating_window_y,
+                settings.floating_window_width,
+                settings.floating_window_height,
+            ),
+            settings.floating_window_always_on_top,
         )
     };
+
+    if let Some(window) = app.get_webview_window("floating_player") {
+        window
+            .set_shadow(false)
+            .map_err(|e| AppError::window(e.to_string()))?;
+        window
+            .set_always_on_top(always_on_top)
+            .map_err(|e| AppError::window(e.to_string()))?;
+
+        if window.is_visible().unwrap_or(false) {
+            window
+                .set_focus()
+                .map_err(|e| AppError::window(e.to_string()))?;
+            return Ok(());
+        }
+
+        let target = window
+            .outer_position()
+            .map_err(|e| AppError::window(e.to_string()))?;
+        let size = window
+            .outer_size()
+            .map_err(|e| AppError::window(e.to_string()))?;
+        let start_x =
+            monitor_left_edge_for_position(&window, target.x, target.y, size.width, size.height)
+                - size.width as i32;
+        if animate {
+            window
+                .set_position(tauri::PhysicalPosition::new(start_x, target.y))
+                .map_err(|e| AppError::window(e.to_string()))?;
+        }
+        window.show().map_err(|e| AppError::window(e.to_string()))?;
+        window
+            .set_focus()
+            .map_err(|e| AppError::window(e.to_string()))?;
+        let _ = animate_floating_window_position(window, target.x, target.y, animate).await?;
+        return Ok(());
+    }
 
     let mut builder = tauri::WebviewWindowBuilder::new(
         &app,
@@ -731,7 +898,7 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
     .decorations(false)
     .transparent(true)
     .shadow(false)
-    .always_on_top(true);
+    .always_on_top(always_on_top);
 
     if let (Some(x), Some(y), Some(w), Some(h)) = saved_position {
         builder = builder.inner_size(w.max(200) as f64, h.max(200) as f64);
@@ -741,11 +908,33 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
             DEFAULT_FLOATING_WINDOW_WIDTH as f64,
             DEFAULT_FLOATING_WINDOW_HEIGHT as f64,
         );
+        builder = builder.center();
     }
 
-    builder
+    let window = builder
+        .visible(false)
         .build()
         .map_err(|e| AppError::window(e.to_string()))?;
+
+    let target = window
+        .outer_position()
+        .map_err(|e| AppError::window(e.to_string()))?;
+    let size = window
+        .outer_size()
+        .map_err(|e| AppError::window(e.to_string()))?;
+    let start_x =
+        monitor_left_edge_for_position(&window, target.x, target.y, size.width, size.height)
+            - size.width as i32;
+    if animate {
+        window
+            .set_position(tauri::PhysicalPosition::new(start_x, target.y))
+            .map_err(|e| AppError::window(e.to_string()))?;
+    }
+    window.show().map_err(|e| AppError::window(e.to_string()))?;
+    window
+        .set_focus()
+        .map_err(|e| AppError::window(e.to_string()))?;
+    let _ = animate_floating_window_position(window, target.x, target.y, animate).await?;
 
     Ok(())
 }
@@ -781,8 +970,30 @@ pub fn toggle_timer_window(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn close_floating_window(app: AppHandle) -> AppResult<()> {
+pub async fn close_floating_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("floating_player") {
+        if window.is_visible().unwrap_or(false) {
+            let animate = floating_window_animations_enabled(&app);
+            let position = window
+                .outer_position()
+                .map_err(|e| AppError::window(e.to_string()))?;
+            let size = window
+                .outer_size()
+                .map_err(|e| AppError::window(e.to_string()))?;
+            let target_x = monitor_left_edge_for_position(
+                &window,
+                position.x,
+                position.y,
+                size.width,
+                size.height,
+            ) - size.width as i32;
+            let completed =
+                animate_floating_window_position(window.clone(), target_x, position.y, animate)
+                    .await?;
+            if !completed {
+                return Ok(());
+            }
+        }
         window
             .close()
             .map_err(|e| AppError::window(e.to_string()))?;

@@ -63,15 +63,11 @@ pub async fn save_settings(
 ) -> AppResult<()> {
     settings.compact_length = settings.compact_length.clamp(80, 300);
     settings.island_edge_position = settings.island_edge_position.min(100);
-    settings.edge_shoulder_radius = settings.edge_shoulder_radius.min(16);
+    settings.collapsed_edge_shoulder_radius = settings.collapsed_edge_shoulder_radius.min(16);
+    settings.expanded_edge_shoulder_radius = settings.expanded_edge_shoulder_radius.min(64);
     settings.expanded_corner_radius = settings.expanded_corner_radius.min(80);
     settings.idle_rotation_seconds = settings.idle_rotation_seconds.clamp(2, 60);
-    if !matches!(
-        settings.font_id.as_str(),
-        "system" | "misans" | "source-han-serif-cn-bold" | "alibaba-puhuiti-heavy"
-    ) {
-        settings.font_id = "misans".to_string();
-    }
+    settings.font_id = "misans".to_string();
     if let Some(ids) = settings.selected_player_ids.as_mut() {
         let mut seen = std::collections::HashSet::new();
         ids.retain(|id| !id.trim().is_empty() && seen.insert(id.clone()));
@@ -122,9 +118,12 @@ pub async fn save_settings(
         .as_ref()
         .is_some_and(|old| old.always_on_top != settings.always_on_top)
     {
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.set_always_on_top(always_on_top);
-        }
+        apply_island_always_on_top(&app, always_on_top)?;
+    }
+    if old_settings.as_ref().is_some_and(|old| {
+        old.floating_window_always_on_top != settings.floating_window_always_on_top
+    }) {
+        apply_floating_window_always_on_top(&app, settings.floating_window_always_on_top)?;
     }
     if old_settings.as_ref().is_some_and(|old| {
         old.capture_hide_on_screenshot != settings.capture_hide_on_screenshot
@@ -179,6 +178,14 @@ pub async fn save_settings(
             let _ = EVENT_BUS.emit(
                 crate::event_bus::EVENT_ALWAYS_ON_TOP_CHANGED,
                 serde_json::json!({"isAlwaysOnTop": settings.always_on_top}),
+            );
+        }
+        if old.floating_window_always_on_top != settings.floating_window_always_on_top {
+            let _ = EVENT_BUS.emit(
+                crate::event_bus::EVENT_FLOATING_WINDOW_ALWAYS_ON_TOP_CHANGED,
+                serde_json::json!({
+                    "isAlwaysOnTop": settings.floating_window_always_on_top
+                }),
             );
         }
         if old.expanded_corner_radius != settings.expanded_corner_radius {
@@ -244,19 +251,70 @@ pub fn set_always_on_top(
     state: State<'_, AppState>,
     enable: bool,
 ) -> AppResult<()> {
+    let changed;
     {
         let mut settings = state
             .settings
             .lock()
             .map_err(|_| AppError::lock("Failed to lock settings"))?;
+        changed = settings.always_on_top != enable;
         settings.always_on_top = enable;
         write_settings_file(&app, &settings)?;
     }
 
+    apply_island_always_on_top(&app, enable)?;
+    if changed {
+        let _ = EVENT_BUS.emit(
+            crate::event_bus::EVENT_ALWAYS_ON_TOP_CHANGED,
+            serde_json::json!({"isAlwaysOnTop": enable}),
+        );
+    }
+    Ok(())
+}
+
+/// Apply the configured topmost state to the main island only.
+fn apply_island_always_on_top(app: &AppHandle, enable: bool) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("main") {
         window
             .set_always_on_top(enable)
-            .map_err(|e| AppError::window(e.to_string()))?;
+            .map_err(|error| AppError::window(format!("设置灵动岛置顶失败：{}", error)))?;
+    }
+    Ok(())
+}
+
+/// Set the floating player's independent topmost preference.
+#[tauri::command]
+pub fn set_floating_window_always_on_top(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    enable: bool,
+) -> AppResult<()> {
+    let changed;
+    {
+        let mut settings = state
+            .settings
+            .lock()
+            .map_err(|_| AppError::lock("Failed to lock settings"))?;
+        changed = settings.floating_window_always_on_top != enable;
+        settings.floating_window_always_on_top = enable;
+        write_settings_file(&app, &settings)?;
+    }
+
+    apply_floating_window_always_on_top(&app, enable)?;
+    if changed {
+        let _ = EVENT_BUS.emit(
+            crate::event_bus::EVENT_FLOATING_WINDOW_ALWAYS_ON_TOP_CHANGED,
+            serde_json::json!({"isAlwaysOnTop": enable}),
+        );
+    }
+    Ok(())
+}
+
+fn apply_floating_window_always_on_top(app: &AppHandle, enable: bool) -> AppResult<()> {
+    if let Some(window) = app.get_webview_window("floating_player") {
+        window
+            .set_always_on_top(enable)
+            .map_err(|error| AppError::window(format!("设置悬浮窗置顶失败：{}", error)))?;
     }
     Ok(())
 }

@@ -18,6 +18,7 @@ export const Events = {
   FLOATING_WINDOW_CLOSED: "floating-window-closed",
   LOCK_FLOATING_WINDOW_CHANGED: "lock-floating-window-changed",
   ALWAYS_ON_TOP_CHANGED: "always-on-top-changed",
+  FLOATING_WINDOW_ALWAYS_ON_TOP_CHANGED: "floating-window-always-on-top-changed",
 
   // 封面效果相关
   HD_COVER_CHANGED: "hd-cover-changed",

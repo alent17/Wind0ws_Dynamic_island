@@ -353,7 +353,7 @@
 
     {#if collapsed}
       <button type="button" class="collapsed-surface" aria-label={t("expand")} title={t("expand")} onclick={toggleCollapsed}>
-        <strong>{displayedTime}</strong>
+        <strong>{#each displayedTime.split("") as character}{#if character === ":"}<span class="timer-colon">{character}</span>{:else}{character}{/if}{/each}</strong>
         <span>{active ? t("timerRunning") : selectedLabel}</span>
         <span class="collapsed-chevron" aria-hidden="true">⌃</span>
       </button>
@@ -389,9 +389,9 @@
       >
         {#key wheelKey}
           <div class="wheel-stack" class:roll-down={wheelDirection === "down"} class:roll-up={wheelDirection === "up"}>
-            <span class="wheel-value previous">{wheelPrevious}</span>
-            <strong class="wheel-value current">{displayedTime}</strong>
-            <span class="wheel-value next">{wheelNext}</span>
+            <span class="wheel-value previous">{#each wheelPrevious.split("") as character}{#if character === ":"}<span class="timer-colon">{character}</span>{:else}{character}{/if}{/each}</span>
+            <strong class="wheel-value current">{#each displayedTime.split("") as character}{#if character === ":"}<span class="timer-colon">{character}</span>{:else}{character}{/if}{/each}</strong>
+            <span class="wheel-value next">{#each wheelNext.split("") as character}{#if character === ":"}<span class="timer-colon">{character}</span>{:else}{character}{/if}{/each}</span>
           </div>
         {/key}
         <div class="wheel-fade top" aria-hidden="true"></div>
@@ -496,7 +496,7 @@
   }
 
   :global(body) {
-    font-family: var(--app-font, "Segoe UI", sans-serif);
+    font-family: var(--app-font);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
@@ -511,6 +511,8 @@
     padding: 22px 24px 18px 31px;
     color: #fff;
     background: transparent;
+    font-family: var(--app-font);
+    font-synthesis: none;
   }
 
   .timer-window.collapsed {
@@ -712,6 +714,8 @@
     transform-origin: left center;
   }
 
+  .timer-colon { position: relative; top: -.08em; }
+
   .wheel-value.previous {
     top: 0;
     color: rgba(255,255,255,.2);
@@ -854,7 +858,7 @@
   .dial-segments button:not(.selected) { opacity: .82; }
   .dial-segments button:disabled { cursor: not-allowed; }
   .dial-segments strong { font-size: 18px; line-height: 1; letter-spacing: -.03em; }
-  .dial-segments span { color: currentColor; font-size: 10px; font-weight: 600; opacity: .72; }
+  .dial-segments span { color: currentColor; font-size: 10px; font-weight: 500; opacity: .72; }
 
   .selection-indicator {
     position: absolute;
@@ -967,7 +971,7 @@
     border-radius: 8px;
     color: #84919f;
     background: rgba(255,255,255,.035);
-    font: 500 10px/1 var(--app-font, "Segoe UI", sans-serif);
+    font: 500 10px/1 var(--app-font);
     cursor: pointer;
     transition: color 140ms ease, background 140ms ease, transform 140ms cubic-bezier(.23, 1, .32, 1);
   }
