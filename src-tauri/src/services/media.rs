@@ -17,7 +17,7 @@ use windows::{
 };
 
 const COVER_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
-const COVER_NEGATIVE_CACHE_TTL: Duration = Duration::from_secs(15 * 60);
+const COVER_NEGATIVE_CACHE_TTL: Duration = Duration::from_secs(30);
 const COVER_MATCH_THRESHOLD: u8 = 65;
 const APPLE_REQUESTS_PER_MINUTE: usize = 18;
 
@@ -198,11 +198,11 @@ fn cover_provider_order(source: &str) -> [&'static str; 2] {
     }
 }
 
-async fn cover_from_netease(
+async fn matched_netease_song(
     client: &reqwest::Client,
     title: &str,
     artist: &str,
-) -> AppResult<Option<ResolvedCover>> {
+) -> AppResult<Option<Value>> {
     // The legacy search endpoint often ranks covers and similarly named songs
     // above the original recording. Search more than the first five entries,
     // and retry without the artist because the service tokenizes CJK queries
@@ -214,6 +214,7 @@ async fn cover_from_netease(
         vec![combined_query, title.to_string()]
     };
     let mut candidate = None;
+    let mut matched_song = None;
     for query in queries {
         let keyword = urlencoding::encode(query.trim());
         let url =
@@ -258,45 +259,79 @@ async fn cover_from_netease(
             })
             .collect();
         candidate = best_cover_candidate(title, artist, candidates);
-        if candidate.is_some() {
+        if let Some(ref selected) = candidate {
+            matched_song = json["result"]["songs"].as_array().and_then(|songs| {
+                songs
+                    .iter()
+                    .find(|song| song["id"].as_u64() == selected.source_id)
+                    .cloned()
+            });
             break;
         }
     }
     let Some(candidate) = candidate else {
         return Ok(None);
     };
-    let cover_url = if candidate.url.is_empty() {
-        let Some(song_id) = candidate.source_id else {
-            return Ok(None);
-        };
-        let detail_url =
-            format!("https://music.163.com/api/song/detail/?id={song_id}&ids=%5B{song_id}%5D");
-        let detail: Value = client
-            .get(detail_url)
-            .header(reqwest::header::REFERER, "https://music.163.com/")
-            .send()
-            .await
-            .map_err(|error| AppError::network(format!("Netease detail failed: {error}")))?
-            .error_for_status()
-            .map_err(|error| AppError::network(format!("Netease detail status failed: {error}")))?
-            .json()
-            .await
-            .map_err(|error| AppError::parse(format!("Netease detail response failed: {error}")))?;
-        detail["songs"][0]["album"]["picUrl"]
-            .as_str()
-            .or_else(|| detail["songs"][0]["album"]["blurPicUrl"].as_str())
-            .unwrap_or_default()
-            .to_string()
-    } else {
-        candidate.url
+    let Some(song_id) = candidate.source_id else {
+        return Ok(matched_song);
     };
-    if cover_url.is_empty() {
-        return Ok(None);
+    let detail_url =
+        format!("https://music.163.com/api/song/detail/?id={song_id}&ids=%5B{song_id}%5D");
+    // Search responses often omit artwork. Detail failure must not discard duration.
+    if let Ok(response) = client
+        .get(detail_url)
+        .header(reqwest::header::REFERER, "https://music.163.com/")
+        .send()
+        .await
+    {
+        if let Ok(response) = response.error_for_status() {
+            if let Ok(detail) = response.json::<Value>().await {
+                if let Some(song) = detail["songs"].as_array().and_then(|songs| {
+                    songs
+                        .iter()
+                        .find(|song| song["id"].as_u64() == Some(song_id))
+                }) {
+                    return Ok(Some(song.clone()));
+                }
+            }
+        }
     }
-    Ok(Some(ResolvedCover {
-        url: netease_hd_url(&cover_url),
-        provider: "netease".to_string(),
-    }))
+    Ok(matched_song)
+}
+
+fn parse_netease_song(song: &Value) -> NeteaseSong {
+    let album = song.get("album").or_else(|| song.get("al"));
+    NeteaseSong {
+        duration: song["duration"]
+            .as_u64()
+            .filter(|value| *value > 0)
+            .or_else(|| song["dt"].as_u64()),
+        album_pic: album
+            .and_then(|album| {
+                album["picUrl"]
+                    .as_str()
+                    .filter(|url| !url.is_empty())
+                    .or_else(|| album["blurPicUrl"].as_str())
+            })
+            .filter(|url| !url.is_empty())
+            .map(netease_hd_url),
+        mv_id: song["mv"].as_i64().or_else(|| song["mvid"].as_i64()),
+        mv_url: None,
+    }
+}
+
+async fn cover_from_netease(
+    client: &reqwest::Client,
+    title: &str,
+    artist: &str,
+) -> AppResult<Option<ResolvedCover>> {
+    Ok(matched_netease_song(client, title, artist)
+        .await?
+        .and_then(|song| parse_netease_song(&song).album_pic)
+        .map(|url| ResolvedCover {
+            url,
+            provider: "netease".to_string(),
+        }))
 }
 
 async fn cover_from_apple(
@@ -415,7 +450,13 @@ pub async fn resolve_hd_cover(
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock()
     {
-        cache.insert(cache_key, (Instant::now(), resolved.clone()));
+        cache.retain(|_, (created, value)| created.elapsed() < if value.is_some() { COVER_CACHE_TTL } else { COVER_NEGATIVE_CACHE_TTL });
+        let incoming_bytes = resolved.as_ref().map_or(0, |cover| cover.url.len());
+        while !cache.is_empty() && (cache.len() >= 64 || cache.values().map(|(_, value)| value.as_ref().map_or(0, |cover| cover.url.len())).sum::<usize>() + incoming_bytes > 8 * 1024 * 1024) {
+            let oldest = cache.iter().min_by_key(|(_, (created, _))| *created).map(|(key, _)| key.clone());
+            if let Some(key) = oldest { cache.remove(&key); }
+        }
+        if incoming_bytes <= 8 * 1024 * 1024 { cache.insert(cache_key, (Instant::now(), resolved.clone())); }
     }
     Ok(resolved)
 }
@@ -455,8 +496,13 @@ fn source_display(source: &str, raw_id: &str) -> String {
             if lower.starts_with("msedge") {
                 return browser_display("Microsoft Edge", raw_id);
             }
-            let app = raw_id.split('!').next().unwrap_or(raw_id)
-                .rsplit('\\').next().unwrap_or(raw_id);
+            let app = raw_id
+                .split('!')
+                .next()
+                .unwrap_or(raw_id)
+                .rsplit('\\')
+                .next()
+                .unwrap_or(raw_id);
             if raw_id.contains('!') {
                 return app.split('_').next().unwrap_or(app).replace('.', " ");
             }
@@ -470,7 +516,8 @@ fn browser_display(name: &str, raw_id: &str) -> String {
     if let Some(profile) = lower.find(".profile") {
         let number = raw_id[profile + ".profile".len()..]
             .split(|ch: char| !ch.is_ascii_digit())
-            .next().unwrap_or("");
+            .next()
+            .unwrap_or("");
         if !number.is_empty() {
             return format!("{name} · 个人资料 {number}");
         }
@@ -496,9 +543,12 @@ fn player_order_ids(app: &AppHandle) -> Vec<String> {
 }
 
 fn ordered_selected_ids<'a>(order: &'a [String], selected: &'a [String]) -> Vec<&'a str> {
-    order.iter().filter(|id| selected.contains(id))
+    order
+        .iter()
+        .filter(|id| selected.contains(id))
         .chain(selected.iter().filter(|id| !order.contains(id)))
-        .map(String::as_str).collect()
+        .map(String::as_str)
+        .collect()
 }
 
 fn selected_session(
@@ -651,9 +701,7 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
     };
 
     // 获取时间线属性（播放进度）
-    let timeline = session
-        .GetTimelineProperties()
-        .map_err(|e| AppError::media(format!("GetTimelineProperties failed: {:?}", e)))?;
+    let timeline = session.GetTimelineProperties().ok();
 
     // 获取媒体属性（标题、艺术家、封面）
     let info = session
@@ -684,16 +732,14 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
         if let Ok(thumbnail_ref) = info.Thumbnail() {
             if let Ok(stream) = thumbnail_ref
                 .OpenReadAsync()
-                .map_err(|e| AppError::media(e.to_string()))?
-                .get()
+                .and_then(|operation| operation.get())
             {
                 if let Ok(reader) = DataReader::CreateDataReader(&stream) {
                     let size = stream.Size().unwrap_or(0) as u32;
                     if size > 0
                         && reader
                             .LoadAsync(size)
-                            .map_err(|e| AppError::media(e.to_string()))?
-                            .get()
+                            .and_then(|operation| operation.get())
                             .is_ok()
                     {
                         let mut buffer = vec![0u8; size as usize];
@@ -743,8 +789,20 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
     let is_playing = playback_status.0 == 4; // Playing = 4
 
     // 计算实际播放位置（考虑时间差）
-    let dur_ms = (timeline.EndTime().unwrap_or_default().Duration / 10000).max(0) as u64;
-    let snapshot_pos_ms = (timeline.Position().unwrap_or_default().Duration / 10000).max(0) as u64;
+    let dur_ms = (timeline
+        .as_ref()
+        .and_then(|value| value.EndTime().ok())
+        .unwrap_or_default()
+        .Duration
+        / 10000)
+        .max(0) as u64;
+    let snapshot_pos_ms = (timeline
+        .as_ref()
+        .and_then(|value| value.Position().ok())
+        .unwrap_or_default()
+        .Duration
+        / 10000)
+        .max(0) as u64;
     // Position 已经是 SMTC 的当前快照。LastUpdatedTime 在部分播放器中是
     // 曲目创建时间或旧时间戳，用它再次外推会直接把进度推到 100%。
     // 前端收到快照后会从接收时刻继续本地计时，因此这里不再重复外推。
@@ -777,7 +835,14 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
     {
         let stabilized = stabilize_timeline(
             cache.get(&timeline_key).copied(),
-            reported_timeline,
+            if timeline.is_none() {
+                cache
+                    .get(&timeline_key)
+                    .copied()
+                    .unwrap_or(reported_timeline)
+            } else {
+                reported_timeline
+            },
             is_playing,
         );
         if cache.len() >= 256 && !cache.contains_key(&timeline_key) {
@@ -822,56 +887,26 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
 /// 通过歌曲名称和艺术家搜索，返回：
 /// - 歌曲时长
 /// - 专辑封面 URL
-/// - MV ID 和播放 URL
+/// - MV ID（播放 URL 通过独立请求获取）
 pub async fn get_netease_song_info(
     song_name: &str,
     artist: &str,
 ) -> AppResult<Option<NeteaseSong>> {
-    let keyword = format!("{} {}", artist, song_name);
-    let encoded_keyword = urlencoding::encode(&keyword);
-    let url = format!(
-        "https://music.163.com/api/search/get/?s={}&type=1&limit=1",
-        encoded_keyword
-    );
-
-    let response = reqwest::get(&url)
-        .await
-        .map_err(|e| AppError::network(format!("Request failed: {}", e)))?;
-
-    let text = response
-        .text()
-        .await
-        .map_err(|e| AppError::network(format!("Read response failed: {}", e)))?;
-
-    let json: Value = serde_json::from_str(&text)
-        .map_err(|e| AppError::parse(format!("JSON parse failed: {}", e)))?;
-
-    if let Some(songs) = json["result"]["songs"].as_array() {
-        if let Some(first_song) = songs.first() {
-            let duration = first_song["duration"].as_u64();
-            let album_pic = first_song["album"]["picUrl"]
-                .as_str()
-                .map(|s| s.to_string());
-            let mv_id = first_song["mv"].as_i64();
-
-            // 如果有 MV，获取 MV URL
-            let mut mv_url: Option<String> = None;
-            if let Some(id) = mv_id {
-                if id > 0 {
-                    mv_url = get_netease_mv_url_internal(id as u64).await?;
-                }
-            }
-
-            return Ok(Some(NeteaseSong {
-                duration,
-                album_pic,
-                mv_id,
-                mv_url,
-            }));
-        }
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(8))
+        .user_agent("Isle/1.0 media resolver")
+        .build()
+        .map_err(|error| AppError::network(error.to_string()))?;
+    let Some(song) = matched_netease_song(&client, song_name, artist).await? else {
+        return Ok(None);
+    };
+    let mut info = parse_netease_song(&song);
+    // Artwork is fetched by the backend so WebView CORS/hotlink rules do not hide it.
+    if let Some(url) = info.album_pic.as_ref() {
+        info.album_pic = download_cover_as_data_url(&client, url).await.ok();
     }
-
-    Ok(None)
+    // MV lookup is independent; callers can request it using mv_id when needed.
+    Ok(Some(info))
 }
 
 /// 获取网易云音乐 MV 播放 URL
@@ -1017,15 +1052,34 @@ mod cover_tests {
     #[test]
     fn selected_players_follow_visible_order() {
         let order = vec!["second".to_string(), "first".to_string()];
-        let selected = vec!["first".to_string(), "second".to_string(), "legacy".to_string()];
-        assert_eq!(ordered_selected_ids(&order, &selected), ["second", "first", "legacy"]);
+        let selected = vec![
+            "first".to_string(),
+            "second".to_string(),
+            "legacy".to_string(),
+        ];
+        assert_eq!(
+            ordered_selected_ids(&order, &selected),
+            ["second", "first", "legacy"]
+        );
     }
 
     #[test]
     fn formats_common_windows_session_ids() {
-        assert_eq!(source_display("generic", "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic"), "Windows 媒体播放器");
-        assert_eq!(source_display("generic", "Chrome.UserData.Profile2"), "Chrome · 个人资料 2");
-        assert_eq!(source_display("generic", "OpenAI.Codex_2p2nqsd0c76g0!App"), "OpenAI Codex");
+        assert_eq!(
+            source_display(
+                "generic",
+                "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic"
+            ),
+            "Windows 媒体播放器"
+        );
+        assert_eq!(
+            source_display("generic", "Chrome.UserData.Profile2"),
+            "Chrome · 个人资料 2"
+        );
+        assert_eq!(
+            source_display("generic", "OpenAI.Codex_2p2nqsd0c76g0!App"),
+            "OpenAI Codex"
+        );
     }
 
     fn candidate(title: &str, artist: &str, url: &str) -> CoverCandidate {
@@ -1035,6 +1089,22 @@ mod cover_tests {
             url: url.to_string(),
             source_id: None,
         }
+    }
+
+    #[test]
+    fn parses_netease_detail_shapes_without_requiring_mv() {
+        let legacy = super::parse_netease_song(&serde_json::json!({
+            "duration": 180000, "album": { "blurPicUrl": "https://p1.music.126.net/cover.jpg" }, "mvid": 123
+        }));
+        assert_eq!(legacy.duration, Some(180000));
+        assert!(legacy.album_pic.unwrap().contains("cover.jpg"));
+        assert_eq!(legacy.mv_id, Some(123));
+        let modern = super::parse_netease_song(&serde_json::json!({
+            "dt": 240000, "al": { "picUrl": "https://p1.music.126.net/new.jpg" }, "mv": 0
+        }));
+        assert_eq!(modern.duration, Some(240000));
+        assert!(modern.album_pic.unwrap().contains("new.jpg"));
+        assert!(modern.mv_url.is_none());
     }
 
     #[test]

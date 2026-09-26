@@ -21,11 +21,15 @@ let lastFrameAt = 0;
 const CAPTURE_STOP_GRACE_MS = 350;
 const LISTENER_RETRY_MS = 1_000;
 
-function queueCaptureCommand(command: "start_spectrum" | "stop_spectrum") {
+function queueCaptureCommand(command: "start_spectrum" | "stop_spectrum" | "restart_spectrum") {
   // Start and stop can cross during a quick collapse, pause, or settings
   // change. Keep their native calls in order so capture cannot outlive users.
   captureCommands = captureCommands.catch(() => undefined).then(() => invoke(command));
   return captureCommands;
+}
+
+export async function refreshSpectrumDevice(): Promise<void> {
+  if (consumers > 0) await queueCaptureCommand("restart_spectrum");
 }
 
 function isCurrent(currentGeneration: number) {

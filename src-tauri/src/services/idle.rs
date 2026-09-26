@@ -237,6 +237,9 @@ fn forecast_days(daily: Option<DailyForecast>) -> Vec<WeatherForecastDay> {
 }
 
 async fn weather_for(location: &WeatherLocation) -> AppResult<WeatherCache> {
+    // Windows share one cache and request; recheck it after the in-flight request finishes.
+    static REQUEST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _request = REQUEST.lock().await;
     {
         let cache = WEATHER_CACHE
             .get_or_init(|| Mutex::new(WeatherCache::default()))
@@ -252,7 +255,13 @@ async fn weather_for(location: &WeatherLocation) -> AppResult<WeatherCache> {
         }
     }
     let url = format!("https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=4&timezone=auto", location.latitude, location.longitude);
-    let response: ForecastResponse = reqwest::get(url)
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(8))
+        .build()
+        .map_err(|e| AppError::network(format!("Weather client failed: {}", e)))?;
+    let response: ForecastResponse = client
+        .get(url)
+        .send()
         .await
         .map_err(|e| AppError::network(format!("Weather request failed: {}", e)))?
         .json()
@@ -282,7 +291,10 @@ async fn weather_for(location: &WeatherLocation) -> AppResult<WeatherCache> {
 }
 
 pub async fn get_idle_snapshot(app: &AppHandle) -> AppResult<IdleSnapshot> {
-    let mut snapshot = system_snapshot()?;
+    // sysinfo refresh can block on Windows. Keep it off Tokio's async workers.
+    let mut snapshot = tauri::async_runtime::spawn_blocking(system_snapshot)
+        .await
+        .map_err(|e| AppError::business(3005, format!("Idle snapshot task failed: {e}")))??;
     let location = app
         .state::<AppState>()
         .settings

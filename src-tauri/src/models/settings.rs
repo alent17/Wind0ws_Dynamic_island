@@ -99,6 +99,8 @@ pub struct AppPreferences {
     pub show_volume_tool: bool,
     pub show_timer_tool: bool,
     pub show_hide_tool: bool,
+    pub show_clock_tool: bool,
+    pub show_weather_tool: bool,
     pub show_custom_function_panel: bool,
     pub enable_mv_playback: bool,
     pub lock_floating_window: bool,
@@ -169,6 +171,8 @@ impl Default for AppPreferences {
             show_volume_tool: true,
             show_timer_tool: true,
             show_hide_tool: true,
+            show_clock_tool: true,
+            show_weather_tool: true,
             show_custom_function_panel: true,
             enable_mv_playback: true,
             lock_floating_window: false,
@@ -211,6 +215,8 @@ mod tests {
         assert!(loaded.floating_use_album_color);
         assert!(loaded.show_settings_tool);
         assert!(loaded.show_hide_tool);
+        assert!(loaded.show_clock_tool);
+        assert!(loaded.show_weather_tool);
         assert!(loaded.show_custom_function_panel);
         assert_eq!(loaded.idle_items.len(), 2);
     }

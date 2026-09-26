@@ -173,10 +173,9 @@
   async function close(event: MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
-    // Keep the pre-created window alive so reopening it never has to build a
-    // new WebView2 instance on the main UI thread.
+    // Countdown state lives in the main window; release this WebView on close.
     try {
-      await getCurrentWindow().hide();
+      await getCurrentWindow().destroy();
     } catch (error) {
       console.error("[倒计时] 关闭窗口失败:", error);
     }

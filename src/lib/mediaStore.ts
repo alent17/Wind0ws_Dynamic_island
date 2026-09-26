@@ -25,32 +25,39 @@ let consumers = 0;
 let unlisten: UnlistenFn | undefined;
 let poll: ReturnType<typeof setInterval> | undefined;
 
-async function refresh() {
-  try {
-    const next = await mediaApi.getMediaInfo();
-    media.set(next);
-  } catch {
-    // Browser Studio deliberately keeps deterministic preview data.
-  }
+let generation = 0;
+let pending: Promise<MediaState> | undefined;
+function publish(next: MediaState) {
+  media.update(previous => ({...next, albumArt: next.albumArt || (previous.title === next.title && previous.artist === next.artist && previous.source === next.source ? previous.albumArt : "")}));
 }
-
+async function refresh(epoch: number) {
+  try {
+    const request = pending ??= mediaApi.getMediaInfo();
+    try { const next = await request; if (epoch === generation && consumers) publish(next); }
+    finally { if (pending === request) pending = undefined; }
+  } catch { /* Browser previews keep demo data. */ }
+}
 export async function connectMedia(): Promise<() => void> {
-  consumers += 1;
+  consumers++;
   if (consumers === 1) {
-    await refresh();
-    try {
-      unlisten = await listen<MediaState>("media-update", ({ payload }) => media.set(payload));
-    } catch {
-      poll = setInterval(refresh, 2500);
-    }
+    const epoch = ++generation;
+    void refresh(epoch);
+    void listen<MediaState>("media-update", ({payload}) => {
+      if (epoch === generation && consumers) publish(payload);
+    }).then(dispose => {
+      if (epoch !== generation || !consumers) dispose(); else unlisten = dispose;
+    }).catch(() => {
+      if (epoch === generation && consumers) poll = setInterval(() => void refresh(epoch), 2500);
+    });
   }
+  let released = false;
   return () => {
-    consumers = Math.max(0, consumers - 1);
-    if (!consumers) {
-      unlisten?.();
-      unlisten = undefined;
-      if (poll) clearInterval(poll);
-      poll = undefined;
-    }
+    if (released) return;
+    released = true;
+    if (--consumers) return;
+    generation++;
+    unlisten?.(); unlisten = undefined;
+    if (poll) clearInterval(poll);
+    poll = undefined;
   };
 }

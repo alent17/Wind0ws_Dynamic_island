@@ -1,6 +1,7 @@
 import './app.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
+import VisibleWindow from './lib/VisibleWindow.svelte';
 import FloatingWindow from './FloatingWindow.svelte';
 import TimerWindow from './TimerWindow.svelte';
 
@@ -23,11 +24,13 @@ let app;
 // 路由分发逻辑
 if (windowType === 'floating') {
   // 渲染独立悬浮窗
-  app = mount(FloatingWindow, {
+  app = mount(VisibleWindow, {
+    props: { component: FloatingWindow },
     target: targetElement,
   });
 } else if (windowType === 'timer') {
-  app = mount(TimerWindow, {
+  app = mount(VisibleWindow, {
+    props: { component: TimerWindow },
     target: targetElement,
   });
 } else {

@@ -122,27 +122,34 @@ fn tray_labels(language: &str) -> (&'static str, &'static str, &'static str) {
 // 数据结构
 // ============================================================================
 
-struct SpectrumState(Mutex<audio::SpectrumCapture>);
+struct SpectrumState(Mutex<(audio::SpectrumCapture, std::collections::HashSet<String>)>);
 
 #[tauri::command]
-fn start_spectrum(state: State<SpectrumState>, app: tauri::AppHandle) -> Result<(), String> {
-    let capture = state
-        .inner()
-        .0
-        .lock()
-        .map_err(|e| format!("Mutex poisoned: {}", e))?;
-    capture.start(app)
+fn start_spectrum(state: State<SpectrumState>, app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    let mut resources = state.0.lock().map_err(|e| e.to_string())?;
+    resources.1.insert(window.label().to_string());
+    resources.0.start(app)
+}
+
+fn release_spectrum(state: &SpectrumState, label: &str) {
+    if let Ok(mut resources) = state.0.lock() {
+        resources.1.remove(label);
+        if resources.1.is_empty() { resources.0.stop(); }
+    }
 }
 
 #[tauri::command]
-fn stop_spectrum(state: State<SpectrumState>) -> Result<(), String> {
-    let capture = state
-        .inner()
-        .0
-        .lock()
-        .map_err(|e| format!("Mutex poisoned: {}", e))?;
-    capture.stop();
+fn stop_spectrum(state: State<SpectrumState>, window: tauri::WebviewWindow) -> Result<(), String> {
+    release_spectrum(&state, window.label());
     Ok(())
+}
+
+#[tauri::command]
+fn restart_spectrum(state: State<SpectrumState>, app: tauri::AppHandle) -> Result<(), String> {
+    let resources = state.0.lock().map_err(|e| e.to_string())?;
+    if resources.1.is_empty() { return Ok(()); }
+    resources.0.stop();
+    resources.0.start(app)
 }
 
 // ============================================================================
@@ -420,7 +427,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         // 注册状态
         .manage(state::AppState::default())
-        .manage(SpectrumState(Mutex::new(audio::SpectrumCapture::new())))
+        .manage(SpectrumState(Mutex::new((audio::SpectrumCapture::new(), std::collections::HashSet::new()))))
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                release_spectrum(&window.state::<SpectrumState>(), window.label());
+            }
+        })
         // 注册 IPC 命令
         .invoke_handler(tauri::generate_handler![
             // 设置相关命令
@@ -490,6 +502,7 @@ pub fn run() {
             // 音频频谱
             start_spectrum,
             stop_spectrum,
+            restart_spectrum,
         ])
         // Setup 回调
         .setup(|app| {
@@ -589,7 +602,8 @@ pub fn run() {
                         let _ = commands::show_main_window(app.clone());
                     }
                     STUDIO_MENU_ID => {
-                        let _ = commands::show_studio_window(app.clone());
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move { let _ = commands::show_studio_window(app).await; });
                     }
                     QUIT_MENU_ID => {
                         app.exit(0);

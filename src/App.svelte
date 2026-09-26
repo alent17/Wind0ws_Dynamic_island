@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import { convertFileSrc } from "@tauri-apps/api/core";
   import { emit, listen } from "@tauri-apps/api/event";
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
@@ -7,23 +7,25 @@
   import { mediaApi } from "$lib/api/media";
   import { idleApi } from "$lib/api/idle";
   import { audioApi } from "$lib/api/audio";
+  import { refreshSpectrumDevice } from "$lib/spectrumStore";
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
   import IslandSurface from "$lib/IslandSurface.svelte";
   import Spectrum from "$lib/Spectrum.svelte";
   import { extractSpectrumColorsFromImage } from "$lib/spectrumColors";
   import {
-    CUSTOM_PANEL_WIDTH,
+
     clampExpandedRadius,
     clampShoulderRadius,
     geometryFor,
     hiddenPlacementFor,
-    hostFor,
+    navigationHostFor as hostFor,
     overlapAttachedEdge,
     placementFor,
     surfaceOffsetFor,
     type IslandEdge,
     type IslandMode,
+    type IslandPage,
     type IslandRegionChange,
     type IslandStyle,
   } from "$lib/islandGeometry";
@@ -66,6 +68,7 @@
 
   // ========== 状态管理 ==========
   let expanded = $state(false);
+  let activeIslandPage = $state<IslandPage>("music");
   let hovering = $state(false);
   let artworkUrl = $state<string>("");
   let rawCoverUrl = "";
@@ -73,6 +76,44 @@
   let artistName = $state<string>("");
   let isPlaying = $state<boolean>(false);
   let lastSongKey: string | null = null;
+  let metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
+
+  async function recoverMissingMetadata() {
+    if (!hasMediaSession || !lastSongKey || !trackTitle || trackTitle === "未知曲目") return;
+    if (durationMs > 0 && (artworkUrl || currentSource !== "netease")) return;
+    const recovery = metadataRecovery;
+    if (recovery.pending || Date.now() < recovery.nextAttempt) return;
+    const key = lastSongKey;
+    recovery.pending = true;
+    try {
+      const info = await mediaApi.getNeteaseSongInfo(trackTitle, artistName === "未知艺术家" ? "" : artistName);
+      if (key !== lastSongKey || recovery !== metadataRecovery || !info) return;
+      if (!durationMs && info.duration && info.duration > 0) {
+        // Preserve the elapsed clock while duration was unavailable.
+        currentTimeMs = projectedPosition(islandMedia, Date.now());
+        mediaSnapshotAt = Date.now();
+        durationMs = info.duration;
+      }
+      if (!artworkUrl && info.albumPic) {
+        const image = new Image();
+        image.onload = () => {
+          if (key !== lastSongKey || recovery !== metadataRecovery) return;
+          rawCoverUrl = info.albumPic!;
+          artworkUrl = info.albumPic!;
+          void syncFloatingMediaClock();
+        };
+        image.src = info.albumPic;
+      }
+      void syncFloatingMediaClock();
+    } catch (error) {
+      console.warn("[媒体信息] 补查失败，将自动重试", error);
+    } finally {
+      recovery.pending = false;
+      recovery.attempts += 1;
+      recovery.nextAttempt = Date.now() + Math.min(60_000, 5_000 * 2 ** Math.min(recovery.attempts - 1, 4));
+    }
+  }
+
   let lastReportedPosition: number | undefined;
   let pendingSeekUntil = 0;
   let spectrumTopColor = $state<string>("#ffffff");
@@ -104,6 +145,8 @@
   });
   let displayedPosition = $derived(projectedPosition(islandMedia, clockNow));
 
+  let lastSyncedArtwork = "";
+  let lastSyncedTrack = "";
   function syncFloatingMediaClock() {
     const syncedAt = Date.now();
     const snapshot: MediaState = {
@@ -111,6 +154,9 @@
       positionMs: projectedPosition(islandMedia, syncedAt),
       lastUpdatedTimestamp: syncedAt,
     };
+    const signature = `${snapshot.source}|${snapshot.title}|${snapshot.artist}`;
+    if (signature === lastSyncedTrack && snapshot.albumArt === lastSyncedArtwork) snapshot.albumArt = "";
+    else { lastSyncedTrack = signature; lastSyncedArtwork = snapshot.albumArt; }
     return emit(Events.ISLAND_MEDIA_SYNC, snapshot);
   }
   function normalizedStyle(value: string): IslandStyle {
@@ -146,9 +192,16 @@
 
   let interactionRegionRevision = Date.now() * 1000;
   let lastInteractionRegionSignature = "";
-  function applyIslandRegion({ geometry, radii, polygon, extraRects }: IslandRegionChange) {
-    const host = hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength, customPanelExtraWidth);
+  function applyIslandRegion({ geometry, radii, polygon, extraRects, anchorGap }: IslandRegionChange) {
+    const host = hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength);
     const offset = surfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge);
+    if (anchorGap !== undefined) {
+      const delta = anchorGap - (renderedIslandStyle === "floating" ? 22 : 0);
+      if (renderedIslandEdge === "top") offset.y += delta;
+      else if (renderedIslandEdge === "bottom") offset.y -= delta;
+      else if (renderedIslandEdge === "left") offset.x += delta;
+      else offset.x -= delta;
+    }
     const translatedExtraRects = (extraRects ?? []).map((rect) => ({
       ...rect,
       x: offset.x + rect.x,
@@ -196,28 +249,23 @@
     window.addEventListener("pagehide", persistOnPageHide);
     updateTimeDisplay();
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    const intervalMs = () => !pageVisible ? 2_000 : expanded && isPlaying ? 250 : 1_000;
-    let activeClockIntervalMs = 250;
-    let checkInterval: ReturnType<typeof setInterval>;
-    const tick = () => {
-      updateTimeDisplay();
-      clockNow = Date.now();
-      const nextIntervalMs = intervalMs();
-      // Rebuild only when the current state crosses a cadence boundary; the
-      // timer below remains cheap while the island is compact or hidden.
-      if (nextIntervalMs !== activeClockIntervalMs) {
-        clearInterval(checkInterval);
-        activeClockIntervalMs = nextIntervalMs;
-        checkInterval = setInterval(tick, activeClockIntervalMs);
-      }
-    };
-    checkInterval = setInterval(tick, activeClockIntervalMs);
 
     return () => {
-      clearInterval(checkInterval);
       window.removeEventListener("pagehide", persistOnPageHide);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
+  });
+
+  $effect(() => {
+    const interval = pageVisible && expanded && activeIslandPage === "music" && isPlaying ? 250
+      : countdown.status === "running" ? 1000 : 60_000;
+    const tick = () => { clockNow = Date.now(); updateTimeDisplay(); };
+    appSettings.clockTimeZone; $locale;
+    untrack(tick);
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => { timer = setTimeout(() => { tick(); schedule(); }, interval - Date.now() % interval); };
+    schedule();
+    return () => clearTimeout(timer);
   });
 
   const playerApps: Record<string, string> = {
@@ -363,10 +411,10 @@
     if (appSettings.showVolumeTool) tools.push("volume");
     if (appSettings.showTimerTool) tools.push("timer");
     if (appSettings.showHideTool) tools.push("hide");
+    if (appSettings.showClockTool) tools.push("clock");
+    if (appSettings.showWeatherTool) tools.push("weather");
     return tools;
   });
-  let customPanelEnabled = $derived(appSettings.showCustomFunctionPanel && enabledFeatureTools.length > 0);
-  let customPanelExtraWidth = $derived(customPanelEnabled ? CUSTOM_PANEL_WIDTH : 0);
   let lastSettingsSnapshot = "";
   function applySettingsIfChanged(value: AppSettings) {
     const next = normalizedSettings(value);
@@ -455,6 +503,7 @@
     audioDeviceSwitching = true;
     try {
       await audioApi.setDefaultDevice(deviceId);
+      await refreshSpectrumDevice().catch((error) => logger.warn("重连音频频谱失败", error));
       const [nextState, nextDevices] = await Promise.all([
         audioApi.getState(),
         audioApi.listDevices(),
@@ -561,11 +610,30 @@
   // Keep weather available for the expanded function panel even while media
   // is playing. Compact mode still only renders it in the idle state.
   let showIdle = $derived(!hasMediaSession);
+  let weatherLoading = $state(false);
+  let weatherFailed = $state(false);
+  let lastWeatherLocation = "";
   $effect(() => {
-    const refresh = () => idleApi.getSnapshot().then((value) => idleSnapshot = value).catch(() => undefined);
+    const locationKey = JSON.stringify(appSettings.weatherLocation);
+    if (lastWeatherLocation !== locationKey) {
+      lastWeatherLocation = locationKey;
+      idleSnapshot = { ...idleSnapshot, weatherTemperature: null, weatherCode: null, weatherForecast: [], weatherUpdatedAt: null };
+    }
+    if (!pageVisible || (!showIdle && (!expanded || activeIslandPage !== "weather"))) return;
+    let pending = false;
+    let disposed = false;
+    const refresh = () => {
+      if (pending) return;
+      pending = true;
+      weatherLoading = true;
+      void idleApi.getSnapshot(locationKey)
+        .then((value) => { if (!disposed) { idleSnapshot = value; weatherFailed = value.weatherUpdatedAt === null || Date.now() - value.weatherUpdatedAt * 1000 >= 30 * 60_000; } })
+        .catch(() => { if (!disposed) weatherFailed = true; })
+        .finally(() => { pending = false; if (!disposed) weatherLoading = false; });
+    };
     refresh();
     const timer = setInterval(refresh, 30_000);
-    return () => clearInterval(timer);
+    return () => { disposed = true; clearInterval(timer); };
   });
 
   let renderedIslandStyle = $state<IslandStyle>(DEFAULT_SETTINGS.islandStyle);
@@ -579,7 +647,6 @@
     renderedIslandStyle,
     renderedIslandEdge,
     appSettings.compactLength,
-    customPanelExtraWidth,
   ));
 
   let captureSnapshot = $state<CaptureSnapshot>({ ...EMPTY_CAPTURE_SNAPSHOT });
@@ -640,7 +707,6 @@
       positionPercent,
       hidden,
       compactLength: appSettings.compactLength,
-      customPanelExtraWidth,
     });
     if (
       placementInput === lastPlacementInput
@@ -662,7 +728,7 @@
     const safeIndex = Math.min(Math.max(0, monitorIndex), allMonitors.length - 1);
     const monitor = allMonitors[safeIndex];
     const dpr = monitor.scaleFactor || window.devicePixelRatio || 1;
-    const host = hostFor(style, edge, appSettings.compactLength, customPanelExtraWidth);
+    const host = hostFor(style, edge, appSettings.compactLength);
     const physicalHost = { width: Math.round(host.width * dpr), height: Math.round(host.height * dpr) };
     const baseShown = placementFor(
       { x: monitor.workX, y: monitor.workY, width: monitor.workWidth, height: monitor.workHeight },
@@ -787,8 +853,6 @@
     const style = renderedIslandStyle;
     const edge = renderedIslandEdge;
     const hidden = isHidden;
-    const panelWidth = customPanelExtraWidth;
-    void panelWidth;
     if (ready && !suppressPlacementEffect) void applyWindowPlacement(style, edge, monitorIndex, position, hidden);
   });
 
@@ -1278,6 +1342,7 @@
           isPlaying = false;
           currentSource = "";
           lastSongKey = null;
+          metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
           lastReportedPosition = undefined;
           pendingSeekUntil = 0;
           trackTitle = "";
@@ -1330,66 +1395,8 @@
 
         if (songChanged) {
           pendingSeekUntil = 0;
-          console.log("[歌曲变更] 检测到新歌:", data.title, "-", data.artist);
           lastSongKey = currentSongKey;
-
-          if (data.durationMs && data.durationMs > 1000) {
-            durationMs = data.durationMs;
-            console.log("[时长] ✓ 使用 SMTC 提供的有效时长:", durationMs, "ms");
-          } else {
-            durationMs = 0;
-            const songName = data.title || trackTitle;
-            const resolvedArtist = data.artist || "";
-
-            if (
-              songName &&
-              songName !== "未知曲目"
-            ) {
-              const requestedTrackKey = currentSongKey;
-              mediaApi
-                .getNeteaseSongInfo(songName, resolvedArtist)
-                .then((songInfo) => {
-                  if (songInfo && lastSongKey === requestedTrackKey) {
-                    if (songInfo.duration && songInfo.duration > 0) {
-                      durationMs = songInfo.duration;
-                      void syncFloatingMediaClock();
-                      console.log(
-                        "[网易云 API] ✓ 获取时长成功:",
-                        songInfo.duration,
-                        "ms",
-                      );
-                    }
-                    if (
-                      songInfo.albumPic &&
-                      (!rawCoverUrl || rawCoverUrl === "")
-                    ) {
-                      const highQualityPic = songInfo.albumPic.replace(
-                        /(\d+)x(\d+)\.jpg/,
-                        "1024y1024.jpg",
-                      );
-                      console.log(
-                        "[网易云 API] ✓ 获取专辑图片:",
-                        highQualityPic,
-                      );
-                    }
-                    if (songInfo.mvId && songInfo.mvId > 0) {
-                      console.log("[网易云 API] ✓ 发现 MV，ID:", songInfo.mvId);
-                      if (songInfo.mvUrl) {
-                        console.log(
-                          "[网易云 API] ✓ MV 播放链接:",
-                          songInfo.mvUrl,
-                        );
-                      }
-                    }
-                  } else {
-                    console.warn("[网易云 API] ✗ 未找到歌曲信息");
-                  }
-                })
-                .catch((err) => {
-                  console.error("[网易云 API] ✗ 获取歌曲信息失败:", err);
-                });
-            }
-          }
+          metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
         }
 
         const titleChanged = trackTitle !== data.title;
@@ -1408,24 +1415,7 @@
         if (titleChanged || artistChanged || coverChanged) {
           if (titleChanged) {
             trackTitle = data.title || "未知曲目";
-            setTimeout(() => {
-              const titleEl = document.querySelector(
-                ".marquee-text",
-              ) as HTMLElement;
-              const wrapperEl = document.querySelector(
-                ".marquee-wrapper",
-              ) as HTMLElement;
-              if (titleEl && wrapperEl) {
-                titleEl.classList.remove("marquee-active");
-                titleEl.style.transform = "";
 
-                requestAnimationFrame(() => {
-                  if (titleEl.scrollWidth > titleEl.clientWidth) {
-                    titleEl.classList.add("marquee-active");
-                  }
-                });
-              }
-    }, 250);
           }
           if (artistChanged) {
             artistName = data.artist || "未知艺术家";
@@ -1462,13 +1452,14 @@
               .resolveHdCover(data.title, data.artist || "", data.source || currentSource)
               .then((resolved) => {
                 if (!resolved || lastSongKey !== requestedTrackKey) return;
-                const resolvedUrl = resolved.url.includes(":\\") || resolved.url.includes(":/")
+                const resolvedUrl = /^[a-z]:[\\/]/i.test(resolved.url)
                   ? convertFileSrc(resolved.url)
                   : resolved.url;
                 const image = new Image();
                 image.onload = () => {
                   if (lastSongKey !== requestedTrackKey) return;
                   artworkUrl = resolvedUrl;
+                  void syncFloatingMediaClock();
                 };
                 image.src = resolvedUrl;
               })
@@ -1476,10 +1467,13 @@
           }
         }
 
+        void recoverMissingMetadata();
         rememberCurrentTrack(songChanged || !lastPersistedTrackSignature.endsWith(`|${isPlaying}`));
         void syncFloatingMediaClock();
       });
       cleanups.push(unlistenMediaUpdate);
+      const recoveryTimer = setInterval(() => void recoverMissingMetadata(), 5_000);
+      cleanups.push(() => clearInterval(recoveryTimer));
     })();
 
     return () => {
@@ -1607,6 +1601,12 @@
     onSettingsToggle={showSettingsWindow}
     enabledTools={enabledFeatureTools}
     showCustomFunctionPanel={appSettings.showCustomFunctionPanel}
+    visible={pageVisible && !isHidden}
+    onPageChange={(page) => activeIslandPage = page}
+    weatherCity={appSettings.weatherLocation?.name ?? ""}
+    weatherUpdatedAt={idleSnapshot.weatherUpdatedAt}
+    {weatherLoading}
+    {weatherFailed}
     onPanelActivity={(active) => panelInteracting = active}
     onHoverChange={(value) => hovering = value}
     onRegionChange={applyIslandRegion}

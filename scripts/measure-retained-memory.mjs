@@ -1,0 +1,22 @@
+import { chromium } from '@playwright/test';
+import {createServer} from 'node:http';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {resolve,extname} from 'node:path';
+const label=process.argv[2]||'before', root=resolve(`dist/performance/${label}`);
+const server=createServer(async(req,res)=>{try{const path=resolve(root,'.'+decodeURIComponent(req.url.split('?')[0]));if(!path.startsWith(root))throw Error();res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css','.html':'text/html','.svg':'image/svg+xml','.woff2':'font/woff2'})[extname(path)]||'application/octet-stream');res.end(await readFile(path));}catch{res.writeHead(404);res.end();}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const browser=await chromium.launch({channel:'chrome',headless:true});
+const page=await browser.newPage({viewport:{width:1280,height:760},reducedMotion:'no-preference'});
+const cdp=await page.context().newCDPSession(page);await cdp.send('Performance.enable');
+const metrics=async()=>Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map(m=>[m.name,m.value]));
+
+await page.goto(`http://127.0.0.1:${server.address().port}/ui-tests/island-fixture.html`);
+const cycle=async()=>{await page.locator('.feature-menu button').nth(1).click();await page.keyboard.press('Escape');await page.getByTestId('compact-mode').click();await page.getByTestId('expanded-mode').click();};
+for(let i=0;i<5;i++)await cycle();
+await cdp.send('HeapProfiler.collectGarbage');const before=await metrics();
+for(let i=0;i<30;i++)await cycle();
+await cdp.send('HeapProfiler.collectGarbage');const after=await metrics();
+console.log(JSON.stringify({before,after}));
+await writeFile('docs/performance/retained-memory.json',JSON.stringify({before,after},null,2));
+await browser.close();server.close();
+if(after.Nodes > before.Nodes + 10 || after.JSEventListeners > before.JSEventListeners + 2 || after.JSHeapUsedSize - before.JSHeapUsedSize > 1024*1024) throw new Error('Retained memory grew beyond the warmed production-page budget');

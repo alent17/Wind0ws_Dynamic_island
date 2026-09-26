@@ -9,9 +9,9 @@ export function mediaTrackKey(title: string, artist: string): string {
 }
 
 export function projectedPosition(media: MediaState, now = Date.now()): number {
-  if (!media.durationMs) return 0;
   const elapsed = media.isPlaying ? Math.max(0, now - media.lastUpdatedTimestamp) : 0;
-  return Math.min(media.durationMs, Math.max(0, media.positionMs + elapsed));
+  const position = Math.max(0, media.positionMs + elapsed);
+  return media.durationMs > 0 ? Math.min(media.durationMs, position) : position;
 }
 
 export function progressRatio(media: MediaState, now = Date.now()): number {

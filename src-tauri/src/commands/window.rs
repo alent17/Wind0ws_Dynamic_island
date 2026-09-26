@@ -7,7 +7,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     Mutex, OnceLock,
 };
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Emitter};
 
 const DEFAULT_FLOATING_WINDOW_WIDTH: u32 = 260;
 const DEFAULT_FLOATING_WINDOW_HEIGHT: u32 = 360;
@@ -756,6 +756,7 @@ mod interaction_region_tests {
 pub fn show_main_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("main") {
         window.show().map_err(|e| AppError::window(e.to_string()))?;
+        let _ = window.emit("isle-window-visible", true);
         window
             .set_focus()
             .map_err(|e| AppError::window(e.to_string()))?;
@@ -764,31 +765,32 @@ pub fn show_main_window(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn show_studio_window(app: AppHandle) -> AppResult<()> {
+pub async fn show_studio_window(app: AppHandle) -> AppResult<()> {
+    static CREATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _create = CREATE.lock().await;
     if let Some(window) = app.get_webview_window("studio-window") {
-        // Studio is pre-created hidden in tauri.conf.json. Reuse that WebView
-        // so the first click only has to show and focus an already initialized
-        // page instead of building a heavy Svelte/Canvas tree synchronously.
+        // Reuse only an already open settings window.
         if window.is_minimized().unwrap_or(false) {
             window
                 .unminimize()
                 .map_err(|e| AppError::window(e.to_string()))?;
         }
         window.show().map_err(|e| AppError::window(e.to_string()))?;
+        let _ = window.emit("isle-window-visible", true);
         window
             .set_focus()
             .map_err(|e| AppError::window(e.to_string()))?;
         return Ok(());
     }
 
-    // Keep a fallback for older configs/dev profiles that do not have the
-    // pre-created window yet.
+    // Create on demand; hidden WebViews still retain their runtime memory.
     let window = tauri::WebviewWindowBuilder::new(
         &app,
         "studio-window",
         tauri::WebviewUrl::App("studio.html".into()),
     )
     .title("Isle Studio")
+    .devtools(false)
     .inner_size(1000.0, 750.0)
     .min_inner_size(800.0, 600.0)
     .resizable(true)
@@ -799,6 +801,7 @@ pub fn show_studio_window(app: AppHandle) -> AppResult<()> {
     .map_err(|e| AppError::window(format!("创建设置窗口失败: {}", e)))?;
 
     window.show().map_err(|e| AppError::window(e.to_string()))?;
+        let _ = window.emit("isle-window-visible", true);
     window
         .set_focus()
         .map_err(|e| AppError::window(e.to_string()))?;
@@ -807,17 +810,17 @@ pub fn show_studio_window(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn toggle_studio_window(app: AppHandle) -> AppResult<()> {
+pub async fn toggle_studio_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("studio-window") {
         if window.is_visible().unwrap_or(false) {
-            window.hide().map_err(|e| AppError::window(e.to_string()))?;
+            window.close().map_err(|e| AppError::window(e.to_string()))?;
             return Ok(());
         }
 
-        return show_studio_window(app);
+        return show_studio_window(app).await;
     }
 
-    show_studio_window(app)
+    show_studio_window(app).await
 }
 
 #[tauri::command]
@@ -880,6 +883,7 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
                 .map_err(|e| AppError::window(e.to_string()))?;
         }
         window.show().map_err(|e| AppError::window(e.to_string()))?;
+        let _ = window.emit("isle-window-visible", true);
         window
             .set_focus()
             .map_err(|e| AppError::window(e.to_string()))?;
@@ -932,6 +936,7 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
             .map_err(|e| AppError::window(e.to_string()))?;
     }
     window.show().map_err(|e| AppError::window(e.to_string()))?;
+        let _ = window.emit("isle-window-visible", true);
     window
         .set_focus()
         .map_err(|e| AppError::window(e.to_string()))?;
@@ -941,33 +946,44 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn open_timer_window(app: AppHandle) -> AppResult<()> {
-    if let Some(window) = app.get_webview_window("timer_window") {
-        window.show().map_err(|e| AppError::window(e.to_string()))?;
+pub async fn open_timer_window(app: AppHandle) -> AppResult<()> {
+    static CREATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _create = CREATE.lock().await;
+    let window = if let Some(window) = app.get_webview_window("timer_window") {
         window
-            .set_focus()
-            .map_err(|e| AppError::window(e.to_string()))?;
-        return Ok(());
+    } else {
+        tauri::WebviewWindowBuilder::new(&app, "timer_window", tauri::WebviewUrl::App("index.html?window=timer".into()))
+            .title("Timer")
+            .devtools(false)
+            .inner_size(448.0, 512.0)
+            .min_inner_size(200.0, 48.0)
+            .resizable(true)
+            .decorations(false)
+            .shadow(false)
+            .transparent(true)
+            .always_on_top(true)
+            .center()
+            .build()
+            .map_err(|e| AppError::window(format!("创建倒计时窗口失败: {}", e)))?
+    };
+    if window.is_minimized().unwrap_or(false) {
+        window.unminimize().map_err(|e| AppError::window(e.to_string()))?;
     }
-
-    Err(AppError::window("倒计时窗口尚未初始化"))
+    window.show().map_err(|e| AppError::window(e.to_string()))?;
+    let _ = window.emit("isle-window-visible", true);
+    window.set_focus().map_err(|e| AppError::window(e.to_string()))?;
+    Ok(())
 }
 
 #[tauri::command]
-pub fn toggle_timer_window(app: AppHandle) -> AppResult<()> {
+pub async fn toggle_timer_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("timer_window") {
         if window.is_visible().unwrap_or(false) {
-            window.hide().map_err(|e| AppError::window(e.to_string()))?;
-        } else {
-            window.show().map_err(|e| AppError::window(e.to_string()))?;
-            window
-                .set_focus()
-                .map_err(|e| AppError::window(e.to_string()))?;
+            window.close().map_err(|e| AppError::window(e.to_string()))?;
+            return Ok(());
         }
-        return Ok(());
     }
-
-    Err(AppError::window("倒计时窗口尚未初始化"))
+    open_timer_window(app).await
 }
 
 #[tauri::command]
@@ -1016,6 +1032,7 @@ pub fn reset_floating_window(app: AppHandle) -> AppResult<()> {
             .center()
             .map_err(|e| AppError::window(e.to_string()))?;
         window.show().map_err(|e| AppError::window(e.to_string()))?;
+        let _ = window.emit("isle-window-visible", true);
         return Ok(());
     }
     Err(AppError::window("悬浮播放器尚未打开"))
