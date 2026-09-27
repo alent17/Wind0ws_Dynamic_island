@@ -2,6 +2,8 @@
 
 日期：2026-09-27。分支：`codex/native-ui-prototype`。这是阶段进展，**不是 P1 全部通过或完整迁移完成的声明**。
 
+后续帧调度、MiSans、键盘与时钟改进见 [第二轮记录](native-ui-frame-timing-results.md)。本文保留首轮事实与数据，不代表最新实现的全部状态。
+
 ## 交付内容
 
 - [独立工程及启动说明](../native/README.md)：`native/target/release/isle-native.exe`，不打安装包。
