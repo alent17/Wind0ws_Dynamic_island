@@ -10,15 +10,17 @@
 - 配置仅更新 `islandStyle`、`islandEdge` 和 `islandEdgePosition`，其余旧版与未知字段继续保留。默认配置为悬浮、顶部、50%。
 - 外观控件使用标准 Win32 下拉列表；窗口可在左侧副屏显示，测试模式不抢焦点。
 
+2026-09-27，继续接入岛体形状参数：收起长度、收起凹肩、展开凹肩和展开圆角。四个范围沿用 Studio：80–300、0–16、0–64、0–80 像素。原生滑杆拖动时数值即时更新；应用后复用岛体现有弹簧切换，重启后恢复。
+
 ## 验证
 
-- `cargo test --workspace`：53 项通过，1 项既有联网用例忽略。
+- `cargo test --workspace`：54 项通过，1 项既有联网用例忽略。
 - `cargo clippy --workspace --all-targets -- -D warnings`、`cargo build --release`、`git diff --check` 通过。
-- `native/scripts/native_settings.py` 在 `DISPLAY2` 上通过：样式和方向即时应用，右边缘 73% 的位置正确落点，重启后配置恢复；主窗口和设置窗口均在左侧副屏工作区内。
-- 已检查设置窗口截图，新增控件与其它分组无重叠或裁切。截图保存在本机 `native/artifacts/native-settings.png`，不纳入提交。
+- `native/scripts/native_settings.py` 在 `DISPLAY2` 上通过：样式和方向即时应用，右边缘 73% 的位置正确落点，四个滑杆值即时应用并在重启后恢复；主窗口和设置窗口均在左侧副屏工作区内。
+- 已检查设置窗口与岛体截图，滑杆区域无重叠或裁切，贴边岛体落在预期边缘。截图保存在本机 `native/artifacts/native-appearance.png` 和 `native/artifacts/native-appearance-island.png`，不纳入提交。
 
-结果：[副屏设置与外观回归](performance/native-settings/native-appearance-position.json)。
+结果：[副屏外观与形状设置回归](performance/native-settings/native-shape-settings.json)。
 
 ## 尚未覆盖
 
-这是设置迁移的一小部分，不是完整 Studio。还需迁移圆角、凹肩、紧凑长度、频谱样式、显示器选择、语言和字体等设置，并建立复用主岛渲染器的 Studio 实时预览、草稿撤销与分组布局。跨 DPI 设置窗滚动与多屏热插拔也需单独验收。
+这是设置迁移的一部分，不是完整 Studio。还需迁移频谱样式、颜色、显示器选择、语言和字体等设置，并建立复用主岛渲染器的 Studio 实时预览、草稿撤销与分组布局。跨 DPI 设置窗滚动与多屏热插拔也需单独验收。
