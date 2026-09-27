@@ -26,14 +26,17 @@
 
 ## 原生无障碍接口
 
-实现 `IAccessible`（MSAA），由 Windows 的 `UiaProviderFromIAccessible` 提供 UIA 桥接，没有透明网页或隐藏 WebView 控件。
+实现 `IAccessible`（MSAA）与 `IAccessibleEx`，由 Windows 的 `UiaProviderFromIAccessible` 桥接通用 UIA 属性，并为音量滑块提供原生 `RangeValuePattern`；没有透明网页或隐藏 WebView 控件。
 
 - 暴露当前可见控件的名称、角色、焦点、状态、屏幕坐标、默认操作、音量数值和导航。
 - UI 操作投递到主线程；调用方不能直接改动图形或页面状态。页面/可见控件集合变更后，旧子对象与排队旧操作通过版本号拒绝。
 - 只发布当前页面/可见按钮，隐藏和收起后移除子控件。命中检测使用实际岛轮廓。
 - 从另一个进程验证：UIA 发现 8 个音乐页控件，InvokePattern 打开音量；MSAA 读取名称/角色、焦点、坐标、设置并读取音量 73、返回音乐、拒绝旧控件写入、收起后子控件为 0。
+- 补充验证：UIA RangeValue 报告音量最小值 0、最大值 100、步进 1；UIA 写入 67 后可重新读取，超出范围的 101 被拒绝。值变化通过 WinEvent 通知辅助技术。
 
-此处是基础 MSAA + UIA 桥接，尚未完成 Narrator/NVDA 的实际朗读验收、完整原生 UIA RangeValue/文本模式、tooltip 和脚本晚绑定 IDispatch。不能称为全部无障碍工作完成。桥接依据：[UiaProviderFromIAccessible](https://learn.microsoft.com/en-us/windows/win32/api/uiautomationcoreapi/nf-uiautomationcoreapi-uiaproviderfromiaccessible)。
+本轮副屏证据：[UIA RangeValue 回归](performance/native-display-accessibility/accessibility-range-results.json)。
+
+此处是基础 MSAA + UIA 桥接，尚未完成 Narrator/NVDA 的实际朗读验收、文本模式、tooltip 和脚本晚绑定 IDispatch。不能称为全部无障碍工作完成。桥接依据：[UiaProviderFromIAccessible](https://learn.microsoft.com/en-us/windows/win32/api/uiautomationcoreapi/nf-uiautomationcoreapi-uiaproviderfromiaccessible)。
 
 ## 可见性资源采样
 
