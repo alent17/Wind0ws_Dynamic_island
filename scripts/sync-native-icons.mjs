@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 const names = ['timer', 'volume-2', 'gallery-horizontal-end', 'settings', 'eye-off',
   'clock', 'cloud-sun', 'arrow-left', 'x', 'check', 'play', 'pause', 'chevron-down',
-  'sun', 'cloud', 'cloud-fog', 'cloud-rain', 'cloud-snow', 'cloud-lightning', 'chevron-up'];
+  'sun', 'cloud', 'cloud-fog', 'cloud-rain', 'cloud-snow', 'cloud-lightning', 'chevron-up', 'music-2'];
 const root = resolve(import.meta.dirname, '..');
 const out = resolve(root, 'native/assets/icons');
 mkdirSync(out, { recursive: true });
