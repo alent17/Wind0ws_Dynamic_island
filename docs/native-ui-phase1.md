@@ -2,6 +2,8 @@
 
 状态：2026-09-27 已开始实施，独立原型已构建运行，阶段验收尚未全部通过。实际证据见 [首轮记录](native-ui-prototype-results.md)。对应总计划： [native-ui-migration-plan.md](native-ui-migration-plan.md)。
 
+后续进展：已在独立原型中开始接入真实媒体，详见 [媒体接入记录](native-ui-media-integration.md)。这不替代本阶段尚未完成的实机验收，也不代表全量迁移完成。
+
 本阶段交付一个能独立启动、交互和测量的原生灵动岛原型。它验证技术路线，不替代日常使用版本。最终全量迁移仍按总计划 P2～P5 执行。
 
 ## 已确定的边界
