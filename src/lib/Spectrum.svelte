@@ -28,6 +28,7 @@
 
   const NUM_BARS = 6;
   const MIN_HEIGHT = 2;
+  const MIN_FRAME_MS = 1000 / 30;
   let canvasEl: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
   let animId = 0;
@@ -62,17 +63,24 @@
     barColors = createSpectrumPalette(topColor, bottomColor, 2);
   }
 
+  function targetAt(index: number) {
+    const sourceBars = mode === "random" ? randomBars : latestBars;
+    const rawTarget = !playing ? 0 : reduceMotion ? 0.18 : values?.[index] ?? sourceBars[index] ?? 0;
+    return rawTarget > 0.02 && !values && mode === "realtime"
+      ? Math.min(1, 0.025 + rawTarget * 1.12)
+      : rawTarget;
+  }
+
+  function barsMoving() {
+    return visibleBars.some((value, index) => Math.abs(targetAt(index) - value) > 0.01);
+  }
+
   function draw(frameMs = 1000 / 60) {
     if (!ctx) return;
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
     for (let index = 0; index < NUM_BARS; index += 1) {
-      const sourceBars = mode === "random" ? randomBars : latestBars;
-      const rawTarget = !playing ? 0 : reduceMotion ? 0.18 : values?.[index] ?? sourceBars[index] ?? 0;
-      // Give quiet live bands a little more presence without flattening louder peaks.
-      const target = rawTarget > 0.02 && !values && mode === "realtime"
-        ? Math.min(1, 0.025 + rawTarget * 1.12)
-        : rawTarget;
-      if (values) visibleBars[index] = target;
+      const target = targetAt(index);
+      if (values || reduceMotion) visibleBars[index] = target;
       else {
         // Faster attack catches transients; the slightly longer release keeps the bars buoyant.
         // Small per-band differences stop all six columns from moving as one block.
@@ -95,36 +103,40 @@
   }
 
   function render(timestamp: number) {
-    if (!mounted || !active) { animId = 0; return; }
+    if (!mounted || !active) { animId = 0; lastFrameTime = 0; return; }
+    if (lastFrameTime && timestamp - lastFrameTime < MIN_FRAME_MS) {
+      animId = requestAnimationFrame(render);
+      return;
+    }
     draw(lastFrameTime ? Math.min(50, timestamp - lastFrameTime) : 1000 / 60);
     lastFrameTime = timestamp;
-    if (values) { animId = 0; return; }
-    if (!playing && visibleBars.every((value) => value < 0.01)) {
-      visibleBars.fill(0);
-      draw();
+    if (values || reduceMotion || !barsMoving()) {
       animId = 0;
+      lastFrameTime = 0;
       return;
     }
     animId = requestAnimationFrame(render);
   }
 
   function ensureRenderLoop() {
-    if (values) {
+    if (values || reduceMotion) {
       if (animId) { cancelAnimationFrame(animId); animId = 0; }
       if (active && mounted) draw();
+      lastFrameTime = 0;
       return;
     }
-    if (shouldAnimateSpectrum(active, mounted, playing, false, visibleBars.some((value) => value >= 0.01)) && !animId) animId = requestAnimationFrame(render);
-    if (!active && animId) { cancelAnimationFrame(animId); animId = 0; lastFrameTime = 0; }
+    const shouldAnimate = shouldAnimateSpectrum(active, mounted, false, barsMoving());
+    if (shouldAnimate && !animId) animId = requestAnimationFrame(render);
+    if (!shouldAnimate && animId) { cancelAnimationFrame(animId); animId = 0; lastFrameTime = 0; }
   }
 
   $effect(() => { active; values; mode; playing; reduceMotion; ensureRenderLoop(); });
-  $effect(() => { scale; resizeCanvas(); });
-  $effect(() => { topColor; bottomColor; rebuildPalette(); if (values && mounted && active) draw(); });
+  $effect(() => { scale; resizeCanvas(); if (mounted && active) draw(); });
+  $effect(() => { topColor; bottomColor; rebuildPalette(); if (mounted && active) draw(); });
 
   $effect(() => {
     if (!mounted || !active || !playing || values || mode !== "realtime" || reduceMotion) return;
-    const stopListening = spectrumValues.subscribe((next) => latestBars = next);
+    const stopListening = spectrumValues.subscribe((next) => { latestBars = next; ensureRenderLoop(); });
     const release = retainSpectrum();
     return () => {
       stopListening();
@@ -152,6 +164,7 @@
         const accent = Math.random() < 0.12 ? Math.random() * 0.2 : 0;
         return Math.min(1, 0.1 + beat * 0.34 + ripple * 0.16 + Math.random() * 0.32 + accent);
       });
+      ensureRenderLoop();
     };
     retarget();
     const timer = setInterval(retarget, 125);
@@ -165,6 +178,7 @@
     mounted = true;
     ctx = canvasEl.getContext("2d");
     resizeCanvas();
+    draw();
     ensureRenderLoop();
   });
 

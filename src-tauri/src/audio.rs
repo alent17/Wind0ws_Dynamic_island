@@ -4,6 +4,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     Arc, Mutex,
 };
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 const FFT_SIZE: usize = 2048;
@@ -12,6 +13,21 @@ const FFT_SIZE: usize = 2048;
 // the real-time audio callback, competing with WebView animation.
 const HOP_SIZE: usize = 1024;
 const NUM_BARS: usize = 6;
+const SPECTRUM_CHANGE_THRESHOLD: f32 = 0.01;
+const SPECTRUM_HEARTBEAT: Duration = Duration::from_secs(1);
+
+fn should_publish_spectrum(
+    previous: Option<&[f32; NUM_BARS]>,
+    current: &[f32; NUM_BARS],
+    elapsed: Duration,
+) -> bool {
+    previous.is_none_or(|previous| {
+        previous
+            .iter()
+            .zip(current)
+            .any(|(old, next)| (*old - *next).abs() >= SPECTRUM_CHANGE_THRESHOLD)
+    }) || elapsed >= SPECTRUM_HEARTBEAT
+}
 
 const FREQ_BANDS: [(f32, f32); NUM_BARS] = [
     (20.0, 250.0),
@@ -61,20 +77,26 @@ impl SpectrumCapture {
         let publisher_bars = published_bars.clone();
         let publisher_app = app.clone();
         std::thread::spawn(move || {
+            let mut previous = None;
+            let mut last_emit = Instant::now();
             while publisher_running.load(Ordering::Acquire)
                 && publisher_generation.load(Ordering::Acquire) == token
             {
-                if let Ok(values) = publisher_bars.lock() {
-                    let _ = publisher_app.emit(
-                        "spectrum-data",
-                        if values.1.elapsed().as_millis() > 200 {
-                            vec![0.0; NUM_BARS]
-                        } else {
-                            values.0.to_vec()
-                        },
-                    );
+                let current = publisher_bars.lock().ok().map(|values| {
+                    if values.1.elapsed() > Duration::from_millis(200) {
+                        [0.0; NUM_BARS]
+                    } else {
+                        values.0
+                    }
+                });
+                if let Some(current) = current {
+                    if should_publish_spectrum(previous.as_ref(), &current, last_emit.elapsed()) {
+                        let _ = publisher_app.emit("spectrum-data", current.to_vec());
+                        previous = Some(current);
+                        last_emit = Instant::now();
+                    }
                 }
-                std::thread::sleep(std::time::Duration::from_millis(50));
+                std::thread::sleep(Duration::from_millis(50));
             }
         });
 
@@ -256,7 +278,31 @@ fn band_level(rms: f32, gain: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::band_level;
+    use super::{band_level, should_publish_spectrum, NUM_BARS};
+    use std::time::Duration;
+
+    #[test]
+    fn spectrum_publisher_sends_changes_and_silent_heartbeats() {
+        let zero = [0.0; NUM_BARS];
+        let mut changed = zero;
+        changed[0] = 0.2;
+        assert!(should_publish_spectrum(None, &zero, Duration::ZERO));
+        assert!(!should_publish_spectrum(
+            Some(&zero),
+            &zero,
+            Duration::from_millis(950)
+        ));
+        assert!(should_publish_spectrum(
+            Some(&zero),
+            &changed,
+            Duration::ZERO
+        ));
+        assert!(should_publish_spectrum(
+            Some(&zero),
+            &zero,
+            Duration::from_secs(1)
+        ));
+    }
     #[test]
     fn silence_and_quiet_treble_do_not_pin_the_bars() {
         assert_eq!(band_level(0.0, 8.0), 0.0);
