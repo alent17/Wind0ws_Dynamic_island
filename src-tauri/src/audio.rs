@@ -279,7 +279,38 @@ fn band_level(rms: f32, gain: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::band_level;
+    use super::{band_level, should_publish_spectrum, NUM_BARS, SPECTRUM_HEARTBEAT};
+    use std::time::Duration;
+
+    #[test]
+    fn spectrum_publisher_skips_small_changes_but_keeps_visible_updates() {
+        let previous = [0.2; NUM_BARS];
+        let small_change = [0.205; NUM_BARS];
+        let visible_change = [0.212; NUM_BARS];
+
+        assert!(should_publish_spectrum(None, &previous, Duration::ZERO));
+        assert!(!should_publish_spectrum(
+            Some(&previous),
+            &small_change,
+            Duration::from_millis(500)
+        ));
+        assert!(should_publish_spectrum(
+            Some(&previous),
+            &visible_change,
+            Duration::from_millis(500)
+        ));
+    }
+
+    #[test]
+    fn spectrum_publisher_sends_a_heartbeat_when_values_are_steady() {
+        let steady = [0.2; NUM_BARS];
+        assert!(should_publish_spectrum(
+            Some(&steady),
+            &steady,
+            SPECTRUM_HEARTBEAT
+        ));
+    }
+
     #[test]
     fn silence_and_quiet_treble_do_not_pin_the_bars() {
         assert_eq!(band_level(0.0, 8.0), 0.0);

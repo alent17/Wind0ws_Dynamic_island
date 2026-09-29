@@ -32,6 +32,7 @@
   let canvasEl: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
   let animId = 0;
+  let renderTimer: ReturnType<typeof setTimeout> | undefined;
   let lastFrameTime = 0;
   let mounted = $state(false);
   let latestBars = new Float32Array(NUM_BARS);
@@ -103,31 +104,36 @@
   }
 
   function render(timestamp: number) {
-    if (!mounted || !active) { animId = 0; lastFrameTime = 0; return; }
-    if (lastFrameTime && timestamp - lastFrameTime < MIN_FRAME_MS) {
-      animId = requestAnimationFrame(render);
-      return;
-    }
+    animId = 0;
+    if (!mounted || !active) { lastFrameTime = 0; return; }
     draw(lastFrameTime ? Math.min(50, timestamp - lastFrameTime) : 1000 / 60);
     lastFrameTime = timestamp;
     if (values || reduceMotion || !barsMoving()) {
-      animId = 0;
       lastFrameTime = 0;
       return;
     }
-    animId = requestAnimationFrame(render);
+    renderTimer = window.setTimeout(() => {
+      renderTimer = undefined;
+      if (mounted && active) render(performance.now());
+      else lastFrameTime = 0;
+    }, MIN_FRAME_MS);
+  }
+
+  function cancelRenderLoop() {
+    if (animId) { cancelAnimationFrame(animId); animId = 0; }
+    if (renderTimer !== undefined) { clearTimeout(renderTimer); renderTimer = undefined; }
   }
 
   function ensureRenderLoop() {
     if (values || reduceMotion) {
-      if (animId) { cancelAnimationFrame(animId); animId = 0; }
+      cancelRenderLoop();
       if (active && mounted) draw();
       lastFrameTime = 0;
       return;
     }
     const shouldAnimate = shouldAnimateSpectrum(active, mounted, false, barsMoving());
-    if (shouldAnimate && !animId) animId = requestAnimationFrame(render);
-    if (!shouldAnimate && animId) { cancelAnimationFrame(animId); animId = 0; lastFrameTime = 0; }
+    if (shouldAnimate && !animId && renderTimer === undefined) animId = requestAnimationFrame(render);
+    if (!shouldAnimate) { cancelRenderLoop(); lastFrameTime = 0; }
   }
 
   $effect(() => { active; values; mode; playing; reduceMotion; ensureRenderLoop(); });
@@ -184,7 +190,7 @@
 
   onDestroy(() => {
     mounted = false;
-    if (animId) cancelAnimationFrame(animId);
+    cancelRenderLoop();
   });
 </script>
 

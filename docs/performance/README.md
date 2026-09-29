@@ -58,4 +58,24 @@
 - `cargo test --manifest-path src-tauri/Cargo.toml --lib`：原生设置迁移、天气缓存等测试。
 - 原始页面数据：before.json、after.json；原生观测：native-before.json。
 
-不生成安装包。
+该轮采样只验证页面和资源释放，没有生成安装包。
+
+## 活跃频谱渲染采样（2026-09-30）
+
+修正后的播放夹具为紧凑播放和展开音乐页开启动态合成频谱；旧夹具启用了减少动画，不能代表正在播放时的频谱负载。新采样连续 60 秒，记录在 `live-spectrum-2026-09-30.json`。
+
+| 场景 | 渲染任务 CPU | 结束 JS 堆 | DOM 节点 |
+|---|---:|---:|---:|
+| playing-compact | 0.636% | 3.11 MiB | 950 |
+| music-expanded | 0.634% | 3.19 MiB | 923 |
+
+这组结果低于 1%，但只表示 Chrome 测试页渲染线程的 TaskDuration；频谱数据是合成的，不包括 Rust 音频采集、WebView2 子进程/GPU，也不能证明整个程序 CPU 低于 1% 或工作集低于 100 MiB。原生进程指标仍需在播放真实音乐的 Isle 实例上采样。
+
+可用环境变量选场景和采样时长：
+
+```powershell
+$env:PERF_SCENES='playing-compact,music-expanded'
+$env:PERF_SAMPLE_SECONDS='60'
+node scripts/build-performance.mjs live-spectrum
+node scripts/measure-performance.mjs live-spectrum
+```

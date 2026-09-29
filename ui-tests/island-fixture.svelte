@@ -81,6 +81,7 @@
         {mode}
         {islandStyle}
         {edge}
+        spectrumMode={params.has("animate") ? "random" : "realtime"}
         expandedRadius={radius}
         collapsedEdgeShoulderRadius={8}
         expandedEdgeShoulderRadius={shoulder}
