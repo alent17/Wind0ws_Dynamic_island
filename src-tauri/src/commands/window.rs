@@ -766,9 +766,6 @@ pub fn show_main_window(app: AppHandle) -> AppResult<()> {
 #[tauri::command]
 pub fn show_studio_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("studio-window") {
-        // Studio is pre-created hidden in tauri.conf.json. Reuse that WebView
-        // so the first click only has to show and focus an already initialized
-        // page instead of building a heavy Svelte/Canvas tree synchronously.
         if window.is_minimized().unwrap_or(false) {
             window
                 .unminimize()
@@ -781,8 +778,8 @@ pub fn show_studio_window(app: AppHandle) -> AppResult<()> {
         return Ok(());
     }
 
-    // Keep a fallback for older configs/dev profiles that do not have the
-    // pre-created window yet.
+    // Create Studio only when requested; a hidden WebView keeps its renderer
+    // and the entire settings page resident even when Studio is never opened.
     let window = tauri::WebviewWindowBuilder::new(
         &app,
         "studio-window",
@@ -795,6 +792,8 @@ pub fn show_studio_window(app: AppHandle) -> AppResult<()> {
     .center()
     .decorations(true)
     .transparent(false)
+    .devtools(false)
+    .visible(false)
     .build()
     .map_err(|e| AppError::window(format!("创建设置窗口失败: {}", e)))?;
 
@@ -950,7 +949,31 @@ pub fn open_timer_window(app: AppHandle) -> AppResult<()> {
         return Ok(());
     }
 
-    Err(AppError::window("倒计时窗口尚未初始化"))
+    let window = tauri::WebviewWindowBuilder::new(
+        &app,
+        "timer_window",
+        tauri::WebviewUrl::App("index.html?window=timer".into()),
+    )
+    .title("Timer")
+    .inner_size(448.0, 512.0)
+    .min_inner_size(200.0, 48.0)
+    .resizable(true)
+    .minimizable(true)
+    .closable(true)
+    .decorations(false)
+    .shadow(false)
+    .transparent(true)
+    .always_on_top(true)
+    .center()
+    .devtools(false)
+    .visible(false)
+    .build()
+    .map_err(|e| AppError::window(format!("创建倒计时窗口失败: {e}")))?;
+    window.show().map_err(|e| AppError::window(e.to_string()))?;
+    window
+        .set_focus()
+        .map_err(|e| AppError::window(e.to_string()))?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -967,7 +990,7 @@ pub fn toggle_timer_window(app: AppHandle) -> AppResult<()> {
         return Ok(());
     }
 
-    Err(AppError::window("倒计时窗口尚未初始化"))
+    open_timer_window(app)
 }
 
 #[tauri::command]

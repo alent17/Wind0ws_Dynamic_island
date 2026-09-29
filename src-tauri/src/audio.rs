@@ -8,10 +8,9 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 const FFT_SIZE: usize = 2048;
-// A 48 kHz stream needs about 47 analyses per second at this hop size.
-// The former 256-sample hop ran the 2048-point FFT about 188 times/s on
-// the real-time audio callback, competing with WebView animation.
-const HOP_SIZE: usize = 1024;
+// A 48 kHz stream needs about 23 analyses per second at this hop size,
+// matching the event and canvas cadence without overlapping FFT windows.
+const HOP_SIZE: usize = FFT_SIZE;
 const NUM_BARS: usize = 6;
 const SPECTRUM_CHANGE_THRESHOLD: f32 = 0.01;
 const SPECTRUM_HEARTBEAT: Duration = Duration::from_secs(1);
@@ -137,13 +136,21 @@ impl SpectrumCapture {
 
             let mut planner = FftPlanner::<f32>::new();
             let fft = planner.plan_fft_forward(FFT_SIZE);
+            let freq_bins = FFT_SIZE / 2;
+            let band_ranges = FREQ_BANDS.map(|(freq_lo, freq_hi)| {
+                let bin_lo =
+                    ((freq_lo * FFT_SIZE as f32 / sample_rate) as usize).min(freq_bins - 1);
+                let bin_hi = ((freq_hi * FFT_SIZE as f32 / sample_rate) as usize)
+                    .min(freq_bins)
+                    .max(bin_lo + 1);
+                (bin_lo, bin_hi)
+            });
 
             let mut ring_buf = vec![0.0f32; FFT_SIZE];
             let mut ring_pos: usize = 0;
             let mut hop_counter: usize = 0;
             let mut smoothed = [0.0f32; NUM_BARS];
             let mut fft_buf = vec![Complex::new(0.0f32, 0.0f32); FFT_SIZE];
-            let mut magnitudes = vec![0.0f32; FFT_SIZE / 2];
             let mut new_bars = [0.0f32; NUM_BARS];
             let callback_running = running.clone();
             let callback_generation = generation.clone();
@@ -178,25 +185,15 @@ impl SpectrumCapture {
 
                             fft.process(&mut fft_buf);
 
-                            let freq_bins = FFT_SIZE / 2;
-                            for (index, complex) in fft_buf[..freq_bins].iter().enumerate() {
-                                let mag = complex.norm() / FFT_SIZE as f32;
-                                magnitudes[index] = mag;
-                            }
-
-                            for (index, &(freq_lo, freq_hi)) in FREQ_BANDS.iter().enumerate() {
-                                let bin_lo = ((freq_lo * FFT_SIZE as f32 / sample_rate) as usize)
-                                    .min(freq_bins - 1);
-                                let bin_hi = ((freq_hi * FFT_SIZE as f32 / sample_rate) as usize)
-                                    .min(freq_bins)
-                                    .max(bin_lo + 1);
+                            for (index, &(bin_lo, bin_hi)) in band_ranges.iter().enumerate() {
                                 let n = (bin_hi - bin_lo) as f32;
-                                let rms = (magnitudes[bin_lo..bin_hi]
+                                let rms = (fft_buf[bin_lo..bin_hi]
                                     .iter()
-                                    .map(|x| x * x)
+                                    .map(|bin| bin.norm_sqr())
                                     .sum::<f32>()
                                     / n)
-                                    .sqrt();
+                                    .sqrt()
+                                    / FFT_SIZE as f32;
                                 new_bars[index] = band_level(rms, BAND_GAINS[index]);
                             }
 

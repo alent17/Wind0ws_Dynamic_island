@@ -28,7 +28,7 @@
 
   const NUM_BARS = 6;
   const MIN_HEIGHT = 2;
-  const MIN_FRAME_MS = 1000 / 30;
+  const MIN_FRAME_MS = 1000 / 24;
   let canvasEl: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
   let animId = 0;
