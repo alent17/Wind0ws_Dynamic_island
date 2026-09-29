@@ -734,10 +734,10 @@
   .idle-player{display:flex;flex:1;min-height:0;flex-direction:column}.idle-cover{cursor:default;color:rgba(255,255,255,.58);background:linear-gradient(145deg,rgba(255,255,255,.12),rgba(255,255,255,.035));box-shadow:none}.idle-progress{height:3px;margin:0 0 7px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.13)}.idle-progress span{display:block;width:100%;height:100%;border-radius:inherit;background:linear-gradient(90deg,rgba(255,255,255,.38),rgba(255,255,255,.16))}.idle-controls{opacity:.36!important}.idle-controls.has-remembered-track{opacity:1!important}.idle-controls button:disabled{cursor:default}.idle-controls button:disabled:active{transform:none}
   .clock-dashboard{gap:11px}
   /* Keep the control area in the island's opaque black surface; the controls stay compact and quiet. */
-  .function-toolbar{height:36px;box-sizing:border-box;gap:3px;padding:3px;border-color:rgba(255,255,255,.1);background:#151517;box-shadow:inset 0 1px 0 rgba(255,255,255,.045)}
-  .function-icon{width:28px;height:28px;color:rgba(255,255,255,.62);transition:color 160ms ease,background 160ms ease,transform 180ms cubic-bezier(.2,.8,.2,1),box-shadow 160ms ease}
-  .function-icon:hover{color:#fff}
-  .function-icon.active{color:#ffd097}
+  .function-toolbar{height:38px;box-sizing:border-box;gap:4px;padding:3px;border:0;border-radius:0;background:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+  .function-icon{width:32px;height:32px;border-radius:12px;color:rgba(255,255,255,.9);background:rgba(255,255,255,.1);transition:color 160ms ease,background 160ms ease,transform 180ms cubic-bezier(.2,.8,.2,1),box-shadow 160ms ease}
+  .function-icon:hover{color:#fff;background:rgba(255,255,255,.16)}
+  .function-icon.active{color:#ffd097;background:rgba(255,255,255,.16)}
   .function-icon.timer-running:not(.active){color:#ffbc6c}
   .function-icon.timer-paused:not(.active){color:rgba(255,188,108,.68)}
   .function-content{position:relative;overflow:visible;margin-top:8px;padding:0 4px}
