@@ -8,9 +8,8 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 const FFT_SIZE: usize = 2048;
-// A 48 kHz stream needs about 23 analyses per second at this hop size,
-// matching the event and canvas cadence without overlapping FFT windows.
-const HOP_SIZE: usize = FFT_SIZE;
+// A 48 kHz stream needs about 23 analyses per second with non-overlapping
+// windows, matching the event and canvas cadence.
 const NUM_BARS: usize = 6;
 const SPECTRUM_CHANGE_THRESHOLD: f32 = 0.01;
 const SPECTRUM_HEARTBEAT: Duration = Duration::from_secs(1);
@@ -146,9 +145,8 @@ impl SpectrumCapture {
                 (bin_lo, bin_hi)
             });
 
-            let mut ring_buf = vec![0.0f32; FFT_SIZE];
-            let mut ring_pos: usize = 0;
-            let mut hop_counter: usize = 0;
+            let mut frame_buf = vec![0.0f32; FFT_SIZE];
+            let mut frame_pos: usize = 0;
             let mut smoothed = [0.0f32; NUM_BARS];
             let mut fft_buf = vec![Complex::new(0.0f32, 0.0f32); FFT_SIZE];
             let mut new_bars = [0.0f32; NUM_BARS];
@@ -169,18 +167,15 @@ impl SpectrumCapture {
                         }
                         for frame in data.chunks(channels) {
                             let sample = frame.iter().sum::<f32>() / channels as f32;
-                            ring_buf[ring_pos % FFT_SIZE] = sample;
-                            ring_pos += 1;
-                            hop_counter += 1;
-
-                            if hop_counter < HOP_SIZE {
+                            frame_buf[frame_pos] = sample;
+                            frame_pos += 1;
+                            if frame_pos < FFT_SIZE {
                                 continue;
                             }
-                            hop_counter = 0;
+                            frame_pos = 0;
 
                             for i in 0..FFT_SIZE {
-                                let idx = (ring_pos + i) % FFT_SIZE;
-                                fft_buf[i] = Complex::new(ring_buf[idx] * hann_window[i], 0.0);
+                                fft_buf[i] = Complex::new(frame_buf[i] * hann_window[i], 0.0);
                             }
 
                             fft.process(&mut fft_buf);
