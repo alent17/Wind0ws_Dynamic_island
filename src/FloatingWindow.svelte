@@ -5,6 +5,7 @@
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
   import { Events } from "./utils/eventConstants";
   import { mediaApi } from "$lib/api/media";
+  import { createAsyncCleanup } from "$lib/asyncCleanup";
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
   import { applyAppFont } from "$lib/font";
@@ -127,10 +128,8 @@
   let circularAlbumArtSize = $derived(Math.max(50, Math.round(albumArtSize * 0.86)));
   let enablePixelArt = $state(false); // 像素化封面
 
-  let unlisten: () => void;
-  let unlistenIslandMediaSync: () => void;
+  const listeners = createAsyncCleanup();
   let lastIslandMediaSyncAt = 0;
-  let unlistenResize: () => void;
   let savePositionTimeout: ReturnType<typeof setTimeout> | null = null;
   let coverRequestId = 0;
   let durationRequestId = 0;
@@ -506,10 +505,9 @@
       isMVPlaybackEnabled = true;
       isAlwaysOnTop = DEFAULT_SETTINGS.floatingWindowAlwaysOnTop;
     }
+    if (listeners.disposed) return;
 
     // 初始化事件监听器管理器
-    eventListeners = [];
-
     // 监听 MV 播放设置变化事件
     const unlistenMVChange = await eventManager.on(
       Events.MV_PLAYBACK_CHANGED,
@@ -525,7 +523,7 @@
         }
       },
     );
-    eventListeners.push(unlistenMVChange);
+    listeners.add(unlistenMVChange);
 
     // 监听锁定悬浮窗设置变化事件
     const unlistenLockChange = await eventManager.on(
@@ -541,7 +539,7 @@
           });
       },
     );
-    eventListeners.push(unlistenLockChange);
+    listeners.add(unlistenLockChange);
 
     // 监听高清封面获取设置变化事件
     const unlistenHDCoverChange = await eventManager.on(
@@ -564,7 +562,7 @@
         }
       },
     );
-    eventListeners.push(unlistenHDCoverChange);
+    listeners.add(unlistenHDCoverChange);
 
     // 监听像素化封面设置变化事件
     const unlistenPixelArtChange = await eventManager.on(
@@ -573,7 +571,7 @@
         enablePixelArt = enabled;
       },
     );
-    eventListeners.push(unlistenPixelArtChange);
+    listeners.add(unlistenPixelArtChange);
 
     // 监听网点效果设置变化事件
     const unlistenHalftoneChange = await eventManager.on(
@@ -582,7 +580,7 @@
         halftoneOverlayVisible = enabled;
       },
     );
-    eventListeners.push(unlistenHalftoneChange);
+    listeners.add(unlistenHalftoneChange);
     const unlistenSettingsChange = await eventManager.on(Events.SETTINGS_UPDATED, (value: AppSettings) => {
       if (value?.fontId) applyAppFont(value.fontId);
       if (value?.language) setLocale(value.language);
@@ -597,27 +595,27 @@
         if (shouldRefreshAlbumColor && displayCover) void extractColors(displayCover);
       }
     });
-    eventListeners.push(unlistenSettingsChange);
+    listeners.add(unlistenSettingsChange);
     const unlistenAlwaysOnTopChange = await eventManager.on(
       Events.FLOATING_WINDOW_ALWAYS_ON_TOP_CHANGED,
       ({ isAlwaysOnTop: enabled }: any) => {
         isAlwaysOnTop = Boolean(enabled);
       },
     );
-    eventListeners.push(unlistenAlwaysOnTopChange);
+    listeners.add(unlistenAlwaysOnTopChange);
     const unlistenCaptureMode = await eventManager.on(
       Events.CAPTURE_MODE_CHANGED,
       (snapshot: CaptureSnapshot) => {
         captureSnapshot = { ...EMPTY_CAPTURE_SNAPSHOT, ...snapshot };
       },
     );
-    eventListeners.push(unlistenCaptureMode);
+    listeners.add(unlistenCaptureMode);
 
     const appWindow = getCurrentWindow();
     windowSize = { width: window.innerWidth, height: window.innerHeight };
 
     // 监听窗口大小变化
-    unlistenResize = await appWindow.onResized(({ payload }) => {
+    const unlistenResize = await appWindow.onResized(({ payload }) => {
       // 锁定时忽略大小变化
       if (isFloatingWindowLocked) {
         return;
@@ -644,6 +642,7 @@
         }
       }, 500); // 500ms 防抖
     });
+    listeners.add(unlistenResize);
 
     // 监听窗口位置变化
     const unlistenMoved = await appWindow.onMoved(({ payload }) => {
@@ -664,12 +663,11 @@
         }
       }, 500); // 500ms 防抖
     });
+    listeners.add(unlistenMoved);
 
+    if (listeners.disposed) return;
     window.addEventListener("blur", handlePointerLeave);
     document.addEventListener("mouseleave", handlePointerLeave);
-
-    // 保存移动监听器引用
-    (window as any).__unlistenMoved = unlistenMoved;
 
     // 监听媒体更新事件（已内置节流）
     const handleMediaUpdate = (payload: any, authoritative = false) => {
@@ -803,13 +801,16 @@
         }
       }
     };
-    unlistenIslandMediaSync = await eventManager.on(
+    const unlistenIslandMediaSync = await eventManager.on(
       Events.ISLAND_MEDIA_SYNC,
       (payload) => handleMediaUpdate(payload, true),
     );
-    unlisten = await onMediaUpdate(handleMediaUpdate);
+    listeners.add(unlistenIslandMediaSync);
+    const unlisten = await onMediaUpdate(handleMediaUpdate);
+    listeners.add(unlisten);
     try {
-      handleMediaUpdate(await mediaApi.getMediaInfo());
+      const initialMedia = await mediaApi.getMediaInfo();
+      if (!listeners.disposed) handleMediaUpdate(initialMedia);
     } catch (error) {
       console.warn("[悬浮窗] 初始媒体状态读取失败:", error);
     }
@@ -826,23 +827,11 @@
   });
 
   onDestroy(() => {
-    if (unlisten) unlisten();
-    if (unlistenIslandMediaSync) unlistenIslandMediaSync();
-    if (unlistenResize) unlistenResize();
-    if ((window as any).__unlistenMoved) {
-      (window as any).__unlistenMoved();
-      delete (window as any).__unlistenMoved;
-    }
+    listeners.dispose();
     window.removeEventListener("blur", handlePointerLeave);
     document.removeEventListener("mouseleave", handlePointerLeave);
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     if (hoverLeaveTimeout) clearTimeout(hoverLeaveTimeout);
-
-    // 清理所有事件监听器
-    if (eventListeners) {
-      eventListeners.forEach((unlisten: () => void) => unlisten());
-      eventListeners.length = 0;
-    }
 
     // 清理临时 Canvas
     tempCanvasCache = null;
@@ -860,9 +849,6 @@
   let tempCanvasCache = $state<HTMLCanvasElement | null>(null);
   let newCanvasRef = $state<HTMLCanvasElement | null>(null);
   let oldCanvasRef = $state<HTMLCanvasElement | null>(null);
-
-  // 事件监听器管理器
-  let eventListeners = $state<(() => void)[]>([]);
 
   // 设置 Canvas 元素引用 - 监听 displayCover 变化确保 Canvas 元素已创建
   $effect(() => {

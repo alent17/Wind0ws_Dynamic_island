@@ -5,6 +5,7 @@
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
   import { Events } from "./utils/eventConstants";
   import { mediaApi } from "$lib/api/media";
+  import { createAsyncCleanup } from "$lib/asyncCleanup";
   import { idleApi } from "$lib/api/idle";
   import { audioApi } from "$lib/api/audio";
   import { windowApi } from "$lib/api/window";
@@ -1118,7 +1119,7 @@
   });
 
   onMount(() => {
-    let cleanups: Array<() => void> = [];
+    const cleanups = createAsyncCleanup();
 
     (async () => {
       console.log("[App.svelte] onMount 开始监听事件");
@@ -1130,7 +1131,7 @@
         Events.TIMER_REQUEST_STATE,
         () => void emit(Events.TIMER_STATE_CHANGED, timerSnapshot()),
       );
-      cleanups.push(unlistenTimerRequest);
+      cleanups.add(unlistenTimerRequest);
 
       const unlistenTimerAction = await listen(
         Events.TIMER_ACTION,
@@ -1143,7 +1144,7 @@
           else if (payload?.action === "reset") handleTimerReset();
         },
       );
-      cleanups.push(unlistenTimerAction);
+      cleanups.add(unlistenTimerAction);
 
       try {
         const loadedSettings = await settingsApi.getSettings();
@@ -1154,6 +1155,7 @@
       } catch (error) {
         console.error("[设置] 读取失败:", error);
       }
+      if (cleanups.disposed) return;
 
       const unlistenSettings = await eventManager.on(
         Events.SETTINGS_UPDATED,
@@ -1170,7 +1172,7 @@
           }
         },
       );
-      cleanups.push(unlistenSettings);
+      cleanups.add(unlistenSettings);
 
       const unlistenSettingsChanged = await eventManager.on(
         Events.SETTINGS_CHANGED,
@@ -1200,7 +1202,7 @@
           }
         },
       );
-      cleanups.push(unlistenSettingsChanged);
+      cleanups.add(unlistenSettingsChanged);
 
       try {
         const allMonitors = await availableMonitors();
@@ -1259,6 +1261,7 @@
       } catch (error) {
         console.error("[显示器] 初始化失败:", error);
       }
+      if (cleanups.disposed) return;
 
       const unlistenFloatingWindowClosed = await eventManager.on(
         Events.FLOATING_WINDOW_CLOSED,
@@ -1267,7 +1270,7 @@
           console.log("[悬浮窗] 已关闭，更新状态");
         },
       );
-      cleanups.push(unlistenFloatingWindowClosed);
+      cleanups.add(unlistenFloatingWindowClosed);
 
       const unlistenMediaUpdate = await onMediaUpdate((data: any) => {
         const receivedAt = Date.now();
@@ -1479,11 +1482,11 @@
         rememberCurrentTrack(songChanged || !lastPersistedTrackSignature.endsWith(`|${isPlaying}`));
         void syncFloatingMediaClock();
       });
-      cleanups.push(unlistenMediaUpdate);
+      cleanups.add(unlistenMediaUpdate);
     })();
 
     return () => {
-      cleanups.forEach((fn) => fn && fn());
+      cleanups.dispose();
     };
   });
 
