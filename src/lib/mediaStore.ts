@@ -24,28 +24,51 @@ export const media = writable<MediaState>(DEMO_MEDIA);
 let consumers = 0;
 let unlisten: UnlistenFn | undefined;
 let poll: ReturnType<typeof setInterval> | undefined;
-
 let generation = 0;
-let pending: Promise<MediaState> | undefined;
+let updateVersion = 0;
+let refreshInFlight: Promise<void> | undefined;
+let refreshGeneration = 0;
+
 function publish(next: MediaState) {
-  media.update(previous => ({...next, albumArt: next.albumArt || (previous.title === next.title && previous.artist === next.artist && previous.source === next.source ? previous.albumArt : "")}));
+  updateVersion += 1;
+  media.update((previous) => ({
+    ...next,
+    albumArt: next.albumArt || (
+      previous.title === next.title && previous.artist === next.artist && previous.source === next.source
+        ? previous.albumArt
+        : ""
+    ),
+  }));
 }
-async function refresh(epoch: number) {
-  try {
-    const request = pending ??= mediaApi.getMediaInfo();
-    try { const next = await request; if (epoch === generation && consumers) publish(next); }
-    finally { if (pending === request) pending = undefined; }
-  } catch { /* Browser previews keep demo data. */ }
+
+function refresh(epoch: number): Promise<void> {
+  if (refreshInFlight && refreshGeneration === epoch) return refreshInFlight;
+
+  const versionAtStart = updateVersion;
+  const request = mediaApi.getMediaInfo();
+  const pending = request.then((next) => {
+    // A media event received during this request is newer than its snapshot.
+    if (epoch === generation && consumers > 0 && versionAtStart === updateVersion) publish(next);
+  }).catch(() => {
+    // Browser Studio deliberately keeps deterministic preview data.
+  }).finally(() => {
+    if (refreshInFlight === pending) refreshInFlight = undefined;
+  });
+  refreshInFlight = pending;
+  refreshGeneration = epoch;
+  return pending;
 }
+
 export async function connectMedia(): Promise<() => void> {
   consumers++;
   if (consumers === 1) {
     const epoch = ++generation;
     void refresh(epoch);
-    void listen<MediaState>("media-update", ({payload}) => {
+    void listen<MediaState>("media-update", ({ payload }) => {
       if (epoch === generation && consumers) publish(payload);
-    }).then(dispose => {
-      if (epoch !== generation || !consumers) dispose(); else unlisten = dispose;
+    }).then((dispose) => {
+      if (epoch !== generation || consumers === 0) dispose();
+      else unlisten = dispose;
     }).catch(() => {
       if (epoch === generation && consumers) poll = setInterval(() => void refresh(epoch), 2500);
     });
@@ -54,9 +77,11 @@ export async function connectMedia(): Promise<() => void> {
   return () => {
     if (released) return;
     released = true;
-    if (--consumers) return;
+    consumers -= 1;
+    if (consumers > 0) return;
     generation++;
-    unlisten?.(); unlisten = undefined;
+    unlisten?.();
+    unlisten = undefined;
     if (poll) clearInterval(poll);
     poll = undefined;
   };

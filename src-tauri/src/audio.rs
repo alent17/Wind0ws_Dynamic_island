@@ -4,14 +4,28 @@ use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     Arc, Mutex,
 };
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 const FFT_SIZE: usize = 2048;
-// A 48 kHz stream needs about 47 analyses per second at this hop size.
-// The former 256-sample hop ran the 2048-point FFT about 188 times/s on
-// the real-time audio callback, competing with WebView animation.
-const HOP_SIZE: usize = 1024;
+// A 48 kHz stream needs about 23 analyses per second with non-overlapping
+// windows, matching the event and canvas cadence.
 const NUM_BARS: usize = 6;
+const SPECTRUM_CHANGE_THRESHOLD: f32 = 0.01;
+const SPECTRUM_HEARTBEAT: Duration = Duration::from_secs(1);
+
+fn should_publish_spectrum(
+    previous: Option<&[f32; NUM_BARS]>,
+    current: &[f32; NUM_BARS],
+    elapsed: Duration,
+) -> bool {
+    previous.map_or(true, |previous| {
+        previous
+            .iter()
+            .zip(current)
+            .any(|(old, next)| (*old - *next).abs() >= SPECTRUM_CHANGE_THRESHOLD)
+    }) || elapsed >= SPECTRUM_HEARTBEAT
+}
 
 const FREQ_BANDS: [(f32, f32); NUM_BARS] = [
     (20.0, 250.0),
@@ -61,20 +75,26 @@ impl SpectrumCapture {
         let publisher_bars = published_bars.clone();
         let publisher_app = app.clone();
         std::thread::spawn(move || {
+            let mut previous = None;
+            let mut last_emit = Instant::now();
             while publisher_running.load(Ordering::Acquire)
                 && publisher_generation.load(Ordering::Acquire) == token
             {
-                if let Ok(values) = publisher_bars.lock() {
-                    let _ = publisher_app.emit(
-                        "spectrum-data",
-                        if values.1.elapsed().as_millis() > 200 {
-                            vec![0.0; NUM_BARS]
-                        } else {
-                            values.0.to_vec()
-                        },
-                    );
+                let current = publisher_bars.lock().ok().map(|values| {
+                    if values.1.elapsed() > Duration::from_millis(200) {
+                        [0.0; NUM_BARS]
+                    } else {
+                        values.0
+                    }
+                });
+                if let Some(current) = current {
+                    if should_publish_spectrum(previous.as_ref(), &current, last_emit.elapsed()) {
+                        let _ = publisher_app.emit("spectrum-data", current.to_vec());
+                        previous = Some(current);
+                        last_emit = Instant::now();
+                    }
                 }
-                std::thread::sleep(std::time::Duration::from_millis(50));
+                std::thread::sleep(Duration::from_millis(50));
             }
         });
 
@@ -112,13 +132,20 @@ impl SpectrumCapture {
 
                 let mut planner = FftPlanner::<f32>::new();
                 let fft = planner.plan_fft_forward(FFT_SIZE);
+                let freq_bins = FFT_SIZE / 2;
+                let band_ranges = FREQ_BANDS.map(|(freq_lo, freq_hi)| {
+                    let bin_lo =
+                        ((freq_lo * FFT_SIZE as f32 / sample_rate) as usize).min(freq_bins - 1);
+                    let bin_hi = ((freq_hi * FFT_SIZE as f32 / sample_rate) as usize)
+                        .min(freq_bins)
+                        .max(bin_lo + 1);
+                    (bin_lo, bin_hi)
+                });
 
-                let mut ring_buf = vec![0.0f32; FFT_SIZE];
-                let mut ring_pos: usize = 0;
-                let mut hop_counter: usize = 0;
+                let mut frame_buf = vec![0.0f32; FFT_SIZE];
+                let mut frame_pos: usize = 0;
                 let mut smoothed = [0.0f32; NUM_BARS];
                 let mut fft_buf = vec![Complex::new(0.0f32, 0.0f32); FFT_SIZE];
-                let mut magnitudes = vec![0.0f32; FFT_SIZE / 2];
                 let mut new_bars = [0.0f32; NUM_BARS];
                 let callback_running = running.clone();
                 let callback_generation = generation.clone();
@@ -137,43 +164,28 @@ impl SpectrumCapture {
                             }
                             for frame in data.chunks(channels) {
                                 let sample = frame.iter().sum::<f32>() / channels as f32;
-                                ring_buf[ring_pos % FFT_SIZE] = sample;
-                                ring_pos += 1;
-                                hop_counter += 1;
-
-                                if hop_counter < HOP_SIZE {
+                                frame_buf[frame_pos] = sample;
+                                frame_pos += 1;
+                                if frame_pos < FFT_SIZE {
                                     continue;
                                 }
-                                hop_counter = 0;
+                                frame_pos = 0;
 
                                 for i in 0..FFT_SIZE {
-                                    let idx = (ring_pos + i) % FFT_SIZE;
-                                    fft_buf[i] = Complex::new(ring_buf[idx] * hann_window[i], 0.0);
+                                    fft_buf[i] = Complex::new(frame_buf[i] * hann_window[i], 0.0);
                                 }
 
                                 fft.process(&mut fft_buf);
 
-                                let freq_bins = FFT_SIZE / 2;
-                                for (index, complex) in fft_buf[..freq_bins].iter().enumerate() {
-                                    let mag = complex.norm() / FFT_SIZE as f32;
-                                    magnitudes[index] = mag;
-                                }
-
-                                for (index, &(freq_lo, freq_hi)) in FREQ_BANDS.iter().enumerate() {
-                                    let bin_lo = ((freq_lo * FFT_SIZE as f32 / sample_rate)
-                                        as usize)
-                                        .min(freq_bins - 1);
-                                    let bin_hi = ((freq_hi * FFT_SIZE as f32 / sample_rate)
-                                        as usize)
-                                        .min(freq_bins)
-                                        .max(bin_lo + 1);
+                                for (index, &(bin_lo, bin_hi)) in band_ranges.iter().enumerate() {
                                     let n = (bin_hi - bin_lo) as f32;
-                                    let rms = (magnitudes[bin_lo..bin_hi]
+                                    let rms = (fft_buf[bin_lo..bin_hi]
                                         .iter()
-                                        .map(|x| x * x)
+                                        .map(|bin| bin.norm_sqr())
                                         .sum::<f32>()
                                         / n)
-                                        .sqrt();
+                                        .sqrt()
+                                        / FFT_SIZE as f32;
                                     new_bars[index] = band_level(rms, BAND_GAINS[index]);
                                 }
 

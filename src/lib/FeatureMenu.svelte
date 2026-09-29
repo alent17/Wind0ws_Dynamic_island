@@ -65,10 +65,10 @@
   .feature-menu{display:flex;gap:4px;width:100%;max-width:156px;margin:auto;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;touch-action:pan-y;user-select:none;overscroll-behavior-x:contain}
   .feature-menu::-webkit-scrollbar{display:none}
   .function-icon{display:flex;flex:0 0 28px;min-width:0;flex-direction:column;align-items:center;gap:0;padding:0;border:0;background:transparent;color:#d9eaff;cursor:pointer;font:500 9px/1.2 var(--app-font,system-ui)}
-  .function-glyph{display:grid;place-items:center;width:28px;height:28px;border-radius:12px;background:transparent;transition:background 140ms,transform 140ms}
-  .function-icon:hover .function-glyph{background:rgba(255,255,255,.1)}
+  .function-glyph{display:grid;place-items:center;width:28px;height:28px;border-radius:12px;background:rgba(255,255,255,.1);transition:background 140ms,transform 140ms}
+  .function-icon:hover .function-glyph{background:rgba(255,255,255,.16)}
   .function-icon:active .function-glyph{transform:scale(.95)}
-  .function-icon:focus-visible{outline:none}.function-icon:focus-visible .function-glyph{background:rgba(255,255,255,.1);outline:2px solid #91caff;outline-offset:-2px}
+  .function-icon:focus-visible{outline:none}.function-icon:focus-visible .function-glyph{background:rgba(255,255,255,.16);outline:2px solid #91caff;outline-offset:-2px}
   @media(prefers-reduced-motion:reduce){.function-glyph{transition:none}}
-  .function-icon.active{color:#91caff}.toolbar{gap:4px}.toolbar .function-icon{flex-basis:calc((100% - 16px)/5)}.toolbar .function-glyph{width:100%}
+  .function-icon.active{color:#91caff}.function-icon.active .function-glyph{background:rgba(255,255,255,.16)}.toolbar{gap:4px}.toolbar .function-icon{flex-basis:calc((100% - 16px)/5)}.toolbar .function-glyph{width:100%}
 </style>

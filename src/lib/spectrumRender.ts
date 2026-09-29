@@ -1,9 +1,8 @@
 export function shouldAnimateSpectrum(
   active: boolean,
   mounted: boolean,
-  playing: boolean,
   hasStaticValues: boolean,
-  hasVisibleBars: boolean,
+  hasMovingBars: boolean,
 ): boolean {
-  return active && mounted && !hasStaticValues && (playing || hasVisibleBars);
+  return active && mounted && !hasStaticValues && hasMovingBars;
 }

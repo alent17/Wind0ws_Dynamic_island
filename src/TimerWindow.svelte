@@ -25,6 +25,7 @@
   let snapshot = $state<TimerSnapshot>({ status: "idle", durationMs: 0, remainingMs: 0, label: "倒计时" });
   let syncedAt = $state(Date.now());
   let now = $state(Date.now());
+  let pageVisible = $state(false);
   let selectedIndex = $state(3);
   let customSelected = $state(false);
   let customDurationMinutes = $state(30);
@@ -54,6 +55,35 @@
   const localRemainingAt = (time: number) => snapshot.status === "running"
     ? Math.max(0, snapshot.remainingMs - (time - syncedAt))
     : snapshot.remainingMs;
+
+  function updateTimerDisplay() {
+    const tickNow = Date.now();
+    if (snapshot.status === "running") now = tickNow;
+    const remaining = localRemainingAt(tickNow);
+    const activeCountdown = (snapshot.status === "running" || snapshot.status === "paused") && remaining > 0;
+    const nextRemaining = activeCountdown ? remaining : selectedMinutes * 60_000;
+    const nextTime = formatCountdown(nextRemaining);
+    if (nextTime !== lastWheelTime) {
+      wheelDirection = nextRemaining <= localRemainingAt(tickNow - 250) ? "down" : "up";
+      lastWheelTime = nextTime;
+      displayedTime = nextTime;
+      wheelKey += 1;
+    }
+    return remaining;
+  }
+
+  $effect(() => {
+    snapshot.status;
+    snapshot.remainingMs;
+    syncedAt;
+    selectedMinutes;
+    const remaining = updateTimerDisplay();
+    if (!pageVisible || snapshot.status !== "running" || remaining <= 0) return;
+    const interval = window.setInterval(() => {
+      if (updateTimerDisplay() <= 0) window.clearInterval(interval);
+    }, 250);
+    return () => window.clearInterval(interval);
+  });
 
   const wheelPrevious = $derived(formatCountdown(Math.max(0, previewRemainingMs + 1_000)));
   const wheelNext = $derived(formatCountdown(Math.max(0, previewRemainingMs - 1_000)));
@@ -268,6 +298,9 @@
 
   onMount(() => {
     let disposed = false;
+    const updateVisibility = () => { pageVisible = document.visibilityState === "visible"; };
+    document.addEventListener("visibilitychange", updateVisibility);
+    updateVisibility();
     void (async () => {
       const unlisten = await listen<TimerSnapshot>(Events.TIMER_STATE_CHANGED, (event) => {
         const value = event.payload;
@@ -309,22 +342,9 @@
       }
     })();
 
-    const interval = window.setInterval(() => {
-      const tickNow = Date.now();
-      now = tickNow;
-      const nextRemaining = active ? localRemainingAt(tickNow) : selectedMinutes * 60_000;
-      const nextTime = formatCountdown(nextRemaining);
-      if (nextTime !== lastWheelTime) {
-        wheelDirection = nextRemaining <= localRemainingAt(tickNow - 250) ? "down" : "up";
-        lastWheelTime = nextTime;
-        displayedTime = nextTime;
-        wheelKey += 1;
-      }
-    }, 250);
-
     return () => {
       disposed = true;
-      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", updateVisibility);
       dispose?.();
     };
   });
