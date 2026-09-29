@@ -18,6 +18,8 @@ use windows::{
 
 const COVER_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 const COVER_NEGATIVE_CACHE_TTL: Duration = Duration::from_secs(15 * 60);
+const COVER_CACHE_MAX_ENTRIES: usize = 64;
+const COVER_CACHE_MAX_BYTES: usize = 8 * 1024 * 1024;
 const COVER_MATCH_THRESHOLD: u8 = 65;
 const APPLE_REQUESTS_PER_MINUTE: usize = 18;
 
@@ -34,6 +36,43 @@ static COVER_CACHE: OnceLock<Mutex<HashMap<String, (Instant, Option<ResolvedCove
 static APPLE_REQUESTS: OnceLock<Mutex<VecDeque<Instant>>> = OnceLock::new();
 static LAST_AUTO_SESSION_ID: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 static TIMELINE_CACHE: OnceLock<Mutex<HashMap<String, TimelineSnapshot>>> = OnceLock::new();
+
+type CoverCache = HashMap<String, (Instant, Option<ResolvedCover>)>;
+
+fn cover_cache_entry_bytes(key: &str, cover: &Option<ResolvedCover>) -> usize {
+    key.len()
+        + cover
+            .as_ref()
+            .map_or(0, |value| value.url.len() + value.provider.len())
+}
+
+fn trim_cover_cache(cache: &mut CoverCache, now: Instant) {
+    cache.retain(|_, (created, cover)| {
+        let ttl = if cover.is_some() {
+            COVER_CACHE_TTL
+        } else {
+            COVER_NEGATIVE_CACHE_TTL
+        };
+        now.saturating_duration_since(*created) < ttl
+    });
+
+    let mut bytes: usize = cache
+        .iter()
+        .map(|(key, (_, cover))| cover_cache_entry_bytes(key, cover))
+        .sum();
+    while cache.len() > COVER_CACHE_MAX_ENTRIES || bytes > COVER_CACHE_MAX_BYTES {
+        let Some(oldest) = cache
+            .iter()
+            .min_by_key(|(_, (created, _))| created)
+            .map(|(key, _)| key.clone())
+        else {
+            break;
+        };
+        if let Some((_, cover)) = cache.remove(&oldest) {
+            bytes = bytes.saturating_sub(cover_cache_entry_bytes(&oldest, &cover));
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct TimelineSnapshot {
@@ -415,7 +454,9 @@ pub async fn resolve_hd_cover(
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock()
     {
-        cache.insert(cache_key, (Instant::now(), resolved.clone()));
+        let now = Instant::now();
+        cache.insert(cache_key, (now, resolved.clone()));
+        trim_cover_cache(&mut cache, now);
     }
     Ok(resolved)
 }
@@ -1011,8 +1052,49 @@ mod cover_tests {
     use super::{
         apple_hd_url, best_cover_candidate, candidate_score, cover_provider_order, netease_hd_url,
         normalize_media_text, ordered_selected_ids, source_display, stabilize_timeline,
-        CoverCandidate, TimelineSnapshot,
+        trim_cover_cache, CoverCache, CoverCandidate, ResolvedCover, TimelineSnapshot,
+        COVER_CACHE_MAX_BYTES, COVER_CACHE_MAX_ENTRIES, COVER_NEGATIVE_CACHE_TTL,
     };
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn cover_cache_evicts_old_entries_and_expired_misses() {
+        let start = Instant::now();
+        let mut cache = CoverCache::new();
+        cache.insert("expired-miss".into(), (start, None));
+        for index in 0..=COVER_CACHE_MAX_ENTRIES {
+            cache.insert(
+                format!("track-{index}"),
+                (
+                    start + Duration::from_secs(index as u64 + 1),
+                    Some(ResolvedCover {
+                        url: "cover.jpg".into(),
+                        provider: "test".into(),
+                    }),
+                ),
+            );
+        }
+        trim_cover_cache(&mut cache, start + COVER_NEGATIVE_CACHE_TTL + Duration::from_secs(1));
+        assert_eq!(cache.len(), COVER_CACHE_MAX_ENTRIES);
+        assert!(!cache.contains_key("expired-miss"));
+        assert!(!cache.contains_key("track-0"));
+        assert!(cache.contains_key(&format!("track-{}", COVER_CACHE_MAX_ENTRIES)));
+    }
+
+    #[test]
+    fn cover_cache_does_not_retain_oversized_data_urls() {
+        let now = Instant::now();
+        let mut cache = CoverCache::new();
+        cache.insert(
+            "large-cover".into(),
+            (now, Some(ResolvedCover {
+                url: "x".repeat(COVER_CACHE_MAX_BYTES),
+                provider: "test".into(),
+            })),
+        );
+        trim_cover_cache(&mut cache, now);
+        assert!(cache.is_empty());
+    }
 
     #[test]
     fn selected_players_follow_visible_order() {

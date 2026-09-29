@@ -45,7 +45,7 @@
 
   let mode=$state<IslandMode>("expanded"); let scenario=$state<Scenario>("playing"); let progress=$state(50); let settings=$state<AppPreferences>({...DEFAULT_SETTINGS}); let monitors=$state<MonitorInfo[]>([]); let cacheMessage=$state("");
   const previewClock = $derived(formatClock(settings.clockTimeZone, $locale, previewNow));
-  let nativeRuntime=$state(false); let followingLive=$state(false); let liveMedia=$state<MediaState>(DEMO_MEDIA); let liveMediaDisconnect:undefined|(()=>void); let stageWidth=$state(0); let stageHeight=$state(0); let previewReady=$state(false);
+  let nativeRuntime=$state(false); let followingLive=$state(false); let liveMedia=$state<MediaState>(DEMO_MEDIA); let liveMediaDisconnect:undefined|(()=>void); let liveMediaConnecting=false; let liveMediaRequest=0; let stageWidth=$state(0); let stageHeight=$state(0); let previewReady=$state(false);
   let idleSnapshot=$state<IdleSnapshot|null>(null);
   const demoForecast:WeatherForecastDay[]=[0,1,2,3].map((offset)=>({date:new Date(Date.now()+offset*86_400_000).toISOString().slice(0,10),weatherCode:[1,61,2,3][offset],temperatureMax:[33,34,34,32][offset],temperatureMin:[26,24,24,23][offset]}));
   let sessions=$state<MediaSessionInfo[]>([]); let sessionsLoading=$state(false); let sessionsLoaded=$state(false); let sessionRequest=0; let weatherQuery=$state(""); let weatherResults=$state<WeatherLocationCandidate[]>([]); let weatherMessage=$state("");
@@ -125,15 +125,18 @@
   });
   async function enableLivePreview(){
     if(!nativeRuntime)return;
-    if(liveMediaDisconnect)return;
+    if(liveMediaDisconnect||liveMediaConnecting)return;
+    const request=liveMediaRequest;
+    liveMediaConnecting=true;
     try{
       const currentMedia=await mediaApi.getMediaInfo();
-      if(studioDisposed)return;
+      if(studioDisposed||request!==liveMediaRequest||document.visibilityState!=="visible")return;
       liveMedia=currentMedia;
       const disconnect=await connectMedia();
-      if(studioDisposed)disconnect();
+      if(studioDisposed||request!==liveMediaRequest||document.visibilityState!=="visible")disconnect();
       else{liveMediaDisconnect=disconnect;followingLive=true}
-    }catch{liveMediaDisconnect=undefined;followingLive=false}
+    }catch{if(request===liveMediaRequest){liveMediaDisconnect=undefined;followingLive=false}}
+    finally{if(request===liveMediaRequest)liveMediaConnecting=false}
   }
   async function refreshIdleSnapshot(){
     if(!nativeRuntime)return;
@@ -147,8 +150,22 @@
   }
   onMount(()=>{
     studioDisposed=false;
-    const clockTimer=setInterval(()=>previewNow=Date.now(),1000);
+    const studioVisible=()=>document.visibilityState==="visible";
+    const clockTimer=setInterval(()=>{if(studioVisible())previewNow=Date.now()},1000);
     nativeRuntime=Boolean((window as any).__TAURI_INTERNALS__);
+    const refreshOnShow=()=>{
+      if(!studioVisible()){
+        liveMediaRequest+=1;
+        liveMediaConnecting=false;
+        liveMediaDisconnect?.();
+        liveMediaDisconnect=undefined;
+        followingLive=false;
+        return;
+      }
+      previewNow=Date.now();
+      if(nativeRuntime){void enableLivePreview();void refreshIdleSnapshot();void refreshSessions()}
+    };
+    document.addEventListener("visibilitychange",refreshOnShow);
     const unsubscribe=media.subscribe(value=>liveMedia=value);
     let disposed=false;
     let deferredFrame=0;
@@ -177,9 +194,11 @@
       );
     });
     if(nativeRuntime){
-      void enableLivePreview();
-      void refreshIdleSnapshot();
-      const idleTimer=setInterval(()=>void refreshIdleSnapshot(),30_000);
+      if(studioVisible()){
+        void enableLivePreview();
+        void refreshIdleSnapshot();
+      }
+      const idleTimer=setInterval(()=>{if(studioVisible())void refreshIdleSnapshot()},30_000);
       deferredTimers.push(idleTimer);
       void (async()=>{
         try{
@@ -190,14 +209,16 @@
           setLocale(settings.language);
         }catch{}
         if(disposed)return;
-        void refreshSessions();
-        deferredTimers.push(setInterval(()=>void refreshSessions(),10_000));
+        if(studioVisible())void refreshSessions();
+        deferredTimers.push(setInterval(()=>{if(studioVisible())void refreshSessions()},10_000));
       })();
     }
     return()=>{
       disposed=true;
       clearInterval(clockTimer);
+      document.removeEventListener("visibilitychange",refreshOnShow);
       studioDisposed=true;
+      liveMediaRequest+=1;
       if(deferredFrame)cancelAnimationFrame(deferredFrame);
       deferredTimers.forEach(timer=>clearTimeout(timer));
       if(closePromise)void closePromise.then(unlisten=>unlisten()).catch(()=>{});
