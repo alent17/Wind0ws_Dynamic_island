@@ -24,33 +24,65 @@ export const media = writable<MediaState>(DEMO_MEDIA);
 let consumers = 0;
 let unlisten: UnlistenFn | undefined;
 let poll: ReturnType<typeof setInterval> | undefined;
+let generation = 0;
+let updateVersion = 0;
+let refreshInFlight: Promise<void> | undefined;
+let refreshGeneration = 0;
 
-async function refresh() {
-  try {
-    const next = await mediaApi.getMediaInfo();
-    media.set(next);
-  } catch {
+function publish(next: MediaState) {
+  updateVersion += 1;
+  media.update((previous) => ({
+    ...next,
+    albumArt: next.albumArt || (
+      previous.title === next.title && previous.artist === next.artist && previous.source === next.source
+        ? previous.albumArt
+        : ""
+    ),
+  }));
+}
+
+function refresh(epoch: number): Promise<void> {
+  if (refreshInFlight && refreshGeneration === epoch) return refreshInFlight;
+
+  const versionAtStart = updateVersion;
+  const request = mediaApi.getMediaInfo();
+  const pending = request.then((next) => {
+    // An event received while the request was pending is newer than this snapshot.
+    if (epoch === generation && consumers > 0 && versionAtStart === updateVersion) publish(next);
+  }).catch(() => {
     // Browser Studio deliberately keeps deterministic preview data.
-  }
+  }).finally(() => {
+    if (refreshInFlight === pending) refreshInFlight = undefined;
+  });
+  refreshInFlight = pending;
+  refreshGeneration = epoch;
+  return pending;
 }
 
 export async function connectMedia(): Promise<() => void> {
   consumers += 1;
   if (consumers === 1) {
-    await refresh();
-    try {
-      unlisten = await listen<MediaState>("media-update", ({ payload }) => media.set(payload));
-    } catch {
-      poll = setInterval(refresh, 2500);
-    }
+    const epoch = ++generation;
+    void refresh(epoch);
+    void listen<MediaState>("media-update", ({ payload }) => {
+      if (epoch === generation && consumers > 0) publish(payload);
+    }).then((dispose) => {
+      if (epoch !== generation || consumers === 0) dispose();
+      else unlisten = dispose;
+    }).catch(() => {
+      if (epoch === generation && consumers > 0) poll = setInterval(() => void refresh(epoch), 2500);
+    });
   }
+  let released = false;
   return () => {
-    consumers = Math.max(0, consumers - 1);
-    if (!consumers) {
-      unlisten?.();
-      unlisten = undefined;
-      if (poll) clearInterval(poll);
-      poll = undefined;
-    }
+    if (released) return;
+    released = true;
+    consumers -= 1;
+    if (consumers > 0) return;
+    generation += 1;
+    unlisten?.();
+    unlisten = undefined;
+    if (poll) clearInterval(poll);
+    poll = undefined;
   };
 }

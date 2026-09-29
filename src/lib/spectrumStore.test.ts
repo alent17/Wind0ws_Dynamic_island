@@ -17,7 +17,8 @@ describe("spectrum capture lifecycle", () => {
     expect(native.invoke.mock.calls.filter(([command]) => command === "start_spectrum")).toHaveLength(2);
     release();
     await vi.advanceTimersByTimeAsync(5000);
-    expect(native.dispose).toHaveBeenCalledOnce();
+    // Recovery replaces the first listener, then release disposes the replacement.
+    expect(native.dispose).toHaveBeenCalledTimes(2);
     expect(native.invoke).toHaveBeenLastCalledWith("stop_spectrum");
     expect(vi.getTimerCount()).toBe(0);
   });
