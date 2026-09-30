@@ -1,50 +1,39 @@
-# Isle 安装与故障排查
+# Isle 原生版安装
 
-## 安装发行版
+main 默认发行 Windows x64 原生程序，不需要 WebView2。
 
-1. 从发布包中运行 `Isle_*_x64-setup.exe`。
-2. 按向导选择安装目录并完成安装。当前安装模式为当前用户安装，不需要管理员权限。
-3. 首次启动后，Isle 会驻留系统托盘；关闭主界面不等于退出程序。
-4. 如需开机启动，从系统托盘打开 Isle Studio，在“应用行为”中开启“开机启动”。
+## 安装与升级
 
-如果系统提示缺少 WebView2，请先安装 Microsoft Edge WebView2 Runtime，再重新启动 Isle。
+运行 `Isle_1.0.11_x64-setup.exe`，选择安装目录。更新前关闭旧程序；从旧 Tauri 版更新时需在旧版托盘选择“退出”。如使用此前的安装目录，安装器会替换 `isle.exe` 为原生程序，保留用户配置。
 
-## 更新安装
+便携包 `Isle_1.0.11_native_x64.zip` 解压后运行 `isle.exe`；保留同目录的 `fonts/` 与许可文件。
 
-直接运行新版本安装包即可覆盖更新。更新前建议从系统托盘选择“退出”，确保旧版本完全结束；这样可以避免旧进程继续占用窗口或后端文件。
+原生版默认连接真实系统媒体会话。F8 打开设置，Alt+F4 退出；原生版本目前没有系统托盘。悬浮播放器可在工具栏打开，也可执行 `isle.exe --open-floating`。
 
-## 从源码运行
+原生配置位于 `%APPDATA%/IsleNative/settings.json`，首次可读取旧版配置并在迁移保存时备份。卸载不会删除用户配置。
 
-需要 Windows 10/11、Node.js 18+、Rust stable、Visual Studio 2022 Build Tools（“使用 C++ 的桌面开发”）和 WebView2 Runtime。
+## 从源码运行与打包
 
-```powershell
-npm install
-npm run tauri dev
-```
-
-生成 Windows 安装包：
+需要 Rust MSVC、Visual Studio C++ Build Tools、Windows SDK；打包需要 NSIS。
 
 ```powershell
+cargo run --release --manifest-path native/Cargo.toml --bin isle-native
+cargo test --manifest-path native/Cargo.toml --workspace
 npm run bundle:windows
 ```
 
-安装包输出在 `src-tauri/target/release/bundle/nsis/`。
+也可不使用 npm：
 
-## 功能说明
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File native/scripts/package-windows.ps1
+```
 
-- 展开灵动岛后，功能栏提供系统音量滑块和输出设备选择器；可直接调整 Windows 主音量并切换扬声器、耳机等播放设备。
-- 倒计时直接显示在展开灵动岛内。开始前左右拖动刻度即可选择时长，也可以点击刻度或使用方向键微调。
-- 倒计时支持开始、暂停、继续和重置，运行期间会持续刷新剩余时间。
+脚本自动寻找 PATH、标准安装目录或现有工具缓存中的 NSIS，可使用 `-MakensisPath` 指定。EXE、安装包和便携 ZIP 输出在 `dist/`。
 
-## 倒计时或悬浮窗无法打开
+## 确认版本
 
-如果看到窗口标题显示“未响应”或界面空白：
+查看安装目录 `isle.exe` 的文件属性，应显示 ProductVersion **1.0.11**、FileDescription **Isle Native**。原生程序不会启动 WebView2 子进程。旧目录中残留的 WebView2 缓存不影响原生运行。
 
-1. 先从系统托盘退出 Isle，不要只关闭窗口。
-2. 重新启动应用，再打开倒计时。
-3. 如果仍然无响应，重新运行最新安装包覆盖安装。
-4. 最后再考虑重置用户配置；操作前请备份 `%APPDATA%` 下 Isle 的设置文件，因为这会丢失个性化设置。
+## 旧版 WebView 构建
 
-## 仍然无法启动时
-
-请记录 Windows 版本、Isle 版本、使用的播放器，以及是否在点击倒计时前就已经卡顿，并附上启动后是否能从托盘退出。这些信息有助于区分 WebView2、播放器媒体会话和配置文件问题。
+旧版需要 Node.js、Rust 和 WebView2，其命令是 `npm run web:bundle:windows`；通过 `npm run tauri dev` 开发。它不是 main 的默认发行程序。

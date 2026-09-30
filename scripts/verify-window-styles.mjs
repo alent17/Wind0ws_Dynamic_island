@@ -1,4 +1,4 @@
-// Run after npm run build: development mode does not reproduce CSS preload bugs.
+// Run after npm run web:build: development mode does not reproduce CSS preload bugs.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';

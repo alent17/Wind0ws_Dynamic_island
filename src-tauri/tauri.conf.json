@@ -4,9 +4,9 @@
   "version": "1.0.10",
   "identifier": "com.isle-app.isle",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "npm run web:dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run web:build",
     "frontendDist": "../build"
   },
   "app": {
