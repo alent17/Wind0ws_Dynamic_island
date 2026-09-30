@@ -89,7 +89,7 @@ impl SpectrumCapture {
                 });
                 if let Some(current) = current {
                     if should_publish_spectrum(previous.as_ref(), &current, last_emit.elapsed()) {
-                        let _ = publisher_app.emit("spectrum-data", current.to_vec());
+                        let _ = publisher_app.emit("spectrum-data", current);
                         previous = Some(current);
                         last_emit = Instant::now();
                     }
@@ -132,6 +132,7 @@ impl SpectrumCapture {
 
                 let mut planner = FftPlanner::<f32>::new();
                 let fft = planner.plan_fft_forward(FFT_SIZE);
+                let mut fft_scratch = vec![Complex::new(0.0, 0.0); fft.get_inplace_scratch_len()];
                 let freq_bins = FFT_SIZE / 2;
                 let band_ranges = FREQ_BANDS.map(|(freq_lo, freq_hi)| {
                     let bin_lo =
@@ -171,22 +172,30 @@ impl SpectrumCapture {
                                 }
                                 frame_pos = 0;
 
-                                for i in 0..FFT_SIZE {
-                                    fft_buf[i] = Complex::new(frame_buf[i] * hann_window[i], 0.0);
-                                }
+                                if frame_buf.iter().any(|sample| *sample != 0.0) {
+                                    for i in 0..FFT_SIZE {
+                                        fft_buf[i] =
+                                            Complex::new(frame_buf[i] * hann_window[i], 0.0);
+                                    }
 
-                                fft.process(&mut fft_buf);
+                                    fft.process_with_scratch(&mut fft_buf, &mut fft_scratch);
 
-                                for (index, &(bin_lo, bin_hi)) in band_ranges.iter().enumerate() {
-                                    let n = (bin_hi - bin_lo) as f32;
-                                    let rms = (fft_buf[bin_lo..bin_hi]
-                                        .iter()
-                                        .map(|bin| bin.norm_sqr())
-                                        .sum::<f32>()
-                                        / n)
-                                        .sqrt()
-                                        / FFT_SIZE as f32;
-                                    new_bars[index] = band_level(rms, BAND_GAINS[index]);
+                                    for (index, &(bin_lo, bin_hi)) in band_ranges.iter().enumerate()
+                                    {
+                                        let n = (bin_hi - bin_lo) as f32;
+                                        let rms = (fft_buf[bin_lo..bin_hi]
+                                            .iter()
+                                            .map(|bin| bin.norm_sqr())
+                                            .sum::<f32>()
+                                            / n)
+                                            .sqrt()
+                                            / FFT_SIZE as f32;
+                                        new_bars[index] = band_level(rms, BAND_GAINS[index]);
+                                    }
+                                } else {
+                                    // Silence has zero energy in every band; keep the same release
+                                    // envelope without performing an FFT or touching its scratch buffer.
+                                    new_bars.fill(0.0);
                                 }
 
                                 for i in 0..NUM_BARS {

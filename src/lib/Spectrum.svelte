@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { retainSpectrum, spectrumValues } from "$lib/spectrumStore";
-  import { shouldAnimateSpectrum } from "$lib/spectrumRender";
+  import { shouldAnimateSpectrum, smoothSpectrumValue } from "$lib/spectrumRender";
   import { createSpectrumPalette } from "$lib/spectrumColors";
   import type { SpectrumMode } from "$lib/api/types";
   import { locale, translate } from "$lib/i18n";
@@ -28,7 +28,7 @@
 
   const NUM_BARS = 6;
   const MIN_HEIGHT = 2;
-  const MIN_FRAME_MS = 1000 / 24;
+  const MIN_FRAME_MS = 1000 / 30;
   let canvasEl: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
   let animId = 0;
@@ -38,6 +38,8 @@
   let latestBars = new Float32Array(NUM_BARS);
   let randomBars = new Float32Array(NUM_BARS);
   let visibleBars = new Float32Array(NUM_BARS);
+  const heights = new Float32Array(NUM_BARS);
+  const paintedHeights = new Float32Array(NUM_BARS).fill(Number.NaN);
   let barColors: string[] = ["#ffffff", "#ffffff"];
 
   const barWidth = $derived(2 * scale);
@@ -62,6 +64,7 @@
     if (!ctx) return;
     // Use only two solid colors, each shared by one half of the six bars.
     barColors = createSpectrumPalette(topColor, bottomColor, 2);
+    paintedHeights.fill(Number.NaN);
   }
 
   function targetAt(index: number) {
@@ -73,33 +76,41 @@
   }
 
   function barsMoving() {
-    return visibleBars.some((value, index) => Math.abs(targetAt(index) - value) > 0.01);
+    return visibleBars.some((value, index) => Math.abs(targetAt(index) - value) > 0.002);
   }
 
   function draw(frameMs = 1000 / 60) {
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    let changed = false;
     for (let index = 0; index < NUM_BARS; index += 1) {
       const target = targetAt(index);
       if (values || reduceMotion) visibleBars[index] = target;
       else {
-        // Faster attack catches transients; the slightly longer release keeps the bars buoyant.
-        // Small per-band differences stop all six columns from moving as one block.
-        const attacking = target > visibleBars[index];
-        const baseDecay = attacking ? 0.5 : 0.82;
-        const decay = Math.min(0.95, Math.max(0.35, baseDecay + (index % 3 - 1) * 0.035));
-        visibleBars[index] += (target - visibleBars[index]) * (1 - Math.pow(decay, frameMs / (1000 / 60)));
+        visibleBars[index] = smoothSpectrumValue(visibleBars[index], target, frameMs, index);
       }
       const value = visibleBars[index];
-      const height = MIN_HEIGHT + value * (maxHeight - MIN_HEIGHT);
+      // Quarter-pixel steps keep motion smooth without invalidating the native
+      // transparent surface for changes too small to see.
+      heights[index] = Math.round((MIN_HEIGHT + value * (maxHeight - MIN_HEIGHT)) * 4) / 4;
+      changed ||= heights[index] !== paintedHeights[index];
+    }
+    if (!changed) return;
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    ctx.beginPath();
+    ctx.fillStyle = barColors[0] ?? "#ffffff";
+    for (let index = 0; index < NUM_BARS; index += 1) {
+      if (index === NUM_BARS / 2) {
+        ctx.fill();
+        ctx.beginPath();
+        ctx.fillStyle = barColors[1] ?? "#ffffff";
+      }
+      const height = heights[index];
       const x = index * (barWidth + barGap);
       const y = (canvasHeight - height) / 2;
-      ctx.globalAlpha = 0.9 + value * 0.1;
-      ctx.fillStyle = barColors[index < NUM_BARS / 2 ? 0 : 1] ?? "#ffffff";
-      ctx.beginPath();
       ctx.roundRect(x, y, barWidth, height, cornerRadius);
-      ctx.fill();
     }
+    ctx.fill();
+    paintedHeights.set(heights);
     ctx.globalAlpha = 1;
   }
 
@@ -116,7 +127,8 @@
       renderTimer = undefined;
       if (mounted && active) render(performance.now());
       else lastFrameTime = 0;
-    }, MIN_FRAME_MS);
+    // Account for draw time without a second callback for every frame.
+    }, Math.max(0, timestamp + MIN_FRAME_MS - performance.now()));
   }
 
   function cancelRenderLoop() {
@@ -163,13 +175,12 @@
     }
     const retarget = () => {
       const now = Date.now();
-      randomBars = Float32Array.from({ length: NUM_BARS }, (_, index) => {
-        if (!playing) return 0;
+      for (let index = 0; index < NUM_BARS; index += 1) {
         const beat = Math.max(0, Math.sin(now / 175 + index * 0.78));
         const ripple = (Math.sin(now / 255 + index * 1.6) + 1) * 0.5;
         const accent = Math.random() < 0.12 ? Math.random() * 0.2 : 0;
-        return Math.min(1, 0.1 + beat * 0.34 + ripple * 0.16 + Math.random() * 0.32 + accent);
-      });
+        randomBars[index] = Math.min(1, 0.1 + beat * 0.34 + ripple * 0.16 + Math.random() * 0.32 + accent);
+      }
       ensureRenderLoop();
     };
     retarget();
