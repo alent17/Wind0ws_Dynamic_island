@@ -1,78 +1,36 @@
-<div align="center">
-
-<img src="src-tauri/icons/128x128.png" width="96" alt="Isle icon">
-
-# Isle
-
-**A Windows media island that stays beautifully within reach.**
+# Isle — Native Windows UI
 
 [简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
 
-[Download v1.0.2](https://github.com/alent17/Wind0ws_Dynamic_island/releases/tag/v1.0.2) · [Installation](INSTALL.md) · [Report an issue](https://github.com/alent17/Wind0ws_Dynamic_island/issues)
+The default application on main is **Isle Native 1.0.11**, built with Rust, Win32, Direct2D, DirectWrite and DirectComposition. It does not require WebView2 at runtime.
 
-</div>
+## Run and build
 
----
-
-Isle is a Dynamic Island-inspired desktop media controller and floating player for Windows 10/11. It reads track, playback, and timeline data from Windows media sessions and presents them in a lightweight, persistent, customizable interface.
-
-![Isle Studio and the expanded island](docs/screenshots/isle-studio.png)
-
-## Highlights
-
-- Windows SMTC playback controls, seeking, and player priority
-- Remembers the last track and can reopen its player to resume playback
-- Compact, hover, expanded, and auto-hidden island states
-- Floating or four-edge attached layouts with multi-monitor support
-- Live system-audio FFT spectrum or smooth generated animation
-- High-resolution artwork matching and a resizable floating player synchronized with the island
-- Weather, date, network, CPU, memory, battery, and custom idle content
-- System volume, output-device selection, timer, tray, and startup integration
-- Capture privacy options for screenshots, recording, games, and screen sharing
-- Simplified Chinese, English, and Japanese UI
-
-## Floating player
-
-The floating player is an independent, immersive media view that can be opened from Isle Studio or the island's shortcut controls.
-
-- Drag it anywhere and resize it freely; compact and large layouts adapt automatically.
-- Track, play state, timeline, play/pause, previous, and next controls stay synchronized with the island.
-- Prefer high-resolution artwork, or silently loop a matched 30-second video preview when the MV option is enabled.
-- Generate a background gradient from the artwork's representative color or use a fixed custom color.
-- Supports always-on-top, close, position reset, and capture protection for screenshots, recording, and screen sharing.
-
-| Floating player | Media view |
-|:--:|:--:|
-| ![Floating player](docs/screenshots/floating-player.png) | ![Floating player media view](docs/screenshots/floating-player-compact.png) |
-
-## Install
-
-Download `Isle_1.0.2_x64-setup.exe` from [GitHub Releases](https://github.com/alent17/Wind0ws_Dynamic_island/releases/latest), run the installer, then play media from an app that supports Windows system media controls. Open Isle Studio from the system tray to customize the experience.
-
-Requires Windows 10/11 x64 and Microsoft Edge WebView2 Runtime. Player capabilities vary with the information exposed through Windows SMTC.
-
-## Build from source
-
-Install Node.js 18+, Rust stable, and Visual Studio 2022 Build Tools with Desktop development with C++.
+Requires Windows 10/11 x64, Rust MSVC, Visual Studio C++ Build Tools and the Windows SDK. NSIS is required to create the installer.
 
 ```powershell
-npm install
+cargo run --release --manifest-path native/Cargo.toml --bin isle-native
+```
+
+Root commands now target the native application:
+
+```powershell
+npm run dev
 npm run check
-npm test -- --run
-cargo test --manifest-path src-tauri/Cargo.toml
+npm test
 npm run bundle:windows
 ```
 
-Built with Tauri 2, Svelte 5, TypeScript, Vite, Rust, Windows API / SMTC, CPAL, RustFFT, and Vitest.
+Outputs: `dist/Isle_1.0.11_x64-setup.exe` and `dist/Isle_1.0.11_native_x64.zip`. Keep the fonts and license files next to the portable executable.
 
-## Privacy
+Real Windows media sessions are enabled by default. F8 opens settings; Alt+F4 exits. Use `--open-floating` to open the native floating player or `--demo` for sample data.
 
-Core media control stays local. Weather uses Open-Meteo; high-resolution artwork may use Apple iTunes Search and an existing unauthenticated NetEase Cloud Music endpoint. Isle does not request Windows location permission.
+Native features include media controls, spectrum, a floating player, a timer, system audio, time zones, weather and settings. Tray integration, MV video and some legacy capture protection remain unported. See [native documentation](native/README.md) and [installation instructions](INSTALL.md).
 
-## Contributing
+Native settings are stored in `%APPDATA%/IsleNative/settings.json`. The first migration can read legacy settings and backs up the original data when saving.
 
-Issues and pull requests are welcome. Please run the frontend checks, frontend tests, and Rust tests before submitting.
+## Legacy WebView application
 
-**Contributors**: [@alent17](https://github.com/alent17) · [ChatGPT](https://chatgpt.com/)
+The legacy source remains in `src/` and `src-tauri/`. Use `web:dev`, `web:check`, `web:test` and `web:bundle:windows` explicitly. Historical screenshots in `docs/screenshots/` show the legacy UI.
 
-Licensed under the [MIT License](LICENSE).
+[MIT License](LICENSE)

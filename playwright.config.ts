@@ -15,7 +15,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "pnpm dev --host 127.0.0.1 --port 1422",
+    command: "npm run web:dev -- --host 127.0.0.1 --port 1422",
     url: "http://127.0.0.1:1422/ui-tests/island-fixture.html",
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
