@@ -1,8 +1,5 @@
 import './app.css';
 import { mount } from 'svelte';
-import App from './App.svelte';
-import FloatingWindow from './FloatingWindow.svelte';
-import TimerWindow from './TimerWindow.svelte';
 
 // Keep browser-only actions out of the desktop application UI.
 document.addEventListener('contextmenu', (event) => event.preventDefault());
@@ -20,21 +17,34 @@ const windowType = urlParams.get('window');
 
 let app;
 
-// 路由分发逻辑
-if (windowType === 'floating') {
-  // 渲染独立悬浮窗
-  app = mount(FloatingWindow, {
-    target: targetElement,
-  });
-} else if (windowType === 'timer') {
-  app = mount(TimerWindow, {
-    target: targetElement,
-  });
-} else {
-  // 默认渲染灵动岛主窗口
-  app = mount(App, {
-    target: targetElement,
-  });
+async function loadFloatingWindow() {
+  return import('./FloatingWindow.svelte');
 }
 
-export default app;
+async function loadTimerWindow() {
+  return import('./TimerWindow.svelte');
+}
+
+async function mountWindow() {
+  // Load only the current window's component and styles. The compact island
+  // does not need to retain the floating player and timer modules.
+  if (windowType === 'floating' || windowType === 'timer') {
+    // Keep each import in its own branch so Vite preloads that component's
+    // CSS. A conditional import inside Promise.all can reuse the timer's
+    // dependency list for the floating player in the production bundle.
+    const contentModule = windowType === 'floating'
+      ? loadFloatingWindow()
+      : loadTimerWindow();
+    const [{ default: VisibleWindow }, { default: Content }] = await Promise.all([
+      import('./lib/VisibleWindow.svelte'),
+      contentModule,
+    ]);
+    app = mount(VisibleWindow, { props: { component: Content }, target: targetElement! });
+  } else {
+    const { default: App } = await import('./App.svelte');
+    app = mount(App, { target: targetElement! });
+  }
+}
+
+void mountWindow().catch((error) => console.error('[Isle] Window initialization failed', error));
+export { app as default };

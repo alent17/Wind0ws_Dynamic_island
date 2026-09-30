@@ -1,3 +1,4 @@
+import { navigationGeometry, navigationHostFor } from "./islandGeometry";
 import { describe, expect, it } from "vitest";
 import {
   expansionForGeometry,
@@ -161,5 +162,29 @@ describe("island geometry", () => {
     expect(stableEnvelope(hover, compact)).toEqual(hover);
     expect(stableEnvelope(expanded, compact)).toEqual(expanded);
     expect(stableEnvelope(compact, expanded)).toEqual(expanded);
+  });
+});
+
+
+describe("in-island navigation geometry", () => {
+  it("keeps the original music page and caps the menu at five slots", () => {
+    expect(navigationGeometry("music",5).width).toBe(300);
+    expect(navigationGeometry("music",8)).toEqual(navigationGeometry("music",5));
+    expect(navigationGeometry("volume",5).height).toBeGreaterThan(navigationGeometry("music",5).height);
+  });
+  it("fits every page and maximum shoulders inside the shared host", () => {
+    for (const edge of ["top","right","bottom","left"] as const) {
+      for (const style of ["floating","edge"] as const) {
+        const host = navigationHostFor(style,edge,300);
+        for (const page of ["music","clock","weather","timer","volume"] as const) {
+          const geometry = navigationGeometry(page,8,80,style,edge,64);
+          const offset = surfaceOffsetFor(host,geometry,style,edge);
+          expect(offset.x).toBeGreaterThanOrEqual(0);
+          expect(offset.y).toBeGreaterThanOrEqual(0);
+          expect(offset.x + geometry.width).toBeLessThanOrEqual(host.width);
+          expect(offset.y + geometry.height).toBeLessThanOrEqual(host.height);
+        }
+      }
+    }
   });
 });

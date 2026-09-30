@@ -44,6 +44,8 @@ export interface AppSettings {
   showVolumeTool: boolean;
   showTimerTool: boolean;
   showHideTool: boolean;
+  showClockTool: boolean;
+  showWeatherTool: boolean;
   showCustomFunctionPanel: boolean;
   enableMvPlayback: boolean;
   lockFloatingWindow: boolean;
@@ -218,6 +220,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showVolumeTool: true,
   showTimerTool: true,
   showHideTool: true,
+  showClockTool: true,
+  showWeatherTool: true,
   showCustomFunctionPanel: true,
   enableMvPlayback: true,
   lockFloatingWindow: false,

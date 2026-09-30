@@ -56,3 +56,5 @@ export function cubicBezierEasing(x1: number, y1: number, x2: number, y2: number
 
 export const islandMorphEasing = cubicBezierEasing(0.22, 0.8, 0.2, 1);
 export const islandSettleEasing = cubicBezierEasing(0.23, 1, 0.32, 1);
+
+export const ISLAND_SPRING = { stiffness: 0.18, damping: 0.8, precision: 0.01 } as const;

@@ -6,7 +6,7 @@
   import IslandSurface from "$lib/IslandSurface.svelte";
   import StudioSlider from "$lib/StudioSlider.svelte";
   import StudioSelect from "$lib/StudioSelect.svelte";
-  import { CUSTOM_PANEL_WIDTH, geometryFor, hostFor, type IslandMode } from "$lib/islandGeometry";
+  import {  geometryFor, navigationHostFor as hostFor, type IslandMode } from "$lib/islandGeometry";
   import { DEMO_MEDIA, media, connectMedia } from "$lib/mediaStore";
   import { extractSpectrumColorsFromImage } from "$lib/spectrumColors";
   import { settingsApi } from "$lib/api/settings";
@@ -95,13 +95,12 @@
     ...(settings.showVolumeTool?["volume"]:[]),
     ...(settings.showTimerTool?["timer"]:[]),
     ...(settings.showHideTool?["hide"]:[]),
+    ...(settings.showClockTool?["clock"]:[]),
+    ...(settings.showWeatherTool?["weather"]:[]),
   ] as IslandTool[]);
-  let previewPanelVisible=$derived(settings.showCustomFunctionPanel&&previewTools.length>0);
-  let previewPanelExtraWidth=$derived(previewPanelVisible?CUSTOM_PANEL_WIDTH:0);
-  let previewExpandedExtraWidth=$derived(previewPanelExtraWidth);
   let previewExpandedRadius=$derived(appearanceDraft.expandedCornerRadius);
-  let previewHost=$derived(hostFor(appearanceDraft.islandStyle,appearanceDraft.islandEdge,appearanceDraft.compactLength,previewExpandedExtraWidth));
-  let currentGeometry=$derived(geometryFor(mode,previewExpandedRadius,appearanceDraft.islandEdge,appearanceDraft.compactLength,previewExpandedExtraWidth));
+  let previewHost=$derived(hostFor(appearanceDraft.islandStyle,appearanceDraft.islandEdge,appearanceDraft.compactLength));
+  let currentGeometry=$state(geometryFor("expanded"));
   let previewScale=$derived(Math.min(previewScaleFloor, Math.max(0.1, (stageWidth - 24) / previewHost.width)));
   const previewPosition=spring(50,{stiffness:.1,damping:.7,precision:.1});
   $effect(()=>{previewPosition.set(appearanceDraft.islandEdgePosition,{hard:!settings.enableAnimations||settings.reduceAnimations})});
@@ -137,7 +136,7 @@
   }
   async function refreshIdleSnapshot(){
     if(!nativeRuntime)return;
-    try{const snapshot=await idleApi.getSnapshot();if(!studioDisposed)idleSnapshot=snapshot}catch{}
+    try{const snapshot=await idleApi.getSnapshot(JSON.stringify(settings.weatherLocation));if(!studioDisposed)idleSnapshot=snapshot}catch{}
   }
   const t=(key:TranslationKey,values:Record<string,string|number>={})=>translate(key,values,$locale);
   const enumLabel=(value:string)=>t(value as TranslationKey);
@@ -158,7 +157,8 @@
       const appWindow=getCurrentWindow();
       closePromise=appWindow.onCloseRequested(async(event)=>{
         event.preventDefault();
-        await appWindow.hide();
+        await persist();
+        await appWindow.destroy();
       });
     }
     // Let the document paint before mounting the preview. The preview contains
@@ -292,7 +292,7 @@
   async function searchWeather(){weatherMessage=t("searching");try{weatherResults=await idleApi.searchLocations(weatherQuery,$locale==="zh-CN"?"zh":$locale);weatherMessage=weatherResults.length?"":t("noCity")}catch{weatherMessage=t("weatherFailed")}}
   function weatherLocationLabel(item:WeatherLocationCandidate){return [...new Set([item.name,item.admin2,item.admin1,item.country].filter(Boolean))].join(" · ")}
   function weatherCandidateDetail(item:WeatherLocationCandidate){const label=[...new Set([item.admin2,item.admin1,item.country].filter(Boolean))].join(" · ");const duplicates=weatherResults.filter(other=>weatherLocationLabel(other)===weatherLocationLabel(item)).length;return duplicates>1?`${label} · ${item.latitude.toFixed(2)}, ${item.longitude.toFixed(2)}`:label}
-  function selectWeather(item:WeatherLocationCandidate){updatePreference({weatherLocation:{name:weatherLocationLabel(item),latitude:item.latitude,longitude:item.longitude}});weatherResults=[];weatherMessage=t("citySaved");setTimeout(()=>void refreshIdleSnapshot(),600)}
+  function selectWeather(item:WeatherLocationCandidate){updatePreference({weatherLocation:{name:weatherLocationLabel(item),latitude:item.latitude,longitude:item.longitude}});weatherResults=[];weatherMessage=t("citySaved");void persist().then(()=>{if(!studioDisposed)void refreshIdleSnapshot()})}
   async function clearCache(){cacheMessage=t("clearing");try{await cacheApi.clearCache();cacheMessage=t("cacheCleared")}catch{cacheMessage=t("clearFailed")}}
 </script>
 
@@ -314,7 +314,7 @@
       <div class="stage-topline"><span><i aria-hidden="true"></i>{t("previewLabel")}</span><small>{nativeRuntime&&followingLive?t("currentMusic"):nativeRuntime?t("previewReady"):t("browserDemo")}</small></div>
       <div class="preview-host" style={`width:${previewHost.width}px;height:${previewHost.height}px;${previewPositionStyle}`}>
         {#if previewReady}
-        <IslandSurface media={sample} clockText={previewClock} clockTimeZone={settings.clockTimeZone} idle={nativeRuntime && followingLive && !sample.title} idleTime={previewClock} idleWeatherTemperature={idleSnapshot?.weatherTemperature ?? null} idleWeatherCode={idleSnapshot?.weatherCode ?? null} idleWeatherForecast={previewForecast} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedRadius={appearanceDraft.expandedCornerRadius} collapsedEdgeShoulderRadius={appearanceDraft.collapsedEdgeShoulderRadius} expandedEdgeShoulderRadius={appearanceDraft.expandedEdgeShoulderRadius} compactLength={appearanceDraft.compactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} spectrumTopColor={previewSpectrumTopColor} spectrumBottomColor={previewSpectrumBottomColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={!nativeRuntime&&appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget === "background" ? null : previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} showCustomFunctionPanel={settings.showCustomFunctionPanel} systemAudio={{volumePercent:42,muted:false,deviceId:"studio-speakers",deviceName:"Speakers"}} audioDevices={[{id:"studio-speakers",name:"Speakers (Realtek Audio)",isDefault:true},{id:"studio-headphones",name:"Headphones",isDefault:false}]} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.showStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{if(nativeRuntime&&followingLive){void mediaApi.controlMedia(action);return}if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
+        <IslandSurface weatherCity={nativeRuntime ? settings.weatherLocation?.name ?? "" : "Shanghai"} weatherUpdatedAt={idleSnapshot?.weatherUpdatedAt ?? null} onRegionChange={({geometry}) => currentGeometry = geometry} media={sample} clockText={previewClock} clockTimeZone={settings.clockTimeZone} idle={nativeRuntime && followingLive && !sample.title} idleTime={previewClock} idleWeatherTemperature={idleSnapshot?.weatherTemperature ?? null} idleWeatherCode={idleSnapshot?.weatherCode ?? null} idleWeatherForecast={previewForecast} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedRadius={appearanceDraft.expandedCornerRadius} collapsedEdgeShoulderRadius={appearanceDraft.collapsedEdgeShoulderRadius} expandedEdgeShoulderRadius={appearanceDraft.expandedEdgeShoulderRadius} compactLength={appearanceDraft.compactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} spectrumTopColor={previewSpectrumTopColor} spectrumBottomColor={previewSpectrumBottomColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={!nativeRuntime&&appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget === "background" ? null : previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} showCustomFunctionPanel={settings.showCustomFunctionPanel} systemAudio={{volumePercent:42,muted:false,deviceId:"studio-speakers",deviceName:"Speakers"}} audioDevices={[{id:"studio-speakers",name:"Speakers (Realtek Audio)",isDefault:true},{id:"studio-headphones",name:"Headphones",isDefault:false}]} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.showStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{if(nativeRuntime&&followingLive){void mediaApi.controlMedia(action);return}if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
         {/if}
       </div>
       <div class="stage-caption" class:editing={previewTarget!==null} aria-live="polite">
@@ -372,6 +372,8 @@
           <button type="button" class="setting-choice" class:active={settings.showVolumeTool} aria-pressed={settings.showVolumeTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showVolumeTool:!settings.showVolumeTool})}><span class="choice-mark" aria-hidden="true">{settings.showVolumeTool?"✓":""}</span><span class="choice-copy"><strong>{t("volumeTool")}</strong></span></button>
           <button type="button" class="setting-choice" class:active={settings.showTimerTool} aria-pressed={settings.showTimerTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showTimerTool:!settings.showTimerTool})}><span class="choice-mark" aria-hidden="true">{settings.showTimerTool?"✓":""}</span><span class="choice-copy"><strong>{t("timerTool")}</strong></span></button>
           <button type="button" class="setting-choice" class:active={settings.showHideTool} aria-pressed={settings.showHideTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showHideTool:!settings.showHideTool})}><span class="choice-mark" aria-hidden="true">{settings.showHideTool?"✓":""}</span><span class="choice-copy"><strong>{t("hideTool")}</strong></span></button>
+          <button type="button" class="setting-choice" class:active={settings.showClockTool} aria-pressed={settings.showClockTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showClockTool:!settings.showClockTool})}><span class="choice-mark" aria-hidden="true">{settings.showClockTool?"✓":""}</span><span class="choice-copy"><strong>{t("clock")}</strong></span></button>
+          <button type="button" class="setting-choice" class:active={settings.showWeatherTool} aria-pressed={settings.showWeatherTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showWeatherTool:!settings.showWeatherTool})}><span class="choice-mark" aria-hidden="true">{settings.showWeatherTool?"✓":""}</span><span class="choice-copy"><strong>{t("weather")}</strong></span></button>
         </div>
       </section>
       <section class="players-section"><div class="section-title"><h2>{t("players")}</h2><button class="icon-button" aria-label={t("refreshPlayers")} disabled={!nativeRuntime} onclick={refreshSessions}><RefreshCw size={15}/></button></div><p class="hint">{t("playersHint")}</p>

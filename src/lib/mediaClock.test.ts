@@ -29,6 +29,11 @@ describe("shared media clock", () => {
     expect(progressRatio(state({ durationMs: 0 }), 9_000)).toBe(0);
   });
 
+  it("keeps the known playback position until duration arrives", () => {
+    expect(projectedPosition(state({ durationMs: 0 }), 6_000)).toBe(25_000);
+    expect(projectedPosition(state({ durationMs: 0, isPlaying: false }), 6_000)).toBe(20_000);
+  });
+
   it("formats stable tabular timestamps", () => {
     expect(formatTime(0)).toBe("0:00");
     expect(formatTime(244_000)).toBe("4:04");

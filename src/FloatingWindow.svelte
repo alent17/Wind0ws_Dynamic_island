@@ -168,7 +168,7 @@
     if (!url) return Promise.resolve(false);
 
     return new Promise((resolve) => {
-      const image = new Image();
+      const image = pageImage();
       if (url.startsWith("http") && !url.includes("asset.localhost")) {
         image.crossOrigin = "Anonymous";
       }
@@ -206,7 +206,7 @@
         return;
       }
 
-      const resolvedUrl = resolved.url.includes(":\\") || resolved.url.includes(":/")
+      const resolvedUrl = /^[a-z]:[\\/]/i.test(resolved.url)
         ? convertFileSrc(resolved.url)
         : resolved.url;
       if (await preloadCover(resolvedUrl)) {
@@ -366,6 +366,7 @@
       const res = await fetch(
         `https://itunes.apple.com/search?term=${query}&limit=1&media=musicVideo`,
         {
+          signal: pageRequests.signal,
           headers: {
             Referer: "https://music.apple.com",
             "User-Agent":
@@ -446,7 +447,9 @@
       // Restore the project's original NetEase MV path first. It works for
       // full MVs as well; the player below intentionally loops only 30 s.
       const song = await mediaApi.getNeteaseSongInfo(title, artist);
-      if (song?.mvUrl) return await cacheMV(song.mvUrl);
+      const mvUrl = song?.mvUrl || (song?.mvId && song.mvId > 0
+        ? await mediaApi.getNeteaseMvUrl(song.mvId) : null);
+      if (mvUrl) return await cacheMV(mvUrl);
     } catch (error) {
       console.warn("[MV] 网易云匹配失败，尝试 Apple Music:", error);
     }
@@ -472,7 +475,25 @@
     }
   }
 
-  onMount(async () => {
+  let disposed = false;
+  const pageRequests = new AbortController();
+  const pendingImages = new Set<HTMLImageElement>();
+  function pageImage() {
+    const image = new Image();
+    pendingImages.add(image);
+    const done = () => pendingImages.delete(image);
+    image.addEventListener("load", done, {once:true});
+    image.addEventListener("error", done, {once:true});
+    return image;
+  }
+  function trackListener(dispose: () => void) {
+    if (disposed) { dispose(); throw new DOMException("Page disposed", "AbortError"); }
+    eventListeners.push(dispose);
+  }
+  onMount(() => {
+    void initialize().catch(error => { if (!disposed) console.error(error); });
+  });
+  async function initialize() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     // 读取设置
@@ -507,6 +528,7 @@
       isAlwaysOnTop = DEFAULT_SETTINGS.floatingWindowAlwaysOnTop;
     }
 
+    if (disposed) return;
     // 初始化事件监听器管理器
     eventListeners = [];
 
@@ -525,7 +547,7 @@
         }
       },
     );
-    eventListeners.push(unlistenMVChange);
+    trackListener(unlistenMVChange);
 
     // 监听锁定悬浮窗设置变化事件
     const unlistenLockChange = await eventManager.on(
@@ -541,7 +563,7 @@
           });
       },
     );
-    eventListeners.push(unlistenLockChange);
+    trackListener(unlistenLockChange);
 
     // 监听高清封面获取设置变化事件
     const unlistenHDCoverChange = await eventManager.on(
@@ -564,7 +586,7 @@
         }
       },
     );
-    eventListeners.push(unlistenHDCoverChange);
+    trackListener(unlistenHDCoverChange);
 
     // 监听像素化封面设置变化事件
     const unlistenPixelArtChange = await eventManager.on(
@@ -573,7 +595,7 @@
         enablePixelArt = enabled;
       },
     );
-    eventListeners.push(unlistenPixelArtChange);
+    trackListener(unlistenPixelArtChange);
 
     // 监听网点效果设置变化事件
     const unlistenHalftoneChange = await eventManager.on(
@@ -582,7 +604,7 @@
         halftoneOverlayVisible = enabled;
       },
     );
-    eventListeners.push(unlistenHalftoneChange);
+    trackListener(unlistenHalftoneChange);
     const unlistenSettingsChange = await eventManager.on(Events.SETTINGS_UPDATED, (value: AppSettings) => {
       if (value?.fontId) applyAppFont(value.fontId);
       if (value?.language) setLocale(value.language);
@@ -597,21 +619,21 @@
         if (shouldRefreshAlbumColor && displayCover) void extractColors(displayCover);
       }
     });
-    eventListeners.push(unlistenSettingsChange);
+    trackListener(unlistenSettingsChange);
     const unlistenAlwaysOnTopChange = await eventManager.on(
       Events.FLOATING_WINDOW_ALWAYS_ON_TOP_CHANGED,
       ({ isAlwaysOnTop: enabled }: any) => {
         isAlwaysOnTop = Boolean(enabled);
       },
     );
-    eventListeners.push(unlistenAlwaysOnTopChange);
+    trackListener(unlistenAlwaysOnTopChange);
     const unlistenCaptureMode = await eventManager.on(
       Events.CAPTURE_MODE_CHANGED,
       (snapshot: CaptureSnapshot) => {
         captureSnapshot = { ...EMPTY_CAPTURE_SNAPSHOT, ...snapshot };
       },
     );
-    eventListeners.push(unlistenCaptureMode);
+    trackListener(unlistenCaptureMode);
 
     const appWindow = getCurrentWindow();
     windowSize = { width: window.innerWidth, height: window.innerHeight };
@@ -645,6 +667,7 @@
       }, 500); // 500ms 防抖
     });
 
+    trackListener(unlistenResize);
     // 监听窗口位置变化
     const unlistenMoved = await appWindow.onMoved(({ payload }) => {
       // 防抖保存位置和大小
@@ -665,14 +688,15 @@
       }, 500); // 500ms 防抖
     });
 
+    trackListener(unlistenMoved);
     window.addEventListener("blur", handlePointerLeave);
     document.addEventListener("mouseleave", handlePointerLeave);
 
-    // 保存移动监听器引用
-    (window as any).__unlistenMoved = unlistenMoved;
+
 
     // 监听媒体更新事件（已内置节流）
     const handleMediaUpdate = (payload: any, authoritative = false) => {
+      if (disposed) return;
       const receivedAt = Date.now();
       if (authoritative) {
         lastIslandMediaSyncAt = receivedAt;
@@ -807,13 +831,15 @@
       Events.ISLAND_MEDIA_SYNC,
       (payload) => handleMediaUpdate(payload, true),
     );
+    trackListener(unlistenIslandMediaSync);
     unlisten = await onMediaUpdate(handleMediaUpdate);
+    trackListener(unlisten);
     try {
       handleMediaUpdate(await mediaApi.getMediaInfo());
     } catch (error) {
       console.warn("[悬浮窗] 初始媒体状态读取失败:", error);
     }
-  });
+  }
 
   $effect(() => {
     const intervalMs = !pageVisible
@@ -826,13 +852,12 @@
   });
 
   onDestroy(() => {
-    if (unlisten) unlisten();
-    if (unlistenIslandMediaSync) unlistenIslandMediaSync();
-    if (unlistenResize) unlistenResize();
-    if ((window as any).__unlistenMoved) {
-      (window as any).__unlistenMoved();
-      delete (window as any).__unlistenMoved;
-    }
+    disposed = true;
+    pageRequests.abort();
+    for (const image of pendingImages) { image.onerror?.(new Event("error")); image.onload = null; image.onerror = null; image.src = ""; }
+    pendingImages.clear();
+    coverRequestId++; mvRequestId++; durationRequestId++;
+
     window.removeEventListener("blur", handlePointerLeave);
     document.removeEventListener("mouseleave", handlePointerLeave);
     document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -867,7 +892,8 @@
   // 设置 Canvas 元素引用 - 监听 displayCover 变化确保 Canvas 元素已创建
   $effect(() => {
     if (displayCover) {
-      requestAnimationFrame(() => {
+      const frame = requestAnimationFrame(() => {
+        if (disposed) return;
         const newCanvas = document.querySelector(
           ".album-art-new",
         ) as HTMLCanvasElement;
@@ -882,6 +908,7 @@
           oldCanvasRef = oldCanvas;
         }
       });
+      return () => cancelAnimationFrame(frame);
     }
   });
 
@@ -971,9 +998,10 @@
     try {
       // 使用后端 API 处理图片
       const processedUrl = await processImageBackend(imageUrl, enablePixelArt);
+      if (disposed) return;
 
       // 加载处理后的图片
-      const img = new Image();
+      const img = pageImage();
       if (
         processedUrl.startsWith("http") &&
         !processedUrl.includes("asset.localhost")
@@ -1282,7 +1310,8 @@
     canvas: HTMLCanvasElement,
     imageUrl: string,
   ) {
-    const img = new Image();
+    if (disposed) return;
+    const img = pageImage();
     if (imageUrl.startsWith("http") && !imageUrl.includes("asset.localhost")) {
       img.crossOrigin = "Anonymous";
     }

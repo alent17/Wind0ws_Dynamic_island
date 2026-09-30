@@ -24,6 +24,7 @@ export type IslandRegionChange = {
   polygon: Point[];
   extraRects?: InteractionExtraRect[];
   settled: boolean;
+  anchorGap?: number;
 };
 
 export const ISLAND_GEOMETRY = {
@@ -35,7 +36,6 @@ export const ISLAND_GEOMETRY = {
 
 export const ISLAND_GAP = 22;
 export const ISLAND_OVERSHOOT = 4;
-export const CUSTOM_PANEL_WIDTH = 300;
 export const FEATURE_RAIL_RESERVE = 0;
 export const ISLAND_HOST = {
   width: Math.max(ISLAND_GEOMETRY.expanded.width, FEATURE_RAIL_WIDTH),
@@ -279,4 +279,23 @@ export function expansionForGeometry(geometry: IslandGeometry, edge: IslandEdge,
   return Math.min(1, Math.max(0,
     (geometry.width * geometry.height - compactArea) / (expandedArea - compactArea),
   ));
+}
+
+
+export type IslandPage = "music" | "timer" | "volume" | "clock" | "weather";
+
+export function navigationGeometry(page: IslandPage, toolCount: number, radius = 45,
+  style: IslandStyle = "floating", edge: IslandEdge = "top", shoulder = 32): IslandGeometry {
+  const inset = style === "edge" ? clampShoulderRadius(shoulder) : 0;
+  const vertical = isVerticalEdge(edge);
+  const toolbar = toolCount > 0 ? 40 : 0;
+  const height = page === "music" ? 160 : page === "weather" ? 240 : 188;
+  const width = page === "music" ? 300 : 300 + (vertical ? 0 : inset * 2);
+  return { width, height: height + toolbar + (vertical ? inset * 2 : 0), radius: clampExpandedRadius(radius) };
+}
+
+// Reserve the largest page once; only the visible silhouette and hit region morph.
+export function navigationHostFor(style: IslandStyle, edge: IslandEdge, compactLength = 80): HostGeometry {
+  const base = hostFor(style, edge, compactLength);
+  return { width: Math.max(base.width, 448 + ISLAND_GAP), height: Math.max(base.height, 440 + ISLAND_GAP + ISLAND_OVERSHOOT) };
 }

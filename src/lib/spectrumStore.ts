@@ -3,7 +3,8 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { writable } from "svelte/store";
 
 const NUM_BARS = 6;
-const values = writable<Float32Array>(new Float32Array(NUM_BARS));
+const bars = new Float32Array(NUM_BARS);
+const values = writable<Float32Array>(bars);
 
 export const spectrumValues = { subscribe: values.subscribe };
 
@@ -21,11 +22,15 @@ let lastFrameAt = 0;
 const CAPTURE_STOP_GRACE_MS = 350;
 const LISTENER_RETRY_MS = 1_000;
 
-function queueCaptureCommand(command: "start_spectrum" | "stop_spectrum") {
+function queueCaptureCommand(command: "start_spectrum" | "stop_spectrum" | "restart_spectrum") {
   // Start and stop can cross during a quick collapse, pause, or settings
   // change. Keep their native calls in order so capture cannot outlive users.
   captureCommands = captureCommands.catch(() => undefined).then(() => invoke(command));
   return captureCommands;
+}
+
+export async function refreshSpectrumDevice(): Promise<void> {
+  if (consumers > 0) await queueCaptureCommand("restart_spectrum");
 }
 
 function isCurrent(currentGeneration: number) {
@@ -37,7 +42,8 @@ async function attachListener(currentGeneration: number): Promise<boolean> {
     const dispose = await listen<number[]>("spectrum-data", ({ payload }) => {
       if (!isCurrent(currentGeneration)) return;
       lastFrameAt = Date.now();
-      values.set(Float32Array.from({ length: NUM_BARS }, (_, index) => payload[index] ?? 0));
+      for (let index = 0; index < NUM_BARS; index += 1) bars[index] = payload[index] ?? 0;
+      values.set(bars);
     });
 
     if (!isCurrent(currentGeneration)) {
@@ -70,7 +76,8 @@ async function connect(currentGeneration: number) {
   watchdog = setInterval(() => {
     if (!isCurrent(currentGeneration)) return;
     if (Date.now() - lastFrameAt > 2500) {
-      values.set(new Float32Array(NUM_BARS));
+      bars.fill(0);
+      values.set(bars);
       lastFrameAt = Date.now();
       // Recover both sides: a native device change can end capture, while a
       // WebView listener can also become detached independently.
@@ -113,7 +120,8 @@ export function retainSpectrum(): () => void {
     watchdog = undefined;
     unlisten?.();
     unlisten = undefined;
-    values.set(new Float32Array(NUM_BARS));
+    bars.fill(0);
+    values.set(bars);
     const releaseGeneration = generation;
     stopTimer = setTimeout(() => {
       stopTimer = undefined;

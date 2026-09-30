@@ -17,7 +17,8 @@ describe("spectrum capture lifecycle", () => {
     expect(native.invoke.mock.calls.filter(([command]) => command === "start_spectrum")).toHaveLength(2);
     release();
     await vi.advanceTimersByTimeAsync(5000);
-    expect(native.dispose).toHaveBeenCalledOnce();
+    // The watchdog replaces the listener once, then release disposes the replacement.
+    expect(native.dispose).toHaveBeenCalledTimes(2);
     expect(native.invoke).toHaveBeenLastCalledWith("stop_spectrum");
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -36,5 +37,18 @@ describe("spectrum capture lifecycle", () => {
     releaseExpanded();
     await vi.advanceTimersByTimeAsync(400);
     expect(native.invoke).toHaveBeenLastCalledWith("stop_spectrum");
+  });
+
+  it("restarts active capture after the output device changes", async () => {
+    vi.useFakeTimers();
+    native.listen.mockResolvedValue(native.dispose);
+    native.invoke.mockResolvedValue(undefined);
+    const { retainSpectrum, refreshSpectrumDevice } = await import("./spectrumStore");
+    const release = retainSpectrum();
+    await vi.advanceTimersByTimeAsync(0);
+    await refreshSpectrumDevice();
+    expect(native.invoke).toHaveBeenLastCalledWith("restart_spectrum");
+    release();
+    await vi.advanceTimersByTimeAsync(400);
   });
 });

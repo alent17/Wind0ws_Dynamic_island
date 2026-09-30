@@ -48,23 +48,15 @@ test("circular artwork disables MV loop without changing the regular mode toggle
   await expect(mvLoop).toHaveAttribute("aria-pressed", "true");
 });
 
-test("feature buttons reveal their background only while hovered", async ({ page }) => {
+test("top toolbar matches music controls and keeps music mounted", async ({page}) => {
   await page.goto("/ui-tests/island-fixture.html");
-  const timerButton = page.locator(".function-icon").first();
-  const background = () => timerButton.evaluate((element) => getComputedStyle(element).backgroundColor);
-
-  await expect(timerButton).toBeVisible();
-  await expect.poll(background).toBe("rgba(0, 0, 0, 0)");
-  await timerButton.hover();
-  await expect.poll(background).toBe("rgba(255, 255, 255, 0.09)");
-
-  await timerButton.click();
-  await page.mouse.move(0, 0);
-  await expect(timerButton).toHaveClass(/active/);
-  await expect.poll(background).toBe("rgba(0, 0, 0, 0)");
-
-  await timerButton.hover();
-  await expect.poll(background).toBe("rgba(255, 255, 255, 0.09)");
+  await expect(page.locator(".expand-functions")).toHaveCount(0);
+  await expect(page.locator(".function-icon")).toHaveCount(7);
+  await expect(page.locator(".music-pane")).toBeVisible();
+  const glyph = page.locator(".function-glyph").first();
+  await expect(glyph).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await glyph.hover();
+  await expect(glyph).toHaveCSS("background-color", "rgba(255, 255, 255, 0.1)");
 });
 
 test("music controls reveal the same background only while hovered", async ({ page }) => {
@@ -306,10 +298,9 @@ async function surfaceMetrics(page: import("@playwright/test").Page) {
     const style = getComputedStyle(element);
     const points = [...style.clipPath.matchAll(/(-?[\d.]+)px\s+(-?[\d.]+)px/g)]
       .map((match) => ({ x: Number(match[1]), y: Number(match[2]) }));
-    const toolbar = element.querySelector(".function-toolbar")!;
-    const lastTool = toolbar.querySelector(".function-icon:last-child")!;
-    const bounds = lastTool.getBoundingClientRect();
-    const coverBounds = element.querySelector(".expanded-cover")!.getBoundingClientRect();
+    const lastTool = element.querySelectorAll(".function-icon")[4];
+    const bounds = (lastTool ?? element).getBoundingClientRect();
+    const coverBounds = (element.querySelector(".expanded-cover") ?? element).getBoundingClientRect();
     const surfaceBounds = element.getBoundingClientRect();
     const inset = 8;
     const hitCorners = [
@@ -338,7 +329,7 @@ test("expanded and collapsed layouts keep a fixed width and configured shoulder"
 
   await expect(surface).toBeVisible();
   await expect.poll(() => musicPane.evaluate((element) => getComputedStyle(element).width)).toBe("300px");
-  await expect.poll(() => surface.evaluate((element) => getComputedStyle(element).width)).toBe("600px");
+  await expect.poll(() => surface.evaluate((element) => getComputedStyle(element).width)).toBe("300px");
   const shortSurfaceBounds = await surface.boundingBox();
   const shortCoverBounds = await page.locator(".expanded-cover").boundingBox();
   expect(shortSurfaceBounds).not.toBeNull();
@@ -348,21 +339,17 @@ test("expanded and collapsed layouts keep a fixed width and configured shoulder"
     const bounds = (selector: string) => shell.querySelector(selector)!.getBoundingClientRect();
     const progress = bounds(".progress-block");
     const controls = bounds(".controls");
-    const digits = bounds(".clock-face .digits");
-    const forecast = bounds(".forecast-strip");
     return {
       controlsCenterOffset: Math.abs((controls.left + controls.right) / 2 - (progress.left + progress.right) / 2),
-      clockForecastGap: forecast.left - digits.right,
     };
   });
   expect(spacing.controlsCenterOffset).toBeLessThanOrEqual(1);
-  expect(spacing.clockForecastGap).toBeGreaterThanOrEqual(8);
   await page.screenshot({ path: testInfo.outputPath("fixed-expanded-short-title.png"), fullPage: true });
 
   await page.getByTestId("long-track").click();
   await expect.poll(() => musicPane.evaluate((element) => getComputedStyle(element).width)).toBe("300px");
-  await expect.poll(() => surface.evaluate((element) => getComputedStyle(element).width)).toBe("600px");
-  for (const text of await page.locator(".metadata strong, .metadata span").all()) {
+  await expect.poll(() => surface.evaluate((element) => getComputedStyle(element).width)).toBe("300px");
+  for (const text of await page.locator(".metadata > span").all()) {
     await expect.poll(() => text.evaluate((element) =>
       getComputedStyle(element).textOverflow === "ellipsis"
       && element.getBoundingClientRect().right <= element.parentElement!.getBoundingClientRect().right
@@ -370,11 +357,11 @@ test("expanded and collapsed layouts keep a fixed width and configured shoulder"
   }
 
   const expanded = await surfaceMetrics(page);
-  expect(expanded.height).toBe(160);
+  expect(expanded.height).toBe(200);
   expect(Number.parseFloat(expanded.borderRadius.split(" ")[2])).toBeCloseTo(45);
   expect(expanded.points[8].x).toBe(32);
   expect(expanded.points[8].y).toBe(32);
-  expect(Math.abs(expanded.leftContentInset - expanded.rightContentInset)).toBeLessThanOrEqual(8);
+  expect(expanded.leftContentInset).toBeGreaterThanOrEqual(32 + 27);
   expect(expanded.hitCorners).toEqual([true, true, true, true]);
   const surfaceBounds = await surface.boundingBox();
   const coverBounds = await page.locator(".expanded-cover").boundingBox();
@@ -411,4 +398,37 @@ test("Studio preview renders the attached concave shoulder and manual radius con
   expect(points[8].x).toBe(32);
   expect(points[8].y).toBe(32);
   await page.screenshot({ path: testInfo.outputPath("studio-attached-shoulder.png"), fullPage: true });
+});
+
+
+test("volume ruler supports keyboard bounds and dragging without snapping back", async ({ page }, testInfo) => {
+  await page.goto("/ui-tests/island-fixture.html");
+  await page.locator('.function-icon').filter({ has: page.locator('svg.lucide-volume-2') }).click();
+  const ruler = page.locator('.volume-ruler');
+  await expect(ruler).toHaveAttribute('aria-valuenow', '42');
+  await ruler.press('End');
+  await expect(ruler).toHaveAttribute('aria-valuenow', '100');
+  await ruler.press('ArrowRight');
+  await expect(ruler).toHaveAttribute('aria-valuenow', '100');
+  await ruler.press('Home');
+  await expect(ruler).toHaveAttribute('aria-valuenow', '0');
+  const box = (await ruler.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + 28);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 - 80, box.y + 28, { steps: 8 });
+  await page.mouse.up();
+  await expect(ruler).toHaveAttribute('aria-valuenow', '8');
+  await page.screenshot({ path: testInfo.outputPath('volume-ruler.png') });
+});
+
+test("hidden Studio unmounts its page and recreates one instance",async({page})=>{
+  await page.goto('/studio.html');
+  await expect(page.locator('.stage')).toHaveCount(1);
+  for(let i=0;i<5;i++) {
+    await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
+    await expect(page.locator('.stage')).toHaveCount(0);
+    await expect(page.locator('#app')).toBeEmpty();
+    await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});
+    await expect(page.locator('.stage')).toHaveCount(1);
+  }
 });

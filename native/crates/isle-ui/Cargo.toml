@@ -1,0 +1,7 @@
+[package]
+name = "isle-ui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+isle-core = { path = "../isle-core" }
