@@ -39,3 +39,6 @@ temp_app.svelte
 src-tauri/target
 src-tauri/target-idle-fix
 src-tauri/gen
+
+# Native UI lives in the separate Wind0ws_Dynamic_island-native repository.
+/native/
