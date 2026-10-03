@@ -1,36 +1,23 @@
-# Isle — Native Windows UI
+# Isle — Windows Dynamic Island (Tauri)
 
-[简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md)
+This repository maintains the **Svelte, Tauri 2, and WebView2** Windows desktop app. The separate Rust/Win32 native UI now lives in [Wind0ws_Dynamic_island-native](https://github.com/alent17/Wind0ws_Dynamic_island-native).
 
-The default application on main is **Isle Native 1.0.11**, built with Rust, Win32, Direct2D, DirectWrite and DirectComposition. It does not require WebView2 at runtime.
+## Development
 
-## Run and build
-
-Requires Windows 10/11 x64, Rust MSVC, Visual Studio C++ Build Tools and the Windows SDK. NSIS is required to create the installer.
+Requirements: Node.js, pnpm (or npm), Rust MSVC, Visual Studio C++ Build Tools, and the Windows SDK.
 
 ```powershell
-cargo run --release --manifest-path native/Cargo.toml --bin isle-native
+pnpm install
+pnpm dev
 ```
 
-Root commands now target the native application:
+Common commands: `pnpm check`, `pnpm test`, `pnpm test:ui`, `pnpm build`, and `pnpm bundle:windows`. Use `pnpm tauri dev` to launch the Tauri development app directly.
 
-```powershell
-npm run dev
-npm run check
-npm test
-npm run bundle:windows
-```
+## Project layout
 
-Outputs: `dist/Isle_1.0.11_x64-setup.exe` and `dist/Isle_1.0.11_native_x64.zip`. Keep the fonts and license files next to the portable executable.
+- `src/`: Svelte UI
+- `src-tauri/`: Tauri/Rust backend and app configuration
+- `ui-tests/`: Playwright UI tests and migration reference captures
+- `docs/`: project documentation, release notes, and Tauri performance samples
 
-Real Windows media sessions are enabled by default. F8 opens settings; Alt+F4 exits. Use `--open-floating` to open the native floating player or `--demo` for sample data.
-
-Native features include media controls, spectrum, a floating player, a timer, system audio, time zones, weather and settings. Tray integration, MV video and some legacy capture protection remain unported. See [native documentation](native/README.md) and [installation instructions](INSTALL.md).
-
-Native settings are stored in `%APPDATA%/IsleNative/settings.json`. The first migration can read legacy settings and backs up the original data when saving.
-
-## Legacy WebView application
-
-The legacy source remains in `src/` and `src-tauri/`. Use `web:dev`, `web:check`, `web:test` and `web:bundle:windows` explicitly. Historical screenshots in `docs/screenshots/` show the legacy UI.
-
-[MIT License](LICENSE)
+See [INSTALL.md](INSTALL.md) for installation and upgrade notes, or visit the [native UI repository](https://github.com/alent17/Wind0ws_Dynamic_island-native) for its source and documentation.
