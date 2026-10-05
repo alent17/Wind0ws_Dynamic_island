@@ -563,10 +563,34 @@ pub fn run() {
                 }
             }
 
+            if let Err(error) = commands::configure_main_window_visibility(&window) {
+                tracing::warn!("[Setup] 配置灵动岛窗口可见性失败: {}", error);
+            }
+
             if let Err(error) = commands::install_island_cursor_passthrough(&window) {
                 tracing::warn!("[Setup] 灵动岛点击穿透初始化失败: {}", error);
             }
             commands::reset_content_protection(app.handle());
+
+            if let Err(error) = window.show() {
+                tracing::warn!("[Setup] 显示灵动岛主窗口失败: {}", error);
+            }
+            // Tao may restore WS_EX_APPWINDOW while processing its queued show
+            // event, so reapply the task-switcher styles on the UI thread after it.
+            let task_switcher_window = window.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                let window_for_style = task_switcher_window.clone();
+                if let Err(error) = task_switcher_window.run_on_main_thread(move || {
+                    if let Err(error) =
+                        commands::hide_main_window_from_task_switcher(&window_for_style)
+                    {
+                        tracing::warn!("[Setup] 刷新灵动岛任务切换器样式失败: {}", error);
+                    }
+                }) {
+                    tracing::warn!("[Setup] 调度灵动岛任务切换器样式刷新失败: {}", error);
+                }
+            });
 
             // 设置窗口焦点
             if let Err(e) = window.set_focus() {
@@ -639,3 +663,4 @@ pub fn run() {
         eprintln!("应用运行失败: {}", e);
     }
 }
+
