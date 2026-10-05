@@ -14,7 +14,7 @@ input and were left untouched.
 
 | Area | Decision | Evidence / notes |
 |---|---|---|
-| Tauri configuration | ✅ Keep | `src-tauri/tauri.conf.json` defines the Tauri 2 app and window lifecycle. The island window is configured as opaque per the current product direction. |
+| Tauri configuration | ✅ Keep | `src-tauri/tauri.conf.json` defines the Tauri 2 app and window lifecycle. The island window uses a transparent host surface so only the island shape is visible. |
 | Svelte frontend | ✅ Keep | `src/` contains the island, floating player, timer, Studio, stores, API wrappers, and UI components. |
 | Island UI and settings | ✅ Keep | `src/App.svelte`, `src/FloatingWindow.svelte`, and `src/Studio.svelte` are the active UI. Do not replace them with Native UI. |
 | Animation system | ✅ Keep | Island geometry and motion live in `src/lib/islandGeometry.ts` and `src/lib/islandMotion.ts`; window motion is in `src-tauri/src/commands/window.rs`. |
@@ -74,9 +74,9 @@ input and were left untouched.
   use the defined scripts. `npm run build` and `npm run tauri build` both pass.
 - Frontend, Tauri, and Cargo versions were 1.0.11, 1.0.10, and 1.0.10. Tauri
   and Cargo metadata, including `Cargo.lock`, now align to 1.0.11.
-- The user directed that the UI must not be transparent. Island, floating-player,
-  and timer windows therefore use opaque window surfaces; the original plan's
-  transparent-window requirement is superseded.
+- The user later asked to restore the transparent UI after seeing the opaque
+  black window canvas. The island, floating-player, and timer windows use
+  transparent host surfaces; Studio remains an ordinary opaque window.
 - `npm run check` reports 0 errors and 0 warnings. `npm run tauri build`
   produced `src-tauri/target/release/isle.exe` and
   `Isle_1.0.11_x64-setup.exe`. `npm run tauri dev` also started the `Isle`
