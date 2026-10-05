@@ -23,7 +23,7 @@ body {
   text-rendering: optimizeLegibility;
   font-synthesis: none;
   overflow: hidden;
-  background: #000;
+  background: transparent;
 }
 
 button, input, select, textarea { font: inherit; }
