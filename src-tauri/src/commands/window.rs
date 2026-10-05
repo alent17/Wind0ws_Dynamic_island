@@ -1071,6 +1071,61 @@ pub fn sync_window_bounds(
     Ok(())
 }
 
+/// Keep the island out of the task switcher while preserving normal mouse and keyboard activation.
+pub fn configure_main_window_visibility(window: &tauri::WebviewWindow) -> AppResult<()> {
+    window
+        .set_decorations(false)
+        .map_err(|e| AppError::window(e.to_string()))?;
+    window
+        .set_skip_taskbar(true)
+        .map_err(|e| AppError::window(e.to_string()))?;
+    window
+        .set_always_on_top(true)
+        .map_err(|e| AppError::window(e.to_string()))?;
+
+    hide_main_window_from_task_switcher(window)
+}
+
+pub fn hide_main_window_from_task_switcher(window: &tauri::WebviewWindow) -> AppResult<()> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, SWP_FRAMECHANGED,
+            SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER,
+            WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+        };
+
+        let raw = window
+            .hwnd()
+            .map_err(|e| AppError::window(e.to_string()))?;
+        let hwnd = HWND(raw.0 as _);
+        unsafe {
+            let current = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+            let task_switcher_hidden =
+                (current & !(WS_EX_APPWINDOW.0 as isize)) | WS_EX_TOOLWINDOW.0 as isize;
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, task_switcher_hidden);
+            SetWindowPos(
+                hwnd,
+                HWND(0),
+                0,
+                0,
+                0,
+                0,
+                SWP_FRAMECHANGED
+                    | SWP_NOMOVE
+                    | SWP_NOSIZE
+                    | SWP_NOZORDER
+                    | SWP_NOOWNERZORDER
+                    | SWP_NOACTIVATE,
+            )
+            .map_err(|e| AppError::window(e.to_string()))?;
+        }
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 pub fn animate_window_bounds(
     app: AppHandle,
@@ -1420,3 +1475,4 @@ pub fn set_current_monitor_index(
 
     Ok(())
 }
+
