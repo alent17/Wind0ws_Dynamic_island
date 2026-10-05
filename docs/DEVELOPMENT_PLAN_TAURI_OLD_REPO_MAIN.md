@@ -231,9 +231,9 @@ Wind0ws_Dynamic_island
 
 | 阶段 | 任务 | 具体内容 | 验收标准 | 状态 |
 |---|---|---|---|---|
-| **P0** | 旧 Tauri 主仓库备份 | 给旧 Tauri `main` 打 tag / 建备份分支 | Tauri 基线可随时恢复 | ☐ |
+| **P0** | 旧 Tauri 主仓库备份 | 给旧 Tauri `main` 打 tag / 建备份分支 | Tauri 基线可随时恢复 | ☑ |
 | **P0** | 两仓库迁移审计 | 对比旧 Tauri 与 Native 仓库 | 生成 `docs/MIGRATION_AUDIT.md` | ☑ |
-| **P0** | 创建迁移分支 | 创建 `migration/native-features` | Native 功能不直接修改 `main` | ☐ |
+| **P0** | 创建迁移分支 | 创建 `migration/native-features` | Native 功能不直接修改 `main` | ☑ |
 | **P1** | 验证旧 Tauri 基线 | 确认旧仓库现有 Tauri / Svelte 工程可正常启动、打包 | 基线无新增回归 | ☐ |
 | **P1** | 无边框窗口 | 移除系统标题栏，自定义窗口外观 | 无系统边框、无多余白边 | ☐ |
 | **P1** | 不透明窗口 | 灵动岛窗口使用实色背景（按用户要求取消透明窗口） | 窗口显示稳定、无异常底色 | ☐ |
