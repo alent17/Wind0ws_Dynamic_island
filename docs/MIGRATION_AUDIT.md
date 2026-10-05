@@ -79,9 +79,10 @@ input and were left untouched.
   transparent-window requirement is superseded.
 - `npm run check` reports 0 errors and 0 warnings. `npm run tauri build`
   produced `src-tauri/target/release/isle.exe` and
-  `Isle_1.0.11_x64-setup.exe`. Static configuration and a successful package
-  build do not prove runtime behavior. Visual opacity, topmost/taskbar behavior,
-  and DPI/multi-monitor acceptance remain unverified until observed on Windows.
+  `Isle_1.0.11_x64-setup.exe`. `npm run tauri dev` also started the `Isle`
+  window successfully. Static configuration and a successful launch/build do
+  not prove actual window appearance, topmost/taskbar behavior, or DPI behavior;
+  those and multi-monitor acceptance remain unverified until observed on Windows.
 
 ## First migration batch
 

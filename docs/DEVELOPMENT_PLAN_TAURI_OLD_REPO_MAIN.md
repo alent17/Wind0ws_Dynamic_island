@@ -234,7 +234,7 @@ Wind0ws_Dynamic_island
 | **P0** | 旧 Tauri 主仓库备份 | 给旧 Tauri `main` 打 tag / 建备份分支 | Tauri 基线可随时恢复 | ☑ |
 | **P0** | 两仓库迁移审计 | 对比旧 Tauri 与 Native 仓库 | 生成 `docs/MIGRATION_AUDIT.md` | ☑ |
 | **P0** | 创建迁移分支 | 创建 `migration/native-features` | Native 功能不直接修改 `main` | ☑ |
-| **P1** | 验证旧 Tauri 基线 | 执行 Svelte 诊断、前端构建及 Tauri Release NSIS 构建 | 0 诊断错误；安装包构建成功 | ☑ |
+| **P1** | 验证旧 Tauri 基线 | 执行 Svelte 诊断、前端构建、Dev 启动及 Tauri Release NSIS 构建 | 0 诊断错误；Dev 窗口启动；安装包构建成功 | ☑ |
 | **P1** | 运行时窗口验收 | 启动 Release EXE 并验证不透明、无边框、置顶、任务栏和 DPI 行为 | 实机及缩放测试通过 | ☐ |
 | **P1** | 无边框窗口 | 移除系统标题栏，自定义窗口外观 | 无系统边框、无多余白边 | ☐ |
 | **P1** | 不透明窗口 | 灵动岛窗口使用实色背景（按用户要求取消透明窗口） | 窗口显示稳定、无异常底色 | ☐ |
@@ -374,9 +374,9 @@ P9 清理 / 发布
 第一阶段只完成基础框架，不接入复杂业务。
 
 - [ ] 当前 Native 项目完整备份
-- [ ] 创建 Tauri 2 + Svelte 前端
-- [ ] 保留现有 Rust 后端
-- [ ] 灵动岛透明无边框窗口成功启动
+- [x] 创建 Tauri 2 + Svelte 前端
+- [x] 保留现有 Rust 后端
+- [x] 灵动岛不透明无边框窗口成功启动
 - [ ] Always On Top
 - [ ] 不进入任务栏
 - [ ] 正确固定到屏幕位置
