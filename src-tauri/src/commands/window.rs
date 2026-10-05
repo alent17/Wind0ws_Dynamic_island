@@ -901,7 +901,7 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
     .min_inner_size(200.0, 200.0)
     .resizable(true)
     .decorations(false)
-    .transparent(true)
+    .transparent(false)
     .shadow(false)
     .skip_taskbar(true)
     .always_on_top(always_on_top);
@@ -962,7 +962,7 @@ pub async fn open_timer_window(app: AppHandle) -> AppResult<()> {
             .resizable(true)
             .decorations(false)
             .shadow(false)
-            .transparent(true)
+            .transparent(false)
             .always_on_top(true)
             .center()
             .build()

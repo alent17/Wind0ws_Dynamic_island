@@ -1670,7 +1670,7 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: transparent;
+    background: #121212;
     font-family: var(--app-font);
     text-rendering: optimizeLegibility;
     font-synthesis: none;

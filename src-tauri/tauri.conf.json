@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Isle",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "identifier": "com.isle-app.isle",
   "build": {
-    "beforeDevCommand": "npm run web:dev",
+    "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run web:build",
+    "beforeBuildCommand": "npm run build",
     "frontendDist": "../build"
   },
   "app": {
@@ -35,7 +35,7 @@
         "resizable": false,
         "decorations": false,
         "shadow": false,
-        "transparent": true,
+        "transparent": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": true,

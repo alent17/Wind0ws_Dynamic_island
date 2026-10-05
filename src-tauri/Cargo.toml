@@ -1,6 +1,6 @@
 [package]
 name = "isle"
-version = "1.0.10"
+version = "1.0.11"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"

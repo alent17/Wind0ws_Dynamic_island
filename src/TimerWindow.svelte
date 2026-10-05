@@ -511,7 +511,7 @@
     height: 100%;
     margin: 0;
     overflow: hidden;
-    background: transparent;
+    background: #141414;
   }
 
   :global(body) {
@@ -529,7 +529,7 @@
     height: 100%;
     padding: 22px 24px 18px 31px;
     color: #fff;
-    background: transparent;
+    background: #141414;
     font-family: var(--app-font);
     font-synthesis: none;
   }
