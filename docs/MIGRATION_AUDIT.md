@@ -70,16 +70,18 @@ input and were left untouched.
 ## Baseline issues found
 
 - `src-tauri/tauri.conf.json` previously called `npm run web:dev` and
-  `npm run web:build`, but `package.json` defines `dev` and `build`. These hooks
-  must use the defined script names before Tauri launch/build can be validated.
-- Frontend, Tauri, and Cargo versions were 1.0.11, 1.0.10, and 1.0.10. Tauri and
-  Cargo metadata are being aligned to 1.0.11.
+  `npm run web:build`, but `package.json` defines `dev` and `build`. The hooks now
+  use the defined scripts. `npm run build` and `npm run tauri build` both pass.
+- Frontend, Tauri, and Cargo versions were 1.0.11, 1.0.10, and 1.0.10. Tauri
+  and Cargo metadata, including `Cargo.lock`, now align to 1.0.11.
 - The user directed that the UI must not be transparent. Island, floating-player,
   and timer windows therefore use opaque window surfaces; the original plan's
   transparent-window requirement is superseded.
-- Static configuration does not prove runtime behavior. Startup/build, visual
-  opacity, topmost/taskbar behavior, and DPI/multi-monitor acceptance remain
-  unverified until run on Windows.
+- `npm run check` reports 0 errors and 0 warnings. `npm run tauri build`
+  produced `src-tauri/target/release/isle.exe` and
+  `Isle_1.0.11_x64-setup.exe`. Static configuration and a successful package
+  build do not prove runtime behavior. Visual opacity, topmost/taskbar behavior,
+  and DPI/multi-monitor acceptance remain unverified until observed on Windows.
 
 ## First migration batch
 
