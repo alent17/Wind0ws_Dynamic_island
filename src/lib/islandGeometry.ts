@@ -30,7 +30,7 @@ export type IslandRegionChange = {
 export const ISLAND_GEOMETRY = {
   compact: { width: 80, height: 28, radius: 14 },
   hover: { width: 90, height: 30, radius: 15 },
-  expanded: { width: 300, height: 160, radius: 45 },
+  expanded: { width: 600, height: 210, radius: 45 },
   hidden: { width: 80, height: 28, radius: 14 },
 } as const;
 
@@ -289,8 +289,8 @@ export function navigationGeometry(page: IslandPage, toolCount: number, radius =
   const inset = style === "edge" ? clampShoulderRadius(shoulder) : 0;
   const vertical = isVerticalEdge(edge);
   const toolbar = toolCount > 0 ? 40 : 0;
-  const height = page === "music" ? 160 : page === "weather" ? 240 : 188;
-  const width = page === "music" ? 300 : 300 + (vertical ? 0 : inset * 2);
+  const height = page === "music" ? 210 : page === "weather" ? 240 : 188;
+  const width = page === "music" ? 600 : 300 + (vertical ? 0 : inset * 2);
   return { width, height: height + toolbar + (vertical ? inset * 2 : 0), radius: clampExpandedRadius(radius) };
 }
 
