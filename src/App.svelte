@@ -1638,7 +1638,7 @@
 
 <style>
   :global(*) { box-sizing: border-box; }
-  :global(html, body, #app) { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; -webkit-font-smoothing: antialiased; }
-  .fixed-host { display: flex; align-items: flex-start; justify-content: center; box-sizing: border-box; background: #000; pointer-events: none; }
+  :global(html, body, #app) { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; -webkit-font-smoothing: antialiased; }
+  .fixed-host { display: flex; align-items: flex-start; justify-content: center; box-sizing: border-box; background: transparent; pointer-events: none; }
   .fixed-host :global(.island-surface) { pointer-events: auto; }
 </style>
