@@ -210,6 +210,17 @@
   let styleProgress = $state(untrack(() => islandStyle === "edge" ? 1 : 0));
   let hideProgress = $state(untrack(() => simulateHidden && mode === "hidden" ? 1 : 0));
   let prefersReducedMotion = $state(false);
+  type CoverRect = { left: number; top: number; width: number; height: number };
+  type PendingCoverMotion = { from: CoverRect; fromExpanded: boolean; src: string };
+  let compactCoverElement = $state<HTMLButtonElement>();
+  let expandedCoverElement = $state<HTMLButtonElement>();
+  let coverMotionElement = $state<HTMLDivElement>();
+  let previousCoverMode = $state<IslandMode | null>(null);
+  let pendingCoverMotion = $state<PendingCoverMotion | null>(null);
+  let coverMotionOverlay = $state<(PendingCoverMotion & { radius: number }) | null>(null);
+  let coverMotionTarget = $state<"compact" | "expanded" | null>(null);
+  let coverMotionAnimation: number | null = null;
+  let coverMotionRevision = 0;
   const shoulderMotion = spring(untrack(() => mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius), ISLAND_SPRING);
   let animatedShoulder = $state(untrack(() => mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius));
   const unsubscribeShoulder = shoulderMotion.subscribe(value => animatedShoulder = value);
@@ -258,6 +269,85 @@
     updatePreference();
     mediaQuery.addEventListener("change", updatePreference);
     return () => mediaQuery.removeEventListener("change", updatePreference);
+  });
+
+  $effect.pre(() => {
+    const nextMode = mode;
+    const previousMode = previousCoverMode;
+    previousCoverMode = nextMode;
+    if (previousMode === null) return;
+    const fromExpanded = previousMode === "expanded";
+    const toExpanded = nextMode === "expanded";
+    if (fromExpanded === toExpanded || (previousMode === "hidden" || nextMode === "hidden")) return;
+
+    const currentOverlayRect = coverMotionElement?.getBoundingClientRect();
+    const source = currentOverlayRect ?? (fromExpanded
+      ? expandedCoverElement?.getBoundingClientRect()
+      : compactCoverElement?.getBoundingClientRect());
+    if (!source || !media.albumArt || idle || !enableAnimations || reduceAnimations || prefersReducedMotion) {
+      if (coverMotionAnimation !== null) cancelAnimationFrame(coverMotionAnimation);
+      coverMotionAnimation = null;
+      coverMotionRevision++;
+      coverMotionOverlay = null;
+      coverMotionTarget = null;
+      pendingCoverMotion = null;
+      return;
+    }
+
+    if (coverMotionAnimation !== null) cancelAnimationFrame(coverMotionAnimation);
+    coverMotionAnimation = null;
+    pendingCoverMotion = {
+      from: { left: source.left, top: source.top, width: source.width, height: source.height },
+      fromExpanded: currentOverlayRect ? (coverMotionTarget === "expanded") : fromExpanded,
+      src: media.albumArt,
+    };
+  });
+
+  $effect(() => {
+    const transition = pendingCoverMotion;
+    if (!transition) return;
+    const revision = ++coverMotionRevision;
+    const targetMode = mode === "expanded" ? "expanded" : "compact";
+    coverMotionTarget = targetMode;
+    coverMotionOverlay = { ...transition, radius: transition.fromExpanded ? 12 : transition.from.width / 2 };
+    pendingCoverMotion = null;
+
+    void (async () => {
+      await tick();
+      const targetElement = targetMode === "expanded" ? expandedCoverElement : compactCoverElement;
+      const overlay = coverMotionElement;
+      if (!targetElement || !overlay || revision !== coverMotionRevision) {
+        if (revision === coverMotionRevision) { coverMotionOverlay = null; coverMotionTarget = null; }
+        return;
+      }
+      const targetRadius = targetMode === "expanded" ? 12 : 10;
+      const duration = 250;
+      const start = performance.now();
+      const easeOut = (progress: number) => 1 - Math.pow(1 - progress, 3);
+      const frame = (now: number) => {
+        if (revision !== coverMotionRevision) return;
+        const target = targetElement.getBoundingClientRect();
+        const progress = Math.min(1, (now - start) / duration);
+        const eased = easeOut(progress);
+        const left = transition.from.left + (target.left - transition.from.left) * eased;
+        const top = transition.from.top + (target.top - transition.from.top) * eased;
+        const width = transition.from.width + (target.width - transition.from.width) * eased;
+        const height = transition.from.height + (target.height - transition.from.height) * eased;
+        const radius = (transition.fromExpanded ? 12 : transition.from.width / 2) + (targetRadius - (transition.fromExpanded ? 12 : transition.from.width / 2)) * eased;
+        overlay.style.left = `${left}px`;
+        overlay.style.top = `${top}px`;
+        overlay.style.width = `${width}px`;
+        overlay.style.height = `${height}px`;
+        overlay.style.borderRadius = `${radius}px`;
+        if (progress < 1) coverMotionAnimation = requestAnimationFrame(frame);
+        else {
+          coverMotionAnimation = null;
+          coverMotionOverlay = null;
+          coverMotionTarget = null;
+        }
+      };
+      coverMotionAnimation = requestAnimationFrame(frame);
+    })();
   });
 
   function notifyRegionChange(change: IslandRegionChange) {
@@ -479,7 +569,7 @@
           <span class="idle-weather"><WeatherIcon code={idleWeatherCode} size={14} /><strong><RollingNumber value={idleWeatherTemperature === null ? "--°" : `${Math.round(idleWeatherTemperature)}°`} reduceMotion={reduceAnimations || !enableAnimations} /></strong></span>
         </div>
       {:else}
-        <button class="cover compact-cover" type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
+        <button bind:this={compactCoverElement} class="cover compact-cover" class:cover-motion-hidden={coverMotionTarget === "compact"} type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
           {#if media.albumArt}
             {#key media.albumArt}
               <span class="compact-disc" class:spinning={mode === "compact" && media.isPlaying && enableAnimations && !reduceAnimations}>
@@ -515,7 +605,7 @@
         <section class="music-pane">
           {#if !idle}
             <div class="top-row">
-            <button class="cover expanded-cover" type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
+            <button bind:this={expandedCoverElement} class="cover expanded-cover" class:cover-motion-hidden={coverMotionTarget === "expanded"} type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
               {#if media.albumArt}{#key media.albumArt}<img class="cover-image" src={media.albumArt} alt="" draggable="false" />{/key}{:else}<Music2 size={30} />{/if}
             </button>
             <div class="metadata">
@@ -639,18 +729,31 @@
   </div>
 
   </div>
+  {#if coverMotionOverlay}
+    <div
+      bind:this={coverMotionElement}
+      class="cover-motion-overlay"
+      style:left={`${coverMotionOverlay.from.left}px`}
+      style:top={`${coverMotionOverlay.from.top}px`}
+      style:width={`${coverMotionOverlay.from.width}px`}
+      style:height={`${coverMotionOverlay.from.height}px`}
+      style:border-radius={`${coverMotionOverlay.radius}px`}
+      aria-hidden="true"
+    ><img src={coverMotionOverlay.src} alt="" draggable="false" /></div>
+  {/if}
 </div>
 
 <style>
   .island-frame{position:relative;width:100%;height:100%;flex:none;overflow:visible;box-sizing:border-box}.island-frame.simulate-hidden{overflow:hidden}.surface-anchor{position:absolute;z-index:1}.edge-top .surface-anchor{top:0;left:50%}.edge-right .surface-anchor{top:50%;right:0}.edge-bottom .surface-anchor{bottom:0;left:50%}.edge-left .surface-anchor{top:50%;left:0}
   .island-surface{position:relative;z-index:1;overflow:hidden;flex:none;box-sizing:border-box;color:#fff;font-family:var(--app-font);text-rendering:optimizeLegibility;font-synthesis:none;contain:layout style;transition:transform 140ms cubic-bezier(.23,1,.32,1),box-shadow 180ms cubic-bezier(.23,1,.32,1)}
+  .cover-motion-overlay{position:fixed;z-index:1000;left:0;top:0;overflow:hidden;pointer-events:none;will-change:left,top,width,height,border-radius;box-shadow:0 8px 22px rgba(0,0,0,.35)}.cover-motion-overlay img{display:block;width:100%;height:100%;object-fit:cover;-webkit-user-drag:none;user-select:none}.cover-motion-hidden{visibility:hidden!important}
   .floating-style .island-surface:active{transform:scale(.97) translateZ(0)}.compact-layer,.expanded-layer{position:absolute;z-index:1;box-sizing:border-box;pointer-events:none}
   .compact-layer{inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 4px}.compact-layer.edge-inset:not(.vertical){padding-left:calc(4px + var(--shoulder-inset));padding-right:calc(8px + var(--shoulder-inset))}.compact-layer.vertical{flex-direction:column;padding:4px 0 8px}.compact-layer.edge-inset.vertical{padding-top:calc(4px + var(--shoulder-inset));padding-bottom:calc(8px + var(--shoulder-inset))}.compact-layer button,.compact-layer :global(canvas){pointer-events:auto}.time-display{width:100%;text-align:center;color:rgba(255,255,255,.8);font:500 12px/1 var(--app-font);letter-spacing:.05em;font-variant-numeric:tabular-nums;user-select:none}.cover{display:grid;place-items:center;flex:none;padding:0;overflow:hidden;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);border:0;cursor:pointer;user-select:none}.cover img{width:100%;height:100%;display:block;object-fit:cover;-webkit-user-drag:none;user-select:none}.compact-cover{width:20px;height:20px;border-radius:50%}.expanded-cover{width:84px;height:84px;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.35);outline:1px solid rgba(255,255,255,.1)}.playing-dot{width:3px;height:3px;border-radius:50%}
   .compact-disc{display:block;width:100%;height:100%;transform-origin:center}.compact-disc.spinning{animation:compact-disc-spin 8s linear 1}@keyframes compact-disc-spin{to{transform:rotate(1turn)}}
   .idle-compact-dashboard{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0 7px;color:rgba(255,255,255,.92);user-select:none}.idle-clock{font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums;letter-spacing:.02em}.idle-weather{display:flex;align-items:center;gap:4px;font:500 11px/1 var(--app-font);font-variant-numeric:tabular-nums}.idle-weather :global(svg){flex:none;color:rgba(255,255,255,.82)}.idle-compact-dashboard.vertical{flex-direction:column;padding:7px 0;gap:10px}.idle-compact-dashboard.vertical .idle-weather{flex-direction:column}
   .cover-image{animation:cover-flip-in 420ms cubic-bezier(.23,1,.32,1)}@keyframes cover-flip-in{from{opacity:0;transform:perspective(500px) rotateY(-70deg) scale(.9)}to{opacity:1;transform:perspective(500px) rotateY(0) scale(1)}}
   .debug-overlay{position:absolute;z-index:4;top:4px;left:50%;display:flex;gap:5px;max-width:calc(100% - 12px);padding:2px 6px;border-radius:5px;transform:translateX(-50%);overflow:hidden;color:#4ade80;background:rgba(0,0,0,.75);font:500 8px/1.3 var(--app-font);white-space:nowrap;pointer-events:none}.debug-overlay span{overflow:hidden;text-overflow:ellipsis}
-  .expanded-layer{inset:0;width:100%;height:100%;padding:0;transition:opacity 120ms linear}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,300px);height:var(--expanded-content-height,160px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:11px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}.progress-block,.control-row{opacity:var(--secondary-opacity);transition:opacity 100ms linear}
+  .expanded-layer{inset:0;width:100%;height:100%;padding:0;transition:opacity 120ms linear}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,600px);height:var(--expanded-content-height,210px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:11px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}.progress-block,.control-row{opacity:var(--secondary-opacity);transition:opacity 100ms linear}
   .progress-block{width:100%;margin-bottom:10px}
   .control-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;width:100%;height:58px}.control-spacer{width:0}.controls{display:flex;align-items:center;justify-content:center;gap:12px}.controls button{flex:none;display:grid;place-items:center;width:58px;height:58px;padding:0;border:0;border-radius:12px;color:rgba(255,255,255,.9);background:transparent;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}.controls .play{color:#fff}.controls button:active,.cover:active{transform:scale(.94)}.controls button:focus-visible:not(:disabled){background:rgba(255,255,255,.1)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .compact-timer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:0;color:#f28b31;background:transparent;cursor:pointer;font-family:var(--app-font);user-select:none}.compact-timer span{min-width:42px;font-size:12px;font-weight:600;line-height:1;letter-spacing:.015em;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}.compact-timer.finished span{min-width:0;font-size:11px}.compact-timer.paused{color:rgba(242,139,49,.62)}.timer-pause{width:7px;height:8px;display:flex;align-items:center;justify-content:center;gap:2px}.timer-pause b{display:block;width:2px;height:7px;border-radius:1px;background:currentColor}.compact-timer.urgent{color:#ff765f}
@@ -699,3 +802,4 @@
   .reduce-page-motion .page-body{transition:none}
   .music-pane :global(.metadata .marquee-title){font-size:18px;line-height:1.2}.music-pane .metadata>span{font-size:15px}.music-pane :global(.progress-block .time){font-size:14px}.music-pane :global(.progress-block.with-times){column-gap:14px}.music-pane :global(.progress-block .track){height:8px}
 </style>
+
