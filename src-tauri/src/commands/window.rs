@@ -1096,9 +1096,7 @@ pub fn hide_main_window_from_task_switcher(window: &tauri::WebviewWindow) -> App
             WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
         };
 
-        let raw = window
-            .hwnd()
-            .map_err(|e| AppError::window(e.to_string()))?;
+        let raw = window.hwnd().map_err(|e| AppError::window(e.to_string()))?;
         let hwnd = HWND(raw.0 as _);
         unsafe {
             let current = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
