@@ -304,6 +304,8 @@ Wind0ws_Dynamic_island
 
 > 网易云播放模式控制实现（2026-10-06）：在 `src-tauri/src/services/netease_cdp.rs` 增加单独的 loopback CDP 适配器，Tauri 暴露读取 / 循环播放模式命令，主岛仅在读取到受支持的网易云模式后显示模式按钮。网络操作在 blocking pool 执行，CDP endpoint、页面、大小、超时均有限制，写入后做状态读回验证；不覆盖 AI/FM/未知模式。该代码不重启播放器，本机 9223 无监听，因此真实网易云模式切换仍未验收，P5 和迁移候选框保持未完成。后端单测已新增（总数 36 项，通过情况见本轮验证记录）。
 
+> 捕获隐私能力范围（2026-10-06）：设置页不再提供无效的“屏幕共享时隐藏”开关，并说明当前不支持检测屏幕共享。录屏说明限定为 Windows AppCapture 能报告的状态，不能保证发现第三方录屏软件；截图监控依赖 Print Screen 与 Win + Shift + S 快捷键检测。以上属于有限覆盖，未通过运行时验收前不扩展勾选范围。
+
 > Release 包重建（2026-10-06）：Studio 同步、封面过渡与网易云 CDP 功能合入后，`pnpm tauri build --bundles nsis` 成功生成最新 Release EXE 和 NSIS 安装器。产物位于 `src-tauri/target/release/isle.exe` 与 `src-tauri/target/release/bundle/nsis/Isle_1.0.11_x64-setup.exe`。Release Candidate“可长期日常使用”仍需长时间运行和设备验收，因此 P9 保持未完成。
 
 > 实现盘点（2026-10-06）：P3–P7 中已勾选的行表示对应 Svelte / Rust 功能路径已实现；Hover 与独立点击区已在 Milestone 2 核对。完整视觉验收、播放器实机兼容、不同缩放下的 DPI、重启自启动和长时间运行等条件仍需 P1/P8 设备验收。网易云播放模式 CDP 路径已实现但真实客户端端点尚不可用；通用录屏兼容和屏幕共享检测仍未完成；Windows AppCapture 支持的系统视频捕获已有检测代码，仍需实机确认。
@@ -486,7 +488,7 @@ P9 清理 / 发布
 - [x] 检查 Timer 更新频率
 - [x] 检查 Store 无意义重复更新
 - [x] 检查封面资源释放
-- [ ] 检查 WebView 内存占用
+- [x] 检查 WebView 内存占用（已记录短时基线；长时间稳定性仍待验收）
 - [x] Debug 启动冒烟
 - [x] Release 启动冒烟
 - [x] 多显示器基础测试
