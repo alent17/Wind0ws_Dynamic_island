@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack, tick } from "svelte";
   import { spring } from "svelte/motion";
-  import { ArrowLeft, Clock, CloudSun, EyeOff, GalleryHorizontalEnd, Music2, Play, Settings, SkipBack, SkipForward, Timer, Volume2, VolumeX } from "lucide-svelte";
+  import { Airplay, ArrowLeft, Clock, CloudSun, EyeOff, GalleryHorizontalEnd, ListMusic, Music2, Play, Settings, Shuffle, SkipBack, SkipForward, Star, Timer, Volume2, VolumeX } from "lucide-svelte";
   import MediaProgress from "$lib/components/media/MediaProgress.svelte";
   import PlayPauseIcon from "$lib/components/media/PlayPauseIcon.svelte";
   import RollingNumber from "$lib/components/time/RollingNumber.svelte";
@@ -222,6 +222,7 @@
   let expandedCoverElement = $state<HTMLButtonElement>();
   let coverMotionElement = $state<HTMLDivElement>();
   let previousCoverMode = $state<IslandMode | null>(null);
+  let collapsingCover = $state(false);
   let pendingCoverMotion = $state<PendingCoverMotion | null>(null);
   let coverMotionOverlay = $state<(PendingCoverMotion & { radius: number }) | null>(null);
   let coverMotionTarget = $state<"compact" | "expanded" | null>(null);
@@ -290,6 +291,21 @@
     const fromExpanded = previousMode === "expanded";
     const toExpanded = nextMode === "expanded";
     if (fromExpanded === toExpanded || (previousMode === "hidden" || nextMode === "hidden")) return;
+    if (toExpanded) collapsingCover = false;
+
+    // Hide both cover endpoints while the shell contracts. The compact cover
+    // moves with the changing shell bounds, so leaving it visible makes it
+    // appear to travel diagonally even after the trajectory overlay is stopped.
+    if (fromExpanded && !toExpanded) {
+      collapsingCover = true;
+      if (coverMotionAnimation !== null) cancelAnimationFrame(coverMotionAnimation);
+      coverMotionAnimation = null;
+      coverMotionRevision++;
+      coverMotionOverlay = null;
+      coverMotionTarget = null;
+      pendingCoverMotion = null;
+      return;
+    }
 
     const currentOverlayRect = coverMotionElement?.getBoundingClientRect();
     const source = currentOverlayRect ?? (fromExpanded
@@ -320,7 +336,8 @@
     const revision = ++coverMotionRevision;
     const targetMode = mode === "expanded" ? "expanded" : "compact";
     coverMotionTarget = targetMode;
-    coverMotionOverlay = { ...transition, radius: transition.fromExpanded ? 12 : transition.from.width / 2 };
+    const expandedCoverRadius = 20 * expandedScale;
+    coverMotionOverlay = { ...transition, radius: transition.fromExpanded ? expandedCoverRadius : transition.from.width / 2 };
     pendingCoverMotion = null;
 
     void (async () => {
@@ -331,7 +348,7 @@
         if (revision === coverMotionRevision) { coverMotionOverlay = null; coverMotionTarget = null; }
         return;
       }
-      const targetRadius = targetMode === "expanded" ? 12 : 10;
+      const targetRadius = targetMode === "expanded" ? expandedCoverRadius : 10;
       const duration = 250;
       const start = performance.now();
       const easeOut = (progress: number) => 1 - Math.pow(1 - progress, 3);
@@ -344,7 +361,8 @@
         const top = transition.from.top + (target.top - transition.from.top) * eased;
         const width = transition.from.width + (target.width - transition.from.width) * eased;
         const height = transition.from.height + (target.height - transition.from.height) * eased;
-        const radius = (transition.fromExpanded ? 12 : transition.from.width / 2) + (targetRadius - (transition.fromExpanded ? 12 : transition.from.width / 2)) * eased;
+        const sourceRadius = transition.fromExpanded ? expandedCoverRadius : transition.from.width / 2;
+        const radius = sourceRadius + (targetRadius - sourceRadius) * eased;
         overlay.style.left = `${left}px`;
         overlay.style.top = `${top}px`;
         overlay.style.width = `${width}px`;
@@ -379,7 +397,12 @@
       radiusMotion.set(target.radius, { hard }),
       shoulderMotion.set(mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius, { hard }),
       styleMorph.set(islandStyle === "edge" ? 1 : 0, { hard }),
-    ]).then(() => { if (revision === transitionRevision) shapeSettled = true; });
+    ]).then(() => {
+      if (revision === transitionRevision) {
+        shapeSettled = true;
+        if (collapsingCover) collapsingCover = false;
+      }
+    });
   });
   $effect(() => {
     if (mode !== "expanded" || !panelVisible) { page = "music"; menuScroll = 0; }
@@ -462,7 +485,7 @@
     notifyRegionChange({ geometry: size, radii: currentRadii, polygon: currentPolygon, extraRects: [], anchorGap: 22 * expandedScale * (1 - styleProgress), settled: shapeSettled });
   });
   const expandedOpacity = $derived(Math.min(1, Math.max(0, (outwardProgress - 0.18) / 0.42)));
-  const secondaryOpacity = $derived(Math.min(1, Math.max(0, (outwardProgress - 0.42) / 0.38)));
+  const expandedContentScale = $derived(0.9 + outwardProgress * 0.1);
   const compactOpacity = $derived(Math.min(1, Math.max(0, 1 - outwardProgress * 4)));
   const surfaceBackground = $derived(mode === "expanded" ? background : "#000");
   const surfaceBorder = $derived(mode === "expanded" ? border : "1px solid transparent");
@@ -521,6 +544,7 @@
   >
   <div
     class="island-surface"
+    class:expanded-surface={mode === "expanded"}
     style:width={`${size.width}px`}
     style:height={`${size.height}px`}
     style:border-radius={borderRadiusCss(currentRadii)}
@@ -580,7 +604,7 @@
           <span class="idle-weather"><WeatherIcon code={idleWeatherCode} size={14} /><strong><RollingNumber value={idleWeatherTemperature === null ? "--°" : `${Math.round(idleWeatherTemperature)}°`} reduceMotion={reduceAnimations || !enableAnimations} /></strong></span>
         </div>
       {:else}
-        <button bind:this={compactCoverElement} class="cover compact-cover" class:cover-motion-hidden={coverMotionTarget === "compact"} type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
+        <button bind:this={compactCoverElement} class="cover compact-cover" class:cover-motion-hidden={coverMotionTarget === "compact"} class:collapse-cover-target-hidden={collapsingCover} type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
           {#if media.albumArt}
             <span class="compact-disc" class:spinning={mode === "compact" && media.isPlaying && enableAnimations && !reduceAnimations}>
               <CoverArt src={media.albumArt} />
@@ -598,10 +622,11 @@
     </div>
 
     {/if}
-    {#if visible && mode !== "hidden" && (mode === "expanded" || (!shapeSettled && expandedOpacity > .05))}
+    {#if visible && mode !== "hidden" && (mode === "expanded" || (!shapeSettled && outwardProgress > .001))}
     <div
       class="expanded-layer"
-      style={`opacity:${expandedOpacity};transform:translateY(${(1 - expandedOpacity) * -6}px);--secondary-opacity:${secondaryOpacity}`}
+      style:opacity={mode === "expanded" ? expandedOpacity : 1}
+      style:transform={`scale(${expandedContentScale})`}
       aria-hidden={expandedOpacity <= .5}
       inert={mode !== "expanded"}
     >
@@ -614,7 +639,7 @@
         <section class="music-pane">
           {#if !idle}
             <div class="top-row">
-            <button bind:this={expandedCoverElement} class="cover expanded-cover" class:cover-motion-hidden={coverMotionTarget === "expanded"} type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
+            <button bind:this={expandedCoverElement} class="cover expanded-cover" class:cover-motion-hidden={coverMotionTarget === "expanded"} class:collapse-cover-source-hidden={collapsingCover} type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
               {#if media.albumArt}<CoverArt src={media.albumArt} />{:else}<Music2 size={30} />{/if}
             </button>
             <div class="metadata">
@@ -622,7 +647,7 @@
               <span title={media.artist}>{media.artist || t("unknownArtist")}</span>
             </div>
             {#if showSpectrum}
-              <Spectrum active={expandedOpacity > .05} playing={media.isPlaying} mode={spectrumMode} reduceMotion={reduceAnimations} topColor={spectrumTopColor} bottomColor={spectrumBottomColor} scale={1.5} values={previewSpectrum} />
+              <Spectrum active={expandedOpacity > .05} playing={media.isPlaying} mode={spectrumMode} reduceMotion={reduceAnimations} topColor={spectrumTopColor} bottomColor={spectrumBottomColor} scale={2.5} values={previewSpectrum} />
             {/if}
             </div>
 
@@ -631,19 +656,25 @@
             </div>
 
             <div class="control-row">
-              <span class="control-spacer"></span>
-              <div class="controls">
-                <button type="button" class="side" aria-label={t("previous")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("prev"); }}><SkipBack size={26} fill="currentColor" /></button>
-                <button type="button" class="play" aria-label={media.isPlaying ? t("pause") : t("play")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("play_pause"); }}>
-                  <PlayPauseIcon playing={media.isPlaying} size={30} reduceMotion={reduceAnimations || !enableAnimations} />
-                </button>
-                <button type="button" class="side" aria-label={t("next")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("next"); }}><SkipForward size={26} fill="currentColor" /></button>
+              <div class="utility-controls leading-controls" aria-label={t("playbackControls")}>
+                <span class="control-mark" aria-hidden="true"><ListMusic size={28} strokeWidth={2} /></span>
+                <span class="control-mark favorite-mark" aria-hidden="true"><Star size={30} strokeWidth={2} /></span>
               </div>
-              <span class="control-spacer" class:has-mode={media.source === "netease" && Boolean(media.neteasePlaybackMode)}>
+              <div class="transport-controls" aria-label={t("playbackControls")}>
+                <button type="button" aria-label={t("previous")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("prev"); }}><SkipBack size={32} fill="currentColor" /></button>
+                <button type="button" class="play" aria-label={media.isPlaying ? t("pause") : t("play")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("play_pause"); }}>
+                  <PlayPauseIcon playing={media.isPlaying} size={38} reduceMotion={reduceAnimations || !enableAnimations} />
+                </button>
+                <button type="button" aria-label={t("next")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("next"); }}><SkipForward size={32} fill="currentColor" /></button>
+              </div>
+              <div class="utility-controls trailing-controls">
                 {#if media.source === "netease" && media.neteasePlaybackMode}
                   <NeteaseModeControl mode={media.neteasePlaybackMode} disabled={neteaseModeBusy} onCycle={() => onMediaAction?.("cycle_netease_mode")} />
+                {:else}
+                  <span class="control-mark" aria-hidden="true"><Shuffle size={28} strokeWidth={2} /></span>
                 {/if}
-              </span>
+                <button type="button" aria-label={t("toggleFloating")} onclick={(e) => { e.stopPropagation(); onToggleFloating?.(); }}><Airplay size={29} strokeWidth={1.8} /></button>
+              </div>
             </div>
           {:else}
             <div class="idle-player" role="group" aria-label={t("mediaPlayer")}>
@@ -765,9 +796,9 @@
   .compact-disc{position:relative;display:block;width:100%;height:100%;transform-origin:center}.compact-disc.spinning{animation:compact-disc-spin 8s linear 1}@keyframes compact-disc-spin{to{transform:rotate(1turn)}}
   .idle-compact-dashboard{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0 7px;color:rgba(255,255,255,.92);user-select:none}.idle-clock{font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums;letter-spacing:.02em}.idle-weather{display:flex;align-items:center;gap:4px;font:500 11px/1 var(--app-font);font-variant-numeric:tabular-nums}.idle-weather :global(svg){flex:none;color:rgba(255,255,255,.82)}.idle-compact-dashboard.vertical{flex-direction:column;padding:7px 0;gap:10px}.idle-compact-dashboard.vertical .idle-weather{flex-direction:column}
   .debug-overlay{position:absolute;z-index:4;top:4px;left:50%;display:flex;gap:5px;max-width:calc(100% - 12px);padding:2px 6px;border-radius:5px;transform:translateX(-50%);overflow:hidden;color:#4ade80;background:rgba(0,0,0,.75);font:500 8px/1.3 var(--app-font);white-space:nowrap;pointer-events:none}.debug-overlay span{overflow:hidden;text-overflow:ellipsis}
-  .expanded-layer{inset:0;width:100%;height:100%;padding:0;transition:opacity 120ms linear}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,600px);height:var(--expanded-content-height,210px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:11px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}.progress-block,.control-row{opacity:var(--secondary-opacity);transition:opacity 100ms linear}
+  .expanded-layer{inset:0;width:100%;height:100%;padding:0;transform-origin:center;will-change:transform,opacity}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,600px);height:var(--expanded-content-height,210px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:11px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}
   .progress-block{width:100%;margin-bottom:10px}
-  .control-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;width:100%;height:58px}.control-spacer{width:0}.control-spacer.has-mode{width:100%;display:flex;align-items:center;justify-content:flex-end}.controls{display:flex;align-items:center;justify-content:center;gap:12px}.controls button{flex:none;display:grid;place-items:center;width:58px;height:58px;padding:0;border:0;border-radius:12px;color:rgba(255,255,255,.9);background:transparent;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}.controls .play{color:#fff}.controls button:active,.cover:active{transform:scale(.94)}.controls button:focus-visible:not(:disabled){background:rgba(255,255,255,.1)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .control-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;width:100%;height:58px}.control-spacer{width:0}.controls{display:flex;align-items:center;justify-content:center;gap:12px}.controls button{flex:none;display:grid;place-items:center;width:58px;height:58px;padding:0;border:0;border-radius:12px;color:rgba(255,255,255,.9);background:transparent;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}.controls .play{color:#fff}.controls button:active,.cover:active{transform:scale(.94)}.controls button:focus-visible:not(:disabled){background:rgba(255,255,255,.1)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .compact-timer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:0;color:#f28b31;background:transparent;cursor:pointer;font-family:var(--app-font);user-select:none}.compact-timer span{min-width:42px;font-size:12px;font-weight:600;line-height:1;letter-spacing:.015em;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}.compact-timer.finished span{min-width:0;font-size:11px}.compact-timer.paused{color:rgba(242,139,49,.62)}.timer-pause{width:7px;height:8px;display:flex;align-items:center;justify-content:center;gap:2px}.timer-pause b{display:block;width:2px;height:7px;border-radius:1px;background:currentColor}.compact-timer.urgent{color:#ff765f}
   .compact-timer{position:absolute;inset:0;display:block;overflow:hidden;padding:0;border-radius:inherit;color:#f4f7ff;background:transparent;box-shadow:inset 1px 0 0 rgba(82,151,255,.46),inset -1px 0 0 rgba(82,151,255,.46),inset 0 0 12px rgba(28,91,190,.08)}.compact-timer:hover{background:rgba(40,100,190,.055)}.compact-timer .timer-summary{position:absolute;inset:0 14px 4px;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}.compact-timer .timer-leading{display:flex;align-items:center;gap:7px;min-width:0;color:rgba(245,248,255,.9)}.compact-timer .timer-leading :global(svg){flex:none;color:#70aaff}.compact-timer .timer-time{min-width:0;overflow:hidden;color:#f5f7fb;font-size:13px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em;text-align:right;text-overflow:ellipsis;white-space:nowrap}.compact-timer .timer-progress-track{position:absolute;right:14px;bottom:5px;left:14px;height:2px;overflow:hidden;border-radius:999px;background:rgba(115,143,183,.2)}.compact-timer .timer-progress-fill{display:block;height:100%;max-width:100%;border-radius:inherit;background:linear-gradient(90deg,#2688ff,#60b5ff);box-shadow:0 0 7px rgba(57,145,255,.68);transition:width 350ms linear,background-color 180ms ease}.compact-timer .timer-progress-fill.paused{background:linear-gradient(90deg,#6d8fb9,#a7c5ed);box-shadow:none}.compact-timer .timer-progress-fill.finished{background:linear-gradient(90deg,#42d99a,#8af0c0)}.compact-timer.paused{color:#f4f7ff}.compact-timer.urgent{box-shadow:inset 1px 0 0 rgba(255,111,102,.58),inset -1px 0 0 rgba(255,111,102,.58),inset 0 0 12px rgba(255,74,60,.09)}.compact-timer.urgent .timer-leading :global(svg){color:#ff8c7c}.compact-timer .timer-pause{flex:none;width:7px;height:8px;gap:2px;color:#a8c5e9}.compact-timer .timer-pause b{width:2px;height:7px;border-radius:1px;background:currentColor}
   .compact-layer.vertical .compact-timer .timer-summary{inset:14px 4px;flex-direction:column;justify-content:center;gap:10px}.compact-layer.vertical .compact-timer .timer-leading{flex-direction:column;gap:5px}.compact-layer.vertical .compact-timer .timer-time{max-width:100%;font-size:11px;text-align:center}.compact-layer.vertical .compact-timer .timer-progress-track{top:14px;right:auto;bottom:14px;left:5px;width:2px;height:auto}.compact-layer.vertical .timer-progress-fill{width:100%!important;height:var(--timer-progress-height,0%)}
@@ -782,7 +813,7 @@
   @media (prefers-reduced-motion:reduce){.surface-anchor{transition:none!important}.island-surface,.expanded-layer,.controls button{transition-duration:120ms!important}.island-surface{transition-property:opacity,box-shadow!important}.expanded-layer{transform:none!important}.compact-disc{animation:none}.studio-preview-highlight .corner,.studio-preview-highlight::after,.studio-preview-highlight .length-handle,.studio-preview-highlight .shoulder-handle,.studio-preview-highlight .background-wash,.studio-preview-highlight .spectrum-focus{animation:none!important;opacity:.78}}
 
   .expanded-shell{display:block;width:var(--page-width);height:var(--page-height);zoom:var(--content-scale,1);transform-origin:top left}
-  .music-pane{width:100%;height:100%;animation:page-enter 180ms ease both}
+  .music-pane{width:100%;height:100%}
 
 
 
@@ -813,5 +844,28 @@
   .attached-style.edge-left .page-body.with-toolbar .navigation-page,.attached-style.edge-right .page-body.with-toolbar .navigation-page{padding-top:16px}
   .reduce-page-motion .page-body{transition:none}
   .music-pane :global(.metadata .marquee-title){font-size:18px;line-height:1.2}.music-pane .metadata>span{font-size:15px}.music-pane :global(.progress-block .time){font-size:14px}.music-pane :global(.progress-block.with-times){column-gap:14px}.music-pane :global(.progress-block .track){height:8px}
+  .expanded-cover{border-radius:20px}
+  .island-surface.expanded-surface::before{content:"";position:absolute;z-index:0;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,0) 48%,rgba(18,27,43,.34) 74%,rgba(31,44,66,.88) 100%)}
+  .top-row{gap:24px;margin-bottom:0}
+  .music-pane :global(.metadata .marquee-title){font-size:24px;line-height:1.12;margin-bottom:5px}
+  .music-pane .metadata>span{font-size:18px;line-height:1.15}
+  .music-pane{padding-top:24px}
+  .music-pane :global(.progress-block .time){font-size:20px}
+  .music-pane :global(.progress-block.with-times){column-gap:12px}
+  .music-pane :global(.progress-block .track){height:10px}
+  .control-row{display:flex;align-items:center;justify-content:space-between;gap:0;width:100%;height:60px;margin-top:0}
+  .utility-controls,.transport-controls{display:flex;align-items:center;flex:none}
+  .utility-controls{gap:22px}
+  .transport-controls{gap:30px}
+  .control-row button,.control-mark{display:grid;place-items:center;flex:none;width:38px;height:48px;padding:0;border:0;border-radius:9px;color:rgba(255,255,255,.95);background:transparent}
+  .control-row button{cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}
+  .control-row button:active:not(:disabled){transform:scale(.92)}
+  .control-row button:disabled{opacity:.45;cursor:default}
+  .control-row .play{color:#fff}
+  .favorite-mark{color:rgba(232,238,248,.82)}
+  .trailing-controls button:last-child{color:rgba(225,234,249,.62)}
+  .compact-cover,.expanded-cover{transition:opacity 120ms ease}
+  .collapse-cover-source-hidden,.collapse-cover-target-hidden{opacity:0!important}
+  @media (hover:hover) and (pointer:fine){.control-row button:hover:not(:disabled){color:#fff;background:rgba(255,255,255,.1);transform:scale(1.06)}}
 </style>
 

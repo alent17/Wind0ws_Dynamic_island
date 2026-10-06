@@ -290,7 +290,7 @@ export function navigationGeometry(page: IslandPage, toolCount: number, radius =
   const inset = style === "edge" ? clampShoulderRadius(shoulder) : 0;
   const vertical = isVerticalEdge(edge);
   const toolbar = toolCount > 0 ? 40 : 0;
-  const height = page === "music" ? 210 : page === "weather" ? 240 : 188;
+  const height = page === "music" ? 249.1 : page === "weather" ? 240 : 188;
   const width = page === "music" ? 600 : 300 + (vertical ? 0 : inset * 2);
   return { width, height: height + toolbar + (vertical ? inset * 2 : 0), radius: clampExpandedRadius(radius) };
 }

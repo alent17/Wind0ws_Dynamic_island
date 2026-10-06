@@ -57,8 +57,8 @@ components:
     backgroundColor: "{colors.island-black}"
     textColor: "{colors.island-white}"
     rounded: "{rounded.island-expanded}"
-    width: "300px"
-    height: "160px"
+    width: "330px"
+    height: "137px"
   studio-panel:
     backgroundColor: "{colors.studio-surface}"
     textColor: "{colors.studio-ink}"
@@ -70,7 +70,7 @@ components:
 
 ## Overview
 
-The production player surfaces use the project's original visual language. The main island is a very small black pill that grows into a 300 × 160 media controller. The separate floating player is a cover-first square stage with a compact black information strip and hover-revealed controls. Isle Studio uses the island's dark shell and bright active controls around a white inspection stage. It must not be replaced by the legacy settings page.
+The production player surfaces use the project's original visual language. The main island is a very small black pill that grows into a 330 × 137 media controller at the reference scale. The separate floating player is a cover-first square stage with a compact black information strip and hover-revealed controls. Isle Studio uses the island's dark shell and bright active controls around a white inspection stage. It must not be replaced by the legacy settings page.
 
 ## Typography
 
@@ -78,9 +78,9 @@ MiSans is the only shipped typeface across Studio, the island, the floating play
 
 ## Dynamic Island
 
-- Compact: 80–300 × 28 px; Hover adds 10 px up to 300 px; Expanded: 300 × 160 px.
+- Compact: 80–300 × 28 px; Hover adds 10 px up to 300 px; Expanded: 330 × 137 px at the reference scale.
 - Compact content uses a 20 px cover and six-bar Canvas spectrum.
-- Expanded content uses a 52 px cover, marquee title, artist, larger spectrum, source progress, three playback buttons, and the floating-player button.
+- Expanded music content uses a 46 px cover, title and artist beside a six-bar spectrum, a full-width elapsed/progress/remaining row, then a seven-position action row: playlist, favorite, previous, play/pause, next, shuffle, and floating player. The shell carries a restrained navy tint along its lower edge.
 - Width, height, opacity, and content changes use the original Svelte spring and drop/flip motion.
 - The original black visual style, configurable expanded radius, auto-hide, reduced-motion, and debug-display behavior are retained.
 

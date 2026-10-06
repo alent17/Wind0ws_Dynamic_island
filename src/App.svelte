@@ -753,8 +753,8 @@
     const monitor = allMonitors[safeIndex];
     const dpr = monitor.scaleFactor || window.devicePixelRatio || 1;
     const layoutScale = navigationScaleForWorkArea(monitor.workWidth, monitor.workHeight, dpr);
-    expandedScale = layoutScale;
-    const host = hostFor(style, edge, $appSettings.compactLength, layoutScale);
+    expandedScale = layoutScale * 0.625;
+    const host = hostFor(style, edge, $appSettings.compactLength, expandedScale);
     const physicalHost = { width: Math.round(host.width * dpr), height: Math.round(host.height * dpr) };
     const baseShown = placementFor(
       { x: monitor.workX, y: monitor.workY, width: monitor.workWidth, height: monitor.workHeight },
@@ -766,7 +766,7 @@
     // so clip-path antialiasing cannot reveal a transparent seam.
     const shown = style === "edge" ? overlapAttachedEdge(baseShown, edge) : baseShown;
     const compact = geometryFor("compact", $appSettings.expandedCornerRadius, edge, $appSettings.compactLength);
-    const offset = surfaceOffsetFor(host, compact, style, edge, layoutScale);
+    const offset = surfaceOffsetFor(host, compact, style, edge, expandedScale);
     const target = hidden
       ? hiddenPlacementFor(
           baseShown,
