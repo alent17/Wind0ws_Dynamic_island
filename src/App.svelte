@@ -20,6 +20,8 @@
     clampShoulderRadius,
     geometryFor,
     hiddenPlacementFor,
+    ISLAND_GAP,
+    navigationScaleForWorkArea,
     navigationHostFor as hostFor,
     overlapAttachedEdge,
     placementFor,
@@ -193,11 +195,12 @@
 
   let interactionRegionRevision = Date.now() * 1000;
   let lastInteractionRegionSignature = "";
+  let expandedScale = $state(1);
   function applyIslandRegion({ geometry, radii, polygon, extraRects, anchorGap }: IslandRegionChange) {
-    const host = hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength);
-    const offset = surfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge);
+    const host = hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength, expandedScale);
+    const offset = surfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge, expandedScale);
     if (anchorGap !== undefined) {
-      const delta = anchorGap - (renderedIslandStyle === "floating" ? 22 : 0);
+      const delta = anchorGap - (renderedIslandStyle === "floating" ? ISLAND_GAP * expandedScale : 0);
       if (renderedIslandEdge === "top") offset.y += delta;
       else if (renderedIslandEdge === "bottom") offset.y -= delta;
       else if (renderedIslandEdge === "left") offset.x += delta;
@@ -648,6 +651,7 @@
     renderedIslandStyle,
     renderedIslandEdge,
     appSettings.compactLength,
+    expandedScale,
   ));
 
   let captureSnapshot = $state<CaptureSnapshot>({ ...EMPTY_CAPTURE_SNAPSHOT });
@@ -729,7 +733,9 @@
     const safeIndex = Math.min(Math.max(0, monitorIndex), allMonitors.length - 1);
     const monitor = allMonitors[safeIndex];
     const dpr = monitor.scaleFactor || window.devicePixelRatio || 1;
-    const host = hostFor(style, edge, appSettings.compactLength);
+    const layoutScale = navigationScaleForWorkArea(monitor.workWidth, monitor.workHeight, dpr);
+    expandedScale = layoutScale;
+    const host = hostFor(style, edge, appSettings.compactLength, layoutScale);
     const physicalHost = { width: Math.round(host.width * dpr), height: Math.round(host.height * dpr) };
     const baseShown = placementFor(
       { x: monitor.workX, y: monitor.workY, width: monitor.workWidth, height: monitor.workHeight },
@@ -741,7 +747,7 @@
     // so clip-path antialiasing cannot reveal a transparent seam.
     const shown = style === "edge" ? overlapAttachedEdge(baseShown, edge) : baseShown;
     const compact = geometryFor("compact", appSettings.expandedCornerRadius, edge, appSettings.compactLength);
-    const offset = surfaceOffsetFor(host, compact, style, edge);
+    const offset = surfaceOffsetFor(host, compact, style, edge, layoutScale);
     const target = hidden
       ? hiddenPlacementFor(
           baseShown,
@@ -1327,6 +1333,21 @@
       }
       if (cleanups.disposed) return;
 
+      // Keep the transparent native host hidden until the WebView has mounted,
+      // the saved display has been resolved, and its responsive bounds are in place.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      renderedIslandStyle = normalizedStyle(appSettings.islandStyle);
+      renderedIslandEdge = normalizedEdge(appSettings.islandEdge);
+      await applyWindowPlacement(
+        renderedIslandStyle,
+        renderedIslandEdge,
+        appSettings.monitorIndex,
+        appSettings.islandEdgePosition,
+        isHidden,
+        false,
+      ).catch((error) => logger.warn("启动窗口定位失败", error));
+      await windowApi.showMainWindow().catch((error) => logger.error("启动时显示灵动岛失败", error));
+
       const unlistenFloatingWindowClosed = await eventManager.on(
         Events.FLOATING_WINDOW_CLOSED,
         () => {
@@ -1497,15 +1518,10 @@
     }
   }
 
-  async function initializeFixedHost() {
-    await applyWindowPlacement();
-  }
-
   onMount(() => {
     win = getCurrentWindow();
     windowReady = true;
     console.log("[App.svelte] 窗口对象已初始化");
-    initializeFixedHost().catch((error) => logger.error("固定宿主初始化失败", error));
 
     document.addEventListener("click", handleGlobalClick);
     return () => {
@@ -1575,6 +1591,7 @@
     expandedRadius={appSettings.expandedCornerRadius ?? 45}
     collapsedEdgeShoulderRadius={appSettings.collapsedEdgeShoulderRadius ?? 8}
     expandedEdgeShoulderRadius={appSettings.expandedEdgeShoulderRadius ?? 32}
+    {expandedScale}
     compactLength={appSettings.compactLength ?? 80}
     idle={showIdle}
     idleTime={currentTime}

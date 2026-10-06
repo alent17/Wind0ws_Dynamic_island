@@ -572,9 +572,9 @@ pub fn run() {
             }
             commands::reset_content_protection(app.handle());
 
-            if let Err(error) = window.show() {
-                tracing::warn!("[Setup] 显示灵动岛主窗口失败: {}", error);
-            }
+            // The transparent WebView must not be shown before the frontend
+            // has mounted and applied its monitor-aware host bounds. The
+            // frontend reveals this window after its first placement pass.
             // Tao may restore WS_EX_APPWINDOW while processing its queued show
             // event, so reapply the task-switcher styles on the UI thread after it.
             let task_switcher_window = window.clone();
@@ -591,11 +591,6 @@ pub fn run() {
                     tracing::warn!("[Setup] 调度灵动岛任务切换器样式刷新失败: {}", error);
                 }
             });
-
-            // 设置窗口焦点
-            if let Err(e) = window.set_focus() {
-                tracing::warn!("[Setup] 设置窗口焦点失败: {}", e);
-            }
 
             // 启动后台服务
             start_media_listener(app.handle().clone());

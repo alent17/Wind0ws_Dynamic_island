@@ -203,8 +203,9 @@ export function surfaceOffsetFor(
   geometry: IslandGeometry,
   style: IslandStyle,
   edge: IslandEdge,
+  scale = 1,
 ): Point {
-  const gap = style === "floating" ? ISLAND_GAP : 0;
+  const gap = style === "floating" ? ISLAND_GAP * Math.min(1, Math.max(0.62, scale)) : 0;
   if (edge === "top") return { x: (host.width - geometry.width) / 2, y: gap };
   if (edge === "right") return { x: host.width - gap - geometry.width, y: (host.height - geometry.height) / 2 };
   if (edge === "bottom") return { x: (host.width - geometry.width) / 2, y: host.height - gap - geometry.height };
@@ -294,8 +295,21 @@ export function navigationGeometry(page: IslandPage, toolCount: number, radius =
   return { width, height: height + toolbar + (vertical ? inset * 2 : 0), radius: clampExpandedRadius(radius) };
 }
 
+const NAVIGATION_REFERENCE_WORK_AREA = { width: 2100, height: 1180 };
+
+export function navigationScaleForWorkArea(workWidth: number, workHeight: number, scaleFactor = 1) {
+  const dpr = Number.isFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1;
+  const logicalWidth = Math.max(1, workWidth) / dpr;
+  const logicalHeight = Math.max(1, workHeight) / dpr;
+  return Math.max(0.62, Math.min(1, logicalWidth / NAVIGATION_REFERENCE_WORK_AREA.width, logicalHeight / NAVIGATION_REFERENCE_WORK_AREA.height));
+}
+
 // Reserve the largest page once; only the visible silhouette and hit region morph.
-export function navigationHostFor(style: IslandStyle, edge: IslandEdge, compactLength = 80): HostGeometry {
+export function navigationHostFor(style: IslandStyle, edge: IslandEdge, compactLength = 80, scale = 1): HostGeometry {
   const base = hostFor(style, edge, compactLength);
-  return { width: Math.max(base.width, 448 + ISLAND_GAP), height: Math.max(base.height, 440 + ISLAND_GAP + ISLAND_OVERSHOOT) };
+  const safeScale = Math.min(1, Math.max(0.62, scale));
+  return {
+    width: Math.ceil(Math.max(base.width, 448 + ISLAND_GAP) * safeScale),
+    height: Math.ceil(Math.max(base.height, 440 + ISLAND_GAP + ISLAND_OVERSHOOT) * safeScale),
+  };
 }

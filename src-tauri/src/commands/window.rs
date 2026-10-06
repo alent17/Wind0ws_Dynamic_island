@@ -756,6 +756,7 @@ mod interaction_region_tests {
 pub fn show_main_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("main") {
         window.show().map_err(|e| AppError::window(e.to_string()))?;
+        hide_main_window_from_task_switcher(&window)?;
         let _ = window.emit("isle-window-visible", true);
         window
             .set_focus()

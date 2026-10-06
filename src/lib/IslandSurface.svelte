@@ -44,6 +44,7 @@
     expandedRadius = 45,
     collapsedEdgeShoulderRadius = 8,
     expandedEdgeShoulderRadius = 32,
+    expandedScale = 1,
     compactLength = 80,
     idle = false,
     idleTime = "",
@@ -118,6 +119,7 @@
     expandedRadius?: number;
     collapsedEdgeShoulderRadius?: number;
     expandedEdgeShoulderRadius?: number;
+    expandedScale?: number;
     compactLength?: number;
     idle?: boolean;
     idleTime?: string;
@@ -243,7 +245,12 @@
   const toolLabels: Record<IslandTool, TranslationKey> = { timer: "timer", volume: "volume", floating: "floatingTool", settings: "settingsTool", hide: "hideTool", clock: "clock", weather: "weather" };
   const shortLabels: Record<IslandTool, TranslationKey> = {timer:"timer",volume:"menuVolume",floating:"menuFloating",settings:"menuSettings",hide:"menuHide",clock:"clock",weather:"weather"};
   const menuItems = $derived(toolOrder.filter(tool => enabledTools.includes(tool)).map(tool => ({ id: tool, label: t(toolLabels[tool]), shortLabel: t(shortLabels[tool]), icon: toolIcons[tool] })));
-  const expandedGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius));
+  const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius));
+  const expandedGeometry = $derived({
+    width: expandedBaseGeometry.width * expandedScale,
+    height: expandedBaseGeometry.height * expandedScale,
+    radius: expandedBaseGeometry.radius * expandedScale,
+  });
 
   async function navigate(next: IslandPage) {
     page = next;
@@ -408,7 +415,7 @@
   });
 
   const anchorTransform = $derived.by(() => {
-    const gap = 22 * (1 - styleProgress);
+    const gap = 22 * expandedScale * (1 - styleProgress);
     const mix = (shown: number, hidden: number) => shown + (hidden - shown) * hideProgress;
     if (edge === "top") return `translateX(-50%) translateY(${mix(gap, 2 - size.height)}px)`;
     if (edge === "right") return `translateY(-50%) translateX(${mix(-gap, size.width - 2)}px)`;
@@ -448,7 +455,7 @@
   const surfaceClipPath = $derived(polygonCss(currentPolygon));
   const resolvedClipPath = $derived(styleProgress > 0 || islandStyle === "edge" ? surfaceClipPath : "none");
   $effect(() => {
-    notifyRegionChange({ geometry: size, radii: currentRadii, polygon: currentPolygon, extraRects: [], anchorGap: 22 * (1 - styleProgress), settled: shapeSettled });
+    notifyRegionChange({ geometry: size, radii: currentRadii, polygon: currentPolygon, extraRects: [], anchorGap: 22 * expandedScale * (1 - styleProgress), settled: shapeSettled });
   });
   const expandedOpacity = $derived(Math.min(1, Math.max(0, (outwardProgress - 0.18) / 0.42)));
   const secondaryOpacity = $derived(Math.min(1, Math.max(0, (outwardProgress - 0.42) / 0.38)));
@@ -596,7 +603,7 @@
       aria-hidden={expandedOpacity <= .5}
       inert={mode !== "expanded"}
     >
-      <div class="expanded-shell" bind:this={pageRoot} class:reduce-page-motion={reduceAnimations || !enableAnimations || prefersReducedMotion} style={`--page-width:${expandedGeometry.width}px;--page-height:${expandedGeometry.height}px;--shoulder-content-inset:${contentShoulderInset}px`}>
+      <div class="expanded-shell" bind:this={pageRoot} class:reduce-page-motion={reduceAnimations || !enableAnimations || prefersReducedMotion} style={`--page-width:${expandedBaseGeometry.width}px;--page-height:${expandedBaseGeometry.height}px;--content-scale:${expandedScale};--shoulder-content-inset:${contentShoulderInset}px`}>
         {#if panelVisible}
           <div class="top-tools"><FeatureMenu items={menuItems} toolbar activeId={page} scrollPosition={menuScroll} onScroll={(value) => menuScroll = value} onSelect={selectTool} /></div>
         {/if}
@@ -769,7 +776,7 @@
   @media (hover:hover) and (pointer:fine){.controls button:hover:not(:disabled){background:rgba(255,255,255,.1);transform:scale(1.06);color:#fff}.cover:hover{filter:brightness(1.08)}}
   @media (prefers-reduced-motion:reduce){.surface-anchor{transition:none!important}.island-surface,.expanded-layer,.controls button{transition-duration:120ms!important}.island-surface{transition-property:opacity,box-shadow!important}.expanded-layer{transform:none!important}.cover-image,.compact-disc{animation:none}.studio-preview-highlight .corner,.studio-preview-highlight::after,.studio-preview-highlight .length-handle,.studio-preview-highlight .shoulder-handle,.studio-preview-highlight .background-wash,.studio-preview-highlight .spectrum-focus{animation:none!important;opacity:.78}}
 
-  .expanded-shell{display:block;width:var(--page-width);height:var(--page-height)}
+  .expanded-shell{display:block;width:var(--page-width);height:var(--page-height);zoom:var(--content-scale,1);transform-origin:top left}
   .music-pane{width:100%;height:100%;animation:page-enter 180ms ease both}
 
 
