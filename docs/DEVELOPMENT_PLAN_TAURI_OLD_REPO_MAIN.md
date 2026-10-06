@@ -298,6 +298,8 @@ Wind0ws_Dynamic_island
 
 > 展开态屏幕自适应（2026-10-06）：展开媒体页按参考布局重排为 600 × 249.1 基准尺寸，并以当前选中显示器工作区 / DPI 计算内容缩放；初始宿主定位、表面偏移与动画命中宿主现共用同一展开缩放，避免不同尺寸的空白宿主和交互区域。副屏启动、`pnpm check` 与 `pnpm build` 通过。125% / 150% 的完整视觉验收仍归入上方未完成的 DPI 适配项。
 
+> 副屏 DPI 抽查（2026-10-06）：在 Windows“系统 → 显示”中确认副屏原为 100%，依次切换到 125% 和 150%；两档设置页截图中均仍可见 Isle 小胶囊，Isle 进程保持响应；随后将副屏恢复为 100%。切到 150% 后，UI 自动化窗口枚举不再返回 Isle 主窗口（仅设置窗与 Studio 窗仍可操作），因此未能核验展开态布局、命中区域与清晰度；P1 完整 DPI 验收及 Milestone 1 / 4 的 DPI 项保持未完成。
+
 > P2/P6/P7/P9 进度（2026-10-06）：`src/lib/islandStore.ts` 集中主岛展开、悬停、页面和媒体会话状态，并派生 idle/media/expanded/timer/volume 等视图；`src/lib/settingsStore.ts` 负责 main 与 FloatingWindow 的设置读取、`settings-updated` 同步和初始读取防竞态。Studio 保留未保存的编辑草稿。Studio 设置窗现使用 Svelte 自定义标题栏，含原生拖动、最小化和保存后关闭。截图监控新增 Windows AppCapture 视频捕获状态查询，并映射到录屏隐藏偏好；无法覆盖不使用 Windows AppCapture 的所有第三方捕获程序，屏幕共享检测仍未实现。仓库不含 Native UI 渲染层；新增 `docs/ARCHITECTURE.md` 与 `docs/STATE_MACHINE.md` 记录架构和状态边界。后端 invoke/event 与前端 API 封装已核对完成。`src/lib/components/` 现按 island/media/settings/time/volume 分组，Rust 继续按 commands/models/services/state 分层。`pnpm check` 与 `pnpm build` 均通过；快速 hover、计时器完成、标题栏交互、捕获事件和跨窗口行为仍需运行时验收。
 
 > Studio 设置同步与切歌封面过渡（2026-10-06）：Studio 现订阅 `settings-updated` 并从 `settingsStore` 读取跨窗口设置快照；未保存的外观草稿字段优先保留，干净字段跟随外部更新。新增 `CoverArt.svelte`，在新封面加载成功后双图交叉淡化，并保留上一个有效封面直到切换开始；失败加载不会先清空当前图片。代码路径已实现，真实播放器切歌的视觉连续性仍待运行时确认。`pnpm check` 0 错误 / 0 警告，`pnpm test` 13 个文件、64 项通过，`cargo test --no-default-features` 31 项通过，`pnpm build` 通过。
