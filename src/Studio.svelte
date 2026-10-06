@@ -10,6 +10,7 @@
   import { DEMO_MEDIA, media, connectMedia } from "$lib/mediaStore";
   import { extractSpectrumColorsFromImage } from "$lib/spectrumColors";
   import { settingsApi } from "$lib/api/settings";
+  import { connectSettingsStore, settingsStore } from "$lib/settingsStore";
   import { windowApi } from "$lib/api/window";
   import { cacheApi } from "$lib/api/cache";
   import { mediaApi } from "$lib/api/media";
@@ -53,6 +54,8 @@
   let persistInFlight: Promise<void> | undefined;
   let persistPending=false;
   let pendingSettingsPatch:Partial<AppPreferences>={};
+  let disconnectSettingsStore:(()=>void)|undefined;
+  let unsubscribeSettingsStore:(()=>void)|undefined;
   let appearanceDraft=$state<AppearanceDraft>(createAppearanceDraft(DEFAULT_SETTINGS));
   let previewTarget=$state<PreviewTarget>(null);
   let applyingAppearance=$state(false);
@@ -144,6 +147,18 @@
   function syncAppearanceDrafts(){
     appearanceDraft=createAppearanceDraft(settings);
   }
+  const appearanceKeys=(Object.keys(createAppearanceDraft(DEFAULT_SETTINGS)) as (keyof AppearanceDraft)[]);
+  function applyExternalSettings(next:AppPreferences){
+    const dirtyAppearanceKeys=new Set(appearanceKeys.filter((key)=>appearanceDraft[key]!==settings[key]));
+    const merged={...next,...pendingSettingsPatch};
+    settings=merged;
+    appearanceDraft={
+      ...createAppearanceDraft(merged),
+      ...Object.fromEntries(appearanceKeys.filter((key)=>dirtyAppearanceKeys.has(key)).map((key)=>[key,appearanceDraft[key]])),
+    } as AppearanceDraft;
+    applyAppFont(merged.fontId);
+    setLocale(merged.language);
+  }
   onMount(()=>{
     studioDisposed=false;
     const clockTimer=setInterval(()=>previewNow=Date.now(),1000);
@@ -183,9 +198,11 @@
       deferredTimers.push(idleTimer);
       void (async()=>{
         try{
-          settings={...DEFAULT_SETTINGS,...await settingsApi.getPreferences()};
-          if(disposed)return;
-          syncAppearanceDrafts();
+          const connection=await connectSettingsStore((value)=>({...DEFAULT_SETTINGS,...value}));
+          if(disposed){connection.disconnect();return}
+          disconnectSettingsStore=connection.disconnect;
+          applyExternalSettings(connection.settings);
+          unsubscribeSettingsStore=settingsStore.subscribe((next)=>applyExternalSettings(next));
           applyAppFont(settings.fontId);
           setLocale(settings.language);
         }catch{}
@@ -203,6 +220,10 @@
       if(closePromise)void closePromise.then(unlisten=>unlisten()).catch(()=>{});
       if(saveTimer)clearTimeout(saveTimer);
       void persist();
+      unsubscribeSettingsStore?.();
+      unsubscribeSettingsStore=undefined;
+      disconnectSettingsStore?.();
+      disconnectSettingsStore=undefined;
       unsubscribe();
       liveMediaDisconnect?.();
       liveMediaDisconnect=undefined;

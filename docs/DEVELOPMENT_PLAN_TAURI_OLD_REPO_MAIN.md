@@ -300,6 +300,10 @@ Wind0ws_Dynamic_island
 
 > P2/P6/P7/P9 进度（2026-10-06）：`src/lib/islandStore.ts` 集中主岛展开、悬停、页面和媒体会话状态，并派生 idle/media/expanded/timer/volume 等视图；`src/lib/settingsStore.ts` 负责 main 与 FloatingWindow 的设置读取、`settings-updated` 同步和初始读取防竞态。Studio 保留未保存的编辑草稿。Studio 设置窗现使用 Svelte 自定义标题栏，含原生拖动、最小化和保存后关闭。截图监控新增 Windows AppCapture 视频捕获状态查询，并映射到录屏隐藏偏好；无法覆盖不使用 Windows AppCapture 的所有第三方捕获程序，屏幕共享检测仍未实现。仓库不含 Native UI 渲染层；新增 `docs/ARCHITECTURE.md` 与 `docs/STATE_MACHINE.md` 记录架构和状态边界。后端 invoke/event 与前端 API 封装已核对完成。`src/lib/components/` 现按 island/media/settings/time/volume 分组，Rust 继续按 commands/models/services/state 分层。`pnpm check` 与 `pnpm build` 均通过；快速 hover、计时器完成、标题栏交互、捕获事件和跨窗口行为仍需运行时验收。
 
+> Studio 设置同步与切歌封面过渡（2026-10-06）：Studio 现订阅 `settings-updated` 并从 `settingsStore` 读取跨窗口设置快照；未保存的外观草稿字段优先保留，干净字段跟随外部更新。新增 `CoverArt.svelte`，在新封面加载成功后双图交叉淡化，并保留上一个有效封面直到切换开始；失败加载不会先清空当前图片。代码路径已实现，真实播放器切歌的视觉连续性仍待运行时确认。`pnpm check` 0 错误 / 0 警告，`pnpm test` 13 个文件、64 项通过，`cargo test --no-default-features` 31 项通过，`pnpm build` 通过。
+
+> Release 包重建（2026-10-06）：本轮修改后的 `pnpm tauri build --bundles nsis` 成功生成 Release EXE 和 NSIS 安装器。产物位于 `src-tauri/target/release/isle.exe` 与 `src-tauri/target/release/bundle/nsis/Isle_1.0.11_x64-setup.exe`。Release Candidate“可长期日常使用”仍需长时间运行和设备验收，因此 P9 保持未完成。
+
 > 实现盘点（2026-10-06）：P3–P7 中已勾选的行表示对应 Svelte / Rust 功能路径已实现；Hover 与独立点击区已在 Milestone 2 核对。完整视觉验收、播放器实机兼容、不同缩放下的 DPI、重启自启动和长时间运行等条件仍需 P1/P8 设备验收。网易云专用控制方案、通用录屏兼容和屏幕共享检测仍未完成；Windows AppCapture 支持的系统视频捕获已有检测代码，仍需实机确认。
 
 ---
@@ -438,7 +442,7 @@ P9 清理 / 发布
 - [x] 歌手
 - [x] 专辑封面
 - [x] 播放状态同步
-- [ ] 切歌时 UI 不闪烁
+- [x] 切歌时 UI 不闪烁
 
 ---
 
