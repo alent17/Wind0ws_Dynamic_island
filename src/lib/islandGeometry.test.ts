@@ -1,4 +1,4 @@
-import { navigationGeometry, navigationHostFor } from "./islandGeometry";
+import { navigationGeometry, navigationHostFor, navigationScaleForWorkArea } from "./islandGeometry";
 import { describe, expect, it } from "vitest";
 import {
   expansionForGeometry,
@@ -185,6 +185,30 @@ describe("in-island navigation geometry", () => {
           expect(offset.y).toBeGreaterThanOrEqual(0);
           expect(offset.x + geometry.width).toBeLessThanOrEqual(host.width);
           expect(offset.y + geometry.height).toBeLessThanOrEqual(host.height);
+        }
+      }
+    }
+  });
+
+  it("scales expanded UI against logical work area and DPI", () => {
+    expect(navigationScaleForWorkArea(2100, 1180, 1)).toBe(1);
+    expect(navigationScaleForWorkArea(1680, 1050, 1.25)).toBeCloseTo(0.64);
+    expect(navigationScaleForWorkArea(1920, 1080, 1.5)).toBe(0.62);
+    expect(navigationScaleForWorkArea(1920, 1080, 0)).toBeCloseTo(0.9142857);
+
+    for (const scale of [0.62, 0.8, 1]) {
+      for (const edge of ["top", "right", "bottom", "left"] as const) {
+        for (const style of ["floating", "edge"] as const) {
+          const host = navigationHostFor(style, edge, 300, scale);
+          for (const page of ["music", "clock", "weather", "timer", "volume"] as const) {
+            const base = navigationGeometry(page, 8, 80, style, edge, 64);
+            const geometry = { ...base, width: base.width * scale, height: base.height * scale, radius: base.radius * scale };
+            const offset = surfaceOffsetFor(host, geometry, style, edge, scale);
+            expect(offset.x).toBeGreaterThanOrEqual(-0.001);
+            expect(offset.y).toBeGreaterThanOrEqual(-0.001);
+            expect(offset.x + geometry.width).toBeLessThanOrEqual(host.width + 0.001);
+            expect(offset.y + geometry.height).toBeLessThanOrEqual(host.height + 0.001);
+          }
         }
       }
     }
