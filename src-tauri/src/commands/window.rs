@@ -797,7 +797,7 @@ pub async fn show_studio_window(app: AppHandle) -> AppResult<()> {
     .min_inner_size(800.0, 600.0)
     .resizable(true)
     .center()
-    .decorations(false)
+    .decorations(true)
     .transparent(false)
     .build()
     .map_err(|e| AppError::window(format!("创建设置窗口失败: {}", e)))?;

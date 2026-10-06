@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { spring } from "svelte/motion";
-  import { RotateCcw,Trash2,ExternalLink,Monitor,RefreshCw,ChevronUp,ChevronDown,CloudSun,Search,Minus,X } from "lucide-svelte";
+  import { RotateCcw,Trash2,ExternalLink,Monitor,RefreshCw,ChevronUp,ChevronDown,CloudSun,Search } from "lucide-svelte";
   import IslandSurface from "$lib/components/island/IslandSurface.svelte";
   import StudioSlider from "$lib/components/settings/StudioSlider.svelte";
   import StudioSelect from "$lib/components/settings/StudioSelect.svelte";
@@ -315,26 +315,10 @@
   function weatherCandidateDetail(item:WeatherLocationCandidate){const label=[...new Set([item.admin2,item.admin1,item.country].filter(Boolean))].join(" · ");const duplicates=weatherResults.filter(other=>weatherLocationLabel(other)===weatherLocationLabel(item)).length;return duplicates>1?`${label} · ${item.latitude.toFixed(2)}, ${item.longitude.toFixed(2)}`:label}
   function selectWeather(item:WeatherLocationCandidate){updatePreference({weatherLocation:{name:weatherLocationLabel(item),latitude:item.latitude,longitude:item.longitude}});weatherResults=[];weatherMessage=t("citySaved");void persist().then(()=>{if(!studioDisposed)void refreshIdleSnapshot()})}
   async function clearCache(){cacheMessage=t("clearing");try{await cacheApi.clearCache();cacheMessage=t("cacheCleared")}catch{cacheMessage=t("clearFailed")}}
-  function minimizeStudioWindow() {
-    if (nativeRuntime) void getCurrentWindow().minimize().catch((error) => console.error("[设置窗口] 最小化失败:", error));
-  }
-  function closeStudioWindow() {
-    if (nativeRuntime) void getCurrentWindow().close().catch((error) => console.error("[设置窗口] 关闭失败:", error));
-  }
 </script>
 
 <svelte:head><title>Isle Studio</title></svelte:head>
 <main>
-  <div class="studio-window-bar" role="group" aria-label={t("windowActions")}>
-    <span class="studio-window-title" aria-label="Isle Studio" data-tauri-drag-region>ISLE STUDIO</span>
-    <div class="studio-window-drag-space" aria-hidden="true" data-tauri-drag-region></div>
-    {#if nativeRuntime}
-      <div class="studio-window-actions" aria-label={t("windowActions")}>
-        <button type="button" aria-label={t("minimize")} title={t("minimize")} onclick={minimizeStudioWindow}><Minus size={14} /></button>
-        <button type="button" class="studio-window-close" aria-label={t("close")} title={t("close")} onclick={closeStudioWindow}><X size={14} /></button>
-      </div>
-    {/if}
-  </div>
   <header class="studio-header">
     <div class="studio-brand">
       <span class="studio-wordmark">ISLE / STUDIO</span>
@@ -445,7 +429,6 @@
   :global(html),:global(body),:global(#app){min-width:780px;min-height:600px;background:#fff;color:#111113}
   :global(body){overflow:auto}
   main{--studio-ink:#15161a;--studio-muted:#747680;--studio-line:#e3e4e8;--studio-panel:#f5f5f7;--studio-surface:#fff;--studio-accent:#3158c8;min-height:100vh;padding:0 32px 54px;box-sizing:border-box;background:#f7f7f9}
-  .studio-window-bar{height:42px;margin:0 -32px 24px;padding:0 18px;display:flex;align-items:center;box-sizing:border-box;border-bottom:1px solid var(--studio-line);background:var(--studio-surface);color:var(--studio-muted);user-select:none}.studio-window-title{font-size:11px;font-weight:700;letter-spacing:.12em}.studio-window-drag-space{height:100%;flex:1;min-width:12px}.studio-window-actions{height:100%;display:flex;align-items:stretch;gap:2px}.studio-window-actions button{width:42px;padding:0;display:grid;place-items:center;border:0;border-radius:0;background:transparent;color:var(--studio-muted);cursor:pointer;transition:background 120ms ease,color 120ms ease}.studio-window-actions button:hover{background:rgba(80,82,92,.1);color:var(--studio-ink)}.studio-window-actions .studio-window-close:hover{background:#d92d3a;color:#fff}.studio-window-actions button:focus-visible{position:relative;z-index:1;outline:2px solid var(--studio-accent);outline-offset:-3px}
   .studio-header{max-width:1240px;margin:0 auto 24px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
   .studio-brand{min-width:0}.studio-wordmark{display:block;margin-bottom:8px;color:#92939b;font-size:11px;font-weight:700;letter-spacing:.16em}.studio-brand h1{margin:0;color:var(--studio-ink);font-size:26px;line-height:1.05;letter-spacing:-.04em}.studio-brand p{max-width:48ch;margin:8px 0 0;color:var(--studio-muted);font-size:12px;line-height:1.5}
   .studio-status{display:flex;align-items:center;gap:9px;flex:none;padding:9px 11px;border:1px solid var(--studio-line);border-radius:12px;background:rgba(255,255,255,.72);color:var(--studio-muted)}.studio-status i,.stage-topline i{width:7px;height:7px;border-radius:50%;background:var(--studio-accent);box-shadow:0 0 0 4px rgba(49,88,200,.11)}.studio-status span{display:flex;flex-direction:column;gap:2px;min-width:0}.studio-status strong{color:var(--studio-ink);font-size:12px;font-weight:600}.studio-status small{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--studio-muted);font-size:11px}.studio-status.browser i{background:#9c9da5;box-shadow:0 0 0 4px rgba(156,157,165,.12)}
@@ -573,8 +556,8 @@
   .skeleton-row i{background:linear-gradient(90deg,#2a2d33 25%,#393c43 50%,#2a2d33 75%);background-size:200% 100%}
 
   @media(max-width:1040px){main{padding-inline:24px}.workspace{grid-template-columns:minmax(340px,.8fr) minmax(400px,1.2fr);gap:18px}}
-  @media(max-width:900px){:global(html),:global(body),:global(#app){min-width:0}main{padding:0 18px 36px}.studio-window-bar{margin:0 -18px 22px;padding:0 16px}.studio-header{align-items:flex-start;flex-direction:column;gap:14px;margin-bottom:18px}.studio-status{align-self:stretch}.workspace{grid-template-columns:1fr}.stage{position:relative;top:0;height:340px}.workspace aside{grid-template-columns:repeat(2,minmax(0,1fr))}.appearance-apply-bar{position:static}}
-  @media(max-width:620px){main{padding:0 12px 28px}.studio-window-bar{margin:0 -12px 18px;padding:0 12px}.studio-brand h1{font-size:23px}.studio-brand p{font-size:12px}.stage{height:300px;border-radius:20px}.stage::before{inset:12px;border-radius:15px}.stage-topline{left:15px;right:15px;top:14px}.workspace aside{grid-template-columns:1fr;gap:12px}aside>section{padding:16px}aside>.appearance-section,aside>.preferences-section,aside>.players-section,aside>.idle-section{grid-column:auto}.select-grid{grid-template-columns:1fr}.appearance-apply-bar{align-items:stretch;flex-direction:column}.apply-actions{justify-content:flex-end}}
+  @media(max-width:900px){:global(html),:global(body),:global(#app){min-width:0}main{padding:0 18px 36px}.studio-header{align-items:flex-start;flex-direction:column;gap:14px;margin-bottom:18px}.studio-status{align-self:stretch}.workspace{grid-template-columns:1fr}.stage{position:relative;top:0;height:340px}.workspace aside{grid-template-columns:repeat(2,minmax(0,1fr))}.appearance-apply-bar{position:static}}
+  @media(max-width:620px){main{padding:0 12px 28px}.studio-brand h1{font-size:23px}.studio-brand p{font-size:12px}.stage{height:300px;border-radius:20px}.stage::before{inset:12px;border-radius:15px}.stage-topline{left:15px;right:15px;top:14px}.workspace aside{grid-template-columns:1fr;gap:12px}aside>section{padding:16px}aside>.appearance-section,aside>.preferences-section,aside>.players-section,aside>.idle-section{grid-column:auto}.select-grid{grid-template-columns:1fr}.appearance-apply-bar{align-items:stretch;flex-direction:column}.apply-actions{justify-content:flex-end}}
   @media(prefers-reduced-motion:reduce){.skeleton-row i{animation:none}.setting-choice,.segmented button,.tool-list button,.ordered-row,.icon-button,.ordered-row button,.search-row button,.apply-button,.reset-button{transition:none}}
   @media(prefers-reduced-transparency:reduce){.appearance-apply-bar{background:#fff;backdrop-filter:none}}
 </style>
