@@ -500,7 +500,7 @@ P9 清理 / 发布
 - [x] 清理旧 Native UI
 - [x] 整理项目结构
 - [x] 完善开发文档
-- [ ] 打包 Release Candidate
+- [x] 打包 Release Candidate（NSIS 安装包已生成；长期日常使用验收仍未完成）
 
 ---
 
