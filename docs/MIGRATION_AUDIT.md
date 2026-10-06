@@ -21,7 +21,7 @@ input and were left untouched.
 | State management | ✅ Keep, improve incrementally | Existing state and API layers live in Svelte components/stores and `src/lib/api/`; do not transplant Native UI state. |
 | Rust backend | ✅ Keep | Tauri command, model, service, and state layers already exist under `src-tauri/src/`. |
 | SMTC | ✅ Keep; compare targeted gaps | `src-tauri/src/services/media.rs` reads GSMTC metadata, timeline, controls, playback state, artwork, and capabilities. Native `crates/isle-app/src/media.rs` remains a reference for focused capability differences. |
-| Netease controls | 🔄 Audit before port | Tauri already uses GSMTC and has Netease metadata/cover support in `services/media.rs`. Native `crates/isle-app/src/cdp.rs` and `netease.rs` add a local CDP route for player modes, not a wholesale replacement for play/skip controls. Real-client behavior still needs validation. |
+| Netease controls | 🔄 Targeted CDP adapter added; real-client validation pending | Tauri still uses GSMTC for play/skip controls and metadata. `src-tauri/src/services/netease_cdp.rs` now provides an isolated, bounded loopback CDP path for playback modes, with a Tauri command and island control. It was adapted as a separate Tauri service rather than copying Native UI or replacing generic controls. The current client did not expose the configured debug port during implementation, so real-client behavior remains unverified. |
 | Other player controls | ✅ Keep | Tauri routes media actions through its existing GSMTC service and models. Native player categorization and capability contracts in `crates/isle-core/src/player.rs` and `player_extension.rs` can inform targeted changes. |
 | System volume | ✅ Keep | Existing Tauri implementation is in `src-tauri/src/services/system_audio.rs` and `commands/audio.rs`. Native `system_audio.rs` is overlapping reference material. |
 | Startup | ✅ Keep | Existing startup registry integration and commands are in `src-tauri/src/services/settings.rs` and `commands/settings.rs`. |
@@ -30,7 +30,7 @@ input and were left untouched.
 | DPI / displays | ✅ Keep, verify on hardware | Tauri monitor enumeration and physical positioning are implemented in `commands/monitor.rs`, `commands/window.rs`, and startup positioning in `src-tauri/src/lib.rs`. Mixed-DPI behavior remains an acceptance test. |
 | Persistence | 🔄 Compare semantics only | Tauri settings are modeled in `src-tauri/src/models/settings.rs` and persisted by `services/settings.rs`. Native `crates/isle-app/src/configuration.rs` and `crates/isle-core/src/settings.rs` use a different model; atomic-write ideas may be referenced without replacing the schema. |
 | Native UI | 🗑 Do not migrate | `crates/isle-ui` and Native rendering/window modules serve a separate Win32 application. Keep all settings and island views in Svelte. |
-| Duplicate dependencies | 🔄 Avoid importing wholesale | Both Rust sides use Windows crate 0.52; Native pins `=0.52.0`, while Tauri specifies `0.52`. Native's `tungstenite = 0.30.0` and Direct2D stack are not needed for the Tauri app unless a specific feature justifies them. |
+| Duplicate dependencies | 🔄 Avoid importing wholesale | Both Rust sides use Windows crate 0.52; Native pins `=0.52.0`, while Tauri specifies `0.52`. Tauri now uses `tungstenite = 0.30.0` only for the bounded NetEase CDP adapter; Native's Direct2D stack remains unnecessary. |
 | Duplicate Rust modules | 🔄 Port only proven gaps | Audio, media, settings, window, and display responsibilities already exist in Tauri. Compare one behavior at a time; do not copy modules wholesale. |
 | Removable code | 🗑 None identified for immediate deletion | No broad cleanup is justified by this audit. Preserve current Svelte/Tauri layers. |
 
@@ -86,9 +86,11 @@ input and were left untouched.
 
 ## First migration batch
 
-No Native code has been migrated by this audit. The first candidate for a later,
-separate change is Netease playback-mode control through a bounded local CDP
-connection, after endpoint ownership and real-client tests are established.
-SMTC, volume, startup, screenshot hiding, window placement, and display support
-already have Tauri implementations and should only change for a demonstrated
-gap.
+At the time of this audit, no Native code had been migrated. A later targeted
+change added `src-tauri/src/services/netease_cdp.rs` and the matching command/UI
+path for playback modes. The adapter keeps the Tauri architecture and uses
+bounded IPv4 loopback requests; it does not replace generic SMTC transport
+controls or copy Native UI. The current machine's NetEase process did not expose
+the configured debug endpoint, so real-client compatibility remains an open
+acceptance item. SMTC, volume, startup, screenshot hiding, window placement, and
+display support continue to use existing Tauri implementations.

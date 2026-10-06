@@ -7,6 +7,7 @@
   import RollingNumber from "$lib/components/time/RollingNumber.svelte";
   import Spectrum from "$lib/components/media/Spectrum.svelte";
   import CoverArt from "$lib/components/media/CoverArt.svelte";
+  import NeteaseModeControl from "$lib/components/media/NeteaseModeControl.svelte";
   import TimerPanel from "$lib/components/time/TimerPanel.svelte";
   import MarqueeTitle from "$lib/components/media/MarqueeTitle.svelte";
   import InfoPanel from "$lib/components/island/InfoPanel.svelte";
@@ -55,6 +56,7 @@
     lastPlayedMedia = null,
     canResumeLastTrack = false,
     resumingLastTrack = false,
+    neteaseModeBusy = false,
     showSpectrum = true,
     spectrumMode = "realtime",
     enableAnimations = true,
@@ -130,6 +132,7 @@
     lastPlayedMedia?: { title: string; artist: string; albumArt: string; sourceDisplay: string } | null;
     canResumeLastTrack?: boolean;
     resumingLastTrack?: boolean;
+    neteaseModeBusy?: boolean;
     showSpectrum?: boolean;
     spectrumMode?: SpectrumMode;
     enableAnimations?: boolean;
@@ -152,7 +155,7 @@
     onToggle?: () => void;
     onOpenPlayer?: () => void;
     onResumeLastTrack?: () => void;
-    onMediaAction?: (action: "prev" | "play_pause" | "next") => void;
+    onMediaAction?: (action: "prev" | "play_pause" | "next" | "cycle_netease_mode") => void;
     onSeek?: (positionMs: number) => void | Promise<void>;
     onToggleFloating?: () => void;
     onHideForTenSeconds?: () => void;
@@ -636,7 +639,11 @@
                 </button>
                 <button type="button" class="side" aria-label={t("next")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("next"); }}><SkipForward size={26} fill="currentColor" /></button>
               </div>
-              <span class="control-spacer"></span>
+              <span class="control-spacer" class:has-mode={media.source === "netease" && Boolean(media.neteasePlaybackMode)}>
+                {#if media.source === "netease" && media.neteasePlaybackMode}
+                  <NeteaseModeControl mode={media.neteasePlaybackMode} disabled={neteaseModeBusy} onCycle={() => onMediaAction?.("cycle_netease_mode")} />
+                {/if}
+              </span>
             </div>
           {:else}
             <div class="idle-player" role="group" aria-label={t("mediaPlayer")}>
@@ -760,7 +767,7 @@
   .debug-overlay{position:absolute;z-index:4;top:4px;left:50%;display:flex;gap:5px;max-width:calc(100% - 12px);padding:2px 6px;border-radius:5px;transform:translateX(-50%);overflow:hidden;color:#4ade80;background:rgba(0,0,0,.75);font:500 8px/1.3 var(--app-font);white-space:nowrap;pointer-events:none}.debug-overlay span{overflow:hidden;text-overflow:ellipsis}
   .expanded-layer{inset:0;width:100%;height:100%;padding:0;transition:opacity 120ms linear}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,600px);height:var(--expanded-content-height,210px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:11px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}.progress-block,.control-row{opacity:var(--secondary-opacity);transition:opacity 100ms linear}
   .progress-block{width:100%;margin-bottom:10px}
-  .control-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;width:100%;height:58px}.control-spacer{width:0}.controls{display:flex;align-items:center;justify-content:center;gap:12px}.controls button{flex:none;display:grid;place-items:center;width:58px;height:58px;padding:0;border:0;border-radius:12px;color:rgba(255,255,255,.9);background:transparent;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}.controls .play{color:#fff}.controls button:active,.cover:active{transform:scale(.94)}.controls button:focus-visible:not(:disabled){background:rgba(255,255,255,.1)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .control-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;width:100%;height:58px}.control-spacer{width:0}.control-spacer.has-mode{width:100%;display:flex;align-items:center;justify-content:flex-end}.controls{display:flex;align-items:center;justify-content:center;gap:12px}.controls button{flex:none;display:grid;place-items:center;width:58px;height:58px;padding:0;border:0;border-radius:12px;color:rgba(255,255,255,.9);background:transparent;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}.controls .play{color:#fff}.controls button:active,.cover:active{transform:scale(.94)}.controls button:focus-visible:not(:disabled){background:rgba(255,255,255,.1)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .compact-timer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:0;color:#f28b31;background:transparent;cursor:pointer;font-family:var(--app-font);user-select:none}.compact-timer span{min-width:42px;font-size:12px;font-weight:600;line-height:1;letter-spacing:.015em;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}.compact-timer.finished span{min-width:0;font-size:11px}.compact-timer.paused{color:rgba(242,139,49,.62)}.timer-pause{width:7px;height:8px;display:flex;align-items:center;justify-content:center;gap:2px}.timer-pause b{display:block;width:2px;height:7px;border-radius:1px;background:currentColor}.compact-timer.urgent{color:#ff765f}
   .compact-timer{position:absolute;inset:0;display:block;overflow:hidden;padding:0;border-radius:inherit;color:#f4f7ff;background:transparent;box-shadow:inset 1px 0 0 rgba(82,151,255,.46),inset -1px 0 0 rgba(82,151,255,.46),inset 0 0 12px rgba(28,91,190,.08)}.compact-timer:hover{background:rgba(40,100,190,.055)}.compact-timer .timer-summary{position:absolute;inset:0 14px 4px;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}.compact-timer .timer-leading{display:flex;align-items:center;gap:7px;min-width:0;color:rgba(245,248,255,.9)}.compact-timer .timer-leading :global(svg){flex:none;color:#70aaff}.compact-timer .timer-time{min-width:0;overflow:hidden;color:#f5f7fb;font-size:13px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em;text-align:right;text-overflow:ellipsis;white-space:nowrap}.compact-timer .timer-progress-track{position:absolute;right:14px;bottom:5px;left:14px;height:2px;overflow:hidden;border-radius:999px;background:rgba(115,143,183,.2)}.compact-timer .timer-progress-fill{display:block;height:100%;max-width:100%;border-radius:inherit;background:linear-gradient(90deg,#2688ff,#60b5ff);box-shadow:0 0 7px rgba(57,145,255,.68);transition:width 350ms linear,background-color 180ms ease}.compact-timer .timer-progress-fill.paused{background:linear-gradient(90deg,#6d8fb9,#a7c5ed);box-shadow:none}.compact-timer .timer-progress-fill.finished{background:linear-gradient(90deg,#42d99a,#8af0c0)}.compact-timer.paused{color:#f4f7ff}.compact-timer.urgent{box-shadow:inset 1px 0 0 rgba(255,111,102,.58),inset -1px 0 0 rgba(255,111,102,.58),inset 0 0 12px rgba(255,74,60,.09)}.compact-timer.urgent .timer-leading :global(svg){color:#ff8c7c}.compact-timer .timer-pause{flex:none;width:7px;height:8px;gap:2px;color:#a8c5e9}.compact-timer .timer-pause b{width:2px;height:7px;border-radius:1px;background:currentColor}
   .compact-layer.vertical .compact-timer .timer-summary{inset:14px 4px;flex-direction:column;justify-content:center;gap:10px}.compact-layer.vertical .compact-timer .timer-leading{flex-direction:column;gap:5px}.compact-layer.vertical .compact-timer .timer-time{max-width:100%;font-size:11px;text-align:center}.compact-layer.vertical .compact-timer .timer-progress-track{top:14px;right:auto;bottom:14px;left:5px;width:2px;height:auto}.compact-layer.vertical .timer-progress-fill{width:100%!important;height:var(--timer-progress-height,0%)}

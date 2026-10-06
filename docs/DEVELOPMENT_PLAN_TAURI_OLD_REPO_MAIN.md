@@ -292,7 +292,7 @@ Wind0ws_Dynamic_island
 
 > WebView2 短时内存采样（2026-10-06）：按 `com.isle-app.isle\EBWebView` 进程组汇总，5 分钟内持续为 6 个子进程，私有内存从约 302.8 MB 到 307.5 MB；中间短暂达到约 332.6 MB 后回落，结束阶段在约 306–308 MB 间波动。此短采样没有看到持续单调增长，但不足以完成长时间验收。
 
-> 网易云 CDP 验收前置（2026-10-06）：本机网易云进程版本为 3.1.41.205529，启动参数没有 `--remote-debugging-port`，`127.0.0.1:9223` 当前无监听；当前 SMTC 媒体信息和常规传输控件可见，Native 参考实现的专用播放模式控制尚不能在此会话验证。
+> 网易云 CDP 验收前置（2026-10-06）：本机网易云进程版本为 3.1.41.205529，启动参数没有 `--remote-debugging-port`，`127.0.0.1:9223` 当前无监听；当前 SMTC 媒体信息和常规传输控件可见，无法在此会话做真实客户端联调。
 
 > 目录整理与自动化验收（2026-10-06）：Svelte 组件按职责移入 `src/lib/components/{island,media,settings,time,volume}`；Rust 命令、模型、服务和共享状态继续按模块分层。目录迁移后 `pnpm check`（0 错误 / 0 警告）、`pnpm build`、`pnpm test`（13 个文件、63 项通过）和 `cargo test --no-default-features`（31 项通过）均成功。几何测试改为验证当前 600×210 展开尺寸；修正竖向屏幕边缘浮岛展开时原生宿主未给 22px 间距留位的越界。
 
@@ -302,9 +302,11 @@ Wind0ws_Dynamic_island
 
 > Studio 设置同步与切歌封面过渡（2026-10-06）：Studio 现订阅 `settings-updated` 并从 `settingsStore` 读取跨窗口设置快照；未保存的外观草稿字段优先保留，干净字段跟随外部更新。新增 `CoverArt.svelte`，在新封面加载成功后双图交叉淡化，并保留上一个有效封面直到切换开始；失败加载不会先清空当前图片。代码路径已实现，真实播放器切歌的视觉连续性仍待运行时确认。`pnpm check` 0 错误 / 0 警告，`pnpm test` 13 个文件、64 项通过，`cargo test --no-default-features` 31 项通过，`pnpm build` 通过。
 
-> Release 包重建（2026-10-06）：本轮修改后的 `pnpm tauri build --bundles nsis` 成功生成 Release EXE 和 NSIS 安装器。产物位于 `src-tauri/target/release/isle.exe` 与 `src-tauri/target/release/bundle/nsis/Isle_1.0.11_x64-setup.exe`。Release Candidate“可长期日常使用”仍需长时间运行和设备验收，因此 P9 保持未完成。
+> 网易云播放模式控制实现（2026-10-06）：在 `src-tauri/src/services/netease_cdp.rs` 增加单独的 loopback CDP 适配器，Tauri 暴露读取 / 循环播放模式命令，主岛仅在读取到受支持的网易云模式后显示模式按钮。网络操作在 blocking pool 执行，CDP endpoint、页面、大小、超时均有限制，写入后做状态读回验证；不覆盖 AI/FM/未知模式。该代码不重启播放器，本机 9223 无监听，因此真实网易云模式切换仍未验收，P5 和迁移候选框保持未完成。后端单测已新增（总数 36 项，通过情况见本轮验证记录）。
 
-> 实现盘点（2026-10-06）：P3–P7 中已勾选的行表示对应 Svelte / Rust 功能路径已实现；Hover 与独立点击区已在 Milestone 2 核对。完整视觉验收、播放器实机兼容、不同缩放下的 DPI、重启自启动和长时间运行等条件仍需 P1/P8 设备验收。网易云专用控制方案、通用录屏兼容和屏幕共享检测仍未完成；Windows AppCapture 支持的系统视频捕获已有检测代码，仍需实机确认。
+> Release 包重建（2026-10-06）：Studio 同步、封面过渡与网易云 CDP 功能合入后，`pnpm tauri build --bundles nsis` 成功生成最新 Release EXE 和 NSIS 安装器。产物位于 `src-tauri/target/release/isle.exe` 与 `src-tauri/target/release/bundle/nsis/Isle_1.0.11_x64-setup.exe`。Release Candidate“可长期日常使用”仍需长时间运行和设备验收，因此 P9 保持未完成。
+
+> 实现盘点（2026-10-06）：P3–P7 中已勾选的行表示对应 Svelte / Rust 功能路径已实现；Hover 与独立点击区已在 Milestone 2 核对。完整视觉验收、播放器实机兼容、不同缩放下的 DPI、重启自启动和长时间运行等条件仍需 P1/P8 设备验收。网易云播放模式 CDP 路径已实现但真实客户端端点尚不可用；通用录屏兼容和屏幕共享检测仍未完成；Windows AppCapture 支持的系统视频捕获已有检测代码，仍需实机确认。
 
 ---
 

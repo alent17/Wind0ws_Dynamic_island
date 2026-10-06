@@ -78,6 +78,9 @@
   let trackTitle = $state<string>("");
   let artistName = $state<string>("");
   let isPlaying = $state<boolean>(false);
+  let neteasePlaybackMode = $state<MediaState["neteasePlaybackMode"]>();
+  let neteaseModeBusy = $state(false);
+  let lastNeteaseModeProbeKey: string | null = null;
   let lastSongKey: string | null = null;
   let metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
 
@@ -144,6 +147,7 @@
     source: currentSource,
     sourceDisplay: playerNames[currentSource as keyof typeof playerNames] || "多媒体",
     capabilities: mediaCapabilities,
+    neteasePlaybackMode,
   });
   let displayedPosition = $derived(projectedPosition(islandMedia, clockNow));
 
@@ -939,6 +943,19 @@
   async function handleMediaAction(action: string, e?: MouseEvent) {
     e?.stopPropagation();
 
+    if (action === "cycle_netease_mode") {
+      if (currentSource !== "netease" || neteaseModeBusy) return;
+      neteaseModeBusy = true;
+      try {
+        neteasePlaybackMode = await mediaApi.cycleNeteasePlaybackMode();
+      } catch (err) {
+        console.error("网易云播放模式切换失败:", err);
+      } finally {
+        neteaseModeBusy = false;
+      }
+      return;
+    }
+
     if (action === "play_pause") {
       isPlaying = !isPlaying;
     }
@@ -1355,6 +1372,8 @@
           durationMs = 0;
           mediaSnapshotAt = receivedAt;
           mediaCapabilities = data.capabilities;
+          neteasePlaybackMode = undefined;
+          lastNeteaseModeProbeKey = null;
           void syncFloatingMediaClock();
           return;
         }
@@ -1374,6 +1393,10 @@
           hasMediaSession = Boolean(data.source);
           transitionIsland({ type: "media-session", active: hasMediaSession });
         currentSource = data.source || "";
+        if (currentSource !== "netease") {
+          neteasePlaybackMode = undefined;
+          lastNeteaseModeProbeKey = null;
+        }
         mediaCapabilities = data.capabilities;
 
         const currentSongKey = `${data.source || ""}|${mediaTrackKey(data.title || "", data.artist || "")}`;
@@ -1400,6 +1423,15 @@
           pendingSeekUntil = 0;
           lastSongKey = currentSongKey;
           metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
+        }
+
+        if (currentSource === "netease" && lastNeteaseModeProbeKey !== currentSongKey) {
+          lastNeteaseModeProbeKey = currentSongKey;
+          void mediaApi.getNeteasePlaybackMode().then((mode) => {
+            if (lastSongKey === currentSongKey && currentSource === "netease") {
+              neteasePlaybackMode = mode ?? undefined;
+            }
+          }).catch((error) => logger.debug("网易云播放模式当前不可读取", error));
         }
 
         const titleChanged = trackTitle !== data.title;
@@ -1563,6 +1595,7 @@
 >
   <IslandSurface
     media={islandMedia}
+    {neteaseModeBusy}
     mode={$islandMode}
     islandStyle={renderedIslandStyle}
     edge={renderedIslandEdge}

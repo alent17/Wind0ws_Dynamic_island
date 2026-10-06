@@ -59,6 +59,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 
 # HTTP 客户端 - 用于下载 MV 和封面图片
 reqwest = { version = "0.11", features = ["json", "blocking"] }
+tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake"] }
 
 # 音频处理依赖
 cpal = "0.15"       # 用于捕获 Windows 系统回放音频 (WASAPI Loopback)

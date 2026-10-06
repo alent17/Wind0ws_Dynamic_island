@@ -14,6 +14,8 @@ export const mediaApi = {
   seekMedia: (positionMs: number) => invoke<void>("seek_media", { positionMs: Math.round(positionMs) }),
   toggleShuffle: () => invoke<void>("toggle_shuffle"),
   cycleRepeat: () => invoke<void>("cycle_repeat"),
+  getNeteasePlaybackMode: () => invoke<NeteasePlaybackMode | null>("get_netease_playback_mode"),
+  cycleNeteasePlaybackMode: () => invoke<NeteasePlaybackMode>("cycle_netease_playback_mode"),
 
   async getNeteaseSongInfo(songName: string, artist: string): Promise<NeteaseSong | null> {
     return invoke<NeteaseSong | null>("get_netease_song_info_cmd", { songName, artist });
@@ -35,3 +37,5 @@ export const mediaApi = {
   },
 
 };
+
+export type NeteasePlaybackMode = "sequential" | "repeat_list" | "repeat_one" | "shuffle";

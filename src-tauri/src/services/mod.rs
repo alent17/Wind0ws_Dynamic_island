@@ -8,6 +8,7 @@ pub mod color;
 pub mod idle;
 pub mod image;
 pub mod media;
+pub mod netease_cdp;
 pub mod settings;
 pub mod spectrum;
 mod system_audio;

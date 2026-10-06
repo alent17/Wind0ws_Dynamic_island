@@ -112,6 +112,7 @@ export interface MediaState {
   capabilities?: MediaCapabilities;
   shuffleActive?: boolean;
   repeatMode?: "none" | "track" | "list";
+  neteasePlaybackMode?: "sequential" | "repeat_list" | "repeat_one" | "shuffle";
 }
 
 export interface NeteaseSong {

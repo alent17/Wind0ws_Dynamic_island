@@ -15,6 +15,42 @@ pub async fn get_media_info_cmd(app: AppHandle) -> AppResult<MediaState> {
         .map_err(|error| AppError::media(format!("读取媒体信息任务失败：{}", error)))?
 }
 
+/// Cycle a NetEase playback mode through the bounded local CDP adapter.
+/// All socket work runs on Tauri's blocking pool, never the UI thread.
+#[tauri::command]
+pub async fn cycle_netease_playback_mode() -> AppResult<String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        use crate::services::netease_cdp::{mode_key, next_mode, LocalCdpClient};
+
+        let client = LocalCdpClient::default();
+        let current = client
+            .playback_mode()
+            .map_err(|error| AppError::media(error.to_string()))?
+            .ok_or_else(|| AppError::media("网易云当前播放模式无法识别"))?;
+        let requested = next_mode(current);
+        let action = client
+            .set_playback_mode(requested)
+            .map_err(|error| AppError::media(error.to_string()))?;
+        Ok(mode_key(action.observed).to_string())
+    })
+    .await
+    .map_err(|error| AppError::media(format!("网易云播放模式任务失败：{error}")))?
+}
+
+#[tauri::command]
+pub async fn get_netease_playback_mode() -> AppResult<Option<String>> {
+    tauri::async_runtime::spawn_blocking(|| {
+        use crate::services::netease_cdp::{mode_key, LocalCdpClient};
+
+        LocalCdpClient::default()
+            .playback_mode()
+            .map(|mode| mode.map(mode_key).map(str::to_string))
+            .map_err(|error| AppError::media(error.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::media(format!("读取网易云播放模式任务失败：{error}")))?
+}
+
 #[tauri::command]
 pub async fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
     tauri::async_runtime::spawn_blocking(crate::services::media::list_media_sessions)
