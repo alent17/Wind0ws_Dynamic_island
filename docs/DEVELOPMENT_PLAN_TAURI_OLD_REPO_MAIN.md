@@ -245,7 +245,7 @@ Wind0ws_Dynamic_island
 | **P2** | 建立 Island Store | 创建统一状态管理 | UI 不直接读取后端杂乱状态 | ☐ |
 | **P2** | 状态机 | 建立 `idle / media / expanded / timer / volume` 等状态 | 状态切换路径明确 | ☐ |
 | **P2** | Rust → Svelte 通信 | 后端只通过 event / invoke 提供数据 | UI 与 Rust 解耦 | ☑ |
-| **P2** | Settings Store | 设置统一存储 | 修改设置后即时生效并持久化 | ☐ |
+| **P2** | Settings Store | 设置统一存储 | 修改设置后即时生效并持久化 | ☑ |
 | **P3** | 重做灵动岛基础 UI | 只完成黑色胶囊、尺寸、圆角、布局 | 静态 UI 达到设计要求 | ☑ |
 | **P3** | 左侧媒体区域 | 专辑封面、歌曲、歌手 | 文本溢出、长歌名正常 | ☑ |
 | **P3** | 右侧功能栏 | 倒计时 / 设置 / 音量 / 时钟 | 与岛体风格统一 | ☑ |
@@ -284,7 +284,7 @@ Wind0ws_Dynamic_island
 
 > 展开态屏幕自适应（2026-10-06）：展开面板与原生宿主已按当前选中显示器的工作区和 DPI 同步缩放；本轮在副屏启动并构建通过。100% / 125% / 150% 的完整视觉验收仍归入上方未完成的 DPI 适配项。
 
-> P2/P9 进度（2026-10-06）：`src/lib/islandStore.ts` 已集中主岛的展开、悬停与页面选择转换；`src/lib/settingsStore.ts` 已集中主窗口设置快照、初始加载和 `settings-updated` 同步，并防止初始读取覆盖较新的事件。Studio 仍保留未保存的编辑草稿，FloatingWindow 与媒体状态尚未迁移到统一 Store，因此 Island Store、完整状态机和 Settings Store 仍保持未完成。后端 invoke/event 与前端 API 封装已核对完成。新增 `docs/ARCHITECTURE.md` 与 `docs/STATE_MACHINE.md` 记录当前边界和剩余工作。`pnpm check` 与 `pnpm build` 均通过。
+> P2/P9 进度（2026-10-06）：`src/lib/islandStore.ts` 已集中主岛的展开、悬停与页面选择转换；`src/lib/settingsStore.ts` 负责 main 与 FloatingWindow 的设置读取、`settings-updated` 同步和初始读取防竞态。Studio 保留未保存的编辑草稿。Island Store 与完整状态机仍未覆盖媒体、idle、timer 和音量业务状态，因此这两项保持未完成。后端 invoke/event 与前端 API 封装已核对完成。新增 `docs/ARCHITECTURE.md` 与 `docs/STATE_MACHINE.md` 记录当前边界和剩余工作。`pnpm check` 与 `pnpm build` 均通过。
 
 > 实现盘点（2026-10-06）：P3–P7 中已勾选的行表示对应 Svelte / Rust 功能路径已实现；完整视觉验收、播放器实机兼容、不同缩放下的 DPI、重启自启动和长时间运行等条件仍需 P1/P8 设备验收。网易云专用控制方案、窗口自定义标题栏及录屏 / 屏幕共享检测仍未完成。
 

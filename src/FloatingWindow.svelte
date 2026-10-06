@@ -7,6 +7,7 @@
   import { mediaApi } from "$lib/api/media";
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
+  import { connectSettingsStore, settingsStore } from "$lib/settingsStore";
   import { applyAppFont } from "$lib/font";
   import { locale, setLocale, translate, type TranslationKey } from "$lib/i18n";
   import {
@@ -71,9 +72,9 @@
   let isHovered = $state(false);
   let hoverLeaveTimeout: ReturnType<typeof setTimeout> | null = null;
   let captureSnapshot = $state<CaptureSnapshot>({ ...EMPTY_CAPTURE_SNAPSHOT });
-  let capturePreferences = $state<AppSettings>({ ...DEFAULT_SETTINGS });
+  const capturePreferences = settingsStore;
   let isCaptureHidden = $derived(
-    activeCaptureReasons(captureSnapshot, capturePreferences).length > 0,
+    activeCaptureReasons(captureSnapshot, $capturePreferences).length > 0,
   );
   let slideDirection = $state<"left" | "right" | "">("");
   let isAnimating = $state(false); // 动画进行中标志
@@ -495,11 +496,16 @@
   });
   async function initialize() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    eventListeners = [];
 
     // 读取设置
     try {
-      const settings = await invoke<AppSettings>("get_settings");
-      capturePreferences = settings;
+      const settingsConnection = await connectSettingsStore((value) => ({
+        ...DEFAULT_SETTINGS,
+        ...value,
+      }));
+      trackListener(settingsConnection.disconnect);
+      const settings = settingsConnection.settings;
       configuredFillColor = settings.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
       useAlbumColor = settings.floatingUseAlbumColor ?? DEFAULT_SETTINGS.floatingUseAlbumColor;
       applyAppFont(settings.fontId);
@@ -530,7 +536,6 @@
 
     if (disposed) return;
     // 初始化事件监听器管理器
-    eventListeners = [];
 
     // 监听 MV 播放设置变化事件
     const unlistenMVChange = await eventManager.on(
@@ -611,7 +616,6 @@
       if (value) {
         const nextUseAlbumColor = value.floatingUseAlbumColor ?? DEFAULT_SETTINGS.floatingUseAlbumColor;
         const shouldRefreshAlbumColor = nextUseAlbumColor && !useAlbumColor;
-        capturePreferences = value;
         isMVPlaybackEnabled = value.enableMvPlayback ?? DEFAULT_SETTINGS.enableMvPlayback;
         setCircularAlbum(value.floatingCircularAlbum ?? DEFAULT_SETTINGS.floatingCircularAlbum);
         configuredFillColor = value.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
