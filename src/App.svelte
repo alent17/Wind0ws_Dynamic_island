@@ -5,6 +5,8 @@
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
   import { Events } from "./utils/eventConstants";
   import { mediaApi } from "$lib/api/media";
+  import { islandMode, islandState, transitionIsland } from "$lib/islandStore";
+  import { connectSettingsStore, refreshSettingsStore, settingsStore } from "$lib/settingsStore";
   import { createAsyncCleanup } from "$lib/asyncCleanup";
   import { idleApi } from "$lib/api/idle";
   import { audioApi } from "$lib/api/audio";
@@ -27,8 +29,6 @@
     placementFor,
     surfaceOffsetFor,
     type IslandEdge,
-    type IslandMode,
-    type IslandPage,
     type IslandRegionChange,
     type IslandStyle,
   } from "$lib/islandGeometry";
@@ -70,9 +70,9 @@
   };
 
   // ========== 状态管理 ==========
-  let expanded = $state(false);
-  let activeIslandPage = $state<IslandPage>("music");
-  let hovering = $state(false);
+  let expanded = $derived($islandState.expanded);
+  let activeIslandPage = $derived($islandState.activePage);
+  let hovering = $derived($islandState.hovering);
   let artworkUrl = $state<string>("");
   let rawCoverUrl = "";
   let trackTitle = $state<string>("");
@@ -133,7 +133,6 @@
   let currentSource = $state<string>("generic");
   let hasMediaSession = $state(false);
   let mediaCapabilities = $state<MediaState["capabilities"]>();
-  let islandMode = $derived<IslandMode>(expanded ? "expanded" : hovering ? "hover" : "compact");
   let islandMedia = $derived<MediaState>({
     title: hasMediaSession ? trackTitle : "",
     artist: hasMediaSession ? artistName : "",
@@ -197,7 +196,7 @@
   let lastInteractionRegionSignature = "";
   let expandedScale = $state(1);
   function applyIslandRegion({ geometry, radii, polygon, extraRects, anchorGap }: IslandRegionChange) {
-    const host = hostFor(renderedIslandStyle, renderedIslandEdge, appSettings.compactLength, expandedScale);
+    const host = hostFor(renderedIslandStyle, renderedIslandEdge, $appSettings.compactLength, expandedScale);
     const offset = surfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge, expandedScale);
     if (anchorGap !== undefined) {
       const delta = anchorGap - (renderedIslandStyle === "floating" ? ISLAND_GAP * expandedScale : 0);
@@ -241,10 +240,10 @@
   // for media/timer interpolation, but avoid constructing Intl formatters on
   // every 250 ms tick.
   function updateTimeDisplay() {
-    const minuteKey = `${appSettings.clockTimeZone}|${$locale}|${Math.floor(Date.now() / 60_000)}`;
+    const minuteKey = `${$appSettings.clockTimeZone}|${$locale}|${Math.floor(Date.now() / 60_000)}`;
     if (minuteKey === lastClockMinute) return;
     lastClockMinute = minuteKey;
-    currentTime = formatClock(appSettings.clockTimeZone, $locale, Date.now());
+    currentTime = formatClock($appSettings.clockTimeZone, $locale, Date.now());
   }
 
   onMount(() => {
@@ -264,7 +263,7 @@
     const interval = pageVisible && expanded && activeIslandPage === "music" && isPlaying ? 250
       : countdown.status === "running" ? 1000 : 60_000;
     const tick = () => { clockNow = Date.now(); updateTimeDisplay(); };
-    appSettings.clockTimeZone; $locale;
+    $appSettings.clockTimeZone; $locale;
     untrack(tick);
     let timer: ReturnType<typeof setTimeout>;
     const schedule = () => { timer = setTimeout(() => { tick(); schedule(); }, interval - Date.now() % interval); };
@@ -405,30 +404,20 @@
   }
 
   // ===== 应用设置 =====
-  let appSettings = $state<AppSettings>({
-    ...DEFAULT_SETTINGS,
-  });
+  const appSettings = settingsStore;
   let enabledFeatureTools = $derived.by<IslandTool[]>(() => {
     const tools: IslandTool[] = [];
-    if (appSettings.showSettingsTool) tools.push("settings");
-    if (appSettings.showFloatingTool) tools.push("floating");
-    if (appSettings.showVolumeTool) tools.push("volume");
-    if (appSettings.showTimerTool) tools.push("timer");
-    if (appSettings.showHideTool) tools.push("hide");
-    if (appSettings.showClockTool) tools.push("clock");
-    if (appSettings.showWeatherTool) tools.push("weather");
+    if ($appSettings.showSettingsTool) tools.push("settings");
+    if ($appSettings.showFloatingTool) tools.push("floating");
+    if ($appSettings.showVolumeTool) tools.push("volume");
+    if ($appSettings.showTimerTool) tools.push("timer");
+    if ($appSettings.showHideTool) tools.push("hide");
+    if ($appSettings.showClockTool) tools.push("clock");
+    if ($appSettings.showWeatherTool) tools.push("weather");
     return tools;
   });
-  let lastSettingsSnapshot = "";
-  function applySettingsIfChanged(value: AppSettings) {
-    const next = normalizedSettings(value);
-    const snapshot = JSON.stringify(next);
-    if (snapshot === lastSettingsSnapshot) return;
-    lastSettingsSnapshot = snapshot;
-    appSettings = next;
-  }
   function toggleIsland() {
-    expanded = !expanded;
+    transitionIsland({ type: "toggle" });
   }
 
   let systemAudio = $state<SystemAudioState | null>(null);
@@ -569,7 +558,7 @@
   $effect(() => {
     if (countdown.status !== "running" || timerRemainingMs > 0) return;
     timerFinished = true;
-    expanded = true;
+    transitionIsland({ type: "expand" });
     if (timerFinishedTimeout !== null) clearTimeout(timerFinishedTimeout);
     timerFinishedTimeout = setTimeout(() => {
       timerFinished = false;
@@ -607,8 +596,8 @@
   });
 
   $effect(() => {
-    applyAppFont(appSettings.fontId);
-    setLocale(appSettings.language);
+    applyAppFont($appSettings.fontId);
+    setLocale($appSettings.language);
   });
   let idleSnapshot = $state<IdleSnapshot>({ cpuPercent: 0, memoryPercent: 0, uploadBytesPerSecond: 0, downloadBytesPerSecond: 0, batteryPercent: null, batteryCharging: null, weatherTemperature: null, weatherCode: null, weatherUpdatedAt: null, weatherForecast: [] });
   // Keep weather available for the expanded function panel even while media
@@ -618,7 +607,7 @@
   let weatherFailed = $state(false);
   let lastWeatherLocation = "";
   $effect(() => {
-    const locationKey = JSON.stringify(appSettings.weatherLocation);
+    const locationKey = JSON.stringify($appSettings.weatherLocation);
     if (lastWeatherLocation !== locationKey) {
       lastWeatherLocation = locationKey;
       idleSnapshot = { ...idleSnapshot, weatherTemperature: null, weatherCode: null, weatherForecast: [], weatherUpdatedAt: null };
@@ -650,7 +639,7 @@
   let currentHost = $derived(hostFor(
     renderedIslandStyle,
     renderedIslandEdge,
-    appSettings.compactLength,
+    $appSettings.compactLength,
     expandedScale,
   ));
 
@@ -699,8 +688,8 @@
   async function applyWindowPlacement(
     style = renderedIslandStyle,
     edge = renderedIslandEdge,
-    monitorIndex = appSettings.monitorIndex,
-    positionPercent = appSettings.islandEdgePosition,
+    monitorIndex = $appSettings.monitorIndex,
+    positionPercent = $appSettings.islandEdgePosition,
     hidden = isHidden,
     animateBounds = true,
   ) {
@@ -711,7 +700,7 @@
       monitorIndex,
       positionPercent,
       hidden,
-      compactLength: appSettings.compactLength,
+      compactLength: $appSettings.compactLength,
     });
     if (
       placementInput === lastPlacementInput
@@ -735,7 +724,7 @@
     const dpr = monitor.scaleFactor || window.devicePixelRatio || 1;
     const layoutScale = navigationScaleForWorkArea(monitor.workWidth, monitor.workHeight, dpr);
     expandedScale = layoutScale;
-    const host = hostFor(style, edge, appSettings.compactLength, layoutScale);
+    const host = hostFor(style, edge, $appSettings.compactLength, layoutScale);
     const physicalHost = { width: Math.round(host.width * dpr), height: Math.round(host.height * dpr) };
     const baseShown = placementFor(
       { x: monitor.workX, y: monitor.workY, width: monitor.workWidth, height: monitor.workHeight },
@@ -746,7 +735,7 @@
     // Extend attached windows one physical pixel beyond the compositor edge,
     // so clip-path antialiasing cannot reveal a transparent seam.
     const shown = style === "edge" ? overlapAttachedEdge(baseShown, edge) : baseShown;
-    const compact = geometryFor("compact", appSettings.expandedCornerRadius, edge, appSettings.compactLength);
+    const compact = geometryFor("compact", $appSettings.expandedCornerRadius, edge, $appSettings.compactLength);
     const offset = surfaceOffsetFor(host, compact, style, edge, layoutScale);
     const target = hidden
       ? hiddenPlacementFor(
@@ -764,8 +753,8 @@
     monitorAnchorX = monitor.x + monitor.width / 2;
     monitorAnchorY = monitor.y;
     const animate = animateBounds
-      && appSettings.enableAnimations
-      && !appSettings.reduceAnimations
+      && $appSettings.enableAnimations
+      && !$appSettings.reduceAnimations
       && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const boundsKey = `${target.x}:${target.y}:${target.width}:${target.height}`;
     if (boundsKey === lastAppliedBounds) return;
@@ -793,8 +782,8 @@
       await applyWindowPlacement(
         nextStyle,
         nextEdge,
-        appSettings.monitorIndex,
-        appSettings.islandEdgePosition,
+        $appSettings.monitorIndex,
+        $appSettings.islandEdgePosition,
         isHidden,
         false,
       ).catch((error) => logger.warn("布局切换定位失败", error));
@@ -803,8 +792,8 @@
     }
     const revision = ++placementTransitionRevision;
     placementAnimation?.cancel();
-    const animate = appSettings.enableAnimations && fixedHostElement;
-    const reduced = appSettings.reduceAnimations || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const animate = $appSettings.enableAnimations && fixedHostElement;
+    const reduced = $appSettings.reduceAnimations || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const exitTransform = reduced ? "translate3d(0,0,0) scale(1)" : edgeTransform(renderedIslandEdge);
     const enterTransform = reduced ? "translate3d(0,0,0) scale(1)" : edgeTransform(nextEdge);
     if (animate) {
@@ -824,8 +813,8 @@
     await applyWindowPlacement(
       nextStyle,
       nextEdge,
-      appSettings.monitorIndex,
-      appSettings.islandEdgePosition,
+      $appSettings.monitorIndex,
+      $appSettings.islandEdgePosition,
       isHidden,
       false,
     ).catch((error) => logger.warn("布局切换定位失败", error));
@@ -846,8 +835,8 @@
   }
 
   $effect(() => {
-    const style = normalizedStyle(appSettings.islandStyle);
-    const edge = normalizedEdge(appSettings.islandEdge);
+    const style = normalizedStyle($appSettings.islandStyle);
+    const edge = normalizedEdge($appSettings.islandEdge);
     if (style !== renderedIslandStyle || edge !== renderedIslandEdge) {
       void transitionPlacement(style, edge);
     }
@@ -855,8 +844,8 @@
 
   $effect(() => {
     const ready = windowReady;
-    const monitorIndex = appSettings.monitorIndex;
-    const position = appSettings.islandEdgePosition;
+    const monitorIndex = $appSettings.monitorIndex;
+    const position = $appSettings.islandEdgePosition;
     const style = renderedIslandStyle;
     const edge = renderedIslandEdge;
     const hidden = isHidden;
@@ -871,7 +860,7 @@
 
     const timeout = setTimeout(() => {
       if (expanded && !hovering && !panelInteracting && !timerFinished) {
-        expanded = false;
+        transitionIsland({ type: "collapse" });
         showMonitorMenu = false;
       }
     }, 2_000);
@@ -996,7 +985,7 @@
   let hideTimeout: ReturnType<typeof setTimeout> | null = null;
 
   function syncCaptureVisibility(snapshot = captureSnapshot) {
-    const reasons = activeCaptureReasons(snapshot, appSettings);
+    const reasons = activeCaptureReasons(snapshot, $appSettings);
     const fullscreenPeek = isMouseAtTop && reasons.length === 1 && reasons[0] === "fullscreen";
     const shouldHide = manualHideActive || (reasons.length > 0 && !fullscreenPeek);
     if (shouldHide && !isHidden) void hideWindowToTop();
@@ -1013,10 +1002,10 @@
     const wasExpanded = expanded;
     // Force the compact state before moving the native window away. This keeps
     // the hidden placement and the rendered island geometry in sync.
-    expanded = false;
-    hovering = false;
+    transitionIsland({ type: "collapse" });
+    transitionIsland({ type: "hover-leave" });
 
-    if (wasExpanded && appSettings.enableAnimations && !appSettings.reduceAnimations && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (wasExpanded && $appSettings.enableAnimations && !$appSettings.reduceAnimations && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       await new Promise((resolve) => setTimeout(resolve, ISLAND_MOTION.collapseDuration + ISLAND_MOTION.outwardDelay));
     }
     if (sequence !== manualHideSequence) return;
@@ -1056,7 +1045,7 @@
   }
 
   async function handleMouseMove(event: MouseEvent) {
-    if (!appSettings.captureHideOnFullscreen || !isFullscreenApp || captureSnapshot.screenshot) return;
+    if (!$appSettings.captureHideOnFullscreen || !isFullscreenApp || captureSnapshot.screenshot) return;
 
     const mouseX = event.clientX;
     const mouseY = event.clientY;
@@ -1133,7 +1122,7 @@
 
   let lastMonitorIndex = -1;
   $effect(() => {
-    const idx = appSettings.monitorIndex;
+    const idx = $appSettings.monitorIndex;
     if (
       idx !== undefined &&
       win &&
@@ -1181,7 +1170,7 @@
   }
 
   $effect(() => {
-    if (appSettings.showDebugInfo) {
+    if ($appSettings.showDebugInfo) {
       startDebugFps();
     } else {
       stopDebugFps();
@@ -1216,23 +1205,19 @@
       );
       cleanups.add(unlistenTimerAction);
 
-      try {
-        const loadedSettings = await settingsApi.getSettings();
-        const appWindow = getCurrentWindow();
-        await appWindow.setAlwaysOnTop(loadedSettings.alwaysOnTop ?? true);
-        applySettingsIfChanged(loadedSettings);
-        console.log("[设置] 已加载:", appSettings);
-      } catch (error) {
-        console.error("[设置] 读取失败:", error);
-      }
+      const settingsConnection = await connectSettingsStore(normalizedSettings);
+      cleanups.add(settingsConnection.disconnect);
+      const loadedSettings = settingsConnection.settings;
+      const appWindow = getCurrentWindow();
+      await appWindow.setAlwaysOnTop(loadedSettings.alwaysOnTop ?? true);
+      console.log("[设置] 已加载:", loadedSettings);
       if (cleanups.disposed) return;
 
       const unlistenSettings = await eventManager.on(
         Events.SETTINGS_UPDATED,
         (s: any) => {
           if (s) {
-            applySettingsIfChanged(s);
-            console.log("[设置] 实时更新:", appSettings);
+            console.log("[设置] 实时更新:", $appSettings);
 
             if (s.monitorIndex !== undefined) {
               currentMonitorIndex = s.monitorIndex;
@@ -1259,16 +1244,8 @@
                 }
               })
               .catch(console.error);
-          } else if (settingName === "alwaysOnTop") {
-          } else {
-            settingsApi
-              .getSettings()
-              .then((s) => {
-                if (s) {
-                  appSettings = { ...appSettings, ...s };
-                }
-              })
-              .catch(console.error);
+          } else if (settingName !== "alwaysOnTop") {
+            void refreshSettingsStore(normalizedSettings);
           }
         },
       );
@@ -1296,7 +1273,7 @@
           };
         });
 
-        const savedMonitorIndex = appSettings.monitorIndex ?? 0;
+        const savedMonitorIndex = $appSettings.monitorIndex ?? 0;
 
         if (savedMonitorIndex >= 0 && savedMonitorIndex < allMonitors.length) {
           currentMonitorIndex = savedMonitorIndex;
@@ -1336,13 +1313,13 @@
       // Keep the transparent native host hidden until the WebView has mounted,
       // the saved display has been resolved, and its responsive bounds are in place.
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      renderedIslandStyle = normalizedStyle(appSettings.islandStyle);
-      renderedIslandEdge = normalizedEdge(appSettings.islandEdge);
+      renderedIslandStyle = normalizedStyle($appSettings.islandStyle);
+      renderedIslandEdge = normalizedEdge($appSettings.islandEdge);
       await applyWindowPlacement(
         renderedIslandStyle,
         renderedIslandEdge,
-        appSettings.monitorIndex,
-        appSettings.islandEdgePosition,
+        $appSettings.monitorIndex,
+        $appSettings.islandEdgePosition,
         isHidden,
         false,
       ).catch((error) => logger.warn("启动窗口定位失败", error));
@@ -1468,7 +1445,7 @@
 
           if (
             songChanged &&
-            appSettings.enableHdCover &&
+            $appSettings.enableHdCover &&
             data.title
           ) {
             const requestedTrackKey = currentSongKey;
@@ -1584,15 +1561,15 @@
 >
   <IslandSurface
     media={islandMedia}
-    mode={islandMode}
+    mode={$islandMode}
     islandStyle={renderedIslandStyle}
     edge={renderedIslandEdge}
     position={displayedPosition}
-    expandedRadius={appSettings.expandedCornerRadius ?? 45}
-    collapsedEdgeShoulderRadius={appSettings.collapsedEdgeShoulderRadius ?? 8}
-    expandedEdgeShoulderRadius={appSettings.expandedEdgeShoulderRadius ?? 32}
+    expandedRadius={$appSettings.expandedCornerRadius ?? 45}
+    collapsedEdgeShoulderRadius={$appSettings.collapsedEdgeShoulderRadius ?? 8}
+    expandedEdgeShoulderRadius={$appSettings.expandedEdgeShoulderRadius ?? 32}
     {expandedScale}
-    compactLength={appSettings.compactLength ?? 80}
+    compactLength={$appSettings.compactLength ?? 80}
     idle={showIdle}
     idleTime={currentTime}
     idleWeatherTemperature={idleSnapshot.weatherTemperature}
@@ -1601,16 +1578,16 @@
     {lastPlayedMedia}
     canResumeLastTrack={Boolean(lastPlayedMedia && playerApps[lastPlayedMedia.source])}
     {resumingLastTrack}
-    showSpectrum={appSettings.showSpectrum}
-    spectrumMode={appSettings.spectrumMode}
-    enableAnimations={appSettings.enableAnimations}
-    reduceAnimations={appSettings.reduceAnimations}
+    showSpectrum={$appSettings.showSpectrum}
+    spectrumMode={$appSettings.spectrumMode}
+    enableAnimations={$appSettings.enableAnimations}
+    reduceAnimations={$appSettings.reduceAnimations}
     {spectrumTopColor}
     {spectrumBottomColor}
     showTime={false}
     timeText={currentTime}
-    showDebugInfo={appSettings.showDebugInfo}
-    debugLines={[`${fps} FPS`, currentSource, `${Math.round(displayedPosition)} ms`, isHidden ? "hidden" : islandMode]}
+    showDebugInfo={$appSettings.showDebugInfo}
+    debugLines={[`${fps} FPS`, currentSource, `${Math.round(displayedPosition)} ms`, isHidden ? "hidden" : $islandMode]}
     onToggle={toggleIsland}
     onOpenPlayer={openCurrentPlayer}
     onResumeLastTrack={resumeLastTrack}
@@ -1620,15 +1597,15 @@
     onHideForTenSeconds={hideForTenSeconds}
     onSettingsToggle={showSettingsWindow}
     enabledTools={enabledFeatureTools}
-    showCustomFunctionPanel={appSettings.showCustomFunctionPanel}
+    showCustomFunctionPanel={$appSettings.showCustomFunctionPanel}
     visible={pageVisible && !isHidden}
-    onPageChange={(page) => activeIslandPage = page}
-    weatherCity={appSettings.weatherLocation?.name ?? ""}
+    onPageChange={(page) => transitionIsland({ type: "select-page", page })}
+    weatherCity={$appSettings.weatherLocation?.name ?? ""}
     weatherUpdatedAt={idleSnapshot.weatherUpdatedAt}
     {weatherLoading}
     {weatherFailed}
     onPanelActivity={(active) => panelInteracting = active}
-    onHoverChange={(value) => hovering = value}
+    onHoverChange={(value) => transitionIsland({ type: value ? "hover-enter" : "hover-leave" })}
     onRegionChange={applyIslandRegion}
     {systemAudio}
     {audioDevices}
@@ -1643,7 +1620,7 @@
     {timerFinished}
     onTimerFinishedDismiss={clearTimerFinished}
     clockText={currentTime}
-    clockTimeZone={appSettings.clockTimeZone}
+    clockTimeZone={$appSettings.clockTimeZone}
     onTimerStart={handleTimerStart}
     onTimerPause={handleTimerPause}
     onTimerResume={handleTimerResume}
