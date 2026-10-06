@@ -5,7 +5,7 @@
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
   import { Events } from "./utils/eventConstants";
   import { mediaApi } from "$lib/api/media";
-  import { islandMode, islandState, transitionIsland } from "$lib/islandStore";
+  import { islandMode, islandState, islandView, transitionIsland } from "$lib/islandStore";
   import { connectSettingsStore, refreshSettingsStore, settingsStore } from "$lib/settingsStore";
   import { createAsyncCleanup } from "$lib/asyncCleanup";
   import { idleApi } from "$lib/api/idle";
@@ -1340,6 +1340,7 @@
         if (!data.source) {
           rememberCurrentTrack(true);
           hasMediaSession = false;
+          transitionIsland({ type: "media-session", active: false });
           isPlaying = false;
           currentSource = "";
           lastSongKey = null;
@@ -1370,7 +1371,8 @@
         }
         const previousPosition = projectedPosition(islandMedia, receivedAt);
         const nextPlaying = Boolean(data.isPlaying);
-        hasMediaSession = Boolean(data.source);
+          hasMediaSession = Boolean(data.source);
+          transitionIsland({ type: "media-session", active: hasMediaSession });
         currentSource = data.source || "";
         mediaCapabilities = data.capabilities;
 
@@ -1587,7 +1589,7 @@
     showTime={false}
     timeText={currentTime}
     showDebugInfo={$appSettings.showDebugInfo}
-    debugLines={[`${fps} FPS`, currentSource, `${Math.round(displayedPosition)} ms`, isHidden ? "hidden" : $islandMode]}
+    debugLines={[`${fps} FPS`, currentSource, `${Math.round(displayedPosition)} ms`, isHidden ? "hidden" : `${$islandMode} / ${$islandView.type}`]}
     onToggle={toggleIsland}
     onOpenPlayer={openCurrentPlayer}
     onResumeLastTrack={resumeLastTrack}

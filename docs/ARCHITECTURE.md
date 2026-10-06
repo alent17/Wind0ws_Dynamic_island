@@ -28,8 +28,10 @@ Windows APIs (GSMTC, Core Audio, registry, Win32)
   and interaction affordances.
 - `src/lib/islandGeometry.ts` contains geometry, placement, and work-area scale
   calculations; `src/lib/islandMotion.ts` defines motion timing and easing.
-- `src/lib/islandStore.ts` owns the main island's expanded, hover, and selected
-  page state. Use `transitionIsland` for those interaction changes.
+- `src/lib/islandStore.ts` owns the main island's expanded, hover, selected
+  page, and media-presence state. It derives the geometry mode and high-level
+  view (`idle`, `media`, `timer`, `volume`, or `expanded`). Use
+  `transitionIsland` for those state changes.
 - `src/lib/settingsStore.ts` owns the main window's normalized settings
   snapshot. It listens before loading the persisted snapshot so a newer settings
   event cannot be overwritten by an older initial read.

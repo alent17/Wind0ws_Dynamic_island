@@ -11,6 +11,7 @@ interface IslandState {
   expanded: boolean;
   hovering: boolean;
   activePage: "music" | "timer" | "volume" | "clock" | "weather";
+  hasMediaSession: boolean;
 }
 ```
 
@@ -22,10 +23,12 @@ The rendered geometry mode is derived from the interaction state:
 | otherwise `hovering` | `hover` |
 | otherwise | `compact` |
 
-Capture hiding is currently coordinated by `App.svelte` and window placement;
-it is not a persistent island-store mode. Media availability, playback data,
-countdown data, and system audio are also maintained by their owning app/service
-flows rather than the interaction store.
+The semantic view is derived separately so expanded geometry retains the
+selected page. Outside expanded mode, Timer, Volume, Clock, and Weather pages
+select their matching view; the Music page selects Media when a session exists
+and Idle otherwise. Capture hiding is coordinated by `App.svelte` and window
+placement and is not a persistent island-store mode. Playback details,
+countdown data, and system audio stay with their owning app/service flows.
 
 ## Events
 
@@ -36,6 +39,7 @@ flows rather than the interaction store.
 | `collapse` | Set `expanded` to false; safe to repeat |
 | `hover-enter` | Set `hovering` to true |
 | `hover-leave` | Set `hovering` to false |
+| `media-session(active)` | Record whether the media backend has a current session |
 | `select-page(page)` | Select music, timer, volume, clock, or weather |
 
 Repeating an event that already matches the state returns the existing object,
@@ -53,6 +57,10 @@ stateDiagram-v2
     Hover --> Expanded: toggle / expand
     Expanded --> Compact: collapse (not hovering)
     Expanded --> Hover: collapse (still hovering)
+    Compact --> Media: media-session(active)
+    Media --> Idle: media-session(inactive)
+    Idle --> Timer: select-page(timer)
+    Idle --> Volume: select-page(volume)
     Compact --> Compact: select-page(page)
     Hover --> Hover: select-page(page)
     Expanded --> Expanded: select-page(page)
@@ -65,8 +73,9 @@ mode.
 
 ## Remaining state-machine work
 
-- Move idle/media availability and active tool selection into the shared model
-  where that removes duplicate ownership.
+- Add explicit countdown-running and active-tool state when that removes
+  duplicate ownership; countdown data itself remains with its current timer
+  lifecycle.
 - Decide whether capture-hidden should become an explicit state or remain an
   external visibility policy; avoid conflating off-screen placement with UI
   geometry.

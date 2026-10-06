@@ -242,8 +242,8 @@ Wind0ws_Dynamic_island
 | **P1** | 任务栏隐藏 | 灵动岛主窗口不进入任务栏 | Alt+Tab / 任务栏行为符合预期 | ☑ |
 | **P1** | DPI 适配 | 100% / 125% / 150% / 多显示器测试 | 不错位、不模糊 | ☐ |
 | **P1** | 展开态屏幕自适应 | 按所选显示器有效工作区与 DPI 等比缩放展开内容、交互轮廓和原生宿主 | 副屏不溢出，展开内容与点击区域对齐；折叠态尺寸不变 | ☑ |
-| **P2** | 建立 Island Store | 创建统一状态管理 | UI 不直接读取后端杂乱状态 | ☐ |
-| **P2** | 状态机 | 建立 `idle / media / expanded / timer / volume` 等状态 | 状态切换路径明确 | ☐ |
+| **P2** | 建立 Island Store | 创建统一状态管理 | UI 不直接读取后端杂乱状态 | ☑ |
+| **P2** | 状态机 | 建立 `idle / media / expanded / timer / volume` 等状态 | 状态切换路径明确 | ☑ |
 | **P2** | Rust → Svelte 通信 | 后端只通过 event / invoke 提供数据 | UI 与 Rust 解耦 | ☑ |
 | **P2** | Settings Store | 设置统一存储 | 修改设置后即时生效并持久化 | ☑ |
 | **P3** | 重做灵动岛基础 UI | 只完成黑色胶囊、尺寸、圆角、布局 | 静态 UI 达到设计要求 | ☑ |
@@ -267,7 +267,7 @@ Wind0ws_Dynamic_island
 | **P6** | 开机启动 | 恢复自动启动 | 开关可控、重启有效 | ☑ |
 | **P6** | 截图隐藏 | 使用 Win32 原生方案 | 截图时符合设定 | ☑ |
 | **P7** | 重做设置页面 | 设置窗口完全使用 Svelte UI | 不再出现 Native 设置页崩坏 | ☑ |
-| **P7** | 自定义标题栏 | 拖动、关闭、最小化 | 无边框但基础窗口功能完整 | ☐ |
+| **P7** | 自定义标题栏 | 拖动、关闭、最小化 | 无边框但基础窗口功能完整 | ☑ |
 | **P7** | 外观设置 | 圆角、位置、功能显示等 | 修改即时预览 | ☑ |
 | **P7** | 模块开关 | 音乐 / 时钟 / 倒计时等可独立显示 | 配置正确保存 | ☑ |
 | **P8** | 性能治理 | 检查事件监听、Timer、Store 更新频率 | 空闲 CPU 保持低占用 | ☐ |
@@ -275,7 +275,7 @@ Wind0ws_Dynamic_island
 | **P8** | EXE 测试 | Debug 和 Release 对比 | Release 不出现额外问题 | ☐ |
 | **P8** | 多显示器测试 | 主副屏、缩放不同、分辨率不同 | 灵动岛位置正确 | ☐ |
 | **P8** | 睡眠恢复 | Windows 睡眠 / 唤醒后测试 | 不丢播放器、不丢窗口 | ☐ |
-| **P9** | 清理旧 Native UI | 删除确认不再使用的 Native UI 层 | 不留下双 UI 架构 | ☐ |
+| **P9** | 清理旧 Native UI | 删除确认不再使用的 Native UI 层 | 不留下双 UI 架构 | ☑ |
 | **P9** | 重构目录 | 整理 `src` / `src-tauri` | 结构清晰 | ☐ |
 | **P9** | 编写开发文档 | 架构、模块、事件、状态机说明 | 后续 Codex 能直接理解 | ☑ |
 | **P9** | 发布候选版 | 打包完整安装版本 | 可长期日常使用 | ☐ |
@@ -284,9 +284,9 @@ Wind0ws_Dynamic_island
 
 > 展开态屏幕自适应（2026-10-06）：展开面板与原生宿主已按当前选中显示器的工作区和 DPI 同步缩放；本轮在副屏启动并构建通过。100% / 125% / 150% 的完整视觉验收仍归入上方未完成的 DPI 适配项。
 
-> P2/P9 进度（2026-10-06）：`src/lib/islandStore.ts` 已集中主岛的展开、悬停与页面选择转换；`src/lib/settingsStore.ts` 负责 main 与 FloatingWindow 的设置读取、`settings-updated` 同步和初始读取防竞态。Studio 保留未保存的编辑草稿。Island Store 与完整状态机仍未覆盖媒体、idle、timer 和音量业务状态，因此这两项保持未完成。后端 invoke/event 与前端 API 封装已核对完成。新增 `docs/ARCHITECTURE.md` 与 `docs/STATE_MACHINE.md` 记录当前边界和剩余工作。`pnpm check` 与 `pnpm build` 均通过。
+> P2/P7/P9 进度（2026-10-06）：`src/lib/islandStore.ts` 集中主岛展开、悬停、页面和媒体会话状态，并派生 idle/media/expanded/timer/volume 等视图；`src/lib/settingsStore.ts` 负责 main 与 FloatingWindow 的设置读取、`settings-updated` 同步和初始读取防竞态。Studio 保留未保存的编辑草稿。Studio 设置窗现使用 Svelte 自定义标题栏，含原生拖动、最小化和保存后关闭。仓库不含 Native UI 渲染层；新增 `docs/ARCHITECTURE.md` 与 `docs/STATE_MACHINE.md` 记录架构和状态边界。后端 invoke/event 与前端 API 封装已核对完成。`pnpm check`、`pnpm build` 和 `cargo check --no-default-features` 均通过；快速 hover、计时器完成、标题栏交互和跨窗口行为仍需运行时验收。
 
-> 实现盘点（2026-10-06）：P3–P7 中已勾选的行表示对应 Svelte / Rust 功能路径已实现；完整视觉验收、播放器实机兼容、不同缩放下的 DPI、重启自启动和长时间运行等条件仍需 P1/P8 设备验收。网易云专用控制方案、窗口自定义标题栏及录屏 / 屏幕共享检测仍未完成。
+> 实现盘点（2026-10-06）：P3–P7 中已勾选的行表示对应 Svelte / Rust 功能路径已实现；完整视觉验收、播放器实机兼容、不同缩放下的 DPI、重启自启动和长时间运行等条件仍需 P1/P8 设备验收。网易云专用控制方案及录屏 / 屏幕共享检测仍未完成；自定义标题栏代码已完成，运行交互需实机确认。
 
 ---
 
@@ -413,7 +413,7 @@ P9 清理 / 发布
 - [x] 完成灵动岛完整静态布局
 - [x] 完成媒体区域
 - [x] 完成右侧功能栏
-- [ ] 建立 Island State Machine
+- [x] 建立 Island State Machine
 - [x] 完成 Hover 展开 / 收起
 - [x] 完成左下角锚定向右上生长
 - [x] 完成内容淡入 / 位移动画
@@ -456,10 +456,10 @@ P9 清理 / 发布
 
 - [x] 设置页完全迁移到 Svelte
 - [x] 无边框窗口
-- [ ] 自定义标题栏
-- [ ] 最小化
-- [ ] 关闭
-- [ ] 拖动
+- [x] 自定义标题栏
+- [x] 最小化
+- [x] 关闭
+- [x] 拖动
 - [x] 外观设置
 - [x] 灵动岛位置设置
 - [x] 功能模块开关
@@ -483,7 +483,7 @@ P9 清理 / 发布
 - [ ] 不同 DPI 测试
 - [ ] 睡眠唤醒测试
 - [ ] 长时间挂机测试
-- [ ] 清理旧 Native UI
+- [x] 清理旧 Native UI
 - [ ] 整理项目结构
 - [x] 完善开发文档
 - [ ] 打包 Release Candidate
