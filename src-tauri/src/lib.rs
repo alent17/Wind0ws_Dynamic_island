@@ -239,26 +239,44 @@ fn start_media_listener(handle: AppHandle) {
 /// ## 工作流程
 ///
 /// 1. 每 50ms 检测截图快捷键
-/// 2. 每 500ms 检测一次全屏状态
+/// 2. 每 500ms 检测一次全屏与 Windows AppCapture 视频捕获状态
 /// 3. 状态变化时立即发布，并周期重发以同步晚加载的窗口
 fn start_capture_monitor(handle: AppHandle) {
     use std::time::{Duration, Instant};
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         GetAsyncKeyState, VK_LWIN, VK_RWIN, VK_S, VK_SHIFT, VK_SNAPSHOT,
     };
+    use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
+    use windows::Media::Capture::AppCapture;
 
     std::thread::spawn(move || {
-        let mut previous = (false, false);
+        let mut previous = (false, false, false);
         let mut screenshot_until: Option<Instant> = None;
         let mut previous_shortcut_down = false;
         let mut is_fullscreen = false;
+        let mut is_recording = false;
         let mut next_fullscreen_check = Instant::now();
+        let mut next_capture_check = Instant::now();
         let mut last_emit = Instant::now() - Duration::from_secs(2);
+
+        let video_capture = unsafe { RoInitialize(RO_INIT_MULTITHREADED) }
+            .ok()
+            .and_then(|()| AppCapture::GetForCurrentView().ok());
+        if video_capture.is_none() {
+            tracing::debug!("[Capture Mode] Windows AppCapture video status is unavailable in this process");
+        }
 
         loop {
             if Instant::now() >= next_fullscreen_check {
                 is_fullscreen = detect_fullscreen_app(&handle);
                 next_fullscreen_check = Instant::now() + Duration::from_millis(500);
+            }
+            if Instant::now() >= next_capture_check {
+                is_recording = video_capture
+                    .as_ref()
+                    .and_then(|capture| capture.IsCapturingVideo().ok())
+                    .unwrap_or(false);
+                next_capture_check = Instant::now() + Duration::from_millis(500);
             }
             let shortcut_down = unsafe {
                 let print_screen = GetAsyncKeyState(VK_SNAPSHOT.0 as i32) < 0;
@@ -278,11 +296,11 @@ fn start_capture_monitor(handle: AppHandle) {
                 screenshot_until = None;
             }
 
-            let current = (screenshot, is_fullscreen);
+            let current = (screenshot, is_recording, is_fullscreen);
             if current != previous || last_emit.elapsed() >= Duration::from_secs(2) {
                 let payload = serde_json::json!({
                     "screenshot": screenshot,
-                    "recording": false,
+                    "recording": is_recording,
                     "fullscreen": is_fullscreen,
                     "screenShare": false,
                 });

@@ -67,7 +67,7 @@ window API wrappers.
 | Settings load and changes | `get_settings`, `update_settings`, `settings-updated` | `settingsStore` in the main window; Studio keeps an edit draft |
 | Audio state and volume | audio commands and state responses | audio API wrappers and island volume panel |
 | Timer window bridge | `timer-request-state`, `timer-state-changed`, `timer-action` | main island and timer window |
-| Capture visibility | `capture-mode-changed` | main window visibility policy |
+| Capture visibility | `capture-mode-changed`; Print Screen / Win+Shift+S, fullscreen window checks, and Windows AppCapture video state | main window visibility policy |
 | Window layout | monitor/window commands | placement and geometry logic in `App.svelte` |
 
 ## Development constraints

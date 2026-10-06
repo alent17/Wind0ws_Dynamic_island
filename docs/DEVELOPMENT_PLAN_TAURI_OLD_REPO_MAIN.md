@@ -284,9 +284,9 @@ Wind0ws_Dynamic_island
 
 > 展开态屏幕自适应（2026-10-06）：展开面板与原生宿主已按当前选中显示器的工作区和 DPI 同步缩放；本轮在副屏启动并构建通过。100% / 125% / 150% 的完整视觉验收仍归入上方未完成的 DPI 适配项。
 
-> P2/P7/P9 进度（2026-10-06）：`src/lib/islandStore.ts` 集中主岛展开、悬停、页面和媒体会话状态，并派生 idle/media/expanded/timer/volume 等视图；`src/lib/settingsStore.ts` 负责 main 与 FloatingWindow 的设置读取、`settings-updated` 同步和初始读取防竞态。Studio 保留未保存的编辑草稿。Studio 设置窗现使用 Svelte 自定义标题栏，含原生拖动、最小化和保存后关闭。仓库不含 Native UI 渲染层；新增 `docs/ARCHITECTURE.md` 与 `docs/STATE_MACHINE.md` 记录架构和状态边界。后端 invoke/event 与前端 API 封装已核对完成。`pnpm check`、`pnpm build` 和 `cargo check --no-default-features` 均通过；快速 hover、计时器完成、标题栏交互和跨窗口行为仍需运行时验收。
+> P2/P6/P7/P9 进度（2026-10-06）：`src/lib/islandStore.ts` 集中主岛展开、悬停、页面和媒体会话状态，并派生 idle/media/expanded/timer/volume 等视图；`src/lib/settingsStore.ts` 负责 main 与 FloatingWindow 的设置读取、`settings-updated` 同步和初始读取防竞态。Studio 保留未保存的编辑草稿。Studio 设置窗现使用 Svelte 自定义标题栏，含原生拖动、最小化和保存后关闭。截图监控新增 Windows AppCapture 视频捕获状态查询，并映射到录屏隐藏偏好；无法覆盖不使用 Windows AppCapture 的所有第三方捕获程序，屏幕共享检测仍未实现。仓库不含 Native UI 渲染层；新增 `docs/ARCHITECTURE.md` 与 `docs/STATE_MACHINE.md` 记录架构和状态边界。后端 invoke/event 与前端 API 封装已核对完成。`pnpm check`、`pnpm build` 和 `cargo check --no-default-features` 均通过；快速 hover、计时器完成、标题栏交互、捕获事件和跨窗口行为仍需运行时验收。
 
-> 实现盘点（2026-10-06）：P3–P7 中已勾选的行表示对应 Svelte / Rust 功能路径已实现；完整视觉验收、播放器实机兼容、不同缩放下的 DPI、重启自启动和长时间运行等条件仍需 P1/P8 设备验收。网易云专用控制方案及录屏 / 屏幕共享检测仍未完成；自定义标题栏代码已完成，运行交互需实机确认。
+> 实现盘点（2026-10-06）：P3–P7 中已勾选的行表示对应 Svelte / Rust 功能路径已实现；完整视觉验收、播放器实机兼容、不同缩放下的 DPI、重启自启动和长时间运行等条件仍需 P1/P8 设备验收。网易云专用控制方案、通用录屏兼容和屏幕共享检测仍未完成；Windows AppCapture 支持的系统视频捕获已有检测代码，仍需实机确认。
 
 ---
 

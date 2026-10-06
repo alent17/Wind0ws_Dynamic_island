@@ -31,6 +31,7 @@ image = "0.25"
 # Windows API 绑定 - 用于访问 Windows 原生功能
 windows = { version = "0.52", features = [
     "Media_Control",        # 全局系统媒体控制（GSMTC）- 获取音乐播放信息
+    "Media_Capture",        # Windows AppCapture - 查询系统视频捕获状态
     "Storage_Streams",      # 存储流 - 读取专辑封面图片数据
     "Graphics_Imaging",     # 图形成像 - 图像处理（提取封面主色）
     "Foundation",           # Windows 基础类型（时间戳、GUID 等）
@@ -49,7 +50,8 @@ windows = { version = "0.52", features = [
     "Win32_System",          # Win32 系统服务
     "Win32_System_Com",      # Win32 COM（CoInitializeEx）
     "Win32_System_SystemServices",  # Win32 系统服务常量
-    "Win32_System_Power"
+    "Win32_System_Power",
+    "Win32_System_WinRT"
 ] }
 
 # 异步运行时 - 用于后台任务和网络请求
