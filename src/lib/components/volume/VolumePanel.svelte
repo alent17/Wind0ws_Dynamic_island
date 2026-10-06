@@ -2,7 +2,7 @@
   import { locale, translate, type TranslationKey } from "$lib/i18n";
   import type { AudioDeviceInfo } from "$lib/api/types";
   import { Check, ChevronDown, LoaderCircle } from "lucide-svelte";
-  import RollingNumber from "$lib/RollingNumber.svelte";
+  import RollingNumber from "$lib/components/time/RollingNumber.svelte";
 
   let {
     volume = 50,

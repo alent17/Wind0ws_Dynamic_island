@@ -3,9 +3,9 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { spring } from "svelte/motion";
   import { RotateCcw,Trash2,ExternalLink,Monitor,RefreshCw,ChevronUp,ChevronDown,CloudSun,Search,Minus,X } from "lucide-svelte";
-  import IslandSurface from "$lib/IslandSurface.svelte";
-  import StudioSlider from "$lib/StudioSlider.svelte";
-  import StudioSelect from "$lib/StudioSelect.svelte";
+  import IslandSurface from "$lib/components/island/IslandSurface.svelte";
+  import StudioSlider from "$lib/components/settings/StudioSlider.svelte";
+  import StudioSelect from "$lib/components/settings/StudioSelect.svelte";
   import {  geometryFor, navigationHostFor as hostFor, type IslandMode } from "$lib/islandGeometry";
   import { DEMO_MEDIA, media, connectMedia } from "$lib/mediaStore";
   import { extractSpectrumColorsFromImage } from "$lib/spectrumColors";

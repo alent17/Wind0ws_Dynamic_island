@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Check, X } from "lucide-svelte";
-  import RollingNumber from "$lib/RollingNumber.svelte";
-  import PlayPauseIcon from "$lib/PlayPauseIcon.svelte";
+  import RollingNumber from "$lib/components/time/RollingNumber.svelte";
+  import PlayPauseIcon from "$lib/components/media/PlayPauseIcon.svelte";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
 

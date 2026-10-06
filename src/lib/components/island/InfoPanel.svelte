@@ -1,6 +1,6 @@
 <script lang="ts">
-  import ComicClock from "$lib/ComicClock.svelte";
-  import WeatherIcon from "$lib/WeatherIcon.svelte";
+  import ComicClock from "$lib/components/time/ComicClock.svelte";
+  import WeatherIcon from "$lib/components/media/WeatherIcon.svelte";
   import { locale, translate } from "$lib/i18n";
   import type { WeatherForecastDay } from "$lib/api/types";
   let { page, time, timeZone="system", city="", temperature=null, code=null, forecast=[], updatedAt=null, loading=false, failed=false, reduceMotion=false, onSettings } = $props<{

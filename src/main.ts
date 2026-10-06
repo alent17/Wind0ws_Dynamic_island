@@ -36,7 +36,7 @@ async function mountWindow() {
       ? loadFloatingWindow()
       : loadTimerWindow();
     const [{ default: VisibleWindow }, { default: Content }] = await Promise.all([
-      import('./lib/VisibleWindow.svelte'),
+      import('./lib/components/island/VisibleWindow.svelte'),
       contentModule,
     ]);
     app = mount(VisibleWindow, { props: { component: Content }, target: targetElement! });

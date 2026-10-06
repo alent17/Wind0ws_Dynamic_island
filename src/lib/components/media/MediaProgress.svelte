@@ -1,7 +1,7 @@
 <script lang="ts">
   import { formatTime } from "$lib/mediaClock";
   import { locale, translate } from "$lib/i18n";
-  import RollingNumber from "$lib/RollingNumber.svelte";
+  import RollingNumber from "$lib/components/time/RollingNumber.svelte";
 
   let { position = 0, duration = 0, light = false, showTimes = true, seekable = false, reduceMotion = false, onSeek } = $props<{
     position?: number;

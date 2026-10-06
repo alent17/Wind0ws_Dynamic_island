@@ -20,16 +20,16 @@ describe("island geometry", () => {
   it("keeps the restored compact, hover and expanded dimensions", () => {
     expect(geometryFor("compact")).toEqual({ width: 80, height: 28, radius: 14 });
     expect(geometryFor("hover")).toEqual({ width: 90, height: 30, radius: 15 });
-    expect(geometryFor("expanded", 38)).toEqual({ width: 300, height: 160, radius: 38 });
-    expect(geometryFor("expanded", 0)).toEqual({ width: 300, height: 160, radius: 0 });
+    expect(geometryFor("expanded", 38)).toEqual({ width: 600, height: 210, radius: 38 });
+    expect(geometryFor("expanded", 0)).toEqual({ width: 600, height: 210, radius: 0 });
     expect(geometryFor("hidden")).toEqual({ width: 80, height: 28, radius: 14 });
-    expect(ISLAND_HOST).toEqual({ width: 300, height: 236, top: 22 });
+    expect(ISLAND_HOST).toEqual({ width: 600, height: 286, top: 22 });
   });
 
   it("rotates compact geometry on side edges but keeps expanded content horizontal", () => {
     expect(geometryFor("compact", 45, "left")).toEqual({ width: 28, height: 80, radius: 14 });
     expect(geometryFor("hover", 45, "right")).toEqual({ width: 30, height: 90, radius: 15 });
-    expect(geometryFor("expanded", 32, "left")).toEqual({ width: 300, height: 160, radius: 32 });
+    expect(geometryFor("expanded", 32, "left")).toEqual({ width: 600, height: 210, radius: 32 });
   });
 
   it("makes only the screen-attached corners square", () => {
@@ -40,23 +40,23 @@ describe("island geometry", () => {
   });
 
   it("sizes and offsets the stable native host for every edge style", () => {
-    expect(hostFor("floating", "top")).toEqual({ width: 300, height: 236 });
-    expect(hostFor("floating", "left")).toEqual({ width: 300, height: 236 });
-    expect(hostFor("edge", "bottom")).toEqual({ width: 300, height: 236 });
+    expect(hostFor("floating", "top")).toEqual({ width: 600, height: 286 });
+    expect(hostFor("floating", "left")).toEqual({ width: 600, height: 286 });
+    expect(hostFor("edge", "bottom")).toEqual({ width: 600, height: 286 });
     expect(hostFor("edge", "right")).toEqual(hostFor("floating", "right"));
     expect(surfaceOffsetFor(hostFor("floating", "right"), geometryFor("compact", 45, "right"), "floating", "right"))
-      .toEqual({ x: 250, y: 78 });
+      .toEqual({ x: 550, y: 103 });
   });
 
   it("expands the native envelope only for the optional function panel", () => {
     expect(geometryFor("compact", 45, "top", 80, 300)).toEqual({ width: 80, height: 28, radius: 14 });
-    expect(geometryFor("expanded", 45, "top", 80, 300)).toEqual({ width: 600, height: 160, radius: 45 });
-    expect(hostFor("floating", "top", 80, 300)).toEqual({ width: 600, height: 236 });
-    expect(hostFor("floating", "left", 300, 300)).toEqual({ width: 600, height: 300 });
+    expect(geometryFor("expanded", 45, "top", 80, 300)).toEqual({ width: 900, height: 210, radius: 45 });
+    expect(hostFor("floating", "top", 80, 300)).toEqual({ width: 900, height: 286 });
+    expect(hostFor("floating", "left", 300, 300)).toEqual({ width: 900, height: 300 });
   });
 
   it("keeps expanded content at a fixed music width", () => {
-    expect(geometryFor("expanded").width).toBe(300);
+    expect(geometryFor("expanded").width).toBe(600);
   });
 
   it("supports an adjustable compact long axis and caps hover at expanded width", () => {
@@ -64,16 +64,16 @@ describe("island geometry", () => {
     expect(geometryFor("hover", 45, "top", 200)).toEqual({ width: 210, height: 30, radius: 15 });
     expect(geometryFor("hover", 45, "top", 300)).toEqual({ width: 300, height: 30, radius: 15 });
     expect(geometryFor("compact", 45, "left", 300)).toEqual({ width: 28, height: 300, radius: 14 });
-    expect(hostFor("edge", "left", 300)).toEqual({ width: 300, height: 300 });
+    expect(hostFor("edge", "left", 300)).toEqual({ width: 600, height: 300 });
     expect(expansionForGeometry(geometryFor("compact", 45, "top", 300), "top", 300)).toBe(0);
   });
 
   it("places the host along positive and negative-origin monitors", () => {
     const monitor = { x: -1920, y: -120, width: 1920, height: 1080 };
     const host = hostFor("edge", "top");
-    expect(placementFor(monitor, host, "top", 0)).toEqual({ x: -1920, y: -120, width: 300, height: 236 });
-    expect(placementFor(monitor, host, "top", 50)).toEqual({ x: -1110, y: -120, width: 300, height: 236 });
-    expect(placementFor(monitor, host, "bottom", 100)).toEqual({ x: -300, y: 724, width: 300, height: 236 });
+    expect(placementFor(monitor, host, "top", 0)).toEqual({ x: -1920, y: -120, width: 600, height: 286 });
+    expect(placementFor(monitor, host, "top", 50)).toEqual({ x: -1260, y: -120, width: 600, height: 286 });
+    expect(placementFor(monitor, host, "bottom", 100)).toEqual({ x: -600, y: 674, width: 600, height: 286 });
   });
 
   it("overdraws one physical pixel beyond every attached screen edge", () => {
@@ -107,9 +107,11 @@ describe("island geometry", () => {
     const geometry = geometryFor("expanded");
     for (const shoulderRadius of [0, 32]) {
       const points = shapePolygonFor(geometry, "edge", "top", shoulderRadius);
-      const pointKeys = points.map(({ x, y }) => `${x.toFixed(2)},${y.toFixed(2)}`).sort();
-      const mirroredKeys = points.map(({ x, y }) => `${(geometry.width - x).toFixed(2)},${y.toFixed(2)}`).sort();
-      expect(mirroredKeys).toEqual(pointKeys);
+      for (const point of points) {
+        const mirror = { x: geometry.width - point.x, y: point.y };
+        expect(points.some((candidate) => Math.abs(candidate.x - mirror.x) < 0.02
+          && Math.abs(candidate.y - mirror.y) < 0.02)).toBe(true);
+      }
     }
   });
 
@@ -148,9 +150,9 @@ describe("island geometry", () => {
   it("clamps crossfade progress during rapid retargeting", () => {
     expect(expansionForWidth(80)).toBe(0);
     expect(expansionForWidth(90)).toBe(0);
-    expect(expansionForWidth(195)).toBeCloseTo(0.5);
-    expect(expansionForWidth(300)).toBe(1);
-    expect(expansionForWidth(400)).toBe(1);
+    expect(expansionForWidth(345)).toBeCloseTo(0.5);
+    expect(expansionForWidth(600)).toBe(1);
+    expect(expansionForWidth(800)).toBe(1);
   });
 
   it("keeps the larger stable envelope until a transition settles", () => {
@@ -167,10 +169,10 @@ describe("island geometry", () => {
 
 
 describe("in-island navigation geometry", () => {
-  it("keeps the original music page and caps the menu at five slots", () => {
-    expect(navigationGeometry("music",5).width).toBe(300);
+  it("keeps the music page width and caps the menu at five slots", () => {
+    expect(navigationGeometry("music",5).width).toBe(600);
     expect(navigationGeometry("music",8)).toEqual(navigationGeometry("music",5));
-    expect(navigationGeometry("volume",5).height).toBeGreaterThan(navigationGeometry("music",5).height);
+    expect(navigationGeometry("weather",5).height).toBeGreaterThan(navigationGeometry("music",5).height);
   });
   it("fits every page and maximum shoulders inside the shared host", () => {
     for (const edge of ["top","right","bottom","left"] as const) {

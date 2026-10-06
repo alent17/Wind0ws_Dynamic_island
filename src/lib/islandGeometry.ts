@@ -308,8 +308,12 @@ export function navigationScaleForWorkArea(workWidth: number, workHeight: number
 export function navigationHostFor(style: IslandStyle, edge: IslandEdge, compactLength = 80, scale = 1): HostGeometry {
   const base = hostFor(style, edge, compactLength);
   const safeScale = Math.min(1, Math.max(0.62, scale));
+  // Expanded content remains horizontal on side edges. A floating island needs
+  // its outer gap inside the native host on those edges, just as top/bottom
+  // layouts reserve the gap in host height.
+  const horizontalGap = style === "floating" && isVerticalEdge(edge) ? ISLAND_GAP : 0;
   return {
-    width: Math.ceil(Math.max(base.width, 448 + ISLAND_GAP) * safeScale),
+    width: Math.ceil(Math.max(base.width + horizontalGap, 448 + ISLAND_GAP) * safeScale),
     height: Math.ceil(Math.max(base.height, 440 + ISLAND_GAP + ISLAND_OVERSHOOT) * safeScale),
   };
 }

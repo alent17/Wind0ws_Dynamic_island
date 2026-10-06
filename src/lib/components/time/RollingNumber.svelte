@@ -1,5 +1,5 @@
 <script lang="ts">
-  import RollingDigit from "$lib/RollingDigit.svelte";
+  import RollingDigit from "$lib/components/time/RollingDigit.svelte";
 
   let { value = "", class: className = "", ariaHidden = false, reduceMotion = false } = $props<{ value?: string; class?: string; ariaHidden?: boolean; reduceMotion?: boolean }>();
   const characters = $derived(value.split(""));

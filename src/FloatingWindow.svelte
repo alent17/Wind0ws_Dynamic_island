@@ -15,7 +15,7 @@
     EMPTY_CAPTURE_SNAPSHOT,
     type CaptureSnapshot,
   } from "$lib/captureMode";
-  import MediaProgress from "$lib/MediaProgress.svelte";
+  import MediaProgress from "$lib/components/media/MediaProgress.svelte";
   import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition } from "$lib/mediaClock";
   import { DEFAULT_SETTINGS, type MediaState, type AppSettings } from "$lib/api/types";
   import {

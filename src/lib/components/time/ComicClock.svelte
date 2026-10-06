@@ -1,5 +1,5 @@
 <script lang="ts">
-  import RollingNumber from "$lib/RollingNumber.svelte";
+  import RollingNumber from "$lib/components/time/RollingNumber.svelte";
 
   let { time = "00:00", date = "", greeting = "", compact = false, reduceMotion = false } = $props<{
     time?: string; date?: string; greeting?: string; compact?: boolean; reduceMotion?: boolean;

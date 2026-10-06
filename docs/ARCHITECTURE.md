@@ -24,8 +24,8 @@ Windows APIs (GSMTC, Core Audio, registry, Win32)
 
 - `src/App.svelte` composes island behavior, monitor placement, and the media,
   audio, timer, idle, and capture integrations.
-- `src/lib/IslandSurface.svelte` and its child components own island rendering
-  and interaction affordances.
+- `src/lib/components/island/IslandSurface.svelte` and the grouped components
+  under `src/lib/components/` own island rendering and interaction affordances.
 - `src/lib/islandGeometry.ts` contains geometry, placement, and work-area scale
   calculations; `src/lib/islandMotion.ts` defines motion timing and easing.
 - `src/lib/islandStore.ts` owns the main island's expanded, hover, selected
@@ -37,6 +37,8 @@ Windows APIs (GSMTC, Core Audio, registry, Win32)
   event cannot be overwritten by an older initial read.
 - `src/lib/api/` is the typed frontend boundary for Tauri commands. New invoke
   calls should be added there instead of embedded in UI components.
+- `src/lib/components/` groups Svelte components by island, media, settings,
+  time, and volume responsibilities. Domain logic and stores stay in `src/lib/`.
 - `src/lib/mediaStore.ts` provides reference-counted media-event wiring for
   consumers that use that store. The island currently has additional media
   lifecycle logic in `App.svelte`; do not assume `mediaStore` is the only media

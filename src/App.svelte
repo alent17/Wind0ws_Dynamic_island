@@ -13,8 +13,8 @@
   import { refreshSpectrumDevice } from "$lib/spectrumStore";
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
-  import IslandSurface from "$lib/IslandSurface.svelte";
-  import Spectrum from "$lib/Spectrum.svelte";
+  import IslandSurface from "$lib/components/island/IslandSurface.svelte";
+  import Spectrum from "$lib/components/media/Spectrum.svelte";
   import { extractSpectrumColorsFromImage } from "$lib/spectrumColors";
   import {
 

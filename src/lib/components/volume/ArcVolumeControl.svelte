@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Volume1, Volume2, VolumeX } from "lucide-svelte";
-  import RollingNumber from "$lib/RollingNumber.svelte";
+  import RollingNumber from "$lib/components/time/RollingNumber.svelte";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
 
   let {

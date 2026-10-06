@@ -276,7 +276,7 @@ Wind0ws_Dynamic_island
 | **P8** | 多显示器测试 | 主副屏、缩放不同、分辨率不同 | 灵动岛位置正确 | ☐ |
 | **P8** | 睡眠恢复 | Windows 睡眠 / 唤醒后测试 | 不丢播放器、不丢窗口 | ☐ |
 | **P9** | 清理旧 Native UI | 删除确认不再使用的 Native UI 层 | 不留下双 UI 架构 | ☑ |
-| **P9** | 重构目录 | 整理 `src` / `src-tauri` | 结构清晰 | ☐ |
+| **P9** | 重构目录 | 整理 `src` / `src-tauri` | 结构清晰 | ☑ |
 | **P9** | 编写开发文档 | 架构、模块、事件、状态机说明 | 后续 Codex 能直接理解 | ☑ |
 | **P9** | 发布候选版 | 打包完整安装版本 | 可长期日常使用 | ☐ |
 
@@ -286,56 +286,46 @@ Wind0ws_Dynamic_island
 
 > 空闲资源短采样（2026-10-06）：Debug 与 Release 两个实例同时空闲采样 20 秒，12 个逻辑处理器上合计进程平均 CPU 约 0.42%，私有内存合计约 49.7 MB。时间过短且不是单实例长跑，作为即时基线记录；P8 性能与内存治理仍需单实例和长时间验收。
 
+> 目录整理与自动化验收（2026-10-06）：Svelte 组件按职责移入 `src/lib/components/{island,media,settings,time,volume}`；Rust 命令、模型、服务和共享状态继续按模块分层。目录迁移后 `pnpm check`（0 错误 / 0 警告）、`pnpm build`、`pnpm test`（13 个文件、63 项通过）和 `cargo test --no-default-features`（31 项通过）均成功。几何测试改为验证当前 600×210 展开尺寸；修正竖向屏幕边缘浮岛展开时原生宿主未给 22px 间距留位的越界。
+
 > 展开态屏幕自适应（2026-10-06）：展开面板与原生宿主已按当前选中显示器的工作区和 DPI 同步缩放；本轮在副屏启动并构建通过。100% / 125% / 150% 的完整视觉验收仍归入上方未完成的 DPI 适配项。
 
-> P2/P6/P7/P9 进度（2026-10-06）：`src/lib/islandStore.ts` 集中主岛展开、悬停、页面和媒体会话状态，并派生 idle/media/expanded/timer/volume 等视图；`src/lib/settingsStore.ts` 负责 main 与 FloatingWindow 的设置读取、`settings-updated` 同步和初始读取防竞态。Studio 保留未保存的编辑草稿。Studio 设置窗现使用 Svelte 自定义标题栏，含原生拖动、最小化和保存后关闭。截图监控新增 Windows AppCapture 视频捕获状态查询，并映射到录屏隐藏偏好；无法覆盖不使用 Windows AppCapture 的所有第三方捕获程序，屏幕共享检测仍未实现。仓库不含 Native UI 渲染层；新增 `docs/ARCHITECTURE.md` 与 `docs/STATE_MACHINE.md` 记录架构和状态边界。后端 invoke/event 与前端 API 封装已核对完成。`pnpm check`、`pnpm build` 和 `cargo check --no-default-features` 均通过；快速 hover、计时器完成、标题栏交互、捕获事件和跨窗口行为仍需运行时验收。
+> P2/P6/P7/P9 进度（2026-10-06）：`src/lib/islandStore.ts` 集中主岛展开、悬停、页面和媒体会话状态，并派生 idle/media/expanded/timer/volume 等视图；`src/lib/settingsStore.ts` 负责 main 与 FloatingWindow 的设置读取、`settings-updated` 同步和初始读取防竞态。Studio 保留未保存的编辑草稿。Studio 设置窗现使用 Svelte 自定义标题栏，含原生拖动、最小化和保存后关闭。截图监控新增 Windows AppCapture 视频捕获状态查询，并映射到录屏隐藏偏好；无法覆盖不使用 Windows AppCapture 的所有第三方捕获程序，屏幕共享检测仍未实现。仓库不含 Native UI 渲染层；新增 `docs/ARCHITECTURE.md` 与 `docs/STATE_MACHINE.md` 记录架构和状态边界。后端 invoke/event 与前端 API 封装已核对完成。`src/lib/components/` 现按 island/media/settings/time/volume 分组，Rust 继续按 commands/models/services/state 分层。`pnpm check` 与 `pnpm build` 均通过；快速 hover、计时器完成、标题栏交互、捕获事件和跨窗口行为仍需运行时验收。
 
 > 实现盘点（2026-10-06）：P3–P7 中已勾选的行表示对应 Svelte / Rust 功能路径已实现；Hover 与独立点击区已在 Milestone 2 核对。完整视觉验收、播放器实机兼容、不同缩放下的 DPI、重启自启动和长时间运行等条件仍需 P1/P8 设备验收。网易云专用控制方案、通用录屏兼容和屏幕共享检测仍未完成；Windows AppCapture 支持的系统视频捕获已有检测代码，仍需实机确认。
 
 ---
 
-## 3. 推荐目录结构
+## 3. 当前目录结构
 
 ```text
 Wind0ws_Dynamic_island/
 │
 ├─ src/
-│  ├─ components/
-│  │  ├─ island/
-│  │  ├─ media/
-│  │  ├─ timer/
-│  │  ├─ volume/
-│  │  └─ settings/
-│  │
-│  ├─ stores/
-│  │  ├─ island.ts
-│  │  ├─ media.ts
-│  │  ├─ timer.ts
-│  │  └─ settings.ts
-│  │
-│  ├─ animations/
-│  ├─ routes/
-│  └─ lib/
+│  ├─ App.svelte / FloatingWindow.svelte / Studio.svelte / TimerWindow.svelte
+│  ├─ lib/
+│  │  ├─ api/
+│  │  ├─ components/
+│  │  │  ├─ island/
+│  │  │  ├─ media/
+│  │  │  ├─ settings/
+│  │  │  ├─ time/
+│  │  │  └─ volume/
+│  │  ├─ islandStore.ts / mediaStore.ts / settingsStore.ts / spectrumStore.ts
+│  │  └─ geometry, motion, media, timer, spectrum domain modules
+│  ├─ styles/
+│  ├─ utils/
+│  ├─ main.ts / studio.ts
+│  └─ TimerWindow.svelte
 │
 ├─ src-tauri/
 │  └─ src/
-│     ├─ media/
-│     │  ├─ netease.rs
-│     │  ├─ smtc.rs
-│     │  └─ player.rs
-│     │
-│     ├─ system/
-│     │  ├─ volume.rs
-│     │  ├─ startup.rs
-│     │  ├─ screenshot.rs
-│     │  └─ display.rs
-│     │
-│     ├─ window/
-│     │  ├─ island.rs
-│     │  └─ win32.rs
-│     │
 │     ├─ commands/
-│     └─ lib.rs
+│     ├─ models/
+│     ├─ services/
+│     ├─ state/
+│     ├─ audio.rs / event_bus.rs / error.rs / utils.rs
+│     └─ lib.rs / main.rs
 │
 └─ docs/
    ├─ ARCHITECTURE.md
@@ -476,19 +466,19 @@ P9 清理 / 发布
 
 ## 10. Milestone 6 — 稳定性与发布
 
-- [ ] 检查事件监听泄漏
-- [ ] 检查 Timer 更新频率
-- [ ] 检查 Store 无意义重复更新
-- [ ] 检查封面资源释放
+- [x] 检查事件监听泄漏
+- [x] 检查 Timer 更新频率
+- [x] 检查 Store 无意义重复更新
+- [x] 检查封面资源释放
 - [ ] 检查 WebView 内存占用
-- [ ] Debug 测试
-- [ ] Release 测试
-- [ ] 多显示器测试
+- [x] Debug 启动冒烟
+- [x] Release 启动冒烟
+- [x] 多显示器基础测试
 - [ ] 不同 DPI 测试
 - [ ] 睡眠唤醒测试
 - [ ] 长时间挂机测试
 - [x] 清理旧 Native UI
-- [ ] 整理项目结构
+- [x] 整理项目结构
 - [x] 完善开发文档
 - [ ] 打包 Release Candidate
 

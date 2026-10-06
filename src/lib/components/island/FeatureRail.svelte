@@ -1,7 +1,7 @@
 <script lang="ts">
   import { EyeOff, GalleryHorizontalEnd, Settings, Timer, Volume2, VolumeX } from "lucide-svelte";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
-  import RollingNumber from "$lib/RollingNumber.svelte";
+  import RollingNumber from "$lib/components/time/RollingNumber.svelte";
   import type { IslandTool } from "$lib/featureRail";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
 
