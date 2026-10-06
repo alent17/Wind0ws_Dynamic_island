@@ -306,6 +306,8 @@ Wind0ws_Dynamic_island
 
 > 捕获隐私能力范围（2026-10-06）：设置页不再提供无效的“屏幕共享时隐藏”开关，并说明当前不支持检测屏幕共享。录屏说明限定为 Windows AppCapture 能报告的状态，不能保证发现第三方录屏软件；截图监控依赖 Print Screen 与 Win + Shift + S 快捷键检测。以上属于有限覆盖，未通过运行时验收前不扩展勾选范围。
 
+> 恢复后布局刷新（2026-10-06）：主窗口在 WebView 恢复可见、重新获得焦点或 pageshow 时重新枚举显示器并无动画校正宿主边界，同时刷新时钟显示。此路径补充了休眠期间显示器 / 工作区变化后的恢复处理；Windows 睡眠唤醒实机验收仍未完成。
+
 > Release 包重建（2026-10-06）：Studio 同步、封面过渡与网易云 CDP 功能合入后，`pnpm tauri build --bundles nsis` 成功生成最新 Release EXE 和 NSIS 安装器。产物位于 `src-tauri/target/release/isle.exe` 与 `src-tauri/target/release/bundle/nsis/Isle_1.0.11_x64-setup.exe`。Release Candidate“可长期日常使用”仍需长时间运行和设备验收，因此 P9 保持未完成。
 
 > 实现盘点（2026-10-06）：P3–P7 中已勾选的行表示对应 Svelte / Rust 功能路径已实现；Hover 与独立点击区已在 Milestone 2 核对。完整视觉验收、播放器实机兼容、不同缩放下的 DPI、重启自启动和长时间运行等条件仍需 P1/P8 设备验收。网易云播放模式 CDP 路径已实现但真实客户端端点尚不可用；通用录屏兼容和屏幕共享检测仍未完成；Windows AppCapture 支持的系统视频捕获已有检测代码，仍需实机确认。

@@ -129,8 +129,29 @@
   let mediaSnapshotAt = $state<number>(Date.now());
   let clockNow = $state<number>(Date.now());
   let pageVisible = $state(true);
+  let resumePlacementTimer: ReturnType<typeof setTimeout> | undefined;
   function handleVisibilityChange() {
     pageVisible = document.visibilityState === "visible";
+    if (pageVisible) scheduleResumeRecovery();
+  }
+  function scheduleResumeRecovery() {
+    if (document.visibilityState !== "visible") return;
+    if (resumePlacementTimer !== undefined) clearTimeout(resumePlacementTimer);
+    resumePlacementTimer = setTimeout(() => {
+      resumePlacementTimer = undefined;
+      if (!windowReady) return;
+
+      // Re-enumerate displays after resume/focus so a monitor or work-area
+      // change made while suspended cannot leave the native host at stale bounds.
+      placementMonitors = [];
+      placementMonitorsRefreshedAt = 0;
+      lastPlacementInput = "";
+      lastAppliedBounds = "";
+      clockNow = Date.now();
+      updateTimeDisplay();
+      void applyWindowPlacement(undefined, undefined, undefined, undefined, undefined, false)
+        .catch((error) => logger.warn("恢复后刷新窗口布局失败", error));
+    }, 350);
   }
   let durationMs = $state<number>(0);
   let currentSource = $state<string>("generic");
@@ -256,10 +277,15 @@
     window.addEventListener("pagehide", persistOnPageHide);
     updateTimeDisplay();
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", scheduleResumeRecovery);
+    window.addEventListener("pageshow", scheduleResumeRecovery);
 
     return () => {
       window.removeEventListener("pagehide", persistOnPageHide);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", scheduleResumeRecovery);
+      window.removeEventListener("pageshow", scheduleResumeRecovery);
+      if (resumePlacementTimer !== undefined) clearTimeout(resumePlacementTimer);
     };
   });
 
