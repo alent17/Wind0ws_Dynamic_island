@@ -1,0 +1,50 @@
+{
+  "runtime": "Chrome headless production fixture; playback scenes animate a synthetic random spectrum. Renderer TaskDuration and JS heap only; not native WebView process CPU or total memory.",
+  "results": [
+    {
+      "scene": "paused-compact",
+      "sampleSeconds": 3,
+      "rendererTaskCpuPercent": 0.02308613612937279,
+      "startHeap": 2474256,
+      "endHeap": 2474256,
+      "domNodes": 921,
+      "listeners": 42
+    },
+    {
+      "scene": "playing-compact",
+      "sampleSeconds": 3,
+      "rendererTaskCpuPercent": 2.101834171618902,
+      "startHeap": 4089224,
+      "endHeap": 3614940,
+      "domNodes": 1832,
+      "listeners": 84
+    },
+    {
+      "scene": "music-expanded",
+      "sampleSeconds": 3,
+      "rendererTaskCpuPercent": 1.0115522379672226,
+      "startHeap": 5571896,
+      "endHeap": 5669752,
+      "domNodes": 2744,
+      "listeners": 126
+    },
+    {
+      "scene": "volume-detail",
+      "sampleSeconds": 3,
+      "rendererTaskCpuPercent": 0.6513817007739438,
+      "startHeap": 8169476,
+      "endHeap": 3030108,
+      "domNodes": 918,
+      "listeners": 47
+    },
+    {
+      "scene": "unmounted",
+      "sampleSeconds": 3,
+      "rendererTaskCpuPercent": 0.017979578774560395,
+      "startHeap": 4516428,
+      "endHeap": 4516428,
+      "domNodes": 1831,
+      "listeners": 89
+    }
+  ]
+}

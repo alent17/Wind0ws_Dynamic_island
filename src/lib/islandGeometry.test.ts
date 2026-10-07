@@ -169,10 +169,15 @@ describe("island geometry", () => {
 
 
 describe("in-island navigation geometry", () => {
-  it("keeps the music page width and caps the menu at five slots", () => {
+  it("keeps the music page width and bounds additional menu slots", () => {
     expect(navigationGeometry("music",5).width).toBe(600);
     expect(navigationGeometry("music",8)).toEqual(navigationGeometry("music",5));
-    expect(navigationGeometry("weather",5).height).toBeGreaterThan(navigationGeometry("music",5).height);
+    // Weather has a compact forecast layout; it is taller than the clock,
+    // not necessarily the music page with its playback controls.
+    expect(navigationGeometry("weather",5).height).toBeGreaterThan(navigationGeometry("clock",5).height);
+    for (const page of ["music", "weather", "clock", "timer", "volume"] as const) {
+      expect(navigationGeometry(page,5).height - navigationGeometry(page,0).height).toBeCloseTo(40);
+    }
   });
   it("fits every page and maximum shoulders inside the shared host", () => {
     for (const edge of ["top","right","bottom","left"] as const) {

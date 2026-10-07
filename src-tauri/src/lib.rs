@@ -177,15 +177,15 @@ fn start_media_listener(handle: AppHandle) {
     }
 
     std::thread::spawn(move || {
-        // 初始化 COM 组件（Windows 媒体 API 需要）
-        // SAFETY: CoInitializeEx must be called before using Windows COM APIs (media sessions).
-        // Using COINIT_MULTITHREADED for thread-safe COM access.
-        unsafe {
-            let _ = windows::Win32::System::Com::CoInitializeEx(
-                None,
-                windows::Win32::System::Com::COINIT_MULTITHREADED,
-            );
-        }
+        // Keep this dedicated worker initialized; service calls own their
+        // nested references and release interfaces before apartment teardown.
+        let _apartment = match services::apartment::Apartment::enter() {
+            Ok(apartment) => apartment,
+            Err(error) => {
+                tracing::error!("[Media] Thread initialization failed: {error}");
+                return;
+            }
+        };
 
         let mut last_artwork_track = String::new();
         let mut last_artwork = String::new();
@@ -246,7 +246,6 @@ fn start_capture_monitor(handle: AppHandle) {
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         GetAsyncKeyState, VK_LWIN, VK_RWIN, VK_S, VK_SHIFT, VK_SNAPSHOT,
     };
-    use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
     use windows::Media::Capture::AppCapture;
 
     std::thread::spawn(move || {
@@ -259,9 +258,11 @@ fn start_capture_monitor(handle: AppHandle) {
         let mut next_capture_check = Instant::now();
         let mut last_emit = Instant::now() - Duration::from_secs(2);
 
-        let video_capture = unsafe { RoInitialize(RO_INIT_MULTITHREADED) }
+        let capture_apartment = services::apartment::Apartment::enter();
+        let video_capture = capture_apartment
+            .as_ref()
             .ok()
-            .and_then(|()| AppCapture::GetForCurrentView().ok());
+            .and_then(|_| AppCapture::GetForCurrentView().ok());
         if video_capture.is_none() {
             tracing::debug!("[Capture Mode] Windows AppCapture video status is unavailable in this process");
         }

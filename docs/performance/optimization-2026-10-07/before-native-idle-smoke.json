@@ -1,0 +1,2256 @@
+﻿{
+    "label":  "before-native-idle-smoke",
+    "createdUtc":  "2026-10-07T11:49:15.1456313Z",
+    "requestedSeconds":  10,
+    "actualSeconds":  16.889357,
+    "warmupSeconds":  0,
+    "logicalCores":  12,
+    "os":  "Microsoft Windows 11 家庭版 Insider Preview",
+    "osBuild":  "26340",
+    "control":  false,
+    "scope":  "Dynamic Isle descendant tree. Per-process CPU deltas keyed by PID and start time. First samples for new PIDs have unavailable CPU; scene, DPI and input corpus must be recorded separately. Sampling overhead also affects the control run.",
+    "gpuStatus":  "available: per-PID engines; engine percentages must not be summed as total GPU utilization",
+    "unavailable":  [
+                        "JS heap/DOM/retainers require WebView2 diagnostics",
+                        "Actual frame presentation requires ETW/PresentMon",
+                        "IPC bytes/in-flight and FFT counters require a profiling build"
+                    ],
+    "processHistory":  [
+                           {
+                               "pid":  26192,
+                               "parentPid":  33392,
+                               "role":  "crashpad-handler",
+                               "version":  "154.0.4258.62",
+                               "startedUtc":  "2026-10-07T11:48:46.9722058Z",
+                               "executable":  "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\154.0.4258.62\\msedgewebview2.exe"
+                           },
+                           {
+                               "pid":  19904,
+                               "parentPid":  33392,
+                               "role":  "utility",
+                               "version":  "154.0.4258.62",
+                               "startedUtc":  "2026-10-07T11:48:47.2327801Z",
+                               "executable":  "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\154.0.4258.62\\msedgewebview2.exe"
+                           },
+                           {
+                               "pid":  5116,
+                               "parentPid":  33392,
+                               "role":  "gpu-process",
+                               "version":  "154.0.4258.62",
+                               "startedUtc":  "2026-10-07T11:48:47.1603613Z",
+                               "executable":  "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\154.0.4258.62\\msedgewebview2.exe"
+                           },
+                           {
+                               "pid":  17264,
+                               "parentPid":  33392,
+                               "role":  "renderer",
+                               "version":  "154.0.4258.62",
+                               "startedUtc":  "2026-10-07T11:48:47.3984130Z",
+                               "executable":  "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\154.0.4258.62\\msedgewebview2.exe"
+                           },
+                           {
+                               "pid":  2684,
+                               "parentPid":  29140,
+                               "role":  "browser",
+                               "version":  "10.0.26100.8875",
+                               "startedUtc":  "2026-10-07T11:48:46.8403862Z",
+                               "executable":  "C:\\WINDOWS\\system32\\conhost.exe"
+                           },
+                           {
+                               "pid":  31248,
+                               "parentPid":  33392,
+                               "role":  "utility",
+                               "version":  "154.0.4258.62",
+                               "startedUtc":  "2026-10-07T11:48:47.1707798Z",
+                               "executable":  "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\154.0.4258.62\\msedgewebview2.exe"
+                           },
+                           {
+                               "pid":  33392,
+                               "parentPid":  29140,
+                               "role":  "browser",
+                               "version":  "154.0.4258.62",
+                               "startedUtc":  "2026-10-07T11:48:46.9445681Z",
+                               "executable":  "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\154.0.4258.62\\msedgewebview2.exe"
+                           },
+                           {
+                               "pid":  29140,
+                               "parentPid":  3916,
+                               "role":  "app",
+                               "version":  "1.0.11",
+                               "startedUtc":  "2026-10-07T11:48:44.2913808Z",
+                               "executable":  "E:\\Wind0ws_Dynamic_island\\dist\\optimization-before\\isle.exe"
+                           }
+                       ],
+    "samples":  [
+                    {
+                        "elapsedSeconds":  5.3291277,
+                        "timestampUtc":  "2026-10-07T11:49:00.7376573Z",
+                        "machineCpuPercent":  35,
+                        "processCount":  8,
+                        "processes":  [
+                                          {
+                                              "pid":  29140,
+                                              "role":  "app",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  20500480,
+                                              "workingSetBytes":  87281664,
+                                              "privateBytes":  25382912,
+                                              "handles":  767,
+                                              "threads":  51,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  2684,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1236992,
+                                              "workingSetBytes":  10223616,
+                                              "privateBytes":  1871872,
+                                              "handles":  120,
+                                              "threads":  4,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  33392,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  39624704,
+                                              "workingSetBytes":  144035840,
+                                              "privateBytes":  49922048,
+                                              "handles":  1527,
+                                              "threads":  70,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  26192,
+                                              "role":  "crashpad-handler",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1646592,
+                                              "workingSetBytes":  10563584,
+                                              "privateBytes":  2584576,
+                                              "handles":  153,
+                                              "threads":  11,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  5116,
+                                              "role":  "gpu-process",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  34975744,
+                                              "workingSetBytes":  98021376,
+                                              "privateBytes":  82096128,
+                                              "handles":  674,
+                                              "threads":  60,
+                                              "gpuEngines":  [
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_0_engtype_3D",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_10_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_11_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_12_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_13_engtype_Security_1",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_1_engtype_VideoDecode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_2_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_3_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_4_engtype_Security",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_5_engtype_VideoEncode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_6_engtype_OFA_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_7_engtype_JPEG_Decode_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_8_engtype_VR",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_9_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 }
+                                                             ],
+                                              "gpuMemory":  [
+                                                                {
+                                                                    "instance":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0",
+                                                                    "dedicatedBytes":  14561280,
+                                                                    "sharedBytes":  3264512,
+                                                                    "committedBytes":  18497536
+                                                                }
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  31248,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  7614464,
+                                              "workingSetBytes":  40370176,
+                                              "privateBytes":  12947456,
+                                              "handles":  330,
+                                              "threads":  25,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  19904,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  3305472,
+                                              "workingSetBytes":  21577728,
+                                              "privateBytes":  8101888,
+                                              "handles":  188,
+                                              "threads":  10,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  17264,
+                                              "role":  "renderer",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  54796288,
+                                              "workingSetBytes":  116539392,
+                                              "privateBytes":  80654336,
+                                              "handles":  295,
+                                              "threads":  20,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          }
+                                      ],
+                        "totalCpuPercentOfMachine":  0,
+                        "totalPrivateWorkingSetBytes":  163700736,
+                        "totalPrivateBytes":  263561216,
+                        "totalHandles":  4054,
+                        "totalThreads":  251
+                    },
+                    {
+                        "elapsedSeconds":  7.0638615,
+                        "timestampUtc":  "2026-10-07T11:49:02.5065206Z",
+                        "machineCpuPercent":  63,
+                        "processCount":  8,
+                        "processes":  [
+                                          {
+                                              "pid":  29140,
+                                              "role":  "app",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  20398080,
+                                              "workingSetBytes":  87281664,
+                                              "privateBytes":  25382912,
+                                              "handles":  767,
+                                              "threads":  51,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  2684,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1236992,
+                                              "workingSetBytes":  10223616,
+                                              "privateBytes":  1871872,
+                                              "handles":  120,
+                                              "threads":  4,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  33392,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  39624704,
+                                              "workingSetBytes":  144035840,
+                                              "privateBytes":  49922048,
+                                              "handles":  1527,
+                                              "threads":  70,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  26192,
+                                              "role":  "crashpad-handler",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1646592,
+                                              "workingSetBytes":  10563584,
+                                              "privateBytes":  2584576,
+                                              "handles":  153,
+                                              "threads":  11,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  5116,
+                                              "role":  "gpu-process",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  33800192,
+                                              "workingSetBytes":  96980992,
+                                              "privateBytes":  81043456,
+                                              "handles":  674,
+                                              "threads":  60,
+                                              "gpuEngines":  [
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_0_engtype_3D",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_10_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_11_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_12_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_13_engtype_Security_1",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_1_engtype_VideoDecode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_2_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_3_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_4_engtype_Security",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_5_engtype_VideoEncode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_6_engtype_OFA_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_7_engtype_JPEG_Decode_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_8_engtype_VR",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_9_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 }
+                                                             ],
+                                              "gpuMemory":  [
+                                                                {
+                                                                    "instance":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0",
+                                                                    "dedicatedBytes":  14561280,
+                                                                    "sharedBytes":  3264512,
+                                                                    "committedBytes":  18497536
+                                                                }
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  31248,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  7614464,
+                                              "workingSetBytes":  40370176,
+                                              "privateBytes":  12947456,
+                                              "handles":  330,
+                                              "threads":  25,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  19904,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  3305472,
+                                              "workingSetBytes":  21577728,
+                                              "privateBytes":  8101888,
+                                              "handles":  188,
+                                              "threads":  10,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  17264,
+                                              "role":  "renderer",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  55074816,
+                                              "workingSetBytes":  116862976,
+                                              "privateBytes":  81084416,
+                                              "handles":  295,
+                                              "threads":  20,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          }
+                                      ],
+                        "totalCpuPercentOfMachine":  0,
+                        "totalPrivateWorkingSetBytes":  162701312,
+                        "totalPrivateBytes":  262938624,
+                        "totalHandles":  4054,
+                        "totalThreads":  251
+                    },
+                    {
+                        "elapsedSeconds":  8.8331603999999988,
+                        "timestampUtc":  "2026-10-07T11:49:04.2350530Z",
+                        "machineCpuPercent":  35,
+                        "processCount":  8,
+                        "processes":  [
+                                          {
+                                              "pid":  29140,
+                                              "role":  "app",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  20398080,
+                                              "workingSetBytes":  87281664,
+                                              "privateBytes":  25382912,
+                                              "handles":  767,
+                                              "threads":  51,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  2684,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1236992,
+                                              "workingSetBytes":  10223616,
+                                              "privateBytes":  1871872,
+                                              "handles":  120,
+                                              "threads":  4,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  33392,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  39624704,
+                                              "workingSetBytes":  144039936,
+                                              "privateBytes":  49922048,
+                                              "handles":  1528,
+                                              "threads":  70,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  26192,
+                                              "role":  "crashpad-handler",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1646592,
+                                              "workingSetBytes":  10563584,
+                                              "privateBytes":  2584576,
+                                              "handles":  153,
+                                              "threads":  11,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  5116,
+                                              "role":  "gpu-process",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  33824768,
+                                              "workingSetBytes":  97009664,
+                                              "privateBytes":  81444864,
+                                              "handles":  674,
+                                              "threads":  60,
+                                              "gpuEngines":  [
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_0_engtype_3D",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_10_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_11_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_12_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_13_engtype_Security_1",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_1_engtype_VideoDecode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_2_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_3_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_4_engtype_Security",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_5_engtype_VideoEncode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_6_engtype_OFA_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_7_engtype_JPEG_Decode_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_8_engtype_VR",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_9_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 }
+                                                             ],
+                                              "gpuMemory":  [
+                                                                {
+                                                                    "instance":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0",
+                                                                    "dedicatedBytes":  14823424,
+                                                                    "sharedBytes":  3264512,
+                                                                    "committedBytes":  18759680
+                                                                }
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  31248,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  7614464,
+                                              "workingSetBytes":  40370176,
+                                              "privateBytes":  12947456,
+                                              "handles":  330,
+                                              "threads":  25,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  19904,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  3305472,
+                                              "workingSetBytes":  21577728,
+                                              "privateBytes":  8101888,
+                                              "handles":  188,
+                                              "threads":  10,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  17264,
+                                              "role":  "renderer",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  55336960,
+                                              "workingSetBytes":  117157888,
+                                              "privateBytes":  81223680,
+                                              "handles":  295,
+                                              "threads":  20,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          }
+                                      ],
+                        "totalCpuPercentOfMachine":  0,
+                        "totalPrivateWorkingSetBytes":  162988032,
+                        "totalPrivateBytes":  263479296,
+                        "totalHandles":  4055,
+                        "totalThreads":  251
+                    },
+                    {
+                        "elapsedSeconds":  10.558899199999999,
+                        "timestampUtc":  "2026-10-07T11:49:05.7925851Z",
+                        "machineCpuPercent":  14,
+                        "processCount":  8,
+                        "processes":  [
+                                          {
+                                              "pid":  29140,
+                                              "role":  "app",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  20398080,
+                                              "workingSetBytes":  87281664,
+                                              "privateBytes":  25382912,
+                                              "handles":  767,
+                                              "threads":  51,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  2684,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1236992,
+                                              "workingSetBytes":  10223616,
+                                              "privateBytes":  1871872,
+                                              "handles":  120,
+                                              "threads":  4,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  33392,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  39624704,
+                                              "workingSetBytes":  144089088,
+                                              "privateBytes":  49926144,
+                                              "handles":  1528,
+                                              "threads":  70,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  26192,
+                                              "role":  "crashpad-handler",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1646592,
+                                              "workingSetBytes":  10563584,
+                                              "privateBytes":  2584576,
+                                              "handles":  153,
+                                              "threads":  11,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  5116,
+                                              "role":  "gpu-process",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  33828864,
+                                              "workingSetBytes":  97026048,
+                                              "privateBytes":  81518592,
+                                              "handles":  674,
+                                              "threads":  60,
+                                              "gpuEngines":  [
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_0_engtype_3D",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_10_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_11_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_12_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_13_engtype_Security_1",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_1_engtype_VideoDecode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_2_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_3_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_4_engtype_Security",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_5_engtype_VideoEncode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_6_engtype_OFA_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_7_engtype_JPEG_Decode_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_8_engtype_VR",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_9_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 }
+                                                             ],
+                                              "gpuMemory":  [
+                                                                {
+                                                                    "instance":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0",
+                                                                    "dedicatedBytes":  14888960,
+                                                                    "sharedBytes":  3264512,
+                                                                    "committedBytes":  18825216
+                                                                }
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  31248,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  7614464,
+                                              "workingSetBytes":  40370176,
+                                              "privateBytes":  12947456,
+                                              "handles":  330,
+                                              "threads":  25,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  19904,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  3305472,
+                                              "workingSetBytes":  21577728,
+                                              "privateBytes":  8101888,
+                                              "handles":  188,
+                                              "threads":  10,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  17264,
+                                              "role":  "renderer",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  55734272,
+                                              "workingSetBytes":  117469184,
+                                              "privateBytes":  81498112,
+                                              "handles":  295,
+                                              "threads":  20,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          }
+                                      ],
+                        "totalCpuPercentOfMachine":  0,
+                        "totalPrivateWorkingSetBytes":  163389440,
+                        "totalPrivateBytes":  263831552,
+                        "totalHandles":  4055,
+                        "totalThreads":  251
+                    },
+                    {
+                        "elapsedSeconds":  12.041349499999999,
+                        "timestampUtc":  "2026-10-07T11:49:07.3575481Z",
+                        "machineCpuPercent":  35,
+                        "processCount":  8,
+                        "processes":  [
+                                          {
+                                              "pid":  29140,
+                                              "role":  "app",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  20398080,
+                                              "workingSetBytes":  87285760,
+                                              "privateBytes":  25382912,
+                                              "handles":  767,
+                                              "threads":  51,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  2684,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1236992,
+                                              "workingSetBytes":  10223616,
+                                              "privateBytes":  1871872,
+                                              "handles":  120,
+                                              "threads":  4,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  33392,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  39661568,
+                                              "workingSetBytes":  144228352,
+                                              "privateBytes":  49926144,
+                                              "handles":  1533,
+                                              "threads":  70,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  26192,
+                                              "role":  "crashpad-handler",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1646592,
+                                              "workingSetBytes":  10563584,
+                                              "privateBytes":  2584576,
+                                              "handles":  153,
+                                              "threads":  11,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  5116,
+                                              "role":  "gpu-process",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  33820672,
+                                              "workingSetBytes":  97034240,
+                                              "privateBytes":  81518592,
+                                              "handles":  674,
+                                              "threads":  60,
+                                              "gpuEngines":  [
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_0_engtype_3D",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_10_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_11_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_12_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_13_engtype_Security_1",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_1_engtype_VideoDecode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_2_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_3_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_4_engtype_Security",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_5_engtype_VideoEncode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_6_engtype_OFA_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_7_engtype_JPEG_Decode_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_8_engtype_VR",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_9_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 }
+                                                             ],
+                                              "gpuMemory":  [
+                                                                {
+                                                                    "instance":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0",
+                                                                    "dedicatedBytes":  14888960,
+                                                                    "sharedBytes":  3264512,
+                                                                    "committedBytes":  18825216
+                                                                }
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  31248,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  7614464,
+                                              "workingSetBytes":  40370176,
+                                              "privateBytes":  12947456,
+                                              "handles":  330,
+                                              "threads":  25,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  19904,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  3305472,
+                                              "workingSetBytes":  21577728,
+                                              "privateBytes":  8101888,
+                                              "handles":  188,
+                                              "threads":  10,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  17264,
+                                              "role":  "renderer",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  52998144,
+                                              "workingSetBytes":  114868224,
+                                              "privateBytes":  78766080,
+                                              "handles":  295,
+                                              "threads":  20,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          }
+                                      ],
+                        "totalCpuPercentOfMachine":  0,
+                        "totalPrivateWorkingSetBytes":  160681984,
+                        "totalPrivateBytes":  261099520,
+                        "totalHandles":  4060,
+                        "totalThreads":  251
+                    },
+                    {
+                        "elapsedSeconds":  13.655014699999999,
+                        "timestampUtc":  "2026-10-07T11:49:08.8983334Z",
+                        "machineCpuPercent":  27,
+                        "processCount":  8,
+                        "processes":  [
+                                          {
+                                              "pid":  29140,
+                                              "role":  "app",
+                                              "cpuPercentOfMachine":  5.1642269619084145,
+                                              "cpuPercentOfOneCore":  61.970723542900977,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  76124160,
+                                              "workingSetBytes":  92917760,
+                                              "privateBytes":  25534464,
+                                              "handles":  767,
+                                              "threads":  51,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  2684,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1236992,
+                                              "workingSetBytes":  10223616,
+                                              "privateBytes":  1871872,
+                                              "handles":  120,
+                                              "threads":  4,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  33392,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  39645184,
+                                              "workingSetBytes":  144781312,
+                                              "privateBytes":  50159616,
+                                              "handles":  1535,
+                                              "threads":  70,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  26192,
+                                              "role":  "crashpad-handler",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1646592,
+                                              "workingSetBytes":  10563584,
+                                              "privateBytes":  2584576,
+                                              "handles":  153,
+                                              "threads":  11,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  5116,
+                                              "role":  "gpu-process",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  39952384,
+                                              "workingSetBytes":  104992768,
+                                              "privateBytes":  115228672,
+                                              "handles":  677,
+                                              "threads":  60,
+                                              "gpuEngines":  [
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_0_engtype_3D",
+                                                                     "utilizationPercent":  1
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_10_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_11_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_12_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_13_engtype_Security_1",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_1_engtype_VideoDecode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_2_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_3_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_4_engtype_Security",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_5_engtype_VideoEncode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_6_engtype_OFA_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_7_engtype_JPEG_Decode_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_8_engtype_VR",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_9_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 }
+                                                             ],
+                                              "gpuMemory":  [
+                                                                {
+                                                                    "instance":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0",
+                                                                    "dedicatedBytes":  38899712,
+                                                                    "sharedBytes":  3309568,
+                                                                    "committedBytes":  42979328
+                                                                }
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  31248,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  7614464,
+                                              "workingSetBytes":  40370176,
+                                              "privateBytes":  12947456,
+                                              "handles":  330,
+                                              "threads":  25,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  19904,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  3305472,
+                                              "workingSetBytes":  21581824,
+                                              "privateBytes":  8105984,
+                                              "handles":  188,
+                                              "threads":  10,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  17264,
+                                              "role":  "renderer",
+                                              "cpuPercentOfMachine":  5.1642269619084145,
+                                              "cpuPercentOfOneCore":  61.970723542900977,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  62619648,
+                                              "workingSetBytes":  143142912,
+                                              "privateBytes":  114294784,
+                                              "handles":  298,
+                                              "threads":  20,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          }
+                                      ],
+                        "totalCpuPercentOfMachine":  10.328453923816829,
+                        "totalPrivateWorkingSetBytes":  232144896,
+                        "totalPrivateBytes":  330727424,
+                        "totalHandles":  4068,
+                        "totalThreads":  251
+                    },
+                    {
+                        "elapsedSeconds":  15.141432,
+                        "timestampUtc":  "2026-10-07T11:49:10.3282398Z",
+                        "machineCpuPercent":  34,
+                        "processCount":  8,
+                        "processes":  [
+                                          {
+                                              "pid":  29140,
+                                              "role":  "app",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  20541440,
+                                              "workingSetBytes":  92917760,
+                                              "privateBytes":  25534464,
+                                              "handles":  767,
+                                              "threads":  51,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  2684,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1236992,
+                                              "workingSetBytes":  10223616,
+                                              "privateBytes":  1871872,
+                                              "handles":  120,
+                                              "threads":  4,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  33392,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  39845888,
+                                              "workingSetBytes":  144789504,
+                                              "privateBytes":  50143232,
+                                              "handles":  1535,
+                                              "threads":  70,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  26192,
+                                              "role":  "crashpad-handler",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1646592,
+                                              "workingSetBytes":  10563584,
+                                              "privateBytes":  2584576,
+                                              "handles":  153,
+                                              "threads":  11,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  5116,
+                                              "role":  "gpu-process",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  42987520,
+                                              "workingSetBytes":  106057728,
+                                              "privateBytes":  118149120,
+                                              "handles":  678,
+                                              "threads":  60,
+                                              "gpuEngines":  [
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_0_engtype_3D",
+                                                                     "utilizationPercent":  1
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_10_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_11_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_12_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_13_engtype_Security_1",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_1_engtype_VideoDecode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_2_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_3_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_4_engtype_Security",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_5_engtype_VideoEncode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_6_engtype_OFA_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_7_engtype_JPEG_Decode_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_8_engtype_VR",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_9_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 }
+                                                             ],
+                                              "gpuMemory":  [
+                                                                {
+                                                                    "instance":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0",
+                                                                    "dedicatedBytes":  41312256,
+                                                                    "sharedBytes":  4419584,
+                                                                    "committedBytes":  46403584
+                                                                }
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  31248,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  7614464,
+                                              "workingSetBytes":  40370176,
+                                              "privateBytes":  12947456,
+                                              "handles":  330,
+                                              "threads":  25,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  19904,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  3309568,
+                                              "workingSetBytes":  21581824,
+                                              "privateBytes":  8105984,
+                                              "handles":  188,
+                                              "threads":  10,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  17264,
+                                              "role":  "renderer",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  86441984,
+                                              "workingSetBytes":  156114944,
+                                              "privateBytes":  126980096,
+                                              "handles":  298,
+                                              "threads":  20,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          }
+                                      ],
+                        "totalCpuPercentOfMachine":  0,
+                        "totalPrivateWorkingSetBytes":  203624448,
+                        "totalPrivateBytes":  346316800,
+                        "totalHandles":  4069,
+                        "totalThreads":  251
+                    },
+                    {
+                        "elapsedSeconds":  16.5839839,
+                        "timestampUtc":  "2026-10-07T11:49:11.8675002Z",
+                        "machineCpuPercent":  30,
+                        "processCount":  8,
+                        "processes":  [
+                                          {
+                                              "pid":  29140,
+                                              "role":  "app",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  20541440,
+                                              "workingSetBytes":  92917760,
+                                              "privateBytes":  25534464,
+                                              "handles":  767,
+                                              "threads":  51,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  2684,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1236992,
+                                              "workingSetBytes":  10223616,
+                                              "privateBytes":  1871872,
+                                              "handles":  120,
+                                              "threads":  4,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  33392,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  39866368,
+                                              "workingSetBytes":  145113088,
+                                              "privateBytes":  50163712,
+                                              "handles":  1542,
+                                              "threads":  70,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  26192,
+                                              "role":  "crashpad-handler",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1646592,
+                                              "workingSetBytes":  10563584,
+                                              "privateBytes":  2584576,
+                                              "handles":  153,
+                                              "threads":  11,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  5116,
+                                              "role":  "gpu-process",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  42180608,
+                                              "workingSetBytes":  106627072,
+                                              "privateBytes":  118714368,
+                                              "handles":  678,
+                                              "threads":  60,
+                                              "gpuEngines":  [
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_0_engtype_3D",
+                                                                     "utilizationPercent":  1
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_10_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_11_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_12_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_13_engtype_Security_1",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_1_engtype_VideoDecode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_2_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_3_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_4_engtype_Security",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_5_engtype_VideoEncode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_6_engtype_OFA_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_7_engtype_JPEG_Decode_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_8_engtype_VR",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_9_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 }
+                                                             ],
+                                              "gpuMemory":  [
+                                                                {
+                                                                    "instance":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0",
+                                                                    "dedicatedBytes":  41115648,
+                                                                    "sharedBytes":  4419584,
+                                                                    "committedBytes":  46206976
+                                                                }
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  31248,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  7614464,
+                                              "workingSetBytes":  40370176,
+                                              "privateBytes":  12947456,
+                                              "handles":  330,
+                                              "threads":  25,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  19904,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  3309568,
+                                              "workingSetBytes":  21581824,
+                                              "privateBytes":  8105984,
+                                              "handles":  188,
+                                              "threads":  10,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  17264,
+                                              "role":  "renderer",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  92266496,
+                                              "workingSetBytes":  158244864,
+                                              "privateBytes":  129064960,
+                                              "handles":  298,
+                                              "threads":  20,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          }
+                                      ],
+                        "totalCpuPercentOfMachine":  0,
+                        "totalPrivateWorkingSetBytes":  208662528,
+                        "totalPrivateBytes":  348987392,
+                        "totalHandles":  4076,
+                        "totalThreads":  251
+                    },
+                    {
+                        "elapsedSeconds":  18.0988789,
+                        "timestampUtc":  "2026-10-07T11:49:13.3761027Z",
+                        "machineCpuPercent":  16,
+                        "processCount":  8,
+                        "processes":  [
+                                          {
+                                              "pid":  29140,
+                                              "role":  "app",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  20541440,
+                                              "workingSetBytes":  92917760,
+                                              "privateBytes":  25534464,
+                                              "handles":  767,
+                                              "threads":  51,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  2684,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1236992,
+                                              "workingSetBytes":  10223616,
+                                              "privateBytes":  1871872,
+                                              "handles":  120,
+                                              "threads":  4,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  33392,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  39866368,
+                                              "workingSetBytes":  145113088,
+                                              "privateBytes":  50163712,
+                                              "handles":  1542,
+                                              "threads":  70,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  26192,
+                                              "role":  "crashpad-handler",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1646592,
+                                              "workingSetBytes":  10563584,
+                                              "privateBytes":  2584576,
+                                              "handles":  153,
+                                              "threads":  11,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  5116,
+                                              "role":  "gpu-process",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  42389504,
+                                              "workingSetBytes":  107245568,
+                                              "privateBytes":  119128064,
+                                              "handles":  678,
+                                              "threads":  60,
+                                              "gpuEngines":  [
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_0_engtype_3D",
+                                                                     "utilizationPercent":  1
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_10_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_11_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_12_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_13_engtype_Security_1",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_1_engtype_VideoDecode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_2_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_3_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_4_engtype_Security",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_5_engtype_VideoEncode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_6_engtype_OFA_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_7_engtype_JPEG_Decode_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_8_engtype_VR",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_9_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 }
+                                                             ],
+                                              "gpuMemory":  [
+                                                                {
+                                                                    "instance":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0",
+                                                                    "dedicatedBytes":  26189824,
+                                                                    "sharedBytes":  4370432,
+                                                                    "committedBytes":  31232000
+                                                                }
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  31248,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  7614464,
+                                              "workingSetBytes":  40370176,
+                                              "privateBytes":  12947456,
+                                              "handles":  330,
+                                              "threads":  25,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  19904,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  3309568,
+                                              "workingSetBytes":  21581824,
+                                              "privateBytes":  8105984,
+                                              "handles":  188,
+                                              "threads":  10,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  17264,
+                                              "role":  "renderer",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  94973952,
+                                              "workingSetBytes":  162131968,
+                                              "privateBytes":  132579328,
+                                              "handles":  298,
+                                              "threads":  20,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          }
+                                      ],
+                        "totalCpuPercentOfMachine":  0,
+                        "totalPrivateWorkingSetBytes":  211578880,
+                        "totalPrivateBytes":  352915456,
+                        "totalHandles":  4076,
+                        "totalThreads":  251
+                    },
+                    {
+                        "elapsedSeconds":  19.635661499999998,
+                        "timestampUtc":  "2026-10-07T11:49:14.8562898Z",
+                        "machineCpuPercent":  11,
+                        "processCount":  8,
+                        "processes":  [
+                                          {
+                                              "pid":  29140,
+                                              "role":  "app",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  20598784,
+                                              "workingSetBytes":  93122560,
+                                              "privateBytes":  25427968,
+                                              "handles":  768,
+                                              "threads":  52,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  2684,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1236992,
+                                              "workingSetBytes":  10223616,
+                                              "privateBytes":  1871872,
+                                              "handles":  120,
+                                              "threads":  4,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  33392,
+                                              "role":  "browser",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  39899136,
+                                              "workingSetBytes":  145182720,
+                                              "privateBytes":  50167808,
+                                              "handles":  1542,
+                                              "threads":  70,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  26192,
+                                              "role":  "crashpad-handler",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  1646592,
+                                              "workingSetBytes":  10563584,
+                                              "privateBytes":  2584576,
+                                              "handles":  153,
+                                              "threads":  11,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  5116,
+                                              "role":  "gpu-process",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  43925504,
+                                              "workingSetBytes":  107843584,
+                                              "privateBytes":  119652352,
+                                              "handles":  678,
+                                              "threads":  60,
+                                              "gpuEngines":  [
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_0_engtype_3D",
+                                                                     "utilizationPercent":  1
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_10_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_11_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_12_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_13_engtype_Security_1",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_1_engtype_VideoDecode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_2_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_3_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_4_engtype_Security",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_5_engtype_VideoEncode",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_6_engtype_OFA_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_7_engtype_JPEG_Decode_0",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_8_engtype_VR",
+                                                                     "utilizationPercent":  0
+                                                                 },
+                                                                 {
+                                                                     "engine":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0_eng_9_engtype_Copy",
+                                                                     "utilizationPercent":  0
+                                                                 }
+                                                             ],
+                                              "gpuMemory":  [
+                                                                {
+                                                                    "instance":  "pid_5116_luid_0x00000000_0x0000BFB6_phys_0",
+                                                                    "dedicatedBytes":  32837632,
+                                                                    "sharedBytes":  3756032,
+                                                                    "committedBytes":  37265408
+                                                                }
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  31248,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  7614464,
+                                              "workingSetBytes":  40370176,
+                                              "privateBytes":  12947456,
+                                              "handles":  330,
+                                              "threads":  25,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  19904,
+                                              "role":  "utility",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  3387392,
+                                              "workingSetBytes":  21663744,
+                                              "privateBytes":  8196096,
+                                              "handles":  188,
+                                              "threads":  10,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          },
+                                          {
+                                              "pid":  17264,
+                                              "role":  "renderer",
+                                              "cpuPercentOfMachine":  0,
+                                              "cpuPercentOfOneCore":  0,
+                                              "cpuSampleAvailable":  true,
+                                              "privateWorkingSetBytes":  99721216,
+                                              "workingSetBytes":  165965824,
+                                              "privateBytes":  136290304,
+                                              "handles":  298,
+                                              "threads":  20,
+                                              "gpuEngines":  [
+
+                                                             ],
+                                              "gpuMemory":  [
+
+                                                            ]
+                                          }
+                                      ],
+                        "totalCpuPercentOfMachine":  0,
+                        "totalPrivateWorkingSetBytes":  218030080,
+                        "totalPrivateBytes":  357138432,
+                        "totalHandles":  4077,
+                        "totalThreads":  252
+                    }
+                ]
+}

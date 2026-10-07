@@ -2,11 +2,11 @@ import { ISLAND_OVERSHOOT } from "./islandGeometry";
 
 export const ISLAND_MOTION = {
   crossAxisDuration: 280,
-  outwardDelay: 40,
-  outwardDuration: 300,
+  outwardDelay: 0,
+  outwardDuration: 240,
   settleDuration: 60,
   radiusDuration: 320,
-  collapseDuration: 420,
+  collapseDuration: 240,
   hoverDuration: 140,
   styleDuration: 180,
   overshoot: ISLAND_OVERSHOOT,
@@ -57,4 +57,16 @@ export function cubicBezierEasing(x1: number, y1: number, x2: number, y2: number
 export const islandMorphEasing = cubicBezierEasing(0.22, 0.8, 0.2, 1);
 export const islandSettleEasing = cubicBezierEasing(0.23, 1, 0.32, 1);
 
-export const ISLAND_SPRING = { stiffness: 0.18, damping: 0.8, precision: 0.01 } as const;
+// Keep both layouts attached to the same edge while their shared elements move.
+export function anchoredLayoutOffset(
+  surface: { width: number; height: number },
+  layout: { width: number; height: number },
+  edge: "top" | "right" | "bottom" | "left",
+) {
+  if (edge === "top") return { x: (surface.width - layout.width) / 2, y: 0 };
+  if (edge === "bottom") return { x: (surface.width - layout.width) / 2, y: surface.height - layout.height };
+  if (edge === "left") return { x: 0, y: (surface.height - layout.height) / 2 };
+  return { x: surface.width - layout.width, y: (surface.height - layout.height) / 2 };
+}
+
+export const ISLAND_SPRING = { stiffness: 0.08, damping: 0.85, precision: 0.01 } as const;

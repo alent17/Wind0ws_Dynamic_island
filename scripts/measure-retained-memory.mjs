@@ -11,12 +11,21 @@ const cdp=await page.context().newCDPSession(page);await cdp.send('Performance.e
 const metrics=async()=>Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map(m=>[m.name,m.value]));
 
 await page.goto(`http://127.0.0.1:${server.address().port}/ui-tests/island-fixture.html`);
-const cycle=async()=>{await page.locator('.feature-menu button').nth(1).click();await page.keyboard.press('Escape');await page.getByTestId('compact-mode').click();await page.getByTestId('expanded-mode').click();};
+const cycle=async()=>{
+ await page.evaluate(() => window.configureIsland({mode:'expanded',toolbar:true}));
+ await page.locator('.feature-menu button').nth(1).click();
+ await page.keyboard.press('Escape');
+ await page.evaluate(() => window.configureIsland({mode:'compact'}));
+ await page.locator('.stage').waitFor();
+ await page.evaluate(() => window.configureIsland({mode:'expanded'}));
+ await page.waitForTimeout(600);
+};
 for(let i=0;i<5;i++)await cycle();
 await cdp.send('HeapProfiler.collectGarbage');const before=await metrics();
 for(let i=0;i<30;i++)await cycle();
 await cdp.send('HeapProfiler.collectGarbage');const after=await metrics();
 console.log(JSON.stringify({before,after}));
-await writeFile('docs/performance/retained-memory.json',JSON.stringify({before,after},null,2));
+await mkdir('dist/performance',{recursive:true});
+await writeFile(`dist/performance/${label}-retained.json`,JSON.stringify({runtime:'Chrome fixture, forced-GC diagnostic; not a native memory benchmark',before,after},null,2));
 await browser.close();server.close();
 if(after.Nodes > before.Nodes + 10 || after.JSEventListeners > before.JSEventListeners + 2 || after.JSHeapUsedSize - before.JSHeapUsedSize > 1024*1024) throw new Error('Retained memory grew beyond the warmed production-page budget');

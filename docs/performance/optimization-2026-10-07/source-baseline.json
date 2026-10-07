@@ -1,0 +1,49 @@
+{
+  "reviewCommit": "a9a855ef62d2596775115c70b82f63af8a67229e",
+  "localBaseline": "pre-task files, preserved; not a pristine review-commit checkout",
+  "existingDifferences": [
+    {
+      "path": "playwright.config.ts",
+      "before": "local differs from a9a855e",
+      "localBlob": "1ee77e89d3ef312f3f17d41ec6383888b123c9fb",
+      "remoteBlob": "3f7d190791d1eb55d3b6d8eee34acd643d30f8b7"
+    },
+    {
+      "path": "src/lib/components/island/IslandSurface.svelte",
+      "before": "local differs from a9a855e",
+      "localBlob": "85f8fae5110413c3826b3f4ea37a327994397779",
+      "remoteBlob": "ead10295cb6c9f80f1af7b0ba0fab950a868d70e"
+    },
+    {
+      "path": "src/lib/islandMotion.test.ts",
+      "before": "local differs from a9a855e",
+      "localBlob": "56d3fb89d02837b1c83623438f0a51b695e0dbf3",
+      "remoteBlob": "9cb914ec4b70f2ec27cf871980f0bbffeab411a5"
+    },
+    {
+      "path": "src/lib/islandMotion.ts",
+      "before": "local differs from a9a855e",
+      "localBlob": "2514235e80aceb3583b645bc488d85a836ca2e54",
+      "remoteBlob": "98e01e72c1752fc0e215e375e523335114150d90"
+    },
+    {
+      "path": "ui-tests/island-fixture.html",
+      "before": "local differs from a9a855e",
+      "localBlob": "3a3389d86b4ccdc9bdb5a7128d3d902e5e336dec",
+      "remoteBlob": "7fa369b6c363a908a5fa96f882d1fa38b6bd0a3d"
+    },
+    {
+      "path": "ui-tests/island-fixture.svelte",
+      "before": "missing locally before this task"
+    },
+    {
+      "path": "ui-tests/island-navigation.pw.ts",
+      "before": "missing locally before this task"
+    },
+    {
+      "path": "ui-tests/island-preview.pw.ts",
+      "before": "missing locally before this task"
+    }
+  ],
+  "scope": "Pre-existing changes verified using normalized local/remote contents. The remote stores CRLF in some blobs; raw normalized-local hashes alone do not prove changes. Modified native inputs were captured before edits."
+}

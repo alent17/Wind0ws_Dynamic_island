@@ -7,11 +7,28 @@ use windows::Win32::Media::Audio::{
     eCommunications, eConsole, eMultimedia, eRender, IMMDevice, IMMDeviceEnumerator,
     MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
 };
-use windows::Win32::System::Com::StructuredStorage::PropVariantToString;
+use windows::Win32::System::Com::StructuredStorage::{
+    PropVariantClear, PropVariantToString, PROPVARIANT,
+};
 use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_ALL, STGM_READ};
 
 fn audio_error(context: &str, error: windows::core::Error) -> AppError {
     AppError::business(5101, format!("{}: {}", context, error))
+}
+
+// Move-only ownership; windows 0.52's raw PROPVARIANT has no Drop implementation.
+struct OwnedPropVariant(PROPVARIANT);
+
+impl Drop for OwnedPropVariant {
+    fn drop(&mut self) {
+        if let Err(error) = unsafe { PropVariantClear(&mut self.0) } {
+            tracing::warn!("Failed to clear audio device property: {error}");
+        }
+    }
+}
+
+fn audio_apartment() -> AppResult<super::apartment::Apartment> {
+    super::apartment::Apartment::enter().map_err(|error| audio_error("无法初始化音频线程", error))
 }
 
 unsafe fn enumerator() -> AppResult<IMMDeviceEnumerator> {
@@ -37,8 +54,13 @@ unsafe fn device_name(device: &IMMDevice) -> String {
     let Ok(value) = store.GetValue(&PKEY_Device_FriendlyName) else {
         return "音频输出设备".to_string();
     };
+    let value = OwnedPropVariant(value);
+    property_name(value)
+}
+
+fn property_name(value: OwnedPropVariant) -> String {
     let mut buffer = [0u16; 512];
-    if PropVariantToString(&value, &mut buffer).is_err() {
+    if unsafe { PropVariantToString(&value.0, &mut buffer) }.is_err() {
         return "音频输出设备".to_string();
     }
     let length = buffer
@@ -48,7 +70,62 @@ unsafe fn device_name(device: &IMMDevice) -> String {
     String::from_utf16_lossy(&buffer[..length])
 }
 
+#[cfg(test)]
+mod resource_tests {
+    use super::*;
+    use std::mem::ManuallyDrop;
+    use windows::core::PWSTR;
+    use windows::Win32::System::Com::{
+        CoTaskMemAlloc,
+        StructuredStorage::{PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0},
+    };
+    use windows::Win32::System::Variant::VT_LPWSTR;
+
+    fn string_property(text: &str) -> OwnedPropVariant {
+        let wide: Vec<u16> = text.encode_utf16().chain(Some(0)).collect();
+        let allocation = unsafe { CoTaskMemAlloc(wide.len() * size_of::<u16>()) }.cast::<u16>();
+        assert!(!allocation.is_null());
+        unsafe { std::ptr::copy_nonoverlapping(wide.as_ptr(), allocation, wide.len()) };
+        OwnedPropVariant(PROPVARIANT {
+            Anonymous: PROPVARIANT_0 {
+                Anonymous: ManuallyDrop::new(PROPVARIANT_0_0 {
+                    vt: VT_LPWSTR,
+                    Anonymous: PROPVARIANT_0_0_0 {
+                        pwszVal: PWSTR(allocation),
+                    },
+                    ..Default::default()
+                }),
+            },
+        })
+    }
+
+    #[test]
+    fn formats_owned_string_and_handles_insufficient_conversion_buffer() {
+        assert_eq!(property_name(string_property("扬声器")), "扬声器");
+        assert_eq!(
+            property_name(string_property(&"x".repeat(600))),
+            "音频输出设备"
+        );
+    }
+
+    #[test]
+    #[ignore = "Requires a Windows audio service; run explicitly for native device stress"]
+    fn queries_device_properties_1000_times() {
+        for _ in 0..1000 {
+            let devices = list_audio_output_devices().unwrap();
+            assert!(
+                !devices.is_empty(),
+                "No audio output device for this diagnostic"
+            );
+            assert!(devices
+                .iter()
+                .all(|device| !device.id.is_empty() && !device.name.is_empty()));
+        }
+    }
+}
+
 pub fn get_system_audio_state() -> AppResult<SystemAudioState> {
+    let _apartment = audio_apartment()?;
     unsafe {
         let enumerator = enumerator()?;
         let device = enumerator
@@ -74,6 +151,7 @@ pub fn get_system_audio_state() -> AppResult<SystemAudioState> {
 }
 
 pub fn list_audio_output_devices() -> AppResult<Vec<AudioDeviceInfo>> {
+    let _apartment = audio_apartment()?;
     unsafe {
         let enumerator = enumerator()?;
         let default = enumerator
@@ -101,6 +179,7 @@ pub fn list_audio_output_devices() -> AppResult<Vec<AudioDeviceInfo>> {
 }
 
 pub fn set_system_volume(volume_percent: u8) -> AppResult<()> {
+    let _apartment = audio_apartment()?;
     unsafe {
         let device = enumerator()?
             .GetDefaultAudioEndpoint(eRender, eMultimedia)
@@ -152,6 +231,7 @@ struct IPolicyConfig_Vtbl {
 }
 
 pub fn set_default_audio_output(id: &str) -> AppResult<()> {
+    let _apartment = audio_apartment()?;
     let wide: Vec<u16> = id.encode_utf16().chain(Some(0)).collect();
     unsafe {
         const POLICY_CONFIG_CLIENT: GUID = GUID::from_u128(0x870af99c_171d_4f9e_af0d_e63df40c2bc9);

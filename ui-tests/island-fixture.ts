@@ -1,4 +1,4 @@
-import { mount } from "svelte";
-import IslandFixture from "./island-fixture.svelte";
-
-mount(IslandFixture, { target: document.getElementById("app")! });
+import { mount, unmount } from "svelte";
+import Fixture from "./IslandFixture.svelte";
+const fixture = mount(Fixture, { target: document.getElementById("app")! });
+(window as any).unmountIsland = () => unmount(fixture);

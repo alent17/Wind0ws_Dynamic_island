@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { createCanvasArtworkRenderer, type CanvasArtworkRequest } from "$lib/canvasArtwork";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { convertFileSrc, invoke } from "@tauri-apps/api/core";
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
@@ -64,7 +65,7 @@
     sourceDisplay: "",
   });
 
-  let currentTrackKey = "";
+  let currentTrackKey = $state("");
   let lastReportedPosition: number | undefined;
   let pendingSeekUntil = 0;
   let displayCover = $state("");
@@ -874,9 +875,9 @@
     }
 
     // 清理临时 Canvas
+    if (tempCanvasCache) tempCanvasCache.width = tempCanvasCache.height = 0;
     tempCanvasCache = null;
-    newCanvasRef = null;
-    oldCanvasRef = null;
+    processedImageCache.clear();
 
     if (savePositionTimeout) clearTimeout(savePositionTimeout);
   });
@@ -885,65 +886,20 @@
     isHovered && windowSize.width > 100 && windowSize.height > 100,
   );
 
-  // 缓存 Canvas 元素引用，避免重复查询
   let tempCanvasCache = $state<HTMLCanvasElement | null>(null);
-  let newCanvasRef = $state<HTMLCanvasElement | null>(null);
-  let oldCanvasRef = $state<HTMLCanvasElement | null>(null);
-
-  // 事件监听器管理器
   let eventListeners = $state<(() => void)[]>([]);
 
-  // 设置 Canvas 元素引用 - 监听 displayCover 变化确保 Canvas 元素已创建
-  $effect(() => {
-    if (displayCover) {
-      const frame = requestAnimationFrame(() => {
-        if (disposed) return;
-        const newCanvas = document.querySelector(
-          ".album-art-new",
-        ) as HTMLCanvasElement;
-        const oldCanvas = document.querySelector(
-          ".album-art-old",
-        ) as HTMLCanvasElement;
-
-        if (newCanvas && !newCanvasRef) {
-          newCanvasRef = newCanvas;
-        }
-        if (oldCanvas && !oldCanvasRef) {
-          oldCanvasRef = oldCanvas;
-        }
-      });
-      return () => cancelAnimationFrame(frame);
-    }
-  });
-
-  // 监听 displayCover 和 enablePixelArt 变化，渲染到 Canvas
-  $effect(() => {
-    if (displayCover) {
-      const renderFunction = enablePixelArt
-        ? renderImageToCanvas
-        : renderImageToCanvasNormal;
-
-      const newCanvas =
-        newCanvasRef ||
-        (document.querySelector(".album-art-new") as HTMLCanvasElement);
-
-      if (newCanvas) {
-        if (!newCanvasRef) newCanvasRef = newCanvas;
-        renderFunction(newCanvas, displayCover);
-      }
-
-      if (previousCover) {
-        const oldCanvas =
-          oldCanvasRef ||
-          (document.querySelector(".album-art-old") as HTMLCanvasElement);
-
-        if (oldCanvas) {
-          if (!oldCanvasRef) oldCanvasRef = oldCanvas;
-          renderFunction(oldCanvas, previousCover);
-        }
-      }
-    }
-  });
+  // Svelte actions bind the renderer to the actual DOM node and destroy it
+  // when the cover branch exits. No document queries or detached refs remain.
+  function coverCanvas(canvas: HTMLCanvasElement, request: CanvasArtworkRequest) {
+    const renderer = createCanvasArtworkRenderer(canvas, {
+      process: (url) => processImageBackend(url, true),
+      paint: (target, image) => renderCachedImage(target, image, false),
+      onError: (error) => console.error("[Canvas] 图片加载失败:", error),
+    });
+    renderer.update(request);
+    return renderer;
+  }
 
   // 缓存处理后的图片。浮动窗可能长时间切歌，使用有上限的 LRU，避免
   // 专辑封面 base64 无限留在 WebView 内存中。
@@ -973,6 +929,7 @@
           imagePath: imageUrl,
           enablePixelArt: enablePixelArt,
         });
+        if (disposed) return imageUrl;
         processedImageCache.set(cacheKey, processedBase64);
         while (processedImageCache.size > MAX_PROCESSED_IMAGES) {
           const oldestKey = processedImageCache.keys().next().value;
@@ -989,46 +946,6 @@
     })();
     processingPromises.set(cacheKey, processing);
     return processing;
-  }
-
-  // 渲染图片到 Canvas（简化版，直接使用后端处理后的 base64）
-  async function renderImageToCanvas(
-    canvas: HTMLCanvasElement,
-    imageUrl: string,
-  ) {
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    try {
-      // 使用后端 API 处理图片
-      const processedUrl = await processImageBackend(imageUrl, enablePixelArt);
-      if (disposed) return;
-
-      // 加载处理后的图片
-      const img = pageImage();
-      if (
-        processedUrl.startsWith("http") &&
-        !processedUrl.includes("asset.localhost")
-      ) {
-        img.crossOrigin = "Anonymous";
-      }
-      img.onload = () => {
-        // 设置 Canvas 尺寸
-        canvas.width = img.width;
-        canvas.height = img.height;
-
-        // 绘制图片
-        ctx.drawImage(img, 0, 0);
-      };
-      img.onerror = () => {
-        console.error("[Canvas] 图片加载失败，使用原图");
-        renderImageToCanvasNormal(canvas, imageUrl);
-      };
-      img.src = processedUrl;
-    } catch (error) {
-      console.error("[图片处理] 处理错误:", error);
-      renderImageToCanvasNormal(canvas, imageUrl);
-    }
   }
 
   // 智能图片质量分析函数
@@ -1309,28 +1226,6 @@
     }
   }
 
-  // 渲染图片到 Canvas（正常高清，不像素化）
-  function renderImageToCanvasNormal(
-    canvas: HTMLCanvasElement,
-    imageUrl: string,
-  ) {
-    if (disposed) return;
-    const img = pageImage();
-    if (imageUrl.startsWith("http") && !imageUrl.includes("asset.localhost")) {
-      img.crossOrigin = "Anonymous";
-    }
-
-    img.onload = () => {
-      renderCachedImage(canvas, img, false);
-    };
-
-    img.onerror = () => {
-      console.error("[Canvas] 图片加载失败:", imageUrl);
-    };
-
-    img.src = imageUrl;
-  }
-
   async function togglePlay(e: MouseEvent) {
     e.stopPropagation();
     await mediaApi.controlMedia("play_pause");
@@ -1572,6 +1467,7 @@
         <!-- 旧图（如果有） -->
         {#if previousCover}
           <canvas
+            use:coverCanvas={{ url: previousCover, track: currentTrackKey, pixelated: enablePixelArt }}
             class="album-art album-art-old"
             class:slide-out={slideDirection}
             draggable="false"
@@ -1579,6 +1475,7 @@
         {/if}
         <!-- 新图 -->
         <canvas
+          use:coverCanvas={{ url: displayCover, track: currentTrackKey, pixelated: enablePixelArt }}
           class="album-art album-art-new"
           class:slide-in={slideDirection}
           draggable="false"

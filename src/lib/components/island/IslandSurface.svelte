@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack, tick } from "svelte";
-  import { spring } from "svelte/motion";
+  import { spring, tweened } from "svelte/motion";
   import { Airplay, ArrowLeft, Clock, CloudSun, EyeOff, GalleryHorizontalEnd, ListMusic, Music2, Play, Settings, Shuffle, SkipBack, SkipForward, Star, Timer, Volume2, VolumeX } from "lucide-svelte";
   import MediaProgress from "$lib/components/media/MediaProgress.svelte";
   import PlayPauseIcon from "$lib/components/media/PlayPauseIcon.svelte";
@@ -16,7 +16,7 @@
   import WeatherIcon from "$lib/components/media/WeatherIcon.svelte";
   import type { IslandTool } from "$lib/featureRail";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
-  import { ISLAND_SPRING } from "$lib/islandMotion";
+  import { ISLAND_MOTION, islandSettleEasing, anchoredLayoutOffset } from "$lib/islandMotion";
   import type { AudioDeviceInfo, MediaState, SpectrumMode, SystemAudioState, WeatherForecastDay } from "$lib/api/types";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
   import {
@@ -205,10 +205,11 @@
     effectiveCompactLength,
     0,
   ));
-  const widthMotion = spring(initial.width, ISLAND_SPRING);
-  const heightMotion = spring(initial.height, ISLAND_SPRING);
-  const radiusMotion = spring(initial.radius, ISLAND_SPRING);
-  const styleMorph = spring(untrack(() => islandStyle === "edge" ? 1 : 0), ISLAND_SPRING);
+  const motionOptions = { duration: ISLAND_MOTION.outwardDuration, easing: islandSettleEasing };
+  const widthMotion = tweened(initial.width, motionOptions);
+  const heightMotion = tweened(initial.height, motionOptions);
+  const radiusMotion = tweened(initial.radius, motionOptions);
+  const styleMorph = tweened(untrack(() => islandStyle === "edge" ? 1 : 0), motionOptions);
   const hideMorph = spring(untrack(() => simulateHidden && mode === "hidden" ? 1 : 0), { stiffness: 0.18, damping: 0.7, precision: 0.001 });
   let animatedWidth = $state(initial.width);
   let animatedHeight = $state(initial.height);
@@ -216,19 +217,7 @@
   let styleProgress = $state(untrack(() => islandStyle === "edge" ? 1 : 0));
   let hideProgress = $state(untrack(() => simulateHidden && mode === "hidden" ? 1 : 0));
   let prefersReducedMotion = $state(false);
-  type CoverRect = { left: number; top: number; width: number; height: number };
-  type PendingCoverMotion = { from: CoverRect; fromExpanded: boolean; src: string };
-  let compactCoverElement = $state<HTMLButtonElement>();
-  let expandedCoverElement = $state<HTMLButtonElement>();
-  let coverMotionElement = $state<HTMLDivElement>();
-  let previousCoverMode = $state<IslandMode | null>(null);
-  let collapsingCover = $state(false);
-  let pendingCoverMotion = $state<PendingCoverMotion | null>(null);
-  let coverMotionOverlay = $state<(PendingCoverMotion & { radius: number }) | null>(null);
-  let coverMotionTarget = $state<"compact" | "expanded" | null>(null);
-  let coverMotionAnimation: number | null = null;
-  let coverMotionRevision = 0;
-  const shoulderMotion = spring(untrack(() => mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius), ISLAND_SPRING);
+  const shoulderMotion = tweened(untrack(() => mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius), motionOptions);
   let animatedShoulder = $state(untrack(() => mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius));
   const unsubscribeShoulder = shoulderMotion.subscribe(value => animatedShoulder = value);
   let shapeSettled = $state(false);
@@ -257,6 +246,46 @@
     radius: expandedBaseGeometry.radius * expandedScale,
   });
 
+  let compactRoot = $state<HTMLDivElement>();
+  let compactMode = $state<"compact" | "hover">(untrack(() => mode === "hover" ? "hover" : "compact"));
+  let coverLayouts = $state<{ compact: { x: number; y: number; width: number }; expanded: { x: number; y: number; width: number } } | null>(null);
+  $effect(() => { if (mode === "compact" || mode === "hover") compactMode = mode; });
+  const compactGeometry = $derived(geometryFor(compactMode, expandedRadius, edge, effectiveCompactLength));
+  const compactInset = $derived(islandStyle === "edge" ? Math.min(collapsedEdgeShoulderRadius, Math.max(compactGeometry.width, compactGeometry.height) / 4, Math.min(compactGeometry.width, compactGeometry.height) / 2) : 0);
+  const expandedInset = $derived(islandStyle === "edge" ? Math.min(expandedEdgeShoulderRadius, Math.max(expandedGeometry.width, expandedGeometry.height) / 4, Math.min(expandedGeometry.width, expandedGeometry.height) / 2) : 0);
+  const compactOffset = $derived(anchoredLayoutOffset(size, compactGeometry, edge));
+  const expandedOffset = $derived(anchoredLayoutOffset(size, expandedGeometry, edge));
+
+  // Read the real layout boxes, including CSS zoom, toolbar and shoulder padding.
+  // Translation cancels when subtracting the root, so measurements stay stable
+  // while the island and the native window move.
+  $effect(() => {
+    const compact = compactRoot;
+    const expanded = pageRoot;
+    compactGeometry; expandedGeometry; compactInset; expandedInset; panelVisible; renderedPage; idle; showTime; timerActive;
+    if (!compact || !expanded) { coverLayouts = null; return; }
+    let disposed = false;
+    const measure = () => {
+      if (disposed) return;
+      const small = compact.querySelector<HTMLElement>(".compact-cover");
+      const large = expanded.querySelector<HTMLElement>(".top-row .expanded-cover");
+      if (!small || !large) { coverLayouts = null; return; }
+      const a = small.getBoundingClientRect(), b = large.getBoundingClientRect();
+      const c = compact.getBoundingClientRect(), d = expanded.getBoundingClientRect();
+      // Rects use viewport pixels; the Studio preview can scale the entire
+      // host. Convert back to surface coordinates without removing CSS zoom.
+      const css = getComputedStyle(compact);
+      const scaleX = c.width / parseFloat(css.width) || 1;
+      const scaleY = c.height / parseFloat(css.height) || 1;
+      const next = { compact: { x: (a.left - c.left) / scaleX, y: (a.top - c.top) / scaleY, width: a.width / scaleX }, expanded: { x: (b.left - d.left) / scaleX, y: (b.top - d.top) / scaleY, width: b.width / scaleX } };
+      if (JSON.stringify(next) !== JSON.stringify(untrack(() => coverLayouts))) coverLayouts = next;
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(compact); observer.observe(expanded);
+    void tick().then(measure);
+    return () => { disposed = true; observer.disconnect(); };
+  });
+
   async function navigate(next: IslandPage) {
     page = next;
     await tick();
@@ -283,102 +312,6 @@
     return () => mediaQuery.removeEventListener("change", updatePreference);
   });
 
-  $effect.pre(() => {
-    const nextMode = mode;
-    const previousMode = previousCoverMode;
-    previousCoverMode = nextMode;
-    if (previousMode === null) return;
-    const fromExpanded = previousMode === "expanded";
-    const toExpanded = nextMode === "expanded";
-    if (fromExpanded === toExpanded || (previousMode === "hidden" || nextMode === "hidden")) return;
-    if (toExpanded) collapsingCover = false;
-
-    // Hide both cover endpoints while the shell contracts. The compact cover
-    // moves with the changing shell bounds, so leaving it visible makes it
-    // appear to travel diagonally even after the trajectory overlay is stopped.
-    if (fromExpanded && !toExpanded) {
-      collapsingCover = true;
-      if (coverMotionAnimation !== null) cancelAnimationFrame(coverMotionAnimation);
-      coverMotionAnimation = null;
-      coverMotionRevision++;
-      coverMotionOverlay = null;
-      coverMotionTarget = null;
-      pendingCoverMotion = null;
-      return;
-    }
-
-    const currentOverlayRect = coverMotionElement?.getBoundingClientRect();
-    const source = currentOverlayRect ?? (fromExpanded
-      ? expandedCoverElement?.getBoundingClientRect()
-      : compactCoverElement?.getBoundingClientRect());
-    if (!source || !media.albumArt || idle || !enableAnimations || reduceAnimations || prefersReducedMotion) {
-      if (coverMotionAnimation !== null) cancelAnimationFrame(coverMotionAnimation);
-      coverMotionAnimation = null;
-      coverMotionRevision++;
-      coverMotionOverlay = null;
-      coverMotionTarget = null;
-      pendingCoverMotion = null;
-      return;
-    }
-
-    if (coverMotionAnimation !== null) cancelAnimationFrame(coverMotionAnimation);
-    coverMotionAnimation = null;
-    pendingCoverMotion = {
-      from: { left: source.left, top: source.top, width: source.width, height: source.height },
-      fromExpanded: currentOverlayRect ? (coverMotionTarget === "expanded") : fromExpanded,
-      src: media.albumArt,
-    };
-  });
-
-  $effect(() => {
-    const transition = pendingCoverMotion;
-    if (!transition) return;
-    const revision = ++coverMotionRevision;
-    const targetMode = mode === "expanded" ? "expanded" : "compact";
-    coverMotionTarget = targetMode;
-    const expandedCoverRadius = 20 * expandedScale;
-    coverMotionOverlay = { ...transition, radius: transition.fromExpanded ? expandedCoverRadius : transition.from.width / 2 };
-    pendingCoverMotion = null;
-
-    void (async () => {
-      await tick();
-      const targetElement = targetMode === "expanded" ? expandedCoverElement : compactCoverElement;
-      const overlay = coverMotionElement;
-      if (!targetElement || !overlay || revision !== coverMotionRevision) {
-        if (revision === coverMotionRevision) { coverMotionOverlay = null; coverMotionTarget = null; }
-        return;
-      }
-      const targetRadius = targetMode === "expanded" ? expandedCoverRadius : 10;
-      const duration = 250;
-      const start = performance.now();
-      const easeOut = (progress: number) => 1 - Math.pow(1 - progress, 3);
-      const frame = (now: number) => {
-        if (revision !== coverMotionRevision) return;
-        const target = targetElement.getBoundingClientRect();
-        const progress = Math.min(1, (now - start) / duration);
-        const eased = easeOut(progress);
-        const left = transition.from.left + (target.left - transition.from.left) * eased;
-        const top = transition.from.top + (target.top - transition.from.top) * eased;
-        const width = transition.from.width + (target.width - transition.from.width) * eased;
-        const height = transition.from.height + (target.height - transition.from.height) * eased;
-        const sourceRadius = transition.fromExpanded ? expandedCoverRadius : transition.from.width / 2;
-        const radius = sourceRadius + (targetRadius - sourceRadius) * eased;
-        overlay.style.left = `${left}px`;
-        overlay.style.top = `${top}px`;
-        overlay.style.width = `${width}px`;
-        overlay.style.height = `${height}px`;
-        overlay.style.borderRadius = `${radius}px`;
-        if (progress < 1) coverMotionAnimation = requestAnimationFrame(frame);
-        else {
-          coverMotionAnimation = null;
-          coverMotionOverlay = null;
-          coverMotionTarget = null;
-        }
-      };
-      coverMotionAnimation = requestAnimationFrame(frame);
-    })();
-  });
-
   function notifyRegionChange(change: IslandRegionChange) {
     // The App callback reads media state while calculating the host offset.
     // Do not let those reads make this geometry effect restart on every media
@@ -389,18 +322,18 @@
   $effect(() => {
     const target = mode === "expanded" ? expandedGeometry : geometryFor(mode, expandedRadius, edge, effectiveCompactLength);
     const hard = !enableAnimations || reduceAnimations || prefersReducedMotion;
+    const duration = hard ? 0 : mode === "expanded" ? ISLAND_MOTION.outwardDuration : ISLAND_MOTION.collapseDuration;
     const revision = ++transitionRevision;
     shapeSettled = false;
     void Promise.all([
-      widthMotion.set(target.width, { hard }),
-      heightMotion.set(target.height, { hard }),
-      radiusMotion.set(target.radius, { hard }),
-      shoulderMotion.set(mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius, { hard }),
-      styleMorph.set(islandStyle === "edge" ? 1 : 0, { hard }),
+      widthMotion.set(target.width, { duration }),
+      heightMotion.set(target.height, { duration }),
+      radiusMotion.set(target.radius, { duration }),
+      shoulderMotion.set(mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius, { duration }),
+      styleMorph.set(islandStyle === "edge" ? 1 : 0, { duration }),
     ]).then(() => {
       if (revision === transitionRevision) {
         shapeSettled = true;
-        if (collapsingCover) collapsingCover = false;
       }
     });
   });
@@ -451,7 +384,7 @@
   });
   const outwardProgress = $derived.by(() => {
     const horizontalEdge = edge === "top" || edge === "bottom";
-    const compact = geometryFor("hover", expandedRadius, edge, effectiveCompactLength);
+    const compact = compactGeometry;
     const expanded = expandedGeometry;
     const value = horizontalEdge ? size.height : size.width;
     const start = horizontalEdge ? compact.height : compact.width;
@@ -465,7 +398,6 @@
     const canonicalHeight = verticalEdge ? size.width : size.height;
     return Math.min(currentShoulderRadius, canonicalWidth / 4, canonicalHeight / 2);
   });
-  const contentShoulderInset = $derived(shoulderMarkerOffset * styleProgress);
   const currentRadii = $derived.by(() => {
     const floating = radiiFor(size, "floating", edge);
     const attached = radiiFor(size, "edge", edge);
@@ -484,9 +416,18 @@
   $effect(() => {
     notifyRegionChange({ geometry: size, radii: currentRadii, polygon: currentPolygon, extraRects: [], anchorGap: 22 * expandedScale * (1 - styleProgress), settled: shapeSettled });
   });
-  const expandedOpacity = $derived(Math.min(1, Math.max(0, (outwardProgress - 0.18) / 0.42)));
-  const expandedContentScale = $derived(0.9 + outwardProgress * 0.1);
-  const compactOpacity = $derived(Math.min(1, Math.max(0, 1 - outwardProgress * 4)));
+  const expandedOpacity = $derived(outwardProgress);
+  const sharedCover = $derived.by(() => {
+    if (!coverLayouts) return null;
+    const p = outwardProgress;
+    const a = coverLayouts.compact, b = coverLayouts.expanded;
+    const from = { x: compactOffset.x + a.x, y: compactOffset.y + a.y };
+    const to = { x: expandedOffset.x + b.x, y: expandedOffset.y + b.y };
+    return { x: from.x + (to.x - from.x) * p, y: from.y + (to.y - from.y) * p, width: a.width + (b.width - a.width) * p,
+      dx: (from.x - to.x) * (1 - p), dy: (from.y - to.y) * (1 - p), radius: 42 + (20 - 42) * p };
+  });
+  const movingCover = $derived(Boolean(sharedCover && !shapeSettled && outwardProgress > 0 && outwardProgress < 1 && renderedPage === "music" && !idle && !timerActive && !showTime && enableAnimations && !reduceAnimations && !prefersReducedMotion));
+  const compactOpacity = $derived(Math.min(1, Math.max(0, (0.08 - outwardProgress) / 0.08)));
   const surfaceBackground = $derived(mode === "expanded" ? background : "#000");
   const surfaceBorder = $derived(mode === "expanded" ? border : "1px solid transparent");
   const controlSelector = 'button,input,select,textarea,a,[role="slider"],[role="listbox"],[data-stop-toggle]';
@@ -568,8 +509,8 @@
       </div>
     {/if}
 
-    {#if visible && mode !== "expanded" && mode !== "hidden"}
-    <div class="compact-layer" class:vertical={edge === "left" || edge === "right"} class:edge-inset={islandStyle === "edge"} style={`opacity:${compactOpacity};--shoulder-inset:${contentShoulderInset}px`} aria-hidden={expandedOpacity > .5} inert={mode === "expanded"}>
+    {#if visible && mode !== "hidden"}
+    <div class="compact-layer" bind:this={compactRoot} class:vertical={edge === "left" || edge === "right"} class:edge-inset={islandStyle === "edge"} style={`opacity:${compactOpacity};--shoulder-inset:${compactInset}px;width:${compactGeometry.width}px;height:${compactGeometry.height}px;left:${compactOffset.x}px;top:${compactOffset.y}px`} aria-hidden={mode === "expanded" || expandedOpacity > .5} inert={mode === "expanded"}>
       {#if timerActive}
         <button
           class="compact-timer"
@@ -604,7 +545,7 @@
           <span class="idle-weather"><WeatherIcon code={idleWeatherCode} size={14} /><strong><RollingNumber value={idleWeatherTemperature === null ? "--°" : `${Math.round(idleWeatherTemperature)}°`} reduceMotion={reduceAnimations || !enableAnimations} /></strong></span>
         </div>
       {:else}
-        <button bind:this={compactCoverElement} class="cover compact-cover" class:cover-motion-hidden={coverMotionTarget === "compact"} class:collapse-cover-target-hidden={collapsingCover} type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
+        <button class="cover compact-cover" class:shared-cover-source={movingCover} type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
           {#if media.albumArt}
             <span class="compact-disc" class:spinning={mode === "compact" && media.isPlaying && enableAnimations && !reduceAnimations}>
               <CoverArt src={media.albumArt} />
@@ -622,15 +563,19 @@
     </div>
 
     {/if}
-    {#if visible && mode !== "hidden" && (mode === "expanded" || (!shapeSettled && outwardProgress > .001))}
+    {#if visible && mode !== "hidden"}
     <div
-      class="expanded-layer"
-      style:opacity={mode === "expanded" ? expandedOpacity : 1}
-      style:transform={`scale(${expandedContentScale})`}
-      aria-hidden={expandedOpacity <= .5}
+      class="expanded-layer" class:vertical={edge === "left" || edge === "right"}
+      style:opacity={expandedOpacity}
+      style:width={`${expandedGeometry.width}px`}
+      style:height={`${expandedGeometry.height}px`}
+      style:left={`${expandedOffset.x}px`}
+      style:top={`${expandedOffset.y}px`}
+      style:transform={sharedCover && !reduceAnimations && enableAnimations && !prefersReducedMotion ? `translate(${sharedCover.dx}px,${sharedCover.dy}px)` : "none"}
+      aria-hidden={mode !== "expanded" || expandedOpacity <= .5}
       inert={mode !== "expanded"}
     >
-      <div class="expanded-shell" bind:this={pageRoot} class:reduce-page-motion={reduceAnimations || !enableAnimations || prefersReducedMotion} style={`--page-width:${expandedBaseGeometry.width}px;--page-height:${expandedBaseGeometry.height}px;--content-scale:${expandedScale};--shoulder-content-inset:${contentShoulderInset}px`}>
+      <div class="expanded-shell" bind:this={pageRoot} class:reduce-page-motion={reduceAnimations || !enableAnimations || prefersReducedMotion} style={`--page-width:${expandedBaseGeometry.width}px;--page-height:${expandedBaseGeometry.height}px;--content-scale:${expandedScale};--shoulder-content-inset:${expandedInset}px`}>
         {#if panelVisible}
           <div class="top-tools"><FeatureMenu items={menuItems} toolbar activeId={page} scrollPosition={menuScroll} onScroll={(value) => menuScroll = value} onSelect={selectTool} /></div>
         {/if}
@@ -639,7 +584,7 @@
         <section class="music-pane">
           {#if !idle}
             <div class="top-row">
-            <button bind:this={expandedCoverElement} class="cover expanded-cover" class:cover-motion-hidden={coverMotionTarget === "expanded"} class:collapse-cover-source-hidden={collapsingCover} type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
+            <button class="cover expanded-cover" class:shared-cover-source={movingCover} type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
               {#if media.albumArt}<CoverArt src={media.albumArt} />{:else}<Music2 size={30} />{/if}
             </button>
             <div class="metadata">
@@ -732,6 +677,11 @@
     </div>
     {/if}
 
+    {#if visible && mode !== "hidden" && sharedCover}
+      <div class="cover moving-cover" class:in-motion={movingCover} aria-hidden="true" style:transform={`translate(${sharedCover.x}px,${sharedCover.y}px) scale(${sharedCover.width / 84})`} style:border-radius={`${sharedCover.radius}px`}>
+        {#if media.albumArt}<CoverArt src={media.albumArt} />{:else}<Music2 size={30} />{/if}
+      </div>
+    {/if}
     {#if previewHighlight}
       <div
         class="studio-preview-highlight"
@@ -773,30 +723,20 @@
   </div>
 
   </div>
-  {#if coverMotionOverlay}
-    <div
-      bind:this={coverMotionElement}
-      class="cover-motion-overlay"
-      style:left={`${coverMotionOverlay.from.left}px`}
-      style:top={`${coverMotionOverlay.from.top}px`}
-      style:width={`${coverMotionOverlay.from.width}px`}
-      style:height={`${coverMotionOverlay.from.height}px`}
-      style:border-radius={`${coverMotionOverlay.radius}px`}
-      aria-hidden="true"
-    ><img src={coverMotionOverlay.src} alt="" draggable="false" /></div>
-  {/if}
 </div>
 
 <style>
+  .cover.moving-cover{position:absolute;left:0;top:0;z-index:3;width:84px;height:84px;visibility:hidden;transform-origin:top left;pointer-events:none;will-change:transform}
+  .cover.moving-cover.in-motion{visibility:visible}
+  .cover.shared-cover-source{visibility:hidden}
   .island-frame{position:relative;width:100%;height:100%;flex:none;overflow:visible;box-sizing:border-box}.island-frame.simulate-hidden{overflow:hidden}.surface-anchor{position:absolute;z-index:1}.edge-top .surface-anchor{top:0;left:50%}.edge-right .surface-anchor{top:50%;right:0}.edge-bottom .surface-anchor{bottom:0;left:50%}.edge-left .surface-anchor{top:50%;left:0}
   .island-surface{position:relative;z-index:1;overflow:hidden;flex:none;box-sizing:border-box;color:#fff;font-family:var(--app-font);text-rendering:optimizeLegibility;font-synthesis:none;contain:layout style;transition:transform 140ms cubic-bezier(.23,1,.32,1),box-shadow 180ms cubic-bezier(.23,1,.32,1)}
-  .cover-motion-overlay{position:fixed;z-index:1000;left:0;top:0;overflow:hidden;pointer-events:none;will-change:left,top,width,height,border-radius;box-shadow:0 8px 22px rgba(0,0,0,.35)}.cover-motion-overlay img{display:block;width:100%;height:100%;object-fit:cover;-webkit-user-drag:none;user-select:none}.cover-motion-hidden{visibility:hidden!important}
   .floating-style .island-surface:active{transform:scale(.97) translateZ(0)}.compact-layer,.expanded-layer{position:absolute;z-index:1;box-sizing:border-box;pointer-events:none}
   .compact-layer{inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 4px}.compact-layer.edge-inset:not(.vertical){padding-left:calc(4px + var(--shoulder-inset));padding-right:calc(8px + var(--shoulder-inset))}.compact-layer.vertical{flex-direction:column;padding:4px 0 8px}.compact-layer.edge-inset.vertical{padding-top:calc(4px + var(--shoulder-inset));padding-bottom:calc(8px + var(--shoulder-inset))}.compact-layer button,.compact-layer :global(canvas){pointer-events:auto}.time-display{width:100%;text-align:center;color:rgba(255,255,255,.8);font:500 12px/1 var(--app-font);letter-spacing:.05em;font-variant-numeric:tabular-nums;user-select:none}.cover{position:relative;display:grid;place-items:center;flex:none;padding:0;overflow:hidden;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);border:0;cursor:pointer;user-select:none}.compact-cover{width:20px;height:20px;border-radius:50%}.expanded-cover{width:84px;height:84px;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.35);outline:1px solid rgba(255,255,255,.1)}.playing-dot{width:3px;height:3px;border-radius:50%}
   .compact-disc{position:relative;display:block;width:100%;height:100%;transform-origin:center}.compact-disc.spinning{animation:compact-disc-spin 8s linear 1}@keyframes compact-disc-spin{to{transform:rotate(1turn)}}
   .idle-compact-dashboard{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0 7px;color:rgba(255,255,255,.92);user-select:none}.idle-clock{font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums;letter-spacing:.02em}.idle-weather{display:flex;align-items:center;gap:4px;font:500 11px/1 var(--app-font);font-variant-numeric:tabular-nums}.idle-weather :global(svg){flex:none;color:rgba(255,255,255,.82)}.idle-compact-dashboard.vertical{flex-direction:column;padding:7px 0;gap:10px}.idle-compact-dashboard.vertical .idle-weather{flex-direction:column}
   .debug-overlay{position:absolute;z-index:4;top:4px;left:50%;display:flex;gap:5px;max-width:calc(100% - 12px);padding:2px 6px;border-radius:5px;transform:translateX(-50%);overflow:hidden;color:#4ade80;background:rgba(0,0,0,.75);font:500 8px/1.3 var(--app-font);white-space:nowrap;pointer-events:none}.debug-overlay span{overflow:hidden;text-overflow:ellipsis}
-  .expanded-layer{inset:0;width:100%;height:100%;padding:0;transform-origin:center;will-change:transform,opacity}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,600px);height:var(--expanded-content-height,210px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:11px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}
+  .expanded-layer{inset:0;width:100%;height:100%;padding:0;transform-origin:left top;will-change:transform,opacity}.expanded-layer.vertical{transform-origin:center top}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,600px);height:var(--expanded-content-height,210px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:11px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}
   .progress-block{width:100%;margin-bottom:10px}
   .control-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;width:100%;height:58px}.control-spacer{width:0}.controls{display:flex;align-items:center;justify-content:center;gap:12px}.controls button{flex:none;display:grid;place-items:center;width:58px;height:58px;padding:0;border:0;border-radius:12px;color:rgba(255,255,255,.9);background:transparent;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}.controls .play{color:#fff}.controls button:active,.cover:active{transform:scale(.94)}.controls button:focus-visible:not(:disabled){background:rgba(255,255,255,.1)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .compact-timer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:0;color:#f28b31;background:transparent;cursor:pointer;font-family:var(--app-font);user-select:none}.compact-timer span{min-width:42px;font-size:12px;font-weight:600;line-height:1;letter-spacing:.015em;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}.compact-timer.finished span{min-width:0;font-size:11px}.compact-timer.paused{color:rgba(242,139,49,.62)}.timer-pause{width:7px;height:8px;display:flex;align-items:center;justify-content:center;gap:2px}.timer-pause b{display:block;width:2px;height:7px;border-radius:1px;background:currentColor}.compact-timer.urgent{color:#ff765f}
@@ -864,8 +804,6 @@
   .control-row .play{color:#fff}
   .favorite-mark{color:rgba(232,238,248,.82)}
   .trailing-controls button:last-child{color:rgba(225,234,249,.62)}
-  .compact-cover,.expanded-cover{transition:opacity 120ms ease}
-  .collapse-cover-source-hidden,.collapse-cover-target-hidden{opacity:0!important}
   @media (hover:hover) and (pointer:fine){.control-row button:hover:not(:disabled){color:#fff;background:rgba(255,255,255,.1);transform:scale(1.06)}}
 </style>
 

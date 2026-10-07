@@ -642,12 +642,8 @@ fn selected_session(
 }
 
 pub fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
-    unsafe {
-        let _ = windows::Win32::System::Com::CoInitializeEx(
-            None,
-            windows::Win32::System::Com::COINIT_MULTITHREADED,
-        );
-    }
+    let _apartment = super::apartment::Apartment::enter()
+        .map_err(|error| AppError::media(format!("Media apartment initialization failed: {error}")))?;
     let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
         .and_then(|op| op.get())
         .map_err(|e| AppError::media(format!("RequestAsync failed: {:?}", e)))?;
@@ -695,6 +691,8 @@ pub fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
 /// - Apple Music
 /// - 其他通用播放器
 pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
+    let _apartment = super::apartment::Apartment::enter()
+        .map_err(|error| AppError::media(format!("Media apartment initialization failed: {error}")))?;
     let (session, source_type, raw_id) = match selected_session(app)? {
         Some(s) => s,
         None => return Ok(MediaState::default()),
@@ -955,13 +953,8 @@ async fn get_netease_mv_url_internal(mv_id: u64) -> AppResult<Option<String>> {
 /// - "next": 下一曲
 /// - "prev": 上一曲
 pub fn control_media(app: &AppHandle, action: &str) -> AppResult<()> {
-    // 初始化 COM
-    unsafe {
-        let _ = windows::Win32::System::Com::CoInitializeEx(
-            None,
-            windows::Win32::System::Com::COINIT_MULTITHREADED,
-        );
-    }
+    let _apartment = super::apartment::Apartment::enter()
+        .map_err(|error| AppError::media(format!("Media apartment initialization failed: {error}")))?;
 
     let Some((session, _, _)) = selected_session(app)? else {
         return Err(AppError::media("未找到可控制的媒体会话"));
@@ -990,6 +983,8 @@ pub fn control_media(app: &AppHandle, action: &str) -> AppResult<()> {
 }
 
 pub fn seek_media(app: &AppHandle, position_ms: u64) -> AppResult<()> {
+    let _apartment = super::apartment::Apartment::enter()
+        .map_err(|error| AppError::media(format!("Media apartment initialization failed: {error}")))?;
     let (session, _, _) =
         selected_session(app)?.ok_or_else(|| AppError::media("No active media session"))?;
     let accepted = session
@@ -1005,6 +1000,8 @@ pub fn seek_media(app: &AppHandle, position_ms: u64) -> AppResult<()> {
 }
 
 pub fn toggle_shuffle(app: &AppHandle) -> AppResult<()> {
+    let _apartment = super::apartment::Apartment::enter()
+        .map_err(|error| AppError::media(format!("Media apartment initialization failed: {error}")))?;
     if let Some((session, _, _)) = selected_session(app)? {
         let current = session
             .GetPlaybackInfo()
@@ -1021,6 +1018,8 @@ pub fn toggle_shuffle(app: &AppHandle) -> AppResult<()> {
 }
 
 pub fn cycle_repeat(app: &AppHandle) -> AppResult<()> {
+    let _apartment = super::apartment::Apartment::enter()
+        .map_err(|error| AppError::media(format!("Media apartment initialization failed: {error}")))?;
     if let Some((session, _, _)) = selected_session(app)? {
         let current = session
             .GetPlaybackInfo()

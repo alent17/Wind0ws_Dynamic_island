@@ -3,6 +3,7 @@
 //! 实现核心业务逻辑，与命令层分离
 //! 命令层负责 Tauri IPC，服务层负责具体业务实现
 
+pub(crate) mod apartment;
 pub mod cache;
 pub mod color;
 pub mod idle;

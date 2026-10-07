@@ -11,6 +11,9 @@
     "bundle:windows": "tauri build --bundles nsis",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
+    "perf:build": "node scripts/build-performance.mjs",
+    "perf:fixture": "node scripts/measure-performance.mjs",
+    "perf:retained": "node scripts/measure-retained-memory.mjs",
     "test:ui": "playwright test",
     "lint": "echo 'No linter configured yet'"
   },

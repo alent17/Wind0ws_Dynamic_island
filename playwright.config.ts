@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: "./ui-tests",
   testMatch: "**/*.pw.ts",
   fullyParallel: true,
+  workers: 2,
   reporter: "list",
   use: {
     baseURL: "http://127.0.0.1:1422",
@@ -15,7 +16,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run web:dev -- --host 127.0.0.1 --port 1422",
+    command: "npm run dev -- --host 127.0.0.1 --port 1422",
     url: "http://127.0.0.1:1422/ui-tests/island-fixture.html",
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,

@@ -1,0 +1,65 @@
+﻿{
+    "label":  "desktop-control-smoke",
+    "createdUtc":  "2026-10-07T11:45:13.0108708Z",
+    "requestedSeconds":  3,
+    "actualSeconds":  5.5116606999999993,
+    "warmupSeconds":  0,
+    "logicalCores":  12,
+    "os":  "Microsoft Windows 11 家庭版 Insider Preview",
+    "osBuild":  "26340",
+    "control":  true,
+    "scope":  "Dynamic Isle descendant tree. Per-process CPU deltas keyed by PID and start time. First samples for new PIDs have unavailable CPU; scene, DPI and input corpus must be recorded separately. Sampling overhead also affects the control run.",
+    "gpuStatus":  "available: per-PID engines; engine percentages must not be summed as total GPU utilization",
+    "unavailable":  [
+                        "JS heap/DOM/retainers require WebView2 diagnostics",
+                        "Actual frame presentation requires ETW/PresentMon",
+                        "IPC bytes/in-flight and FFT counters require a profiling build"
+                    ],
+    "processHistory":  [
+
+                       ],
+    "samples":  [
+                    {
+                        "elapsedSeconds":  7.9994213,
+                        "timestampUtc":  "2026-10-07T11:45:09.6920972Z",
+                        "machineCpuPercent":  40,
+                        "processCount":  0,
+                        "processes":  [
+
+                                      ],
+                        "totalCpuPercentOfMachine":  null,
+                        "totalPrivateWorkingSetBytes":  null,
+                        "totalPrivateBytes":  null,
+                        "totalHandles":  null,
+                        "totalThreads":  null
+                    },
+                    {
+                        "elapsedSeconds":  9.434299,
+                        "timestampUtc":  "2026-10-07T11:45:11.1542734Z",
+                        "machineCpuPercent":  56,
+                        "processCount":  0,
+                        "processes":  [
+
+                                      ],
+                        "totalCpuPercentOfMachine":  null,
+                        "totalPrivateWorkingSetBytes":  null,
+                        "totalPrivateBytes":  null,
+                        "totalHandles":  null,
+                        "totalThreads":  null
+                    },
+                    {
+                        "elapsedSeconds":  10.8835382,
+                        "timestampUtc":  "2026-10-07T11:45:12.6040011Z",
+                        "machineCpuPercent":  66,
+                        "processCount":  0,
+                        "processes":  [
+
+                                      ],
+                        "totalCpuPercentOfMachine":  null,
+                        "totalPrivateWorkingSetBytes":  null,
+                        "totalPrivateBytes":  null,
+                        "totalHandles":  null,
+                        "totalThreads":  null
+                    }
+                ]
+}
