@@ -1,0 +1,880 @@
+{
+  "runtime": "isolated debug native custom-protocol WebView2; M2 correctness acceptance, not a Release performance benchmark",
+  "startedUtc": "2026-10-08T15:53:28.322Z",
+  "settings": {
+    "pixelArt": false,
+    "hdCover": true,
+    "captureHideOnScreenshot": false,
+    "reduceAnimations": false
+  },
+  "tracks": 100,
+  "uniqueTracks": 100,
+  "pixelChecksPassed": 100,
+  "errors": [],
+  "reopens": [
+    {
+      "index": 25,
+      "state": {
+        "title": "The Hardest",
+        "titleMatches": true,
+        "canvasCount": 1,
+        "connected": true,
+        "width": 108,
+        "height": 108,
+        "imageReady": true,
+        "urlMatchesPixels": true
+      }
+    },
+    {
+      "index": 50,
+      "state": {
+        "title": "光輪",
+        "titleMatches": true,
+        "canvasCount": 1,
+        "connected": true,
+        "width": 108,
+        "height": 108,
+        "imageReady": true,
+        "urlMatchesPixels": true
+      }
+    },
+    {
+      "index": 75,
+      "state": {
+        "title": "ギブス",
+        "titleMatches": true,
+        "canvasCount": 1,
+        "connected": true,
+        "width": 108,
+        "height": 108,
+        "imageReady": true,
+        "urlMatchesPixels": true
+      }
+    },
+    {
+      "index": 100,
+      "state": {
+        "title": "mabataki",
+        "titleMatches": true,
+        "canvasCount": 1,
+        "connected": true,
+        "width": 108,
+        "height": 108,
+        "imageReady": true,
+        "urlMatchesPixels": true
+      }
+    }
+  ],
+  "heaps": [
+    {
+      "index": 0,
+      "postGc": false,
+      "detachedCanvasNodes": 0,
+      "jsHeapUsedBytes": 2191536
+    },
+    {
+      "index": 25,
+      "postGc": false,
+      "detachedCanvasNodes": 0,
+      "jsHeapUsedBytes": 3114924
+    },
+    {
+      "index": 50,
+      "postGc": false,
+      "detachedCanvasNodes": 0,
+      "jsHeapUsedBytes": 2412584
+    },
+    {
+      "index": 75,
+      "postGc": false,
+      "detachedCanvasNodes": 0,
+      "jsHeapUsedBytes": 2431448
+    },
+    {
+      "index": 100,
+      "postGc": false,
+      "detachedCanvasNodes": 0,
+      "jsHeapUsedBytes": 2407232
+    }
+  ],
+  "corpus": [
+    {
+      "index": 1,
+      "title": "right or left",
+      "artist": "in",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 2,
+      "title": "美電球",
+      "artist": "Vaundy",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 3,
+      "title": "素晴らしい日々",
+      "artist": "ROTH BART BARON",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 4,
+      "title": "Karma",
+      "artist": "Caroline Kole",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 5,
+      "title": "恋時雨 (Fujii Kaze Stadium Live \"Feelin' Good\")",
+      "artist": "藤井風",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 6,
+      "title": "Mars 2027",
+      "artist": "青葉市子",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 7,
+      "title": "じゃむ",
+      "artist": "鈴木真海子",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 8,
+      "title": "こわす",
+      "artist": "ひとひら",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 9,
+      "title": "F_A_R",
+      "artist": "toe",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 10,
+      "title": "副都心",
+      "artist": "ゲシュタルト乙女",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 11,
+      "title": "Toosie Slide (Sped Up)",
+      "artist": "Dance Fruits Music",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 12,
+      "title": "華奢な心",
+      "artist": "アイナ・ジ・エンド",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 13,
+      "title": "Nevermore",
+      "artist": "Bialystocks",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 14,
+      "title": "つづく",
+      "artist": "羊文学",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 15,
+      "title": "The Loser",
+      "artist": "verzache",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 16,
+      "title": "プロポーズ",
+      "artist": "9Lana",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 17,
+      "title": "贝比",
+      "artist": "LÜCY",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 18,
+      "title": "Bran-new Lovesong",
+      "artist": "the pillows",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 19,
+      "title": "the girl",
+      "artist": "ヒメウズ（himeuzu）",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 20,
+      "title": "2016",
+      "artist": "aldn",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 21,
+      "title": "1999",
+      "artist": "羊文学",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 22,
+      "title": "祥月 (Acoustic ver.)",
+      "artist": "あたらよ",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 23,
+      "title": "雨のメッセージ",
+      "artist": "Lamp",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 24,
+      "title": "死の光",
+      "artist": "別野加奈",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 25,
+      "title": "The Hardest",
+      "artist": "milet",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 26,
+      "title": "inside",
+      "artist": "Juliana Chahayed",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 27,
+      "title": "七階から目薬",
+      "artist": "文藝天国",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 28,
+      "title": "呼吸",
+      "artist": "kyooo",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 29,
+      "title": "あなたに抱きしめて",
+      "artist": "みゆな",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 30,
+      "title": "Love Will Set You Free",
+      "artist": "Kodaline",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 31,
+      "title": "mocha",
+      "artist": "sucola",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 32,
+      "title": "未完成",
+      "artist": "THE MUSMUS",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 33,
+      "title": "心の実",
+      "artist": "indigo la End",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 34,
+      "title": "TATTOO",
+      "artist": "Official髭男dism",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 35,
+      "title": "The Moon × 星なんて言わず",
+      "artist": "NakamuraEmi",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 36,
+      "title": "ただ好きと言えたら",
+      "artist": "蔦谷好位置",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 37,
+      "title": "Reunion Days",
+      "artist": "dinner in haze",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 38,
+      "title": "犬かキャットかで死ぬまで喧嘩しよう!",
+      "artist": "Official髭男dism",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 39,
+      "title": "好きでよかった。",
+      "artist": "リーガルリリー",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 40,
+      "title": "メメント",
+      "artist": "UNIDOTS",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 41,
+      "title": "Once Upon A Time (House Mix)",
+      "artist": "Max Oazo",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 42,
+      "title": "3びきのくま",
+      "artist": "青葉市子",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 43,
+      "title": "はるなつあきふゆ",
+      "artist": "青葉市子",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 44,
+      "title": "Super Ball",
+      "artist": "TOMOO",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 45,
+      "title": "あわいに",
+      "artist": "TOMOO",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 46,
+      "title": "アンディーヴと眠って",
+      "artist": "青葉市子",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 47,
+      "title": "Kanata",
+      "artist": "baobab",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 48,
+      "title": "墨田区 SUMMER NIGHT",
+      "artist": "未來電波基地",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 49,
+      "title": "未定",
+      "artist": "chilldspot",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 50,
+      "title": "光輪",
+      "artist": "Tenniscoats",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 51,
+      "title": "晴れのビート",
+      "artist": "Tanaka",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 52,
+      "title": "YES -free flower-",
+      "artist": "My Little Lover",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 53,
+      "title": "Swallows",
+      "artist": "Nowlu",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 54,
+      "title": "糸しいひと",
+      "artist": "汐れいら",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 55,
+      "title": "kid feat. 優河",
+      "artist": "Ryu Matsuyama",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 56,
+      "title": "黄昏泣き(Don't cry my child)",
+      "artist": "東京事変",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 57,
+      "title": "水槽のブランコ",
+      "artist": "Kitri",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 58,
+      "title": "Ginger",
+      "artist": "TOMOO",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 59,
+      "title": "The Ban",
+      "artist": "前島麻由",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 60,
+      "title": "plum",
+      "artist": "にしな",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 61,
+      "title": "まばたき",
+      "artist": "Special Favorite Music",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 62,
+      "title": "かぐや姫",
+      "artist": "水曜日のカンパネラ",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 63,
+      "title": "Tell Me Baby",
+      "artist": "Official髭男dism",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 64,
+      "title": "Lithonia",
+      "artist": "Childish Gambino",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 65,
+      "title": "風になれ",
+      "artist": "三浦透子",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 66,
+      "title": "あの街に風吹けば",
+      "artist": "羊文学",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 67,
+      "title": "いりぐちでぐち",
+      "artist": "青葉市子",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 68,
+      "title": "ここでキスして。",
+      "artist": "椎名林檎",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 69,
+      "title": "汽笛",
+      "artist": "大越佑華",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 70,
+      "title": "ポルターガイスト",
+      "artist": "椎名林檎",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 71,
+      "title": "Junior Sweet",
+      "artist": "Chara",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 72,
+      "title": "ブラウス",
+      "artist": "ゴホウビ",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 73,
+      "title": "Just Friends",
+      "artist": "Hayden James",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 74,
+      "title": "人間そっくり",
+      "artist": "plenty",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 75,
+      "title": "ギブス",
+      "artist": "椎名林檎",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 76,
+      "title": "Go!",
+      "artist": "M83",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 77,
+      "title": "Tek It - Sped Up",
+      "artist": "Cream",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 78,
+      "title": "Gift",
+      "artist": "Vaundy",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 79,
+      "title": "Burning (English version)",
+      "artist": "羊文学",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 80,
+      "title": "Meaningless",
+      "artist": "Charlotte Cardin",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 81,
+      "title": "こいのうた",
+      "artist": "GO!GO!7188",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 82,
+      "title": "或る日の隅田川",
+      "artist": "未來電波基地",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 83,
+      "title": "雨のち雨のち雨",
+      "artist": "GO!GO!7188",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 84,
+      "title": "つよがるガール",
+      "artist": "ぼっちぼろまる",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 85,
+      "title": "モルヒネ",
+      "artist": "椎名林檎",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 86,
+      "title": "Real Emotion",
+      "artist": "Paper Route",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 87,
+      "title": "変身",
+      "artist": "羊文学",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 88,
+      "title": "茜さす 帰路照らされど…",
+      "artist": "椎名林檎",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 89,
+      "title": "Body",
+      "artist": "Loud Luxury",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 90,
+      "title": "Feelin’ Go(o)d",
+      "artist": "藤井風",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 91,
+      "title": "ラッキーカラー",
+      "artist": "あいみょん",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 92,
+      "title": "ざらめ",
+      "artist": "あいみょん",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 93,
+      "title": "Volta",
+      "artist": "Boogie Belgique",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 94,
+      "title": "Meet The Frownies X Lovely Bastards",
+      "artist": "Dustum",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 95,
+      "title": "Can't Help Falling in Love",
+      "artist": "Haley Reinhart",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 96,
+      "title": "夕立",
+      "artist": "日食なつこ",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 97,
+      "title": "Train",
+      "artist": "chestnut bakery",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 98,
+      "title": "Museum of My Mess",
+      "artist": "mindfreakk!",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 99,
+      "title": "Burning",
+      "artist": "羊文学",
+      "source": "netease",
+      "hasNativeCover": true
+    },
+    {
+      "index": 100,
+      "title": "mabataki",
+      "artist": "Vaundy",
+      "source": "netease",
+      "hasNativeCover": true
+    }
+  ],
+  "sessionRecovery": {
+    "runtime": "isolated debug native WebView2; real player exit and restart",
+    "cases": [
+      {
+        "name": "before exit",
+        "state": {
+          "media": {
+            "queryOk": true,
+            "title": "mabataki",
+            "source": "netease",
+            "coverChars": 39810
+          },
+          "dom": {
+            "title": "mabataki",
+            "count": 1,
+            "connected": true,
+            "ready": true
+          }
+        }
+      },
+      {
+        "name": "real no-session clears Canvas",
+        "state": {
+          "media": {
+            "queryOk": true,
+            "title": "",
+            "source": "",
+            "coverChars": 0
+          },
+          "dom": {
+            "title": "等待播放...",
+            "count": 0,
+            "connected": false,
+            "ready": false
+          }
+        }
+      },
+      {
+        "name": "real session and cover restored",
+        "state": {
+          "media": {
+            "queryOk": true,
+            "title": "mabataki",
+            "source": "netease",
+            "coverChars": 39810
+          },
+          "dom": {
+            "title": "mabataki",
+            "count": 1,
+            "connected": true,
+            "ready": true
+          }
+        }
+      }
+    ],
+    "detachedCanvasNodes": 0,
+    "passed": true
+  },
+  "environment": {
+    "pages": [
+      {
+        "url": "http://tauri.localhost/index.html?window=floating",
+        "viewport": {
+          "dpi": 1,
+          "width": 200,
+          "height": 395
+        }
+      },
+      {
+        "url": "http://tauri.localhost/",
+        "viewport": {
+          "dpi": 1,
+          "width": 372,
+          "height": 289
+        }
+      }
+    ]
+  }
+}

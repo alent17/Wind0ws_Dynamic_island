@@ -156,6 +156,19 @@ fn restart_spectrum(state: State<SpectrumState>, app: tauri::AppHandle) -> Resul
 // 媒体监听器
 // ============================================================================
 
+fn media_event_payload(
+    info: models::MediaState,
+    artwork_omitted: bool,
+) -> Result<serde_json::Value, serde_json::Error> {
+    let mut payload = serde_json::to_value(info)?;
+    if artwork_omitted {
+        if let Some(fields) = payload.as_object_mut() {
+            fields.remove("albumArt");
+        }
+    }
+    Ok(payload)
+}
+
 /// 启动媒体状态监听器
 ///
 /// 在后台线程中持续监听系统媒体播放状态，
@@ -194,6 +207,7 @@ fn start_media_listener(handle: AppHandle) {
         // 持续监听媒体状态
         loop {
             if let Ok(mut info) = services::media::get_media_info(&handle) {
+                let mut artwork_omitted = false;
                 if info.source.is_empty() {
                     // GSMTC may briefly return no selected session while a
                     // player refreshes its metadata. Confirm the removal over
@@ -216,12 +230,15 @@ fn start_media_listener(handle: AppHandle) {
                         // payload to every WebView once per second caused release
                         // builds to stutter even though only progress had changed.
                         info.album_art.clear();
+                        artwork_omitted = true;
                     } else {
                         last_artwork_track = artwork_track;
                         last_artwork = info.album_art.clone();
                     }
                 }
-                let _ = event_bus::emit_media_update(info);
+                if let Ok(payload) = media_event_payload(info, artwork_omitted) {
+                    let _ = event_bus::emit_media_update(payload);
+                }
             } else {
                 // A failed SMTC query is not proof that its session was
                 // removed, so it must break the consecutive-miss sequence.
@@ -680,3 +697,14 @@ pub fn run() {
     }
 }
 
+
+#[cfg(test)]
+mod media_delta_tests {
+    #[test]
+    fn unchanged_artwork_is_omitted_but_explicit_empty_snapshot_is_preserved() {
+        let omitted = super::media_event_payload(super::models::MediaState::default(), true).unwrap();
+        assert!(omitted.get("albumArt").is_none());
+        let cleared = super::media_event_payload(super::models::MediaState::default(), false).unwrap();
+        assert_eq!(cleared.get("albumArt").unwrap(), "");
+    }
+}

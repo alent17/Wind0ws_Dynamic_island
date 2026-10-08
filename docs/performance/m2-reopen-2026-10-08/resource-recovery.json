@@ -1,0 +1,75 @@
+{
+  "runtime": "debug native diagnostic, paused playback, floating open; no forced GC",
+  "requestedSeconds": 300,
+  "actualSeconds": 301.106023,
+  "samples": 188,
+  "first": {
+    "elapsedSeconds": 4.4080018,
+    "rendererPrivateMiB": 243.65234375,
+    "gpuProcessPrivateMiB": 114.94921875,
+    "gpuCommittedMiB": 71.5234375,
+    "treePrivateMiB": 485.9765625
+  },
+  "last": {
+    "elapsedSeconds": 302.8955205,
+    "rendererPrivateMiB": 209.8671875,
+    "gpuProcessPrivateMiB": 123.41796875,
+    "gpuCommittedMiB": 74.53515625,
+    "treePrivateMiB": 456.99609375
+  },
+  "firstMinuteMedian": {
+    "rendererPrivateMiB": 244.234375,
+    "gpuProcessPrivateMiB": 97.978515625,
+    "gpuCommittedMiB": 55.84765625,
+    "treePrivateMiB": 469.103515625
+  },
+  "lastMinuteMedian": {
+    "rendererPrivateMiB": 208.244140625,
+    "gpuProcessPrivateMiB": 127.02734375,
+    "gpuCommittedMiB": 72.71875,
+    "treePrivateMiB": 461.51171875
+  },
+  "range": {
+    "rendererPrivateMiB": {
+      "min": 206.61328125,
+      "max": 245.80859375
+    },
+    "gpuProcessPrivateMiB": {
+      "min": 95.4765625,
+      "max": 162.5546875
+    },
+    "gpuCommittedMiB": {
+      "min": 55.69140625,
+      "max": 95.58984375
+    },
+    "treePrivateMiB": {
+      "min": 451.5078125,
+      "max": 533.48046875
+    }
+  },
+  "closedWindow": {
+    "requestedSeconds": 60,
+    "actualSeconds": 61.75936349999999,
+    "samples": 35,
+    "first": {
+      "elapsedSeconds": 3.149213,
+      "rendererCount": 1,
+      "rendererPrivateMiB": 111.05078125,
+      "gpuProcessPrivateMiB": 111.68359375,
+      "gpuCommittedMiB": 58.89453125
+    },
+    "last": {
+      "elapsedSeconds": 61.9612537,
+      "rendererCount": 1,
+      "rendererPrivateMiB": 116.21484375,
+      "gpuProcessPrivateMiB": 131.4765625,
+      "gpuCommittedMiB": 78.015625
+    },
+    "median": {
+      "rendererCount": 1,
+      "rendererPrivateMiB": 110.24609375,
+      "gpuProcessPrivateMiB": 104.171875,
+      "gpuCommittedMiB": 57.1796875
+    }
+  }
+}

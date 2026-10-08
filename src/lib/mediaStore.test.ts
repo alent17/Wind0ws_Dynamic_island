@@ -103,3 +103,37 @@ it("ignores a snapshot from a previous connection after reconnecting", async () 
   second();
   unsubscribe();
 });
+
+it("receives delayed same-track artwork and treats omissions separately from clears", async () => {
+  let update!: (event: {payload:MediaState}) => void;
+  api.listen.mockImplementation((_event,callback)=>{update=callback;return Promise.resolve(vi.fn());});
+  const {connectMedia,media}=await import("./mediaStore");
+  let current!:MediaState;const unsubscribe=media.subscribe(value=>current=value);
+  const release=await connectMedia();await Promise.resolve();
+  update({payload:state("Same","new-cover")});
+  const delta={...state("Same")};delete (delta as Partial<MediaState>).albumArt;
+  update({payload:delta});expect(current.albumArt).toBe("new-cover");
+  update({payload:state("Same","")});expect(current.albumArt).toBe("");
+  update({payload:state("Same","late-cover")});expect(current.albumArt).toBe("late-cover");
+  release();unsubscribe();
+});
+
+it("keeps delayed initial artwork after an omission but not after an explicit clear", async () => {
+  const snapshot=deferred<MediaState>();api.getMediaInfo.mockReturnValue(snapshot.promise);
+  let update!:(event:{payload:MediaState})=>void;
+  api.listen.mockImplementation((_event,callback)=>{update=callback;return Promise.resolve(vi.fn());});
+  const {connectMedia,media}=await import("./mediaStore");let current!:MediaState;
+  const unsubscribe=media.subscribe(value=>current=value);const release=await connectMedia();
+  const delta={...state("Same")};delete(delta as Partial<MediaState>).albumArt;update({payload:delta});
+  snapshot.resolve(state("Same","full-cover"));await snapshot.promise;await Promise.resolve();
+  expect(current.albumArt).toBe("full-cover");release();unsubscribe();
+});
+it("does not revive artwork cleared while the initial snapshot was pending", async () => {
+  const snapshot=deferred<MediaState>();api.getMediaInfo.mockReturnValue(snapshot.promise);
+  let update!:(event:{payload:MediaState})=>void;
+  api.listen.mockImplementation((_event,callback)=>{update=callback;return Promise.resolve(vi.fn());});
+  const {connectMedia,media}=await import("./mediaStore");let current!:MediaState;
+  const unsubscribe=media.subscribe(value=>current=value);const release=await connectMedia();
+  update({payload:state("Same","")});snapshot.resolve(state("Same","old-cover"));
+  await snapshot.promise;await Promise.resolve();expect(current.albumArt).toBe("");release();unsubscribe();
+});

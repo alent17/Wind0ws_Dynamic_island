@@ -5,7 +5,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 const exec=promisify(execFile);
 const rootPid=Number(process.env.ISLE_ROOT_PID);
-if(!rootPid)throw new Error('Set ISLE_ROOT_PID to the diagnostic Release process');
+if(!rootPid)throw new Error('Set ISLE_ROOT_PID to the native diagnostic process');
 const endpoint=process.env.ISLE_CDP_ENDPOINT||'http://127.0.0.1:9228';
 const output=resolve(process.argv[2]||'dist/performance/acceptance-2026-10-08/artwork');
 await mkdir(output,{recursive:true});
@@ -15,7 +15,8 @@ const main=context.pages().find(page=>!page.url().includes('window=floating') &&
 if(!main) throw new Error('No native Isle main WebView2 target');
 const invoke=(command,args={})=>main.evaluate(({command,args})=>window.__TAURI_INTERNALS__.invoke(command,args),{command,args});
 const resume=Number(process.env.ARTWORK_RESUME_INDEX||0);
-const report=resume ? JSON.parse(await readFile(resolve(output,'artwork-acceptance.json'),'utf8')) : {runtime:'Latest Release WebView2 with remote debugging; diagnostic pass separate from unprofiled Idle samples',startedUtc:new Date().toISOString(),tracks:[],snapshots:[],errors:[],expectedChanges:100};
+const report=resume ? JSON.parse(await readFile(resolve(output,'artwork-acceptance.json'),'utf8')) : {runtime:process.env.ISLE_RUNTIME_DESCRIPTION||'Native WebView2 diagnostics; build type unspecified',startedUtc:new Date().toISOString(),tracks:[],snapshots:[],errors:[],reopens:[],expectedChanges:100};
+report.reopens ??= [];
 const flush=()=>writeFile(resolve(output,'artwork-acceptance.json'),JSON.stringify(report,null,2));
 const pause=ms=>new Promise(done=>setTimeout(done,ms));
 async function nativePoint(index) {
@@ -58,7 +59,7 @@ async function settledArtwork(page,title) {
  let state;
  for(let attempt=0;attempt<60;attempt++) {
   state=await canvasState(page,title);
-  if(state.titleMatches && state.canvasCount===1 && state.connected && state.imageReady && state.width>0 && state.height>0 && state.urlMatchesPixels!==false) return state;
+  if(state.titleMatches && state.canvasCount===1 && state.connected && state.imageReady && state.width>0 && state.height>0 && state.urlMatchesPixels===true) return state;
   await pause(250);
  }
  throw new Error(`Artwork did not settle for latest track: ${JSON.stringify(state)}`);
@@ -119,14 +120,13 @@ try {
    await pause(1000);
    if(context.pages().some(page=>page.url().includes('window=floating')))throw new Error('Floating target retained after close');
    await invoke('open_floating_window');floating=await floatingPage();
-   try { await settledArtwork(floating,media.title); } catch(error) {
-    (report.reopenFailures ??= []).push({index,error:String(error)});await flush();
-    console.log(`Recorded failed reopen at ${index}: ${error}`);
-   }
+   floating.on('pageerror',error=>report.errors.push(String(error)));
+   report.reopens.push({index,state:await settledArtwork(floating,media.title)});await flush();
   }
  }
  report.uniqueTracks=new Set(report.tracks.map(row=>`${row.source}|${row.title}|${row.artist}`)).size;
- report.phase='100-track-pass-completed; no-session and 5-minute recovery still required';await flush();
+ if(report.failure || report.reopenFailures?.length || report.errors.length || report.snapshots.some(row=>row.detachedCanvasNodes!==0) || report.tracks.length!==100 || report.tracks.some(row=>row.state.urlMatchesPixels!==true) || report.reopens.length!==4)throw new Error('Incomplete acceptance, prior failure, page errors or Detached Canvas detected; use a fresh output directory for a new pass');
+ report.phase='100-track-and-reopen-pass-completed; no-session recovery requires separate validation';await flush();
 } catch(error) {
  report.failure=String(error);await flush();throw error;
 } finally {

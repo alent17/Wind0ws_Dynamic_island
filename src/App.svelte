@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { artworkValue, withoutArtwork } from "$lib/mediaArtwork";
   import { onMount, onDestroy, untrack } from "svelte";
   import { convertFileSrc } from "@tauri-apps/api/core";
   import { emit, listen } from "@tauri-apps/api/event";
@@ -182,7 +183,7 @@
       lastUpdatedTimestamp: syncedAt,
     };
     const signature = `${snapshot.source}|${snapshot.title}|${snapshot.artist}`;
-    if (signature === lastSyncedTrack && snapshot.albumArt === lastSyncedArtwork) snapshot.albumArt = "";
+    if (signature === lastSyncedTrack && snapshot.albumArt === lastSyncedArtwork) return emit(Events.ISLAND_MEDIA_SYNC, withoutArtwork({...snapshot}));
     else { lastSyncedTrack = signature; lastSyncedArtwork = snapshot.albumArt; }
     return emit(Events.ISLAND_MEDIA_SYNC, snapshot);
   }
@@ -1463,13 +1464,7 @@
         const titleChanged = trackTitle !== data.title;
         const artistChanged = artistName !== data.artist;
 
-        const newCover =
-          data.albumArt ||
-          data.thumbnail ||
-          data.coverUrl ||
-          data.api_cover_url ||
-          data.image ||
-          (songChanged ? "" : rawCoverUrl);
+        const newCover = artworkValue(data) ?? (songChanged ? "" : rawCoverUrl);
 
         const coverChanged = songChanged || newCover !== rawCoverUrl;
 

@@ -1,0 +1,1959 @@
+{
+  "before": {
+    "sourceBase": "74db42b (M3 budgets present), tracing only",
+    "snapshotDelayMs": 1800,
+    "hdCover": false,
+    "title": "Itadaki",
+    "canvasCount": 0,
+    "events": [
+      {
+        "elapsedMs": 0,
+        "origin": "native-event",
+        "outcome": "received",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 0,
+        "origin": "native-event",
+        "outcome": "applied",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 2,
+        "origin": "island-sync",
+        "outcome": "received",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 2,
+        "origin": "island-sync",
+        "outcome": "applied",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 1004,
+        "origin": "native-event",
+        "outcome": "received",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 1004,
+        "origin": "native-event",
+        "outcome": "dropped-authority-window",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 1005,
+        "origin": "island-sync",
+        "outcome": "received",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 1005,
+        "origin": "island-sync",
+        "outcome": "applied",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 1178,
+        "origin": "initial-snapshot",
+        "outcome": "received",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 41998,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 1178,
+        "origin": "initial-snapshot",
+        "outcome": "dropped-authority-window",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 41998,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 1430,
+        "origin": "island-sync",
+        "outcome": "received",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 1430,
+        "origin": "island-sync",
+        "outcome": "applied",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 1518,
+        "origin": "island-sync",
+        "outcome": "received",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 648514,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 1519,
+        "origin": "island-sync",
+        "outcome": "applied",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 648514,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 2009,
+        "origin": "native-event",
+        "outcome": "received",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 2009,
+        "origin": "native-event",
+        "outcome": "dropped-authority-window",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 2010,
+        "origin": "island-sync",
+        "outcome": "received",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      },
+      {
+        "elapsedMs": 2010,
+        "origin": "island-sync",
+        "outcome": "applied",
+        "title": "Itadaki",
+        "source": "netease",
+        "coverPresent": true,
+        "coverChars": 0,
+        "currentTrack": "netease|itadaki|slappy",
+        "displayCoverChars": 0
+      }
+    ]
+  },
+  "after": {
+    "runtime": "isolated debug native custom-protocol WebView2; correctness, not Release performance",
+    "snapshotDelayMs": 1800,
+    "cases": [
+      {
+        "name": "same-track reopen 1",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 1,
+          "ready": true,
+          "pixel": [
+            185,
+            185,
+            185,
+            255
+          ]
+        }
+      },
+      {
+        "name": "same-track reopen 2",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 1,
+          "ready": true,
+          "pixel": [
+            185,
+            185,
+            185,
+            255
+          ]
+        }
+      },
+      {
+        "name": "same-track reopen 3",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 1,
+          "ready": true,
+          "pixel": [
+            185,
+            185,
+            185,
+            255
+          ]
+        }
+      },
+      {
+        "name": "same-track reopen 4",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 1,
+          "ready": true,
+          "pixel": [
+            185,
+            185,
+            185,
+            255
+          ]
+        }
+      },
+      {
+        "name": "same-track reopen 5",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 1,
+          "ready": true,
+          "pixel": [
+            185,
+            185,
+            185,
+            255
+          ]
+        }
+      },
+      {
+        "name": "omitted cover preserves same-track artwork",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 1,
+          "ready": true,
+          "pixel": [
+            185,
+            185,
+            185,
+            255
+          ]
+        }
+      },
+      {
+        "name": "explicit empty clears artwork",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 0,
+          "ready": false,
+          "pixel": null
+        }
+      },
+      {
+        "name": "late same-track cover",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 1,
+          "ready": true,
+          "pixel": [
+            255,
+            0,
+            0,
+            255
+          ]
+        }
+      },
+      {
+        "name": "latest same-track replacement wins",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 1,
+          "ready": true,
+          "pixel": [
+            0,
+            255,
+            0,
+            255
+          ]
+        }
+      },
+      {
+        "name": "same-track-updates: Detached Canvas",
+        "count": 0
+      },
+      {
+        "name": "older initial snapshot cannot replace newer cover",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 1,
+          "ready": true,
+          "pixel": [
+            0,
+            0,
+            255,
+            255
+          ]
+        }
+      },
+      {
+        "name": "older initial snapshot cannot resurrect explicit clear",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 0,
+          "ready": false,
+          "pixel": null
+        }
+      },
+      {
+        "name": "full cover restored",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 1,
+          "ready": true,
+          "pixel": [
+            0,
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      {
+        "name": "no-session clears Canvas",
+        "state": {
+          "title": "等待播放...",
+          "count": 0,
+          "ready": false,
+          "pixel": null
+        }
+      },
+      {
+        "name": "session snapshot restores Canvas",
+        "state": {
+          "title": "青い、濃い、橙色の日",
+          "count": 1,
+          "ready": true,
+          "pixel": [
+            185,
+            185,
+            185,
+            255
+          ]
+        }
+      },
+      {
+        "name": "session-restored: Detached Canvas",
+        "count": 0
+      }
+    ],
+    "traces": [
+      {
+        "name": "reopen 1",
+        "events": [
+          {
+            "at": 1791474756911,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474756912,
+            "origin": "native-event",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474756963,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474756964,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474757604,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474757604,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474757605,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474757605,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474757988,
+            "origin": "initial-snapshot",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474757988,
+            "origin": "initial-snapshot",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          },
+          {
+            "at": 1791474758609,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          },
+          {
+            "at": 1791474758609,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          },
+          {
+            "at": 1791474758610,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          },
+          {
+            "at": 1791474758610,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          }
+        ]
+      },
+      {
+        "name": "reopen 2",
+        "events": [
+          {
+            "at": 1791474761627,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474761628,
+            "origin": "native-event",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474761630,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474761630,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474762632,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474762632,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474762633,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474762633,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474763275,
+            "origin": "initial-snapshot",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474763275,
+            "origin": "initial-snapshot",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          }
+        ]
+      },
+      {
+        "name": "reopen 3",
+        "events": [
+          {
+            "at": 1791474765307,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474765308,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474765649,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474765649,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474765650,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474765650,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474766654,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474766654,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474766656,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474766656,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474767168,
+            "origin": "initial-snapshot",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474767168,
+            "origin": "initial-snapshot",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          }
+        ]
+      },
+      {
+        "name": "reopen 4",
+        "events": [
+          {
+            "at": 1791474769671,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474769672,
+            "origin": "native-event",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474769675,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474769675,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474770675,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474770675,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474770676,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474770676,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474771082,
+            "origin": "initial-snapshot",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474771082,
+            "origin": "initial-snapshot",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          }
+        ]
+      },
+      {
+        "name": "reopen 5",
+        "events": [
+          {
+            "at": 1791474773690,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474773691,
+            "origin": "native-event",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474773693,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474773693,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474774695,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474774695,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474774696,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474774696,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474774985,
+            "origin": "initial-snapshot",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474774985,
+            "origin": "initial-snapshot",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          }
+        ]
+      },
+      {
+        "name": "same-track-updates",
+        "events": [
+          {
+            "at": 1791474773690,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474773691,
+            "origin": "native-event",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474773693,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474773693,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474774695,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474774695,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474774696,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474774696,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474774985,
+            "origin": "initial-snapshot",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474774985,
+            "origin": "initial-snapshot",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          },
+          {
+            "at": 1791474775248,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          },
+          {
+            "at": 1791474775248,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          },
+          {
+            "at": 1791474775253,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          },
+          {
+            "at": 1791474775253,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474775256,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 178,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474775257,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 178,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474775362,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 178,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474775362,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 178,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474775364,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 178,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474775364,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 178,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474775703,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474775703,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474775704,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474775704,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          }
+        ]
+      },
+      {
+        "name": "stale-snapshot",
+        "events": [
+          {
+            "at": 1791474777715,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474777716,
+            "origin": "native-event",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474777717,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474777717,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474777942,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 178,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474777942,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 178,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474778719,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474778719,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474778720,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474778720,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474779433,
+            "origin": "initial-snapshot",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474779433,
+            "origin": "initial-snapshot",
+            "outcome": "ignored-stale-snapshot-artwork",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474779433,
+            "origin": "initial-snapshot",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474779724,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474779724,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474779725,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          },
+          {
+            "at": 1791474779725,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 178
+          }
+        ]
+      },
+      {
+        "name": "clear-pending-snapshot",
+        "events": [
+          {
+            "at": 1791474781741,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474781742,
+            "origin": "native-event",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474781742,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474781742,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474782113,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474782113,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474782738,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474782738,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474782738,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474782738,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783532,
+            "origin": "initial-snapshot",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783532,
+            "origin": "initial-snapshot",
+            "outcome": "ignored-stale-snapshot-artwork",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783532,
+            "origin": "initial-snapshot",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783742,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783742,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783743,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783743,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          }
+        ]
+      },
+      {
+        "name": "session-restored",
+        "events": [
+          {
+            "at": 1791474781741,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474781742,
+            "origin": "native-event",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474781742,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474781742,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474782113,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474782113,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474782738,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474782738,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474782738,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474782738,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783532,
+            "origin": "initial-snapshot",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783532,
+            "origin": "initial-snapshot",
+            "outcome": "ignored-stale-snapshot-artwork",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783532,
+            "origin": "initial-snapshot",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783742,
+            "origin": "native-event",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783742,
+            "origin": "native-event",
+            "outcome": "clock-skipped-artwork-reconciled",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783743,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474783743,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": false,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474784141,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474784141,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          },
+          {
+            "at": 1791474784149,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "",
+            "source": "",
+            "coverPresent": true,
+            "coverChars": 0,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          },
+          {
+            "at": 1791474784149,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "",
+            "source": "",
+            "coverPresent": true,
+            "coverChars": 0,
+            "currentTrack": "",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474784160,
+            "origin": "island-sync",
+            "outcome": "received",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "",
+            "displayCoverChars": 0
+          },
+          {
+            "at": 1791474784160,
+            "origin": "island-sync",
+            "outcome": "applied",
+            "title": "青い、濃い、橙色の日",
+            "source": "netease",
+            "coverPresent": true,
+            "coverChars": 34198,
+            "currentTrack": "netease|青い濃い橙色の日|massofthefermentingdregs",
+            "displayCoverChars": 34198
+          }
+        ]
+      }
+    ],
+    "passed": true
+  }
+}

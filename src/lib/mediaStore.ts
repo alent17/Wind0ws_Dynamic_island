@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import { artworkValue } from "./mediaArtwork";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { mediaApi } from "$lib/api/media";
 import type { MediaState } from "$lib/api/types";
@@ -26,14 +27,16 @@ let unlisten: UnlistenFn | undefined;
 let poll: ReturnType<typeof setInterval> | undefined;
 let generation = 0;
 let updateVersion = 0;
+let artworkVersion = 0;
 let refreshInFlight: Promise<void> | undefined;
 let refreshGeneration = 0;
 
 function publish(next: MediaState) {
   updateVersion += 1;
+  if (artworkValue({...next}) !== undefined) artworkVersion += 1;
   media.update((previous) => ({
     ...next,
-    albumArt: next.albumArt || (
+    albumArt: artworkValue({...next}) ?? (
       previous.title === next.title && previous.artist === next.artist && previous.source === next.source
         ? previous.albumArt
         : ""
@@ -45,10 +48,20 @@ function refresh(epoch: number): Promise<void> {
   if (refreshInFlight && refreshGeneration === epoch) return refreshInFlight;
 
   const versionAtStart = updateVersion;
+  const artworkAtStart = artworkVersion;
   const request = mediaApi.getMediaInfo();
   const pending = request.then((next) => {
     // A media event received during this request is newer than its snapshot.
-    if (epoch === generation && consumers > 0 && versionAtStart === updateVersion) publish(next);
+    if (epoch !== generation || consumers === 0) return;
+    if (versionAtStart === updateVersion) { publish(next); return; }
+    // A clock-only delta must not discard a delayed full cover snapshot.
+    // Explicit artwork updates/clears since the request remain newer.
+    if (artworkAtStart === artworkVersion) {
+      const cover = artworkValue({...next});
+      if (cover !== undefined) media.update(previous =>
+        previous.title === next.title && previous.artist === next.artist && previous.source === next.source
+          ? {...previous,albumArt:cover} : previous);
+    }
   }).catch(() => {
     // Browser Studio deliberately keeps deterministic preview data.
   }).finally(() => {

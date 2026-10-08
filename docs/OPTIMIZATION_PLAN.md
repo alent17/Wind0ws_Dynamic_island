@@ -1,6 +1,8 @@
 # Isle Optimization Plan
 
-> 2026-10-08 更新：三轮最新 Release OS 基线已采集；M1 本轮正确性/资源压力验收通过并勾选；M2 在第 50 首后重开浮窗出现空封面，维持未勾选。完整 B0 的 IPC/ETW/噪声校准仍待补。见 [验收报告](performance/acceptance-2026-10-08/REPORT.md)。
+> 2026-10-09 更新：M2 浮窗重开空封面已记录真实事件时序、修复并通过封面正确性/Canvas 所有权验收：100 首真实切歌及四次重开全部通过，Detached Canvas=0。M2 勾选；GPU 长期回稳及 Release 性能收益未确认，不能据此判定内存/Idle 达标。M3 保持未勾选，后续 Release C 前后构建必须包含同一 M2 修复。见 [M2 验收报告](performance/m2-reopen-2026-10-08/ACCEPTANCE.md)。
+
+> 2026-10-08 历史记录：三轮最新 Release OS 基线已采集；M1 正确性/资源压力验收通过。该轮 M2 第 50 首重开失败，详见 [原验收报告](performance/acceptance-2026-10-08/REPORT.md)。完整 B0 的 IPC/ETW/噪声校准仍待补。
 
 > 原始审查基线为 a9a855e。2026-10-07 已按项目所有者的“执行”指令实施 B1、M1、M2 的代码与验证工作，并补充 B0 的采样工具及 Windows 冒烟记录。详细结果见 [本轮执行记录](performance/optimization-2026-10-07/EXECUTION.md)。完整性能验收尚未完成，未将短时诊断包装成长测结果。
 
@@ -361,7 +363,8 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Risk:** 双重PropVariantClear、Clone原始指针、提前CoUninitialize或STA/MTA错用会造成更严重问题。
   - **Verification:** 连续1000次设备名称/列表查询与打开关闭音量页，比较native retained allocations/private commit、句柄与线程；覆盖PropVariantToString错误路径。验证媒体控制/会话读取仍正常，COM成功/失败路径配对计数一致。记录前后数据，实际泄漏字节不能只靠WS波动判断。
 
-- [ ] **M2 · 🟠 P1 — Give Canvas and image rendering explicit DOM ownership**
+- [x] **M2 · 🟠 P1 — Give Canvas and image rendering explicit DOM ownership**
+  - **2026-10-09 验收状态：** 明确区分封面字段省略与清空，接收同曲目迟到/替换封面，保护较新事件不被旧快照覆盖。5 次延迟快照重开、100 首真实切歌及四次关闭重开、真实无会话恢复通过，原生堆快照 Detached Canvas=0；79 项前端、9 项 UI、51 项 Rust 通过（1 项忽略）。本次勾选限于封面正确性/Canvas 所有权；诊断 GPU 仍波动，Release 性能目标不据此勾选。见 [M2 验收报告](performance/m2-reopen-2026-10-08/ACCEPTANCE.md)。
   - **Problem:** 浮窗缓存的newCanvasRef/oldCanvasRef在条件DOM销毁后仍保留；后续仅在null时赋新ref；异步Image.onload可以把旧歌画到当前Canvas。
   - **File:** `src/FloatingWindow.svelte:886–945,995–1028,1066–1081,1313–1330,1532–1598`。
   - **Reason:** 会导致Detached Canvas保留与封面空白/错图；这是具体owner缺陷，不能仅清LRU解决。
@@ -670,4 +673,4 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
 - [Microsoft CoInitializeEx](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coinitializeex)：每次成功初始化，包括S_FALSE，需对应CoUninitialize，并遵守线程apartment模型。
 - [Chrome DevTools memory problems](https://developer.chrome.com/docs/devtools/memory-problems)：用retained对象、Detached DOM与heap snapshots区分bloat/leak；Chrome fixture不等同native WebView2总开销。
 
-**当前执行状态：B1 已通过验证；M1/M2 已实施并通过针对性回归，仍待原生长期资源验收；B0 已建立采样入口并保存诊断数据，完整基线尚未完成。其余任务未实施，A–F 长测未完成。详见本轮执行记录。**
+**当前执行状态：B1、M1 已完成；M2 封面正确性/Canvas 所有权验收完成并独立提交。B0 完整基线尚未完成；M3 预算实现已提交，但同条件 Release C 对照未完成，保持未勾选。GPU/内存长期性能结论仍待后续验收。其他阶段不动，本轮到 M2 停止。**

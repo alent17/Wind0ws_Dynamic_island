@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { artworkValue, snapshotDecision, withoutArtwork, type ArtworkSnapshotToken } from "$lib/mediaArtwork";
   import { createCanvasArtworkRenderer, type CanvasArtworkRequest } from "$lib/canvasArtwork";
   import { ArtworkResultCache, artworkCacheKey, artworkCanvasSize } from "$lib/artworkBudget";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -133,6 +134,8 @@
   let unlisten: () => void;
   let unlistenIslandMediaSync: () => void;
   let lastIslandMediaSyncAt = 0;
+  let mediaEventRevision = 0;
+  let artworkRevision = 0;
   let unlistenResize: () => void;
   let savePositionTimeout: ReturnType<typeof setTimeout> | null = null;
   let coverRequestId = 0;
@@ -701,18 +704,50 @@
 
 
     // 监听媒体更新事件（已内置节流）
-    const handleMediaUpdate = (payload: any, authoritative = false) => {
+    const traceMedia = (origin: string, outcome: string, payload: any) => {
+      const trace = (window as any).__ISLE_MEDIA_TRACE__;
+      if (!Array.isArray(trace)) return;
+      trace.push({ at: Date.now(), origin, outcome,
+        title: String(payload.title || "").slice(0, 256), source: payload.source,
+        coverPresent: Object.hasOwn(payload, "albumArt"), coverChars: payload.albumArt?.length || 0,
+        currentTrack: currentTrackKey.slice(0, 512), displayCoverChars: displayCover.length });
+      if (trace.length > 128) trace.splice(0, trace.length - 128);
+    };
+    const receiveSameTrackArtwork = (payload: any) => {
+      const cover = artworkValue(payload);
+      if (cover === undefined) return;
+      if (cover && cover === mediaState.albumArt && displayCover) return;
+      artworkRevision++;
+      mediaState.albumArt = cover;
+      if (!cover) {
+        coverRequestId++;
+        displayCover = "";
+        previousCover = "";
+      } else {
+        void resolveTrackCover(currentTrackKey, mediaState.title, mediaState.artist, mediaState.source, cover);
+      }
+    };
+    const handleMediaUpdate = (payload: any, authoritative = false, origin = "native-event", snapshot?: ArtworkSnapshotToken) => {
       if (disposed) return;
+      traceMedia(origin, "received", payload);
       const receivedAt = Date.now();
+      const newTrackKey = `${payload.source || ""}|${mediaTrackKey(payload.title || "", payload.artist || "")}`;
+      if (snapshot) {
+        const decision = snapshotDecision(snapshot, {events:mediaEventRevision,artwork:artworkRevision}, newTrackKey === currentTrackKey);
+        if (decision === "discard") { traceMedia(origin, "dropped-stale-snapshot", payload); return; }
+        if (decision === "ignore-artwork") {
+          traceMedia(origin, "ignored-stale-snapshot-artwork", payload);
+          payload = withoutArtwork(payload);
+        }
+      } else { mediaEventRevision++; }
       if (authoritative) {
         lastIslandMediaSyncAt = receivedAt;
       } else if (receivedAt - lastIslandMediaSyncAt < 2_500) {
-        // The main island already normalized this system snapshot. Keep its
-        // timeline authoritative instead of independently correcting it again.
+        // Clock authority must not suppress independently supplied artwork.
+        if (newTrackKey === currentTrackKey) receiveSameTrackArtwork(payload);
+        traceMedia(origin, "clock-skipped-artwork-reconciled", payload);
         return;
       }
-
-      const newTrackKey = `${payload.source || ""}|${mediaTrackKey(payload.title || "", payload.artist || "")}`;
 
       // 检查是否是空状态（播放器关闭或无媒体）
       const isEmptyState =
@@ -726,6 +761,7 @@
         if (currentTrackKey && payload.source) return;
         // 播放器退出，重置为等待状态
         currentTrackKey = "";
+        artworkRevision++;
         lastReportedPosition = undefined;
         pendingSeekUntil = 0;
         mvRequestId += 1;
@@ -751,8 +787,9 @@
         currentTrackKey = newTrackKey;
 
         // 使用 SMTC 提供的图片作为基础
-        const smtcCover =
-          payload.albumArt || payload.thumbnail || payload.coverUrl || "";
+        const incomingCover = artworkValue(payload);
+        const smtcCover = incomingCover ?? "";
+        if (incomingCover !== undefined) artworkRevision++;
 
         mediaState = {
           ...mediaState,
@@ -785,6 +822,7 @@
 
         if (isMVPlaybackEnabled && !floatingCircularAlbum) requestMVForCurrentTrack(newTrackKey, payload.title, payload.artist);
       } else {
+        receiveSameTrackArtwork(payload);
         // 播放状态变化
         const previousPosition = projectedPosition(mediaState, receivedAt);
         const wasPlaying = mediaState.isPlaying;
@@ -832,16 +870,23 @@
           }
         }
       }
+      traceMedia(origin, "applied", payload);
     };
     unlistenIslandMediaSync = await eventManager.on(
       Events.ISLAND_MEDIA_SYNC,
-      (payload) => handleMediaUpdate(payload, true),
+      (payload) => handleMediaUpdate(payload, true, "island-sync"),
     );
     trackListener(unlistenIslandMediaSync);
     unlisten = await onMediaUpdate(handleMediaUpdate);
     trackListener(unlisten);
     try {
-      handleMediaUpdate(await mediaApi.getMediaInfo());
+      const snapshotToken = {events:mediaEventRevision,artwork:artworkRevision};
+      const snapshot = await mediaApi.getMediaInfo();
+      const diagnosticDelay = (window as any).__ISLE_MEDIA_SNAPSHOT_DELAY_MS__;
+      if (typeof diagnosticDelay === "number" && diagnosticDelay > 0) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(3000, diagnosticDelay)));
+      }
+      handleMediaUpdate(snapshot, false, "initial-snapshot", snapshotToken);
     } catch (error) {
       console.warn("[悬浮窗] 初始媒体状态读取失败:", error);
     }
