@@ -1,0 +1,662 @@
+{
+  "result": {
+    "nativeIdleThreeRoundsCompleted": true,
+    "m1DeviceAcceptancePassed": true,
+    "m2AcceptancePassed": false,
+    "m2Failure": "Error: Artwork did not settle for latest track: {\"title\":\"Veranda\",\"titleMatches\":true,\"canvasCount\":0,\"connected\":false,\"width\":0,\"height\":0,\"imageReady\":false,\"urlMatchesPixels\":null}",
+    "realTrackChanges": 100,
+    "uniqueTracks": 100,
+    "correctPixelChecks": 100,
+    "detachedCanvasAtCheckpoints": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "businessCodeChangedThisRun": false,
+    "nextScope": "M3 only after user follow-up; M2 remains unchecked"
+  },
+  "idle": {
+    "rounds": [
+      {
+        "label": "release-idle-r1",
+        "warmupSeconds": 300,
+        "actualSeconds": 600.8039252,
+        "samples": 407,
+        "cpu": {
+          "first": 0.1009532253555065,
+          "last": 0.0860908750262221,
+          "mean": 0.07540864815634335,
+          "p95": 0.35407826050153085,
+          "min": 0,
+          "max": 0.618929655469508
+        },
+        "logicalCores": 12,
+        "machineCpu": {
+          "first": 3,
+          "last": 3,
+          "mean": 5.594594594594595,
+          "p95": 14,
+          "min": 0,
+          "max": 26
+        },
+        "privateBytes": {
+          "first": 268738560,
+          "last": 269074432,
+          "mean": 267880221.56265357,
+          "p95": 269037568,
+          "min": 266555392,
+          "max": 269557760
+        },
+        "privateWorkingSet": {
+          "first": 164700160,
+          "last": 165564416,
+          "mean": 164375448.84520885,
+          "p95": 165531648,
+          "min": 163164160,
+          "max": 165744640
+        },
+        "threads": {
+          "first": 213,
+          "last": 211,
+          "mean": 212.26535626535627,
+          "p95": 214,
+          "min": 210,
+          "max": 215
+        },
+        "handles": {
+          "first": 3789,
+          "last": 3787,
+          "mean": 3790,
+          "p95": 3794,
+          "min": 3784,
+          "max": 3797
+        },
+        "gpuStatus": "available: per-PID engines; engine percentages must not be summed as total GPU utilization",
+        "processCount": {
+          "first": 7,
+          "last": 7,
+          "mean": 7,
+          "p95": 7,
+          "min": 7,
+          "max": 7
+        },
+        "gpuMemory": {
+          "dedicatedBytes": {
+            "first": 17059840,
+            "last": 17125376,
+            "mean": 17088823.98034398,
+            "p95": 17190912,
+            "min": 16928768,
+            "max": 17190912
+          },
+          "sharedBytes": {
+            "first": 3186688,
+            "last": 3186688,
+            "mean": 3199569.769041769,
+            "p95": 3186688,
+            "min": 3186688,
+            "max": 4235264
+          },
+          "committedBytes": {
+            "first": 21114880,
+            "last": 21180416,
+            "mean": 21156745.749385748,
+            "p95": 21245952,
+            "min": 20983808,
+            "max": 22228992
+          }
+        },
+        "gpuEngines": {
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_0_engtype_3D": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_10_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_11_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_12_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_13_engtype_Security_1": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_1_engtype_VideoDecode": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_2_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_3_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_4_engtype_Security": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_5_engtype_VideoEncode": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_6_engtype_OFA_0": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_7_engtype_JPEG_Decode_0": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_8_engtype_VR": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_9_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          }
+        },
+        "candidateIdleCpuPass": true,
+        "memoryInterpretation": "Ten-minute endpoint changes do not establish absence of a leak; inspect warm-up/cache and per-role trends. GPU counters are reported per engine. CPU summary is a sampled mean, not a presentation/FPS metric."
+      },
+      {
+        "label": "release-idle-r2",
+        "warmupSeconds": 300,
+        "actualSeconds": 600.2081788999999,
+        "samples": 396,
+        "cpu": {
+          "first": 0.04848234046340564,
+          "last": 0.255555054472602,
+          "mean": 0.0743472325933509,
+          "p95": 0.2704364801950426,
+          "min": 0,
+          "max": 0.5255982729854787
+        },
+        "logicalCores": 12,
+        "machineCpu": {
+          "first": 7,
+          "last": 11,
+          "mean": 7.068181818181818,
+          "p95": 19,
+          "min": 0,
+          "max": 55
+        },
+        "privateBytes": {
+          "first": 269410304,
+          "last": 270622720,
+          "mean": 270265406.06060606,
+          "p95": 271769600,
+          "min": 268967936,
+          "max": 272580608
+        },
+        "privateWorkingSet": {
+          "first": 165830656,
+          "last": 167141376,
+          "mean": 166642936.24242425,
+          "p95": 167915520,
+          "min": 165707776,
+          "max": 168697856
+        },
+        "threads": {
+          "first": 220,
+          "last": 212,
+          "mean": 215.86363636363637,
+          "p95": 225,
+          "min": 210,
+          "max": 225
+        },
+        "handles": {
+          "first": 3800,
+          "last": 3794,
+          "mean": 3797.497474747475,
+          "p95": 3803,
+          "min": 3789,
+          "max": 3805
+        },
+        "gpuStatus": "available: per-PID engines; engine percentages must not be summed as total GPU utilization",
+        "processCount": {
+          "first": 7,
+          "last": 7,
+          "mean": 7,
+          "p95": 7,
+          "min": 7,
+          "max": 7
+        },
+        "gpuMemory": {
+          "dedicatedBytes": {
+            "first": 17059840,
+            "last": 17125376,
+            "mean": 17084829.737373736,
+            "p95": 17190912,
+            "min": 16863232,
+            "max": 17190912
+          },
+          "sharedBytes": {
+            "first": 3186688,
+            "last": 3186688,
+            "mean": 3215815.111111111,
+            "p95": 3186688,
+            "min": 3186688,
+            "max": 4235264
+          },
+          "committedBytes": {
+            "first": 21114880,
+            "last": 21180416,
+            "mean": 21168996.848484848,
+            "p95": 21245952,
+            "min": 20918272,
+            "max": 22294528
+          }
+        },
+        "gpuEngines": {
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_0_engtype_3D": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_10_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_11_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_12_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_13_engtype_Security_1": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_1_engtype_VideoDecode": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_2_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_3_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_4_engtype_Security": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_5_engtype_VideoEncode": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_6_engtype_OFA_0": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_7_engtype_JPEG_Decode_0": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_8_engtype_VR": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_9_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          }
+        },
+        "candidateIdleCpuPass": true,
+        "memoryInterpretation": "Ten-minute endpoint changes do not establish absence of a leak; inspect warm-up/cache and per-role trends. GPU counters are reported per engine. CPU summary is a sampled mean, not a presentation/FPS metric."
+      },
+      {
+        "label": "release-idle-r3",
+        "warmupSeconds": 300,
+        "actualSeconds": 600.8738601,
+        "samples": 395,
+        "cpu": {
+          "first": 0,
+          "last": 0,
+          "mean": 0.0703753305468065,
+          "p95": 0.2627756297205252,
+          "min": 0,
+          "max": 0.5194453894805581
+        },
+        "logicalCores": 12,
+        "machineCpu": {
+          "first": 17,
+          "last": 15,
+          "mean": 6.111392405063291,
+          "p95": 16,
+          "min": 0,
+          "max": 44
+        },
+        "privateBytes": {
+          "first": 272306176,
+          "last": 273113088,
+          "mean": 272772694.8455696,
+          "p95": 273752064,
+          "min": 271667200,
+          "max": 275333120
+        },
+        "privateWorkingSet": {
+          "first": 168566784,
+          "last": 169607168,
+          "mean": 169233052.84050632,
+          "p95": 170086400,
+          "min": 168267776,
+          "max": 171565056
+        },
+        "threads": {
+          "first": 211,
+          "last": 210,
+          "mean": 212.2101265822785,
+          "p95": 214,
+          "min": 209,
+          "max": 215
+        },
+        "handles": {
+          "first": 3795,
+          "last": 3793,
+          "mean": 3798.240506329114,
+          "p95": 3804,
+          "min": 3792,
+          "max": 3806
+        },
+        "gpuStatus": "available: per-PID engines; engine percentages must not be summed as total GPU utilization",
+        "processCount": {
+          "first": 7,
+          "last": 7,
+          "mean": 7,
+          "p95": 7,
+          "min": 7,
+          "max": 7
+        },
+        "gpuMemory": {
+          "dedicatedBytes": {
+            "first": 17190912,
+            "last": 17190912,
+            "mean": 17084395.260759495,
+            "p95": 17190912,
+            "min": 16863232,
+            "max": 17190912
+          },
+          "sharedBytes": {
+            "first": 3186688,
+            "last": 3186688,
+            "mean": 3213234.2278481014,
+            "p95": 3186688,
+            "min": 3186688,
+            "max": 4235264
+          },
+          "committedBytes": {
+            "first": 21245952,
+            "last": 21245952,
+            "mean": 21165981.488607597,
+            "p95": 21245952,
+            "min": 20918272,
+            "max": 22294528
+          }
+        },
+        "gpuEngines": {
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_0_engtype_3D": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_10_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_11_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_12_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_13_engtype_Security_1": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_1_engtype_VideoDecode": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_2_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_3_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_4_engtype_Security": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_5_engtype_VideoEncode": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_6_engtype_OFA_0": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_7_engtype_JPEG_Decode_0": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_8_engtype_VR": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          },
+          "pid_10792_luid_0x00000000_0x0000BC45_phys_0_eng_9_engtype_Copy": {
+            "first": 0,
+            "last": 0,
+            "mean": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0
+          }
+        },
+        "candidateIdleCpuPass": true,
+        "memoryInterpretation": "Ten-minute endpoint changes do not establish absence of a leak; inspect warm-up/cache and per-role trends. GPU counters are reported per engine. CPU summary is a sampled mean, not a presentation/FPS metric."
+      }
+    ],
+    "formalThreeRoundCoverage": true,
+    "candidateBudget": "Original plan CPU <=0.1% machine mean and <=0.5% sampled p95. Not noise-calibrated without a desktop control run. No automatic M1/M2 acceptance."
+  },
+  "manifest": {
+    "commit": "7d75c9784d03fd658260cc68604b7e52cfafccde",
+    "startedUtc": "2026-10-07T18:41:21.0433911Z",
+    "executable": "E:\\Wind0ws_Dynamic_island\\src-tauri\\target\\release\\isle.exe",
+    "sha256": "FC697AA1933F1095466A18CBCB1B177F8B0C30376ADFC12D1F5665839CB3213F",
+    "fileVersion": "1.0.11",
+    "rootPid": 35244,
+    "profile": "release; tauri/custom-protocol; no attached DevTools",
+    "scene": "Paused NetEase session, compact main window, no floating window; existing user settings retained",
+    "requestedRounds": 3,
+    "warmupSecondsPerRound": 300,
+    "sampleSecondsPerRound": 600,
+    "completedRounds": [
+      "release-idle-r1",
+      "release-idle-r2",
+      "release-idle-r3"
+    ]
+  }
+}

@@ -41,15 +41,16 @@ function Read-Sample {
         $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
         if (-not $process) { continue }
         try {
-            $cpu = $process.CPU
+            $cpu = [double]$process.TotalProcessorTime.TotalSeconds
+            $counterAt = $timer.Elapsed.TotalSeconds
             $birth = $process.StartTime.ToUniversalTime().ToString('o')
             $key = "$processId/$birth"
             $cpuSingleCore = $null
             if ($previous.ContainsKey($key)) {
-                $deltaSeconds = $at - $previous[$key].at
-                if ($deltaSeconds -gt 0) { $cpuSingleCore = 100 * [math]::Max(0, $cpu - $previous[$key].cpu) / $deltaSeconds }
+                $deltaSeconds = $counterAt - $previous[$key].at
+                if ($deltaSeconds -gt 0) { $cpuSingleCore = 100 * [math]::Max([double]0, [double]($cpu - $previous[$key].cpu)) / $deltaSeconds }
             }
-            $previous[$key] = @{ at = $at; cpu = $cpu }
+            $previous[$key] = @{ at = $counterAt; cpu = $cpu }
             $role = if ($item.Name -eq 'isle.exe') { 'app' } elseif ($item.Name -ne 'msedgewebview2.exe') { $item.Name } elseif ($item.CommandLine -match '--type=([^ ]+)') { $matches[1] } else { 'browser' }
             $counters = $memory | Where-Object { [int]$_.IDProcess -eq $processId } | Select-Object -First 1
             if (-not $processHistory.ContainsKey($key)) {
@@ -61,6 +62,8 @@ function Read-Sample {
             [pscustomobject]@{
                 pid = $processId
                 role = $role
+                cumulativeCpuSeconds = $cpu
+                cpuCounterTimestampSeconds = $counterAt
                 cpuPercentOfMachine = $machineCpu
                 cpuPercentOfOneCore = $cpuSingleCore
                 cpuSampleAvailable = ($null -ne $cpuSingleCore)
