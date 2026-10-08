@@ -2,67 +2,39 @@
 //!
 //! 提供图片像素化等特效处理功能
 
+use super::image_budget::{self, ImageWork, MAX_ARTWORK_EDGE};
 use crate::error::{AppError, AppResult};
 use crate::utils::load_image_data;
 use base64::{engine::general_purpose, Engine};
-use image::{GenericImageView, ImageFormat};
-use std::io::Cursor;
+use image::GenericImageView;
 
-/// 处理图片（可选像素化效果）
-///
-/// # 参数
-/// - `image_path`: 图片路径
-/// - `enable_pixel_art`: 是否启用像素化效果
-///
-/// # 返回
-/// Base64 编码的 PNG 图片数据（带 data URI 前缀）
-pub async fn process_image(image_path: &str, enable_pixel_art: bool) -> AppResult<String> {
-    let img_data = load_image_data(image_path)?;
-
-    if img_data.is_empty() {
-        return Err(AppError::parse("图片数据为空"));
-    }
-
-    let _img = image::load_from_memory(&img_data)
-        .map_err(|e| AppError::parse(format!("无法加载图片：{}", e)))?;
-
-    if enable_pixel_art {
-        let processed_data = pixelate_image_advanced(&img_data, 12, 32)?;
-        let base64_result = general_purpose::STANDARD.encode(&processed_data);
-        Ok(format!("data:image/png;base64,{}", base64_result))
-    } else {
-        let base64_result = general_purpose::STANDARD.encode(&img_data);
-        Ok(format!("data:image/png;base64,{}", base64_result))
-    }
+fn data_url(image: &image::DynamicImage) -> AppResult<String> {
+    Ok(format!(
+        "data:image/png;base64,{}",
+        general_purpose::STANDARD.encode(image_budget::encode_png(image)?)
+    ))
 }
 
-/// 像素化封面图片
-///
-/// # 参数
-/// - `image_path`: 图片路径
-/// - `pixel_size`: 像素块大小
-///
-/// # 返回
-/// Base64 编码的 PNG 图片数据
+pub async fn process_image(image_path: &str, enable_pixel_art: bool) -> AppResult<String> {
+    let _work = ImageWork::enter()?;
+    let bytes = load_image_data(image_path)?;
+    let image = image_budget::fit(image_budget::decode(&bytes)?);
+    let image = if enable_pixel_art {
+        pixelate_image(&image, 12)
+    } else {
+        image
+    };
+    data_url(&image)
+}
+
 pub fn pixelate_cover(image_path: &str, pixel_size: u32) -> AppResult<String> {
-    let img_data = load_image_data(image_path)?;
-
-    if img_data.is_empty() {
-        return Err(AppError::parse("图片数据为空"));
+    if pixel_size == 0 || pixel_size > MAX_ARTWORK_EDGE {
+        return Err(AppError::business(3006, "pixel_size 必须在 1 到 1280 之间"));
     }
-
-    let img = image::load_from_memory(&img_data)
-        .map_err(|e| AppError::parse(format!("无法加载图片：{}", e)))?;
-
-    let pixelated = pixelate_image(&img, pixel_size);
-
-    let mut buffer = Cursor::new(Vec::new());
-    pixelated
-        .write_to(&mut buffer, ImageFormat::Png)
-        .map_err(|e| AppError::io(format!("写入图片失败：{}", e)))?;
-
-    let base64_result = general_purpose::STANDARD.encode(buffer.into_inner());
-    Ok(format!("data:image/png;base64,{}", base64_result))
+    let _work = ImageWork::enter()?;
+    let bytes = load_image_data(image_path)?;
+    let image = image_budget::fit(image_budget::decode(&bytes)?);
+    data_url(&pixelate_image(&image, pixel_size))
 }
 
 /// 像素化图片
@@ -76,20 +48,18 @@ fn pixelate_image(img: &image::DynamicImage, pixel_size: u32) -> image::DynamicI
     for y in (0..height).step_by(pixel_size as usize) {
         for x in (0..width).step_by(pixel_size as usize) {
             // 计算块内平均颜色
-            let mut r_sum = 0u32;
-            let mut g_sum = 0u32;
-            let mut b_sum = 0u32;
-            let mut count = 0u32;
+            let mut r_sum = 0u64;
+            let mut g_sum = 0u64;
+            let mut b_sum = 0u64;
+            let mut count = 0u64;
 
-            for dy in 0..pixel_size {
-                for dx in 0..pixel_size {
-                    let px = x + dx;
-                    let py = y + dy;
+            for py in y..y.saturating_add(pixel_size).min(height) {
+                for px in x..x.saturating_add(pixel_size).min(width) {
                     if px < width && py < height {
                         let pixel = img.get_pixel(px, py);
-                        r_sum += pixel[0] as u32;
-                        g_sum += pixel[1] as u32;
-                        b_sum += pixel[2] as u32;
+                        r_sum += pixel[0] as u64;
+                        g_sum += pixel[1] as u64;
+                        b_sum += pixel[2] as u64;
                         count += 1;
                     }
                 }
@@ -105,10 +75,8 @@ fn pixelate_image(img: &image::DynamicImage, pixel_size: u32) -> image::DynamicI
                 let g_avg = g_avg as u8;
                 let b_avg = b_avg as u8;
 
-                for dy in 0..pixel_size {
-                    for dx in 0..pixel_size {
-                        let px = x + dx;
-                        let py = y + dy;
+                for py in y..y.saturating_add(pixel_size).min(height) {
+                    for px in x..x.saturating_add(pixel_size).min(width) {
                         if px < width && py < height {
                             let pixel = result.get_pixel_mut(px, py);
                             pixel[0] = r_avg;
@@ -124,23 +92,31 @@ fn pixelate_image(img: &image::DynamicImage, pixel_size: u32) -> image::DynamicI
     image::DynamicImage::ImageRgba8(result)
 }
 
-/// 高级像素化处理
-///
-/// 支持自定义像素块大小和调色板大小
-fn pixelate_image_advanced(
-    img_data: &[u8],
-    pixel_size: u32,
-    _palette_size: u32,
-) -> AppResult<Vec<u8>> {
-    let img = image::load_from_memory(img_data)
-        .map_err(|e| AppError::parse(format!("无法加载图片：{}", e)))?;
-
-    let pixelated = pixelate_image(&img, pixel_size);
-
-    let mut buffer = Cursor::new(Vec::new());
-    pixelated
-        .write_to(&mut buffer, ImageFormat::Png)
-        .map_err(|e| AppError::io(format!("写入图片失败：{}", e)))?;
-
-    Ok(buffer.into_inner())
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn rejects_zero_and_huge_pixel_sizes_before_loading_a_file() {
+        assert!(pixelate_cover("missing.png", 0)
+            .unwrap_err()
+            .to_string()
+            .contains("pixel_size"));
+        assert!(pixelate_cover("missing.png", u32::MAX)
+            .unwrap_err()
+            .to_string()
+            .contains("pixel_size"));
+    }
+    #[test]
+    fn clipped_large_block_preserves_average_and_alpha() {
+        let image = image::DynamicImage::ImageRgba8(image::RgbaImage::from_fn(2, 1, |x, _| {
+            if x == 0 {
+                image::Rgba([0, 20, 40, 128])
+            } else {
+                image::Rgba([200, 40, 60, 255])
+            }
+        }));
+        let result = pixelate_image(&image, 1280).to_rgba8();
+        assert_eq!(result.get_pixel(0, 0).0, [100, 30, 50, 128]);
+        assert_eq!(result.get_pixel(1, 0).0, [100, 30, 50, 255]);
+    }
 }

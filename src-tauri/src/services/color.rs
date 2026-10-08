@@ -2,7 +2,7 @@
 //!
 //! 提供图片主色调提取功能
 
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
 use crate::utils::load_image_data;
 use image::imageops::FilterType;
 
@@ -14,14 +14,14 @@ use image::imageops::FilterType;
 /// # 返回
 /// RGB 元组 (r, g, b)
 pub fn extract_dominant_color(image_path: &str) -> AppResult<(u8, u8, u8)> {
+    let _work = super::image_budget::ImageWork::enter()?;
     let img_data = load_image_data(image_path)?;
 
     if img_data.is_empty() {
         return Ok((60, 80, 100)); // 默认颜色
     }
 
-    let img = image::load_from_memory(&img_data)
-        .map_err(|e| AppError::parse(format!("无法加载图片：{}", e)))?;
+    let img = super::image_budget::decode(&img_data)?;
 
     // 缩小图片以提高处理速度
     let resized = img.resize_exact(80, 80, FilterType::Lanczos3);

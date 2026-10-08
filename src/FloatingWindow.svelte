@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { createCanvasArtworkRenderer, type CanvasArtworkRequest } from "$lib/canvasArtwork";
+  import { ArtworkResultCache, artworkCacheKey, artworkCanvasSize } from "$lib/artworkBudget";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { convertFileSrc, invoke } from "@tauri-apps/api/core";
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
@@ -903,8 +904,8 @@
 
   // 缓存处理后的图片。浮动窗可能长时间切歌，使用有上限的 LRU，避免
   // 专辑封面 base64 无限留在 WebView 内存中。
-  const MAX_PROCESSED_IMAGES = 12;
-  const processedImageCache = new Map<string, string>();
+  const processedImageCache = new ArtworkResultCache();
+  let fingerprintJobs = 0;
   const processingPromises = new Map<string, Promise<string>>();
 
   // 使用后端 API 处理图片（支持像素化）
@@ -912,12 +913,15 @@
     imageUrl: string,
     enablePixelArt: boolean,
   ): Promise<string> {
-    const cacheKey = `${enablePixelArt ? "pixel" : "normal"}:${imageUrl}`;
+    if (disposed || processingPromises.size + fingerprintJobs >= 2) return imageUrl;
+    fingerprintJobs++;
+    let cacheKey: string;
+    try { cacheKey = await artworkCacheKey(imageUrl, enablePixelArt); }
+    finally { fingerprintJobs--; }
+    if (disposed) return imageUrl;
     const cached = processedImageCache.get(cacheKey);
     if (cached) {
-      // Map insertion order is the access order used by this small LRU.
-      processedImageCache.delete(cacheKey);
-      processedImageCache.set(cacheKey, cached);
+      // The byte-bounded cache updates recency on lookup.
       return cached;
     }
     const pending = processingPromises.get(cacheKey);
@@ -931,11 +935,6 @@
         });
         if (disposed) return imageUrl;
         processedImageCache.set(cacheKey, processedBase64);
-        while (processedImageCache.size > MAX_PROCESSED_IMAGES) {
-          const oldestKey = processedImageCache.keys().next().value;
-          if (oldestKey === undefined) break;
-          processedImageCache.delete(oldestKey);
-        }
         return processedBase64;
       } catch (error) {
         console.error("[图片处理] 后端处理失败:", error);
@@ -989,8 +988,10 @@
     if (!ctx) return;
 
     // 设置 Canvas 尺寸与图片一致
-    canvas.width = img.width;
-    canvas.height = img.height;
+    const raster = artworkCanvasSize(img.width, img.height,
+      Math.max(canvas.clientWidth, canvas.clientHeight, 1), window.devicePixelRatio || 1);
+    canvas.width = raster.width;
+    canvas.height = raster.height;
 
     if (pixelated) {
       // 智能像素化算法：根据图片质量和内容决定像素化程度
@@ -1073,7 +1074,7 @@
     } else {
       // 正常渲染高清图
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     }
   }
 

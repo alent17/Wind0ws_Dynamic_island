@@ -1,0 +1,73 @@
+{
+  "runtime": "isolated debug custom-protocol native build; not a Release performance benchmark",
+  "results": [
+    {
+      "case": "pixel_size=0",
+      "rejected": true,
+      "error": {
+        "message": "[3006] pixel_size 必须在 1 到 1280 之间",
+        "code": 3006
+      }
+    },
+    {
+      "case": "pixel_size=4294967295",
+      "rejected": true,
+      "error": {
+        "message": "[3006] pixel_size 必须在 1 到 1280 之间",
+        "code": 3006
+      }
+    },
+    {
+      "case": "broken.png",
+      "rejected": true,
+      "error": {
+        "message": "解析错误: 无法读取图片尺寸：The image format could not be determined",
+        "code": 2006
+      }
+    },
+    {
+      "case": "over-bytes.png",
+      "rejected": true,
+      "error": {
+        "message": "[3004] 图片文件超过预算",
+        "code": 3004
+      }
+    },
+    {
+      "case": "over-edge.png",
+      "rejected": true,
+      "error": {
+        "message": "解析错误: 无法读取图片尺寸：Image size exceeds limit",
+        "code": 2006
+      }
+    },
+    {
+      "case": "over-pixels.png",
+      "rejected": true,
+      "error": {
+        "message": "[3004] 图片尺寸或像素数超出预算",
+        "code": 3004
+      }
+    },
+    {
+      "case": "wide.png pixelated=false",
+      "dimensions": {
+        "width": 1280,
+        "height": 720
+      },
+      "uriChars": 26106
+    },
+    {
+      "case": "wide.png pixelated=true",
+      "dimensions": {
+        "width": 1280,
+        "height": 720
+      },
+      "uriChars": 26106
+    },
+    {
+      "case": "backend responds after all invalid inputs",
+      "success": true
+    }
+  ]
+}

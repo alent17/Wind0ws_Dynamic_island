@@ -131,40 +131,21 @@ fn apple_hd_url(url: &str) -> String {
 }
 
 async fn download_cover_as_data_url(client: &reqwest::Client, url: &str) -> AppResult<String> {
-    const MAX_COVER_BYTES: u64 = 12 * 1024 * 1024;
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|error| AppError::network(format!("Cover download failed: {error}")))?
-        .error_for_status()
-        .map_err(|error| AppError::network(format!("Cover download status failed: {error}")))?;
-    if response
-        .content_length()
-        .is_some_and(|size| size > MAX_COVER_BYTES)
-    {
-        return Err(AppError::business(3004, "封面图片过大"));
-    }
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|error| AppError::network(format!("Cover bytes failed: {error}")))?;
-    if bytes.len() as u64 > MAX_COVER_BYTES {
-        return Err(AppError::business(3004, "封面图片过大"));
-    }
-    let format = image::guess_format(&bytes)
-        .map_err(|error| AppError::parse(format!("Cover image format failed: {error}")))?;
-    let mime = match format {
-        image::ImageFormat::Jpeg => "image/jpeg",
-        image::ImageFormat::Png => "image/png",
-        image::ImageFormat::WebP => "image/webp",
-        image::ImageFormat::Gif => "image/gif",
-        image::ImageFormat::Bmp => "image/bmp",
-        _ => return Err(AppError::business(3002, "不支持的封面图片格式")),
-    };
+    let directory = std::env::temp_dir().join("isle-artwork-downloads");
+    std::fs::create_dir_all(&directory)?;
+    super::cache::cleanup_dead_partials(&directory);
+    let downloaded = super::http_budget::download(
+        client,
+        url,
+        &directory,
+        super::image_budget::MAX_IMAGE_BYTES as u64,
+    )
+    .await?;
+    let bytes = super::image_budget::read_limited(std::fs::File::open(&downloaded.path)?)?;
+    let normalized = super::image_budget::normalize(&bytes)?;
     Ok(format!(
-        "data:{mime};base64,{}",
-        general_purpose::STANDARD.encode(&bytes)
+        "data:image/png;base64,{}",
+        general_purpose::STANDARD.encode(normalized)
     ))
 }
 
@@ -450,13 +431,43 @@ pub async fn resolve_hd_cover(
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock()
     {
-        cache.retain(|_, (created, value)| created.elapsed() < if value.is_some() { COVER_CACHE_TTL } else { COVER_NEGATIVE_CACHE_TTL });
-        let incoming_bytes = resolved.as_ref().map_or(0, |cover| cover.url.len());
-        while !cache.is_empty() && (cache.len() >= 64 || cache.values().map(|(_, value)| value.as_ref().map_or(0, |cover| cover.url.len())).sum::<usize>() + incoming_bytes > 8 * 1024 * 1024) {
-            let oldest = cache.iter().min_by_key(|(_, (created, _))| *created).map(|(key, _)| key.clone());
-            if let Some(key) = oldest { cache.remove(&key); }
+        cache.retain(|_, (created, value)| {
+            created.elapsed()
+                < if value.is_some() {
+                    COVER_CACHE_TTL
+                } else {
+                    COVER_NEGATIVE_CACHE_TTL
+                }
+        });
+        let incoming_bytes = cache_key.len()
+            + resolved
+                .as_ref()
+                .map_or(0, |cover| cover.url.len() + cover.provider.len());
+        while !cache.is_empty()
+            && (cache.len() >= 64
+                || cache
+                    .iter()
+                    .map(|(key, (_, value))| {
+                        key.len()
+                            + value
+                                .as_ref()
+                                .map_or(0, |cover| cover.url.len() + cover.provider.len())
+                    })
+                    .fold(0usize, usize::saturating_add)
+                    .saturating_add(incoming_bytes)
+                    > 8 * 1024 * 1024)
+        {
+            let oldest = cache
+                .iter()
+                .min_by_key(|(_, (created, _))| *created)
+                .map(|(key, _)| key.clone());
+            if let Some(key) = oldest {
+                cache.remove(&key);
+            }
         }
-        if incoming_bytes <= 8 * 1024 * 1024 { cache.insert(cache_key, (Instant::now(), resolved.clone())); }
+        if incoming_bytes <= 8 * 1024 * 1024 {
+            cache.insert(cache_key, (Instant::now(), resolved.clone()));
+        }
     }
     Ok(resolved)
 }
@@ -642,8 +653,9 @@ fn selected_session(
 }
 
 pub fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
-    let _apartment = super::apartment::Apartment::enter()
-        .map_err(|error| AppError::media(format!("Media apartment initialization failed: {error}")))?;
+    let _apartment = super::apartment::Apartment::enter().map_err(|error| {
+        AppError::media(format!("Media apartment initialization failed: {error}"))
+    })?;
     let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
         .and_then(|op| op.get())
         .map_err(|e| AppError::media(format!("RequestAsync failed: {:?}", e)))?;
@@ -691,8 +703,9 @@ pub fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
 /// - Apple Music
 /// - 其他通用播放器
 pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
-    let _apartment = super::apartment::Apartment::enter()
-        .map_err(|error| AppError::media(format!("Media apartment initialization failed: {error}")))?;
+    let _apartment = super::apartment::Apartment::enter().map_err(|error| {
+        AppError::media(format!("Media apartment initialization failed: {error}"))
+    })?;
     let (session, source_type, raw_id) = match selected_session(app)? {
         Some(s) => s,
         None => return Ok(MediaState::default()),
@@ -733,19 +746,24 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
                 .and_then(|operation| operation.get())
             {
                 if let Ok(reader) = DataReader::CreateDataReader(&stream) {
-                    let size = stream.Size().unwrap_or(0) as u32;
-                    if size > 0
-                        && reader
+                    if let Ok(size) =
+                        super::image_budget::checked_stream_size(stream.Size().unwrap_or(0))
+                    {
+                        if reader
                             .LoadAsync(size)
                             .and_then(|operation| operation.get())
-                            .is_ok()
-                    {
-                        let mut buffer = vec![0u8; size as usize];
-                        if reader.ReadBytes(&mut buffer).is_ok() {
-                            thumbnail_base64 = format!(
-                                "data:image/png;base64,{}",
-                                general_purpose::STANDARD.encode(&buffer)
-                            );
+                            .ok()
+                            == Some(size)
+                        {
+                            let mut buffer = vec![0u8; size as usize];
+                            if reader.ReadBytes(&mut buffer).is_ok() {
+                                if let Ok(png) = super::image_budget::normalize(&buffer) {
+                                    thumbnail_base64 = format!(
+                                        "data:image/png;base64,{}",
+                                        general_purpose::STANDARD.encode(png)
+                                    );
+                                }
+                            }
                         }
                     }
                 }
@@ -953,8 +971,9 @@ async fn get_netease_mv_url_internal(mv_id: u64) -> AppResult<Option<String>> {
 /// - "next": 下一曲
 /// - "prev": 上一曲
 pub fn control_media(app: &AppHandle, action: &str) -> AppResult<()> {
-    let _apartment = super::apartment::Apartment::enter()
-        .map_err(|error| AppError::media(format!("Media apartment initialization failed: {error}")))?;
+    let _apartment = super::apartment::Apartment::enter().map_err(|error| {
+        AppError::media(format!("Media apartment initialization failed: {error}"))
+    })?;
 
     let Some((session, _, _)) = selected_session(app)? else {
         return Err(AppError::media("未找到可控制的媒体会话"));
@@ -983,8 +1002,9 @@ pub fn control_media(app: &AppHandle, action: &str) -> AppResult<()> {
 }
 
 pub fn seek_media(app: &AppHandle, position_ms: u64) -> AppResult<()> {
-    let _apartment = super::apartment::Apartment::enter()
-        .map_err(|error| AppError::media(format!("Media apartment initialization failed: {error}")))?;
+    let _apartment = super::apartment::Apartment::enter().map_err(|error| {
+        AppError::media(format!("Media apartment initialization failed: {error}"))
+    })?;
     let (session, _, _) =
         selected_session(app)?.ok_or_else(|| AppError::media("No active media session"))?;
     let accepted = session
@@ -1000,8 +1020,9 @@ pub fn seek_media(app: &AppHandle, position_ms: u64) -> AppResult<()> {
 }
 
 pub fn toggle_shuffle(app: &AppHandle) -> AppResult<()> {
-    let _apartment = super::apartment::Apartment::enter()
-        .map_err(|error| AppError::media(format!("Media apartment initialization failed: {error}")))?;
+    let _apartment = super::apartment::Apartment::enter().map_err(|error| {
+        AppError::media(format!("Media apartment initialization failed: {error}"))
+    })?;
     if let Some((session, _, _)) = selected_session(app)? {
         let current = session
             .GetPlaybackInfo()
@@ -1018,8 +1039,9 @@ pub fn toggle_shuffle(app: &AppHandle) -> AppResult<()> {
 }
 
 pub fn cycle_repeat(app: &AppHandle) -> AppResult<()> {
-    let _apartment = super::apartment::Apartment::enter()
-        .map_err(|error| AppError::media(format!("Media apartment initialization failed: {error}")))?;
+    let _apartment = super::apartment::Apartment::enter().map_err(|error| {
+        AppError::media(format!("Media apartment initialization failed: {error}"))
+    })?;
     if let Some((session, _, _)) = selected_session(app)? {
         let current = session
             .GetPlaybackInfo()

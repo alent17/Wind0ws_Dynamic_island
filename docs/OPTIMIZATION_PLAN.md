@@ -1,5 +1,7 @@
 # Isle Optimization Plan
 
+> 2026-10-08 更新：三轮最新 Release OS 基线已采集；M1 本轮正确性/资源压力验收通过并勾选；M2 在第 50 首后重开浮窗出现空封面，维持未勾选。完整 B0 的 IPC/ETW/噪声校准仍待补。见 [验收报告](performance/acceptance-2026-10-08/REPORT.md)。
+
 > 原始审查基线为 a9a855e。2026-10-07 已按项目所有者的“执行”指令实施 B1、M1、M2 的代码与验证工作，并补充 B0 的采样工具及 Windows 冒烟记录。详细结果见 [本轮执行记录](performance/optimization-2026-10-07/EXECUTION.md)。完整性能验收尚未完成，未将短时诊断包装成长测结果。
 
 ## 1. 审查基线与证据口径
@@ -350,7 +352,7 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
 
 ### Phase 1 — Memory / Leak / Stability
 
-- [ ] **M1 · 🔴 P0 — Release PROPVARIANT and balance COM ownership**
+- [x] **M1 · 🔴 P0 — Release PROPVARIANT and balance COM ownership**
   - **Problem:** `device_name`返回后PROPVARIANT的字符串资源没有清理；媒体会话/控制调用重复CoInitializeEx且忽略返回值，没有配对释放。worker媒体读取路径的线程初始化策略也不一致。
   - **File:** `src-tauri/src/services/system_audio.rs:33–49`、`src-tauri/src/services/media.rs:644–650,957–965`、`src-tauri/src/commands/media.rs:12–58`、`src-tauri/src/lib.rs:179–189`。
   - **Reason:** windows 0.52 PROPVARIANT是原始生成结构，没有自动Drop；成功COM初始化包括S_FALSE也需配对。长寿命线程与短任务必须有各自明确owner。
@@ -369,6 +371,7 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Verification:** cover→空会话→cover、cover→无图曲目→cover循环100次；故意延迟旧Image.onload，最终封面始终最新。heap快照检索Detached Canvas及retainer，关闭窗口后listener/ref回基线；比较Renderer privateBytes/GPU与回稳时间。
 
 - [ ] **M3 · 🔴 P0 — Bound input, decode and cache bytes; reject crash inputs**
+  - **2026-10-08 实施状态：** 已落实图片/下载/解码/并发/缓存/Canvas 预算及错误输入校验，50 项 Rust、73 项前端、9 项 UI 及实际原生命令验证通过。完整同条件 Release C 对照未完成，暂不勾选。见 [M3 实施记录](performance/m3-2026-10-08/IMPLEMENTATION.md)。
   - **Problem:** SMTC按stream size分配且u64转u32未验证；HTTP缺Content-Length时整包读取后才超限拒绝；原图尺寸解码/Canvas和数量LRU没有项目字节预算；pixel_size=0进入step_by(0)会panic，release abort。
   - **File:** `src-tauri/src/services/media.rs:133–170,732–763`、`src-tauri/src/services/cache.rs:287–337`、`src-tauri/src/services/image.rs:19–37,47–77,130–145`、`src-tauri/src/utils.rs`、`src/FloatingWindow.svelte:948–1028,1066–1081`、`src-tauri/Cargo.toml`。
   - **Reason:** 现有磁盘/条目上限不能控制下载在途、原始decode、Base64和Canvas峰值；一个可达command错误输入不应终止应用。

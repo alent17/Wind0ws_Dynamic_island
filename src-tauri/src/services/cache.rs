@@ -6,8 +6,8 @@ use crate::error::{AppError, AppResult};
 use crate::models::{CacheMetadata, CacheStats};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use tauri::Manager;
 
 /// 全局缓存目录路径
@@ -52,12 +52,15 @@ fn is_image(content_type: &str) -> bool {
 }
 
 fn is_over_cache_limit(metadata: &[CacheMetadata]) -> bool {
-    let total = metadata.iter().map(|item| item.size).sum::<u64>();
+    let total = metadata
+        .iter()
+        .map(|item| item.size)
+        .fold(0u64, u64::saturating_add);
     let image_total = metadata
         .iter()
         .filter(|item| is_image(&item.content_type))
         .map(|item| item.size)
-        .sum::<u64>();
+        .fold(0u64, u64::saturating_add);
     let video_total = total.saturating_sub(image_total);
     total > MAX_CACHE_BYTES
         || image_total > MAX_IMAGE_CACHE_BYTES
@@ -66,12 +69,15 @@ fn is_over_cache_limit(metadata: &[CacheMetadata]) -> bool {
 
 fn evict_to_limits(_cache_dir: &PathBuf, metadata: &mut Vec<CacheMetadata>) {
     while is_over_cache_limit(metadata) {
-        let total = metadata.iter().map(|item| item.size).sum::<u64>();
+        let total = metadata
+            .iter()
+            .map(|item| item.size)
+            .fold(0u64, u64::saturating_add);
         let image_total = metadata
             .iter()
             .filter(|item| is_image(&item.content_type))
             .map(|item| item.size)
-            .sum::<u64>();
+            .fold(0u64, u64::saturating_add);
         let video_total = total.saturating_sub(image_total);
         let image_over = image_total > MAX_IMAGE_CACHE_BYTES;
         let video_over = video_total > MAX_VIDEO_CACHE_BYTES;
@@ -101,6 +107,28 @@ fn evict_to_limits(_cache_dir: &PathBuf, metadata: &mut Vec<CacheMetadata>) {
     }
 }
 
+pub(crate) fn cleanup_dead_partials(directory: &std::path::Path) {
+    let mut processes = sysinfo::System::new();
+    processes.refresh_processes();
+    if let Ok(entries) = fs::read_dir(directory) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let owner = name
+                .strip_prefix(".download-")
+                .or_else(|| name.strip_prefix(".normalize-"))
+                .filter(|_| name.ends_with(".partial"))
+                .and_then(|tail| tail.split('-').next())
+                .and_then(|pid| pid.parse::<u32>().ok());
+            let regular = entry.file_type().is_ok_and(|kind| kind.is_file());
+            if regular
+                && owner.is_some_and(|pid| processes.process(sysinfo::Pid::from_u32(pid)).is_none())
+            {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
+}
+
 /// 初始化缓存系统
 ///
 /// 在应用启动时调用，执行以下操作：
@@ -112,9 +140,10 @@ pub fn init_cache_system(app_handle: &tauri::AppHandle) -> AppResult<()> {
     // to the executable by default. If that location is read-only (for
     // example a manually copied binary under Program Files), gracefully fall
     // back to the per-user application cache.
-    let install_cache = std::env::current_exe()
-        .ok()
-        .and_then(|path| path.parent().map(|parent| parent.join("cache").join("media")));
+    let install_cache = std::env::current_exe().ok().and_then(|path| {
+        path.parent()
+            .map(|parent| parent.join("cache").join("media"))
+    });
     let fallback_cache = app_handle
         .path()
         .app_cache_dir()
@@ -128,6 +157,8 @@ pub fn init_cache_system(app_handle: &tauri::AppHandle) -> AppResult<()> {
     // 创建缓存目录
     fs::create_dir_all(&cache_dir)
         .map_err(|e| AppError::cache(format!("无法创建缓存目录：{}", e)))?;
+
+    cleanup_dead_partials(&cache_dir);
 
     // 加载元数据
     let metadata_file = cache_dir.join("metadata.json");
@@ -215,7 +246,10 @@ pub fn get_cache_stats() -> AppResult<CacheStats> {
             .ok_or_else(|| AppError::cache("缓存元数据未初始化"))?;
 
         (
-            metadata.iter().map(|m| m.size).sum::<u64>(),
+            metadata
+                .iter()
+                .map(|m| m.size)
+                .fold(0u64, u64::saturating_add),
             metadata.len() as u32,
             metadata
                 .iter()
@@ -267,17 +301,40 @@ pub fn get_cached_media(url: &str) -> AppResult<Option<String>> {
         .as_mut()
         .ok_or_else(|| AppError::cache("缓存元数据未初始化"))?;
 
-    // 查找缓存记录
-    if let Some(meta) = metadata.iter_mut().find(|m| m.key == key) {
-        if PathBuf::from(&meta.file_path).exists() {
-            meta.last_accessed_at = now_seconds();
-            let result = meta.file_path.clone();
-            persist_metadata_if_due(&cache_dir, metadata)?;
-            return Ok(Some(result));
+    let hit = metadata
+        .iter_mut()
+        .find(|entry| entry.key == key)
+        .filter(|entry| PathBuf::from(&entry.file_path).exists())
+        .map(|entry| {
+            entry.last_accessed_at = now_seconds();
+            (entry.file_path.clone(), is_image(&entry.content_type))
+        });
+    if hit.is_some() {
+        persist_metadata_if_due(&cache_dir, metadata)?;
+    }
+    drop(metadata_global);
+    let Some((path, artwork)) = hit else {
+        return Ok(None);
+    };
+    if artwork {
+        let bytes = super::image_budget::read_limited(fs::File::open(&path)?)?;
+        let (width, height) = super::image_budget::dimensions(&bytes)?;
+        if width > super::image_budget::MAX_ARTWORK_EDGE
+            || height > super::image_budget::MAX_ARTWORK_EDGE
+        {
+            let normalized = super::image_budget::normalize(&bytes)?;
+            let temporary = stage_image(&cache_dir, &normalized)?;
+            return save_cache_file(
+                url,
+                &temporary.0,
+                normalized.len() as u64,
+                "image/png",
+                true,
+            )
+            .map(Some);
         }
     }
-
-    Ok(None)
+    Ok(Some(path))
 }
 
 /// 下载并缓存媒体文件
@@ -306,39 +363,66 @@ pub async fn download_and_cache(url: &str, content_type: &str) -> AppResult<Stri
         return Ok(cached_path);
     }
 
-    // 下载文件
-    let client = reqwest::Client::new();
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| AppError::network(format!("下载失败：{}", e)))?
-        .error_for_status()
-        .map_err(|e| AppError::network(format!("下载响应失败：{}", e)))?;
-
-    const MAX_MEDIA_BYTES: u64 = 128 * 1024 * 1024;
-    if response
-        .content_length()
-        .is_some_and(|size| size > MAX_MEDIA_BYTES)
-    {
-        return Err(AppError::business(3004, "媒体文件超过 128 MB"));
+    let directory = CACHE_DIR
+        .lock()
+        .map_err(|_| AppError::lock("缓存目录锁失败"))?
+        .clone()
+        .ok_or_else(|| AppError::cache("缓存系统未初始化"))?;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| AppError::network(format!("创建下载客户端失败：{e}")))?;
+    let limit = if is_image(content_type) {
+        super::image_budget::MAX_IMAGE_BYTES as u64
+    } else {
+        128 * 1024 * 1024
+    };
+    let mut downloaded = super::http_budget::download(&client, url, &directory, limit).await?;
+    let mut stored_type = content_type;
+    if is_image(content_type) {
+        let bytes = super::image_budget::read_limited(fs::File::open(&downloaded.path)?)?;
+        let normalized = super::image_budget::normalize(&bytes)?;
+        fs::write(&downloaded.path, &normalized)?;
+        downloaded.size = normalized.len() as u64;
+        stored_type = "image/png";
     }
+    save_cache_file(url, &downloaded.path, downloaded.size, stored_type, false)
+}
 
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| AppError::network(format!("读取数据失败：{}", e)))?;
-    if bytes.len() as u64 > MAX_MEDIA_BYTES {
-        return Err(AppError::business(3004, "媒体文件超过 128 MB"));
+struct TemporaryImage(PathBuf);
+impl Drop for TemporaryImage {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
     }
-
-    save_cache_file(url, &bytes, content_type)
+}
+fn stage_image(directory: &std::path::Path, bytes: &[u8]) -> AppResult<TemporaryImage> {
+    use std::io::Write;
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let path = directory.join(format!(
+        ".normalize-{}-{}.partial",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)?;
+    let temporary = TemporaryImage(path);
+    file.write_all(bytes)?;
+    file.flush()?;
+    Ok(temporary)
 }
 
 /// 保存缓存文件
 ///
 /// 将数据保存到缓存目录，并更新元数据
-fn save_cache_file(url: &str, content: &[u8], content_type: &str) -> AppResult<String> {
+fn save_cache_file(
+    url: &str,
+    temporary: &std::path::Path,
+    size: u64,
+    content_type: &str,
+    replace_existing: bool,
+) -> AppResult<String> {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
@@ -361,13 +445,11 @@ fn save_cache_file(url: &str, content: &[u8], content_type: &str) -> AppResult<S
         _ => "dat",
     };
 
-    let file_path = cache_dir.join(format!("{}.{}", key, extension));
+    let suffix = if is_image(content_type) { "-1280" } else { "" };
+    let file_path = cache_dir.join(format!("{}{suffix}.{}", key, extension));
 
-    // 写入文件
-    fs::write(&file_path, content)
-        .map_err(|e| AppError::cache(format!("无法写入缓存文件：{}", e)))?;
-
-    // 更新元数据
+    // Serialize publication and accounting so concurrent identical URL
+    // downloads and recovered orphan files cannot bypass the byte quota.
     {
         let mut metadata_global = CACHE_METADATA
             .lock()
@@ -375,6 +457,18 @@ fn save_cache_file(url: &str, content: &[u8], content_type: &str) -> AppResult<S
         let metadata = metadata_global
             .as_mut()
             .ok_or_else(|| AppError::cache("缓存元数据未初始化"))?;
+        if file_path.exists() && !replace_existing {
+            if let Some(existing) = metadata
+                .iter()
+                .find(|entry| entry.key == key && entry.file_path == file_path.to_string_lossy())
+            {
+                return Ok(existing.file_path.clone());
+            }
+            // An orphan from a previous interrupted publish belongs to this
+            // cache key. Replace it with the newly validated complete file.
+        }
+        fs::rename(temporary, &file_path)
+            .map_err(|e| AppError::cache(format!("无法发布缓存文件：{e}")))?;
 
         // 移除旧记录（如果存在）
         if let Some(pos) = metadata.iter().position(|m| m.key == key) {
@@ -391,7 +485,7 @@ fn save_cache_file(url: &str, content: &[u8], content_type: &str) -> AppResult<S
             file_path: file_path.to_string_lossy().to_string(),
             created_at: now,
             last_accessed_at: now,
-            size: content.len() as u64,
+            size,
             content_type: content_type.to_string(),
         });
 
@@ -402,4 +496,57 @@ fn save_cache_file(url: &str, content: &[u8], content_type: &str) -> AppResult<S
     }
 
     Ok(file_path.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+    #[test]
+    fn public_cache_lookup_migrates_an_oversized_existing_image() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let directory = std::env::temp_dir().join(format!(
+            "isle-cache-budget-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).unwrap();
+        let original_dir = CACHE_DIR.lock().unwrap().replace(directory.clone());
+        let original_metadata = CACHE_METADATA.lock().unwrap().replace(Vec::new());
+        let source =
+            super::super::image_budget::encode_png(&image::DynamicImage::new_rgb8(2560, 1440))
+                .unwrap();
+        let temporary = stage_image(&directory, &source).unwrap();
+        let path = save_cache_file(
+            "https://example.test/legacy-cover",
+            &temporary.0,
+            source.len() as u64,
+            "image/png",
+            false,
+        )
+        .unwrap();
+        let bounded = get_cached_media("https://example.test/legacy-cover")
+            .unwrap()
+            .unwrap();
+        assert_eq!(bounded, path);
+        assert_eq!(
+            super::super::image_budget::dimensions(&fs::read(&bounded).unwrap()).unwrap(),
+            (1280, 720)
+        );
+        let metadata = CACHE_METADATA.lock().unwrap();
+        assert_eq!(metadata.as_ref().unwrap().len(), 1);
+        assert_eq!(
+            metadata.as_ref().unwrap()[0].size,
+            fs::metadata(&bounded).unwrap().len()
+        );
+        drop(metadata);
+        *CACHE_DIR.lock().unwrap() = original_dir;
+        *CACHE_METADATA.lock().unwrap() = original_metadata;
+        for entry in fs::read_dir(&directory).unwrap().flatten() {
+            fs::remove_file(entry.path()).unwrap();
+        }
+        fs::remove_dir(&directory).unwrap();
+    }
 }

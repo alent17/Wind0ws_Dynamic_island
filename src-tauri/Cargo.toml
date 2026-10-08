@@ -55,7 +55,7 @@ windows = { version = "0.52", features = [
 ] }
 
 # 异步运行时 - 用于后台任务和网络请求
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
 
 # HTTP 客户端 - 用于下载 MV 和封面图片
 reqwest = { version = "0.11", features = ["json", "blocking"] }
