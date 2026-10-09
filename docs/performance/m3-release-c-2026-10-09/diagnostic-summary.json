@@ -1,0 +1,3708 @@
+[
+  {
+    "variant": "before",
+    "mode": "continuous",
+    "tracks": 100,
+    "reopens": 0,
+    "pageErrors": [],
+    "canvasPixelChecksPassed": true,
+    "snapshots": [
+      {
+        "trackIndex": 0,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.2152137756347656,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 25,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.5673866271972656,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 50,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.705108642578125,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 75,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.7485008239746094,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 100,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.827362060546875,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      }
+    ],
+    "qualityPresentation": [
+      {
+        "index": 1,
+        "width": 1170,
+        "height": 1170,
+        "bytes": 604924,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 2,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 380182,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 3,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 257458,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 4,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 106211,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 5,
+        "width": 800,
+        "height": 800,
+        "bytes": 1256413,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 6,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 10276,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 7,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 353353,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 8,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 813553,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 9,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 147541,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 10,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1215421,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 11,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 570498,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 12,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 673877,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 13,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1422856,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 14,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 60742,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 15,
+        "width": 800,
+        "height": 800,
+        "bytes": 38855,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 16,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 198313,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 17,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 455854,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 18,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 464413,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 19,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1333579,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 20,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 706705,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 21,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 391449,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 22,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 723355,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 23,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 123925,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 24,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 692421,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 25,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1028161,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 26,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 584046,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 27,
+        "width": 1000,
+        "height": 1000,
+        "bytes": 963684,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 28,
+        "width": 360,
+        "height": 360,
+        "bytes": 184922,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 29,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 759653,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 30,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1286678,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 31,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 328247,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 32,
+        "width": 530,
+        "height": 530,
+        "bytes": 479870,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 33,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 867257,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 34,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 2032275,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 35,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1091652,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 36,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 783289,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 37,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1045818,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 38,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 709064,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 39,
+        "width": 800,
+        "height": 800,
+        "bytes": 887109,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 40,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 799313,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 41,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 142582,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 42,
+        "width": 488,
+        "height": 488,
+        "bytes": 12490,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 43,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 10276,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 44,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 2292449,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 45,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 2085635,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 46,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 843774,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 47,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1012142,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 48,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 327882,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 49,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1863673,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 50,
+        "width": 600,
+        "height": 600,
+        "bytes": 45788,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 51,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 2513298,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 52,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 560302,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 53,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 888089,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 54,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 162238,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 55,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 921623,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 56,
+        "width": 800,
+        "height": 800,
+        "bytes": 120764,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 57,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1797173,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 58,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1462055,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 59,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1377167,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 60,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1047647,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 61,
+        "width": 800,
+        "height": 800,
+        "bytes": 552004,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 62,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 110049,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 63,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 709064,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 64,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 157891,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 65,
+        "width": 800,
+        "height": 800,
+        "bytes": 876083,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 66,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 495924,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 67,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 10276,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 68,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 2325186,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 69,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 618340,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 70,
+        "width": 384,
+        "height": 384,
+        "bytes": 277936,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 71,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 849928,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 72,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1080659,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 73,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 275604,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 74,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 240009,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 75,
+        "width": 800,
+        "height": 800,
+        "bytes": 524922,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 76,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 340216,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 77,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 487394,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 78,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 286863,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 79,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 116141,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 80,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 894702,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 81,
+        "width": 800,
+        "height": 800,
+        "bytes": 573660,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 82,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 544930,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 83,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 2314431,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 84,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 263969,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 85,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 2325186,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 86,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1552592,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 87,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 205235,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 88,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 2325186,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 89,
+        "width": 108,
+        "height": 108,
+        "bytes": 936,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 90,
+        "width": 800,
+        "height": 800,
+        "bytes": 621642,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 91,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1208069,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 92,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1208069,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 93,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 1806145,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 94,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 77049,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 95,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 323641,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 96,
+        "width": 363,
+        "height": 363,
+        "bytes": 322980,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 97,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 74692,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 98,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 380044,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 99,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 152758,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 100,
+        "width": 1200,
+        "height": 1200,
+        "bytes": 380182,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      }
+    ]
+  },
+  {
+    "variant": "before",
+    "mode": "reopen",
+    "tracks": 100,
+    "reopens": 4,
+    "pageErrors": [],
+    "canvasPixelChecksPassed": true,
+    "snapshots": [
+      {
+        "trackIndex": 0,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.1741104125976562,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 25,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.5065460205078125,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 50,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.5236587524414062,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 75,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.535480499267578,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 100,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.4980392456054688,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      }
+    ],
+    "qualityPresentation": []
+  },
+  {
+    "variant": "after",
+    "mode": "continuous",
+    "tracks": 100,
+    "reopens": 0,
+    "pageErrors": [],
+    "canvasPixelChecksPassed": true,
+    "snapshots": [
+      {
+        "trackIndex": 0,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.1977272033691406,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 25,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.6318016052246094,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 50,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.7380752563476562,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 75,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.7227935791015625,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 100,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.7476463317871094,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      }
+    ],
+    "qualityPresentation": [
+      {
+        "index": 1,
+        "width": 184,
+        "height": 184,
+        "bytes": 629647,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 2,
+        "width": 184,
+        "height": 184,
+        "bytes": 3443964,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 3,
+        "width": 184,
+        "height": 184,
+        "bytes": 1171634,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 4,
+        "width": 184,
+        "height": 184,
+        "bytes": 306600,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 5,
+        "width": 184,
+        "height": 184,
+        "bytes": 1590161,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 6,
+        "width": 184,
+        "height": 184,
+        "bytes": 23559,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 7,
+        "width": 184,
+        "height": 184,
+        "bytes": 588621,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 8,
+        "width": 184,
+        "height": 184,
+        "bytes": 2298084,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 9,
+        "width": 184,
+        "height": 184,
+        "bytes": 190934,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 10,
+        "width": 184,
+        "height": 184,
+        "bytes": 2273092,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 11,
+        "width": 184,
+        "height": 184,
+        "bytes": 1460255,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 12,
+        "width": 184,
+        "height": 184,
+        "bytes": 2669025,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 13,
+        "width": 184,
+        "height": 184,
+        "bytes": 2823923,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 14,
+        "width": 184,
+        "height": 184,
+        "bytes": 744352,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 15,
+        "width": 184,
+        "height": 184,
+        "bytes": 33375,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 16,
+        "width": 184,
+        "height": 184,
+        "bytes": 2119424,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 17,
+        "width": 184,
+        "height": 184,
+        "bytes": 2572460,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 18,
+        "width": 184,
+        "height": 184,
+        "bytes": 2092743,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 19,
+        "width": 184,
+        "height": 184,
+        "bytes": 2928230,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 20,
+        "width": 184,
+        "height": 184,
+        "bytes": 3684186,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 21,
+        "width": 184,
+        "height": 184,
+        "bytes": 2056737,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 22,
+        "width": 184,
+        "height": 184,
+        "bytes": 2196554,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 23,
+        "width": 184,
+        "height": 184,
+        "bytes": 2688004,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 24,
+        "width": 184,
+        "height": 184,
+        "bytes": 1165044,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 25,
+        "width": 184,
+        "height": 184,
+        "bytes": 1947289,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 26,
+        "width": 184,
+        "height": 184,
+        "bytes": 1844106,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 27,
+        "width": 184,
+        "height": 184,
+        "bytes": 1900731,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 28,
+        "width": 184,
+        "height": 184,
+        "bytes": 191172,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 29,
+        "width": 184,
+        "height": 184,
+        "bytes": 1758965,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 30,
+        "width": 184,
+        "height": 184,
+        "bytes": 1857296,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 31,
+        "width": 184,
+        "height": 184,
+        "bytes": 358666,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 32,
+        "width": 184,
+        "height": 184,
+        "bytes": 461804,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 33,
+        "width": 184,
+        "height": 184,
+        "bytes": 2283459,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 34,
+        "width": 184,
+        "height": 184,
+        "bytes": 3438031,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 35,
+        "width": 184,
+        "height": 184,
+        "bytes": 1830735,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 36,
+        "width": 184,
+        "height": 184,
+        "bytes": 2761845,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 37,
+        "width": 184,
+        "height": 184,
+        "bytes": 4111041,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 38,
+        "width": 184,
+        "height": 184,
+        "bytes": 718011,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 39,
+        "width": 184,
+        "height": 184,
+        "bytes": 1182656,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 40,
+        "width": 184,
+        "height": 184,
+        "bytes": 1437307,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 41,
+        "width": 184,
+        "height": 184,
+        "bytes": 1439113,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 42,
+        "width": 184,
+        "height": 184,
+        "bytes": 7086,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 43,
+        "width": 184,
+        "height": 184,
+        "bytes": 23559,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 44,
+        "width": 184,
+        "height": 184,
+        "bytes": 2965567,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 45,
+        "width": 184,
+        "height": 184,
+        "bytes": 2594480,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 46,
+        "width": 184,
+        "height": 184,
+        "bytes": 1562472,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 47,
+        "width": 184,
+        "height": 184,
+        "bytes": 1409427,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 48,
+        "width": 184,
+        "height": 184,
+        "bytes": 1937774,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 49,
+        "width": 184,
+        "height": 184,
+        "bytes": 2128892,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 50,
+        "width": 184,
+        "height": 184,
+        "bytes": 142070,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 51,
+        "width": 184,
+        "height": 184,
+        "bytes": 3423338,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 52,
+        "width": 184,
+        "height": 184,
+        "bytes": 976113,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 53,
+        "width": 184,
+        "height": 184,
+        "bytes": 3018575,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 54,
+        "width": 184,
+        "height": 184,
+        "bytes": 2265469,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 55,
+        "width": 184,
+        "height": 184,
+        "bytes": 3084909,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 56,
+        "width": 184,
+        "height": 184,
+        "bytes": 691763,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 57,
+        "width": 184,
+        "height": 184,
+        "bytes": 2203161,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 58,
+        "width": 184,
+        "height": 184,
+        "bytes": 2310264,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 59,
+        "width": 184,
+        "height": 184,
+        "bytes": 2095830,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 60,
+        "width": 184,
+        "height": 184,
+        "bytes": 2448159,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 61,
+        "width": 184,
+        "height": 184,
+        "bytes": 661293,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 62,
+        "width": 184,
+        "height": 184,
+        "bytes": 1398500,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 63,
+        "width": 184,
+        "height": 184,
+        "bytes": 718011,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 64,
+        "width": 184,
+        "height": 184,
+        "bytes": 1719071,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 65,
+        "width": 184,
+        "height": 184,
+        "bytes": 1241347,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 66,
+        "width": 184,
+        "height": 184,
+        "bytes": 684476,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 67,
+        "width": 184,
+        "height": 184,
+        "bytes": 23559,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 68,
+        "width": 184,
+        "height": 184,
+        "bytes": 2348434,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 69,
+        "width": 184,
+        "height": 184,
+        "bytes": 1244001,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 70,
+        "width": 184,
+        "height": 184,
+        "bytes": 290393,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 71,
+        "width": 184,
+        "height": 184,
+        "bytes": 1188705,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 72,
+        "width": 184,
+        "height": 184,
+        "bytes": 1194307,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 73,
+        "width": 184,
+        "height": 184,
+        "bytes": 1221854,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 74,
+        "width": 184,
+        "height": 184,
+        "bytes": 1699749,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 75,
+        "width": 184,
+        "height": 184,
+        "bytes": 802269,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 76,
+        "width": 184,
+        "height": 184,
+        "bytes": 1417876,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 77,
+        "width": 184,
+        "height": 184,
+        "bytes": 2313445,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 78,
+        "width": 184,
+        "height": 184,
+        "bytes": 2048370,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 79,
+        "width": 184,
+        "height": 184,
+        "bytes": 1231119,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 80,
+        "width": 184,
+        "height": 184,
+        "bytes": 2213049,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 81,
+        "width": 184,
+        "height": 184,
+        "bytes": 983151,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 82,
+        "width": 184,
+        "height": 184,
+        "bytes": 2380149,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 83,
+        "width": 184,
+        "height": 184,
+        "bytes": 2353453,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 84,
+        "width": 184,
+        "height": 184,
+        "bytes": 2193457,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 85,
+        "width": 184,
+        "height": 184,
+        "bytes": 2348434,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 86,
+        "width": 184,
+        "height": 184,
+        "bytes": 2314073,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 87,
+        "width": 184,
+        "height": 184,
+        "bytes": 1586560,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 88,
+        "width": 184,
+        "height": 184,
+        "bytes": 2348434,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 89,
+        "width": 108,
+        "height": 108,
+        "bytes": 6175,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 90,
+        "width": 184,
+        "height": 184,
+        "bytes": 853599,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 91,
+        "width": 184,
+        "height": 184,
+        "bytes": 2611612,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 92,
+        "width": 184,
+        "height": 184,
+        "bytes": 2611612,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 93,
+        "width": 184,
+        "height": 184,
+        "bytes": 2843630,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 94,
+        "width": 184,
+        "height": 184,
+        "bytes": 652301,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 95,
+        "width": 184,
+        "height": 184,
+        "bytes": 3036651,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 96,
+        "width": 184,
+        "height": 184,
+        "bytes": 338610,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 97,
+        "width": 184,
+        "height": 184,
+        "bytes": 914922,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 98,
+        "width": 184,
+        "height": 184,
+        "bytes": 675406,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 99,
+        "width": 184,
+        "height": 184,
+        "bytes": 1928653,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      },
+      {
+        "index": 100,
+        "width": 184,
+        "height": 184,
+        "bytes": 3443964,
+        "presentation": {
+          "cssWidth": 184,
+          "cssHeight": 184,
+          "dpi": 1,
+          "opacity": "1"
+        }
+      }
+    ]
+  },
+  {
+    "variant": "after",
+    "mode": "reopen",
+    "tracks": 100,
+    "reopens": 4,
+    "pageErrors": [],
+    "canvasPixelChecksPassed": true,
+    "snapshots": [
+      {
+        "trackIndex": 0,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.243633270263672,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 25,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.5076942443847656,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 50,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.53094482421875,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 75,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 6.666664123535156,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      },
+      {
+        "trackIndex": 100,
+        "detachedCanvasNodes": 0,
+        "jsHeapUsedMiB": 3.5075721740722656,
+        "canvasNodes": [
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (internal cache) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "system / SharedFunctionInfo / HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement (prototype) / http://tauri.localhost",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          },
+          {
+            "name": "HTMLCanvasElement",
+            "detachedness": 0
+          }
+        ]
+      }
+    ],
+    "qualityPresentation": []
+  }
+]

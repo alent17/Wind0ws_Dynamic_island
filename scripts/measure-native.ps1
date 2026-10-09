@@ -5,7 +5,8 @@ param(
     [string]$OutputDirectory = 'dist/performance',
     [int]$RootPid = 0,
     [switch]$Control,
-    [switch]$IncludeGpu
+    [switch]$IncludeGpu,
+    [string]$StopFile = ''
 )
 $ErrorActionPreference = 'Stop'
 $logicalCores = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
@@ -70,6 +71,7 @@ function Read-Sample {
                 privateWorkingSetBytes = if ($counters) { $counters.WorkingSetPrivate } else { $null }
                 workingSetBytes = $process.WorkingSet64
                 privateBytes = $process.PrivateMemorySize64
+                peakPagefileUsageBytes = $process.PeakPagedMemorySize64
                 handles = $process.HandleCount
                 threads = $process.Threads.Count
                 gpuEngines = @($gpu | Where-Object Name -match $gpuPattern | ForEach-Object { [pscustomobject]@{ engine=$_.Name; utilizationPercent=$_.UtilizationPercentage } })
@@ -98,6 +100,7 @@ if ($WarmupSeconds) { Start-Sleep -Seconds $WarmupSeconds }
 $null = Read-Sample
 $started = $timer.Elapsed.TotalSeconds
 for ($index=0; $timer.Elapsed.TotalSeconds - $started -lt $Seconds; $index++) {
+    if ($StopFile -and (Test-Path -LiteralPath $StopFile)) { break }
     $remaining = [math]::Min($started + $Seconds, $started + $index + 1) - $timer.Elapsed.TotalSeconds
     if ($remaining -gt 0) { Start-Sleep -Milliseconds ([int]($remaining * 1000)) }
     $samples.Add((Read-Sample))

@@ -1,0 +1,1911 @@
+{
+  "scope": "Separate CDP diagnostic pass, same real-player queue and frozen input corpus. Source comparisons and actual Canvas presentation comparisons are listed separately.",
+  "diagnosticBatch": "diagnostic-hover-fixed",
+  "samples": 100,
+  "rows": [
+    {
+      "index": 1,
+      "title": "right or left",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 83.76842929886408,
+        "psnrDb": 28.899999885940836,
+        "maxChannelDifference": 157,
+        "changedChannelFraction": 0.21725421073247161
+      }
+    },
+    {
+      "index": 2,
+      "title": "美電球",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 5.4743930041152264,
+      "psnrDb": 40.747443888767506,
+      "maxChannelDifference": 20,
+      "changedChannelFraction": 0.7666358024691358,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 437.3216118292205,
+        "psnrDb": 21.722794207600728,
+        "maxChannelDifference": 182,
+        "changedChannelFraction": 0.9357226792009401
+      }
+    },
+    {
+      "index": 3,
+      "title": "素晴らしい日々",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.1384567901234568,
+      "psnrDb": 47.5676380915528,
+      "maxChannelDifference": 8,
+      "changedChannelFraction": 0.40982510288065843,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 97.97829024676851,
+        "psnrDb": 28.21950504262322,
+        "maxChannelDifference": 105,
+        "changedChannelFraction": 0.4695554249902076
+      }
+    },
+    {
+      "index": 4,
+      "title": "Karma",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.34102880658436213,
+      "psnrDb": 52.80289295622523,
+      "maxChannelDifference": 16,
+      "changedChannelFraction": 0.15041152263374485,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 16.80731492361927,
+        "psnrDb": 35.875820232165275,
+        "maxChannelDifference": 145,
+        "changedChannelFraction": 0.12554837446141795
+      }
+    },
+    {
+      "index": 5,
+      "title": "恋時雨 (Fujii Kaze Stadium Live \"Feelin' Good\")",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.563724279835391,
+      "psnrDb": 50.62013620403854,
+      "maxChannelDifference": 4,
+      "changedChannelFraction": 0.5168827160493827,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 262.57872111241676,
+        "psnrDb": 23.938208320995884,
+        "maxChannelDifference": 156,
+        "changedChannelFraction": 0.9511848805327067
+      }
+    },
+    {
+      "index": 6,
+      "title": "Mars 2027",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.022222222222222223,
+      "psnrDb": 64.66292874643254,
+      "maxChannelDifference": 2,
+      "changedChannelFraction": 0.016666666666666666,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 0.20849980415197805,
+        "psnrDb": 54.939747094994054,
+        "maxChannelDifference": 6,
+        "changedChannelFraction": 0.015139052095573835
+      }
+    },
+    {
+      "index": 7,
+      "title": "じゃむ",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.7534567901234568,
+      "psnrDb": 45.691852926989576,
+      "maxChannelDifference": 26,
+      "changedChannelFraction": 0.17373456790123457,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 215.86079122600862,
+        "psnrDb": 24.789065962575467,
+        "maxChannelDifference": 222,
+        "changedChannelFraction": 0.15707011359185272
+      }
+    },
+    {
+      "index": 8,
+      "title": "こわす",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.1317695473251028,
+      "psnrDb": 47.59322356731222,
+      "maxChannelDifference": 8,
+      "changedChannelFraction": 0.6626543209876543,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 35.65402467685077,
+        "psnrDb": 32.609718001360825,
+        "maxChannelDifference": 104,
+        "changedChannelFraction": 0.8989228358793576
+      }
+    },
+    {
+      "index": 9,
+      "title": "F_A_R",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.4289609053497943,
+      "psnrDb": 46.58060013688634,
+      "maxChannelDifference": 17,
+      "changedChannelFraction": 0.09856995884773663,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 190.40125342734038,
+        "psnrDb": 25.33410557813228,
+        "maxChannelDifference": 212,
+        "changedChannelFraction": 0.059763023893458674
+      }
+    },
+    {
+      "index": 10,
+      "title": "副都心",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.3721090534979423,
+      "psnrDb": 46.75691730947448,
+      "maxChannelDifference": 12,
+      "changedChannelFraction": 0.6097119341563786,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 72.52395221308265,
+        "psnrDb": 29.525988978001514,
+        "maxChannelDifference": 125,
+        "changedChannelFraction": 0.7548276537406973
+      }
+    },
+    {
+      "index": 11,
+      "title": "Toosie Slide (Sped Up)",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.3363991769547325,
+      "psnrDb": 46.871441613697364,
+      "maxChannelDifference": 19,
+      "changedChannelFraction": 0.6200720164609054,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 70.25566980023501,
+        "psnrDb": 29.663989822752256,
+        "maxChannelDifference": 199,
+        "changedChannelFraction": 0.5990990990990991
+      }
+    },
+    {
+      "index": 12,
+      "title": "華奢な心",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.6535802469135803,
+      "psnrDb": 45.946550851463996,
+      "maxChannelDifference": 11,
+      "changedChannelFraction": 0.7160288065843622,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 89.48411672542107,
+        "psnrDb": 28.613344052241892,
+        "maxChannelDifference": 172,
+        "changedChannelFraction": 0.8915981198589894
+      }
+    },
+    {
+      "index": 13,
+      "title": "Nevermore",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 2.069341563786008,
+      "psnrDb": 44.97248180001871,
+      "maxChannelDifference": 15,
+      "changedChannelFraction": 0.7208024691358025,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 130.86611829220524,
+        "psnrDb": 26.96253140164402,
+        "maxChannelDifference": 167,
+        "changedChannelFraction": 0.9221210340775559
+      }
+    },
+    {
+      "index": 14,
+      "title": "つづく",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.8384670781893004,
+      "psnrDb": 48.89594345853549,
+      "maxChannelDifference": 12,
+      "changedChannelFraction": 0.4774074074074074,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 27.40616921269095,
+        "psnrDb": 33.75232026023709,
+        "maxChannelDifference": 128,
+        "changedChannelFraction": 0.3883274578926753
+      }
+    },
+    {
+      "index": 15,
+      "title": "The Loser",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.023179012345679012,
+      "psnrDb": 64.47985434070354,
+      "maxChannelDifference": 2,
+      "changedChannelFraction": 0.022746913580246914,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 18.134576968272622,
+        "psnrDb": 35.54572931775152,
+        "maxChannelDifference": 72,
+        "changedChannelFraction": 0.05850959655307481
+      }
+    },
+    {
+      "index": 16,
+      "title": "プロポーズ",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.9705967078189301,
+      "psnrDb": 45.18482607968483,
+      "maxChannelDifference": 11,
+      "changedChannelFraction": 0.6620473251028807,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 159.23085585585585,
+        "psnrDb": 26.11053131452018,
+        "maxChannelDifference": 144,
+        "changedChannelFraction": 0.7549451625538582
+      }
+    },
+    {
+      "index": 17,
+      "title": "贝比",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.939537037037037,
+      "psnrDb": 45.25382283646333,
+      "maxChannelDifference": 19,
+      "changedChannelFraction": 0.716604938271605,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 125.58379357618487,
+        "psnrDb": 27.141467629839333,
+        "maxChannelDifference": 174,
+        "changedChannelFraction": 0.9113787700744223
+      }
+    },
+    {
+      "index": 18,
+      "title": "Bran-new Lovesong",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.4547222222222222,
+      "psnrDb": 46.503002877337124,
+      "maxChannelDifference": 6,
+      "changedChannelFraction": 0.7042798353909465,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 90.92718370544458,
+        "psnrDb": 28.543866210082317,
+        "maxChannelDifference": 95,
+        "changedChannelFraction": 0.8679200940070505
+      }
+    },
+    {
+      "index": 19,
+      "title": "the girl",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.9139711934156378,
+      "psnrDb": 45.31144963808892,
+      "maxChannelDifference": 17,
+      "changedChannelFraction": 0.7364917695473251,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 134.12330591461026,
+        "psnrDb": 26.855761113483897,
+        "maxChannelDifference": 150,
+        "changedChannelFraction": 0.8621523697610655
+      }
+    },
+    {
+      "index": 20,
+      "title": "2016",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 3.7003086419753086,
+      "psnrDb": 42.44842410877559,
+      "maxChannelDifference": 17,
+      "changedChannelFraction": 0.7829835390946502,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 365.691196631414,
+        "psnrDb": 22.499658552753342,
+        "maxChannelDifference": 178,
+        "changedChannelFraction": 0.9504798276537407
+      }
+    },
+    {
+      "index": 21,
+      "title": "1999",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.3179835390946502,
+      "psnrDb": 46.931703746804835,
+      "maxChannelDifference": 10,
+      "changedChannelFraction": 0.6953703703703704,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 33.00676654915785,
+        "psnrDb": 32.944773793621806,
+        "maxChannelDifference": 172,
+        "changedChannelFraction": 0.8619565217391304
+      }
+    },
+    {
+      "index": 22,
+      "title": "祥月 (Acoustic ver.)",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.1081995884773663,
+      "psnrDb": 47.68462376316397,
+      "maxChannelDifference": 5,
+      "changedChannelFraction": 0.6854423868312757,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 25.891069330199766,
+        "psnrDb": 33.99930373213465,
+        "maxChannelDifference": 56,
+        "changedChannelFraction": 0.7714061887974931
+      }
+    },
+    {
+      "index": 23,
+      "title": "雨のメッセージ",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.4157510288065844,
+      "psnrDb": 46.62093474973468,
+      "maxChannelDifference": 8,
+      "changedChannelFraction": 0.6900925925925926,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 71.90620838229533,
+        "psnrDb": 29.5631397187903,
+        "maxChannelDifference": 76,
+        "changedChannelFraction": 0.9290638464551508
+      }
+    },
+    {
+      "index": 24,
+      "title": "死の光",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.238724279835391,
+      "psnrDb": 47.20105710723945,
+      "maxChannelDifference": 11,
+      "changedChannelFraction": 0.23425925925925925,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 150.09567175871524,
+        "psnrDb": 26.367121919984477,
+        "maxChannelDifference": 160,
+        "changedChannelFraction": 0.2754798276537407
+      }
+    },
+    {
+      "index": 25,
+      "title": "The Hardest",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.9122942386831276,
+      "psnrDb": 45.31525644264175,
+      "maxChannelDifference": 15,
+      "changedChannelFraction": 0.7533744855967078,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 58.496660791226006,
+        "psnrDb": 30.459492852359027,
+        "maxChannelDifference": 169,
+        "changedChannelFraction": 0.7507148452800627
+      }
+    },
+    {
+      "index": 26,
+      "title": "inside",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.0542078189300412,
+      "psnrDb": 47.90154127868142,
+      "maxChannelDifference": 6,
+      "changedChannelFraction": 0.7173251028806584,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 12.158773991382686,
+        "psnrDb": 37.28190575044733,
+        "maxChannelDifference": 77,
+        "changedChannelFraction": 0.7655013709361536
+      }
+    },
+    {
+      "index": 27,
+      "title": "七階から目薬",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 2.425216049382716,
+      "psnrDb": 44.28329927259423,
+      "maxChannelDifference": 18,
+      "changedChannelFraction": 0.6953497942386831,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 86.58203094398746,
+        "psnrDb": 28.75652592079362,
+        "maxChannelDifference": 138,
+        "changedChannelFraction": 0.91665687426557
+      }
+    },
+    {
+      "index": 28,
+      "title": "呼吸",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 30.674441833137486,
+        "psnrDb": 33.26303692027756,
+        "maxChannelDifference": 53,
+        "changedChannelFraction": 0.5190951821386603
+      }
+    },
+    {
+      "index": 29,
+      "title": "あなたに抱きしめて",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.9139197530864197,
+      "psnrDb": 48.521722967771346,
+      "maxChannelDifference": 9,
+      "changedChannelFraction": 0.6635288065843621,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 9.341186839012925,
+        "psnrDb": 38.42678302101573,
+        "maxChannelDifference": 129,
+        "changedChannelFraction": 0.7172248335291813
+      }
+    },
+    {
+      "index": 30,
+      "title": "Love Will Set You Free",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.6954423868312758,
+      "psnrDb": 45.83797324351199,
+      "maxChannelDifference": 13,
+      "changedChannelFraction": 0.6646604938271605,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 75.29702311006659,
+        "psnrDb": 29.363025542877608,
+        "maxChannelDifference": 145,
+        "changedChannelFraction": 0.7027908343125735
+      }
+    },
+    {
+      "index": 31,
+      "title": "mocha",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.41934156378600823,
+      "psnrDb": 51.90512450459796,
+      "maxChannelDifference": 10,
+      "changedChannelFraction": 0.13997942386831275,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 27.617038777908345,
+        "psnrDb": 33.71903251120563,
+        "maxChannelDifference": 119,
+        "changedChannelFraction": 0.12678221699960832
+      }
+    },
+    {
+      "index": 32,
+      "title": "未完成",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 68.54271445358403,
+        "psnrDb": 29.77119061344976,
+        "maxChannelDifference": 119,
+        "changedChannelFraction": 0.7169898159028594
+      }
+    },
+    {
+      "index": 33,
+      "title": "心の実",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.3453703703703703,
+      "psnrDb": 46.842385020568386,
+      "maxChannelDifference": 8,
+      "changedChannelFraction": 0.6888888888888889,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 67.4692616529573,
+        "psnrDb": 29.83974403370107,
+        "maxChannelDifference": 115,
+        "changedChannelFraction": 0.852066196631414
+      }
+    },
+    {
+      "index": 34,
+      "title": "TATTOO",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.9361625514403291,
+      "psnrDb": 45.261385449667905,
+      "maxChannelDifference": 12,
+      "changedChannelFraction": 0.7053292181069959,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 121.61329808068939,
+        "psnrDb": 27.280992944238246,
+        "maxChannelDifference": 125,
+        "changedChannelFraction": 0.9242361927144536
+      }
+    },
+    {
+      "index": 35,
+      "title": "The Moon × 星なんて言わず",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.022932098765432,
+      "psnrDb": 48.0323355424294,
+      "maxChannelDifference": 5,
+      "changedChannelFraction": 0.6968106995884774,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 10.54770857814336,
+        "psnrDb": 37.899222386707294,
+        "maxChannelDifference": 44,
+        "changedChannelFraction": 0.7250195848021935
+      }
+    },
+    {
+      "index": 36,
+      "title": "ただ好きと言えたら",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.4942078189300412,
+      "psnrDb": 46.38669356201235,
+      "maxChannelDifference": 11,
+      "changedChannelFraction": 0.7045987654320988,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 78.54500587544065,
+        "psnrDb": 29.179617843460214,
+        "maxChannelDifference": 151,
+        "changedChannelFraction": 0.8813063063063064
+      }
+    },
+    {
+      "index": 37,
+      "title": "Reunion Days",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 5.597088477366255,
+      "psnrDb": 40.6511818868903,
+      "maxChannelDifference": 13,
+      "changedChannelFraction": 0.8048765432098766,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 625.0714845280063,
+        "psnrDb": 20.171506738265855,
+        "maxChannelDifference": 142,
+        "changedChannelFraction": 0.970436741088915
+      }
+    },
+    {
+      "index": 38,
+      "title": "犬かキャットかで死ぬまで喧嘩しよう!",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.8330761316872428,
+      "psnrDb": 45.49899858325194,
+      "maxChannelDifference": 19,
+      "changedChannelFraction": 0.2729320987654321,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 282.1225225225225,
+        "psnrDb": 23.626426025508888,
+        "maxChannelDifference": 213,
+        "changedChannelFraction": 0.26215236976106543
+      }
+    },
+    {
+      "index": 39,
+      "title": "好きでよかった。",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.5361419753086419,
+      "psnrDb": 50.83800550786255,
+      "maxChannelDifference": 5,
+      "changedChannelFraction": 0.49266460905349796,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 197.76068350959656,
+        "psnrDb": 25.169404064279732,
+        "maxChannelDifference": 168,
+        "changedChannelFraction": 0.8761163337250294
+      }
+    },
+    {
+      "index": 40,
+      "title": "メメント",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.9326646090534979,
+      "psnrDb": 48.43354863556529,
+      "maxChannelDifference": 9,
+      "changedChannelFraction": 0.5989711934156379,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 17.86183901292597,
+        "psnrDb": 35.61154190075196,
+        "maxChannelDifference": 104,
+        "changedChannelFraction": 0.5534175479827653
+      }
+    },
+    {
+      "index": 41,
+      "title": "Once Upon A Time (House Mix)",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 2.7811316872427985,
+      "psnrDb": 43.68858807570504,
+      "maxChannelDifference": 24,
+      "changedChannelFraction": 0.5977572016460906,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 141.48422444183313,
+        "psnrDb": 26.623723423489775,
+        "maxChannelDifference": 176,
+        "changedChannelFraction": 0.6140520955738347
+      }
+    },
+    {
+      "index": 42,
+      "title": "3びきのくま",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 0.0015471993732863298,
+        "psnrDb": 76.235340800457,
+        "maxChannelDifference": 1,
+        "changedChannelFraction": 0.0015471993732863298
+      }
+    },
+    {
+      "index": 43,
+      "title": "はるなつあきふゆ",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.022222222222222223,
+      "psnrDb": 64.66292874643254,
+      "maxChannelDifference": 2,
+      "changedChannelFraction": 0.016666666666666666,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 0.20849980415197805,
+        "psnrDb": 54.939747094994054,
+        "maxChannelDifference": 6,
+        "changedChannelFraction": 0.015139052095573835
+      }
+    },
+    {
+      "index": 44,
+      "title": "Super Ball",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.4184567901234568,
+      "psnrDb": 46.61264250272008,
+      "maxChannelDifference": 5,
+      "changedChannelFraction": 0.7006172839506173,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 66.148178613396,
+        "psnrDb": 29.925624704553773,
+        "maxChannelDifference": 62,
+        "changedChannelFraction": 0.9338229533881708
+      }
+    },
+    {
+      "index": 45,
+      "title": "あわいに",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.9880349794238683,
+      "psnrDb": 45.146563393392526,
+      "maxChannelDifference": 18,
+      "changedChannelFraction": 0.6881481481481482,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 134.39478065021544,
+        "psnrDb": 26.846979580639836,
+        "maxChannelDifference": 159,
+        "changedChannelFraction": 0.8967685076380728
+      }
+    },
+    {
+      "index": 46,
+      "title": "アンディーヴと眠って",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.9194135802469136,
+      "psnrDb": 48.495694466366295,
+      "maxChannelDifference": 4,
+      "changedChannelFraction": 0.6744341563786008,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 6.481433607520564,
+        "psnrDb": 40.014092841679954,
+        "maxChannelDifference": 43,
+        "changedChannelFraction": 0.7200352526439483
+      }
+    },
+    {
+      "index": 47,
+      "title": "Kanata",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.031707818930041,
+      "psnrDb": 47.99523638957325,
+      "maxChannelDifference": 4,
+      "changedChannelFraction": 0.617664609053498,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 12.939992166079122,
+        "psnrDb": 37.01146347458694,
+        "maxChannelDifference": 63,
+        "changedChannelFraction": 0.6370348609479044
+      }
+    },
+    {
+      "index": 48,
+      "title": "墨田区 SUMMER NIGHT",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.290730452674897,
+      "psnrDb": 47.0224480422377,
+      "maxChannelDifference": 12,
+      "changedChannelFraction": 0.6757098765432099,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 38.584028593811205,
+        "psnrDb": 32.26672790107469,
+        "maxChannelDifference": 115,
+        "changedChannelFraction": 0.8245985115550333
+      }
+    },
+    {
+      "index": 49,
+      "title": "未定",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 8.042469135802468,
+      "psnrDb": 39.07690957961779,
+      "maxChannelDifference": 32,
+      "changedChannelFraction": 0.6441563786008231,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 1107.6734332158246,
+        "psnrDb": 17.68668621285102,
+        "maxChannelDifference": 240,
+        "changedChannelFraction": 0.68490990990991
+      }
+    },
+    {
+      "index": 50,
+      "title": "光輪",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.5826440329218107,
+      "psnrDb": 50.47677057829381,
+      "maxChannelDifference": 13,
+      "changedChannelFraction": 0.16468106995884774,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 35.415109674892285,
+        "psnrDb": 32.63891769791337,
+        "maxChannelDifference": 85,
+        "changedChannelFraction": 0.1957794751273012
+      }
+    },
+    {
+      "index": 51,
+      "title": "晴れのビート",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 3.157798353909465,
+      "psnrDb": 43.13695966855051,
+      "maxChannelDifference": 15,
+      "changedChannelFraction": 0.7428395061728396,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 322.9155699177438,
+        "psnrDb": 23.03991375106437,
+        "maxChannelDifference": 167,
+        "changedChannelFraction": 0.9472287504896201
+      }
+    },
+    {
+      "index": 52,
+      "title": "YES -free flower-",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.7921913580246913,
+      "psnrDb": 49.14250260470251,
+      "maxChannelDifference": 15,
+      "changedChannelFraction": 0.36693415637860083,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 31.052330591461025,
+        "psnrDb": 33.209861597360884,
+        "maxChannelDifference": 143,
+        "changedChannelFraction": 0.40511163337250294
+      }
+    },
+    {
+      "index": 53,
+      "title": "Swallows",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.4000617283950618,
+      "psnrDb": 46.66933176825131,
+      "maxChannelDifference": 19,
+      "changedChannelFraction": 0.6455761316872428,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 94.16046807677242,
+        "psnrDb": 28.392117521258406,
+        "maxChannelDifference": 157,
+        "changedChannelFraction": 0.9256071288679985
+      }
+    },
+    {
+      "index": 54,
+      "title": "糸しいひと",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.401059670781893,
+      "psnrDb": 46.66623728694592,
+      "maxChannelDifference": 12,
+      "changedChannelFraction": 0.7190637860082304,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 39.43481198589894,
+        "psnrDb": 32.17200586294969,
+        "maxChannelDifference": 144,
+        "changedChannelFraction": 0.8941147669408539
+      }
+    },
+    {
+      "index": 55,
+      "title": "kid feat. 優河",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 2.0441460905349795,
+      "psnrDb": 45.02568430243805,
+      "maxChannelDifference": 18,
+      "changedChannelFraction": 0.7053292181069959,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 187.90230121425773,
+        "psnrDb": 25.391482619885977,
+        "maxChannelDifference": 221,
+        "changedChannelFraction": 0.9465334900117509
+      }
+    },
+    {
+      "index": 56,
+      "title": "黄昏泣き(Don't cry my child)",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.4733950617283951,
+      "psnrDb": 51.37856637640909,
+      "maxChannelDifference": 4,
+      "changedChannelFraction": 0.4244238683127572,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 158.40374069721895,
+        "psnrDb": 26.133149276486623,
+        "maxChannelDifference": 172,
+        "changedChannelFraction": 0.6641989815902859
+      }
+    },
+    {
+      "index": 57,
+      "title": "水槽のブランコ",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.5445576131687242,
+      "psnrDb": 46.24276248415224,
+      "maxChannelDifference": 14,
+      "changedChannelFraction": 0.7244341563786009,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 71.01965334900117,
+        "psnrDb": 29.617018127134,
+        "maxChannelDifference": 194,
+        "changedChannelFraction": 0.8486682334508422
+      }
+    },
+    {
+      "index": 58,
+      "title": "Ginger",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.4851440329218106,
+      "psnrDb": 46.41311786224915,
+      "maxChannelDifference": 14,
+      "changedChannelFraction": 0.7034979423868313,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 85.90488640814728,
+        "psnrDb": 28.790624929652108,
+        "maxChannelDifference": 153,
+        "changedChannelFraction": 0.7679494712103407
+      }
+    },
+    {
+      "index": 59,
+      "title": "The Ban",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.5804835390946501,
+      "psnrDb": 46.14290383892305,
+      "maxChannelDifference": 21,
+      "changedChannelFraction": 0.5243621399176954,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 127.65289855072464,
+        "psnrDb": 27.070496803074032,
+        "maxChannelDifference": 231,
+        "changedChannelFraction": 0.7350665883274579
+      }
+    },
+    {
+      "index": 60,
+      "title": "plum",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.115761316872428,
+      "psnrDb": 47.65509060398746,
+      "maxChannelDifference": 6,
+      "changedChannelFraction": 0.6985082304526748,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 21.670280062671367,
+        "psnrDb": 34.77215836770667,
+        "maxChannelDifference": 65,
+        "changedChannelFraction": 0.8751370936153545
+      }
+    },
+    {
+      "index": 61,
+      "title": "まばたき",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.32448559670781896,
+      "psnrDb": 53.01884936801301,
+      "maxChannelDifference": 8,
+      "changedChannelFraction": 0.27289094650205764,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 504.315589502546,
+        "psnrDb": 21.10377967504958,
+        "maxChannelDifference": 223,
+        "changedChannelFraction": 0.4763317665491579
+      }
+    },
+    {
+      "index": 62,
+      "title": "かぐや姫",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.9184979423868312,
+      "psnrDb": 48.50002173128692,
+      "maxChannelDifference": 7,
+      "changedChannelFraction": 0.6544855967078189,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 8.852947512730122,
+        "psnrDb": 38.659924714815936,
+        "maxChannelDifference": 71,
+        "changedChannelFraction": 0.6680376028202115
+      }
+    },
+    {
+      "index": 63,
+      "title": "Tell Me Baby",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.8330761316872428,
+      "psnrDb": 45.49899858325194,
+      "maxChannelDifference": 19,
+      "changedChannelFraction": 0.2729320987654321,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 282.1225225225225,
+        "psnrDb": 23.626426025508888,
+        "maxChannelDifference": 213,
+        "changedChannelFraction": 0.26215236976106543
+      }
+    },
+    {
+      "index": 64,
+      "title": "Lithonia",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.1359053497942386,
+      "psnrDb": 47.57738215914233,
+      "maxChannelDifference": 9,
+      "changedChannelFraction": 0.6091872427983539,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 42.09508421464943,
+        "psnrDb": 31.88848978170053,
+        "maxChannelDifference": 107,
+        "changedChannelFraction": 0.793135526831179
+      }
+    },
+    {
+      "index": 65,
+      "title": "風になれ",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.5849279835390947,
+      "psnrDb": 50.45977961925686,
+      "maxChannelDifference": 2,
+      "changedChannelFraction": 0.5355761316872428,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 180.9427732079906,
+        "psnrDb": 25.555391186492635,
+        "maxChannelDifference": 150,
+        "changedChannelFraction": 0.9059831570701136
+      }
+    },
+    {
+      "index": 66,
+      "title": "あの街に風吹けば",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.0367181069958848,
+      "psnrDb": 47.97419677013912,
+      "maxChannelDifference": 19,
+      "changedChannelFraction": 0.2731687242798354,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 99.03261848805327,
+        "psnrDb": 28.173020986322527,
+        "maxChannelDifference": 154,
+        "changedChannelFraction": 0.24149040344692518
+      }
+    },
+    {
+      "index": 67,
+      "title": "いりぐちでぐち",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.022222222222222223,
+      "psnrDb": 64.66292874643254,
+      "maxChannelDifference": 2,
+      "changedChannelFraction": 0.016666666666666666,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 0.20849980415197805,
+        "psnrDb": 54.939747094994054,
+        "maxChannelDifference": 6,
+        "changedChannelFraction": 0.015139052095573835
+      }
+    },
+    {
+      "index": 68,
+      "title": "ここでキスして。",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 119.82132784958871,
+        "psnrDb": 27.345462327730218,
+        "maxChannelDifference": 118,
+        "changedChannelFraction": 0.758578143360752
+      }
+    },
+    {
+      "index": 69,
+      "title": "汽笛",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.838014403292181,
+      "psnrDb": 45.487314505284786,
+      "maxChannelDifference": 31,
+      "changedChannelFraction": 0.373179012345679,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 115.93308852330591,
+        "psnrDb": 27.48872954997558,
+        "maxChannelDifference": 149,
+        "changedChannelFraction": 0.40915589502546024
+      }
+    },
+    {
+      "index": 70,
+      "title": "ポルターガイスト",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 859.8767724245985,
+        "psnrDb": 18.786441432180105,
+        "maxChannelDifference": 174,
+        "changedChannelFraction": 0.7998335291813553
+      }
+    },
+    {
+      "index": 71,
+      "title": "Junior Sweet",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.0101543209876542,
+      "psnrDb": 48.08692634972645,
+      "maxChannelDifference": 12,
+      "changedChannelFraction": 0.4161831275720165,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 66.5605366235801,
+        "psnrDb": 29.898635462072342,
+        "maxChannelDifference": 121,
+        "changedChannelFraction": 0.4531237759498629
+      }
+    },
+    {
+      "index": 72,
+      "title": "ブラウス",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 4.309897119341564,
+      "psnrDb": 41.78613457536768,
+      "maxChannelDifference": 21,
+      "changedChannelFraction": 0.514320987654321,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 392.93662358010187,
+        "psnrDb": 22.187578518385116,
+        "maxChannelDifference": 217,
+        "changedChannelFraction": 0.4240207598903251
+      }
+    },
+    {
+      "index": 73,
+      "title": "Just Friends",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.8824897119341564,
+      "psnrDb": 48.67370709783992,
+      "maxChannelDifference": 14,
+      "changedChannelFraction": 0.306059670781893,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 69.55385820603212,
+        "psnrDb": 29.70759135222583,
+        "maxChannelDifference": 127,
+        "changedChannelFraction": 0.37316882099490795
+      }
+    },
+    {
+      "index": 74,
+      "title": "人間そっくり",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.0814609053497943,
+      "psnrDb": 47.790695364896926,
+      "maxChannelDifference": 17,
+      "changedChannelFraction": 0.5986111111111111,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 24.433274578926753,
+        "psnrDb": 34.25098685287996,
+        "maxChannelDifference": 134,
+        "changedChannelFraction": 0.7287896592244418
+      }
+    },
+    {
+      "index": 75,
+      "title": "ギブス",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.4874074074074074,
+      "psnrDb": 51.25188235748961,
+      "maxChannelDifference": 2,
+      "changedChannelFraction": 0.4541049382716049,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 16.142939678809245,
+        "psnrDb": 36.05097736923363,
+        "maxChannelDifference": 57,
+        "changedChannelFraction": 0.7269682726204465
+      }
+    },
+    {
+      "index": 76,
+      "title": "Go!",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.467417695473251,
+      "psnrDb": 46.465266089749704,
+      "maxChannelDifference": 16,
+      "changedChannelFraction": 0.36540123456790125,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 135.4611437524481,
+        "psnrDb": 26.812656226606137,
+        "maxChannelDifference": 166,
+        "changedChannelFraction": 0.4818057187622405
+      }
+    },
+    {
+      "index": 77,
+      "title": "Tek It - Sped Up",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 4.202366255144033,
+      "psnrDb": 41.89586460428555,
+      "maxChannelDifference": 21,
+      "changedChannelFraction": 0.7221810699588478,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 333.77249314531923,
+        "psnrDb": 22.89629818121563,
+        "maxChannelDifference": 188,
+        "changedChannelFraction": 0.7637583235409322
+      }
+    },
+    {
+      "index": 78,
+      "title": "Gift",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 10.747283950617284,
+      "psnrDb": 37.81781637481083,
+      "maxChannelDifference": 31,
+      "changedChannelFraction": 0.5831275720164609,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 689.2468958088523,
+        "psnrDb": 19.747055420365946,
+        "maxChannelDifference": 178,
+        "changedChannelFraction": 0.6190364277320799
+      }
+    },
+    {
+      "index": 79,
+      "title": "Burning (English version)",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.3765740740740742,
+      "psnrDb": 46.742807749271066,
+      "maxChannelDifference": 14,
+      "changedChannelFraction": 0.3960288065843621,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 112.00152761457109,
+        "psnrDb": 27.63856414715101,
+        "maxChannelDifference": 165,
+        "changedChannelFraction": 0.4588817077947513
+      }
+    },
+    {
+      "index": 80,
+      "title": "Meaningless",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.9507613168724279,
+      "psnrDb": 48.35008857364362,
+      "maxChannelDifference": 19,
+      "changedChannelFraction": 0.6310185185185185,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 19.232452017234625,
+        "psnrDb": 35.290457032717725,
+        "maxChannelDifference": 156,
+        "changedChannelFraction": 0.8100176263219742
+      }
+    },
+    {
+      "index": 81,
+      "title": "こいのうた",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.3641872427983539,
+      "psnrDb": 52.51755632147383,
+      "maxChannelDifference": 7,
+      "changedChannelFraction": 0.295298353909465,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 1412.3893948296122,
+        "psnrDb": 16.631259129399425,
+        "maxChannelDifference": 167,
+        "changedChannelFraction": 0.6175675675675676
+      }
+    },
+    {
+      "index": 82,
+      "title": "或る日の隅田川",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 4.057592592592592,
+      "psnrDb": 42.04811921835271,
+      "maxChannelDifference": 19,
+      "changedChannelFraction": 0.7606069958847737,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 247.21405209557383,
+        "psnrDb": 24.200072076626288,
+        "maxChannelDifference": 160,
+        "changedChannelFraction": 0.8463278495887192
+      }
+    },
+    {
+      "index": 83,
+      "title": "雨のち雨のち雨",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 49.28201135918527,
+        "psnrDb": 31.203919363793702,
+        "maxChannelDifference": 54,
+        "changedChannelFraction": 0.8482569526047787
+      }
+    },
+    {
+      "index": 84,
+      "title": "つよがるガール",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 4.2076028806584365,
+      "psnrDb": 41.89045617098004,
+      "maxChannelDifference": 18,
+      "changedChannelFraction": 0.663425925925926,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 287.8371034077556,
+        "psnrDb": 23.53933585281796,
+        "maxChannelDifference": 159,
+        "changedChannelFraction": 0.7187524481002742
+      }
+    },
+    {
+      "index": 85,
+      "title": "モルヒネ",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 119.82132784958871,
+        "psnrDb": 27.345462327730218,
+        "maxChannelDifference": 118,
+        "changedChannelFraction": 0.758578143360752
+      }
+    },
+    {
+      "index": 86,
+      "title": "Real Emotion",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 7.564567901234568,
+      "psnrDb": 39.34296235312275,
+      "maxChannelDifference": 24,
+      "changedChannelFraction": 0.7063271604938272,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 616.5961417939678,
+        "psnrDb": 20.23079557964985,
+        "maxChannelDifference": 229,
+        "changedChannelFraction": 0.7374363493928712
+      }
+    },
+    {
+      "index": 87,
+      "title": "変身",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.9029115226337449,
+      "psnrDb": 48.57435165498528,
+      "maxChannelDifference": 4,
+      "changedChannelFraction": 0.6768724279835391,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 7.614081472777125,
+        "psnrDb": 39.314628412936564,
+        "maxChannelDifference": 54,
+        "changedChannelFraction": 0.7056698002350176
+      }
+    },
+    {
+      "index": 88,
+      "title": "茜さす 帰路照らされど…",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 119.82132784958871,
+        "psnrDb": 27.345462327730218,
+        "maxChannelDifference": 118,
+        "changedChannelFraction": 0.758578143360752
+      }
+    },
+    {
+      "index": 89,
+      "title": "Body",
+      "hdSourceUnavailable": true,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.047623456790123454,
+      "psnrDb": 61.35259445011374,
+      "maxChannelDifference": 3,
+      "changedChannelFraction": 0.03424897119341564,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 0.07159224441833137,
+        "psnrDb": 59.582143830957364,
+        "maxChannelDifference": 2,
+        "changedChannelFraction": 0.06935957696827262
+      }
+    },
+    {
+      "index": 90,
+      "title": "Feelin’ Go(o)d",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.5487037037037037,
+      "psnrDb": 50.73742469210828,
+      "maxChannelDifference": 2,
+      "changedChannelFraction": 0.5106172839506172,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 20.980229142185664,
+        "psnrDb": 34.912701337003924,
+        "maxChannelDifference": 139,
+        "changedChannelFraction": 0.738728946337642
+      }
+    },
+    {
+      "index": 91,
+      "title": "ラッキーカラー",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 5.4235802469135805,
+      "psnrDb": 40.78794290536806,
+      "maxChannelDifference": 18,
+      "changedChannelFraction": 0.7711728395061729,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 260.88513513513516,
+        "psnrDb": 23.966310265461512,
+        "maxChannelDifference": 207,
+        "changedChannelFraction": 0.9041911476694086
+      }
+    },
+    {
+      "index": 92,
+      "title": "ざらめ",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 5.4235802469135805,
+      "psnrDb": 40.78794290536806,
+      "maxChannelDifference": 18,
+      "changedChannelFraction": 0.7711728395061729,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 260.88513513513516,
+        "psnrDb": 23.966310265461512,
+        "maxChannelDifference": 207,
+        "changedChannelFraction": 0.9041911476694086
+      }
+    },
+    {
+      "index": 93,
+      "title": "Volta",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.7139506172839507,
+      "psnrDb": 45.790820560870564,
+      "maxChannelDifference": 12,
+      "changedChannelFraction": 0.6880041152263374,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 146.24826674500588,
+        "psnrDb": 26.479896331054206,
+        "maxChannelDifference": 155,
+        "changedChannelFraction": 0.9118390129259695
+      }
+    },
+    {
+      "index": 94,
+      "title": "Meet The Frownies X Lovely Bastards",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.0751131687242799,
+      "psnrDb": 47.816261794389405,
+      "maxChannelDifference": 14,
+      "changedChannelFraction": 0.41826131687242796,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 47.681276929103014,
+        "psnrDb": 31.3473248335055,
+        "maxChannelDifference": 169,
+        "changedChannelFraction": 0.35971406188797495
+      }
+    },
+    {
+      "index": 95,
+      "title": "Can't Help Falling in Love",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 3.7610802469135804,
+      "psnrDb": 42.37767761181229,
+      "maxChannelDifference": 15,
+      "changedChannelFraction": 0.7386625514403292,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 356.4100470035253,
+        "psnrDb": 22.611304228075355,
+        "maxChannelDifference": 201,
+        "changedChannelFraction": 0.9250097924010967
+      }
+    },
+    {
+      "index": 96,
+      "title": "夕立",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 201.58781825303564,
+        "psnrDb": 25.086160762756332,
+        "maxChannelDifference": 106,
+        "changedChannelFraction": 0.7053564433999217
+      }
+    },
+    {
+      "index": 97,
+      "title": "Train",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 0.8519341563786008,
+      "psnrDb": 48.82674330216759,
+      "maxChannelDifference": 14,
+      "changedChannelFraction": 0.4720987654320988,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 25.302692910301605,
+        "psnrDb": 34.09913616219859,
+        "maxChannelDifference": 138,
+        "changedChannelFraction": 0.46335683509596554
+      }
+    },
+    {
+      "index": 98,
+      "title": "Museum of My Mess",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 3.0315637860082303,
+      "psnrDb": 43.31413650371818,
+      "maxChannelDifference": 27,
+      "changedChannelFraction": 0.24815843621399178,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 322.274294947121,
+        "psnrDb": 23.048546939153688,
+        "maxChannelDifference": 209,
+        "changedChannelFraction": 0.19529964747356052
+      }
+    },
+    {
+      "index": 99,
+      "title": "Burning",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 1.4687037037037036,
+      "psnrDb": 46.46146170813225,
+      "maxChannelDifference": 15,
+      "changedChannelFraction": 0.6951851851851852,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 69.71678417547983,
+        "psnrDb": 29.69743014659648,
+        "maxChannelDifference": 135,
+        "changedChannelFraction": 0.8291813552683118
+      }
+    },
+    {
+      "index": 100,
+      "title": "mabataki",
+      "hdSourceUnavailable": false,
+      "comparison": "decoded actual displayed source images resized to fixed 180x180",
+      "mse": 5.4743930041152264,
+      "psnrDb": 40.747443888767506,
+      "maxChannelDifference": 20,
+      "changedChannelFraction": 0.7666358024691358,
+      "renderComparison": {
+        "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+        "width": 184,
+        "height": 185,
+        "mse": 437.3216118292205,
+        "psnrDb": 21.722794207600728,
+        "maxChannelDifference": 182,
+        "changedChannelFraction": 0.9357226792009401
+      }
+    }
+  ],
+  "worstMse": 10.747283950617284,
+  "exactPixelMatches": 10,
+  "renderWorstMse": 1412.3893948296122,
+  "renderExactPixelMatches": 0
+}

@@ -1,4 +1,4 @@
-param([ValidateSet('Snapshot','Pause','Play','Next')][string]$Action='Snapshot', [string]$Source='cloudmusic.exe')
+param([ValidateSet('Snapshot','Pause','Play','Next')][string]$Action='Snapshot', [string]$Source='cloudmusic.exe', [string]$TimingFile='')
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $managerType=[Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime]
@@ -10,13 +10,17 @@ function Await-Operation($operation,$type) {
     $task.GetAwaiter().GetResult()
 }
 $manager=Await-Operation ($managerType::RequestAsync()) $managerType
+$actionTimings=[Collections.Generic.List[object]]::new()
 $rows=@(foreach($session in $manager.GetSessions()) {
     $id=$session.SourceAppUserModelId
     if($Action -ne 'Snapshot' -and $id -like "*$Source*") {
+        $actionStarted=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         $operation=switch($Action) { 'Pause' {$session.TryPauseAsync()} 'Play' {$session.TryPlayAsync()} 'Next' {$session.TrySkipNextAsync()} }
         if(-not (Await-Operation $operation $boolType)) { throw "Player rejected $Action" }
+        $actionTimings.Add([pscustomobject]@{action=$Action;source=$id;startedMs=$actionStarted;completedMs=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()})
     }
     $props=Await-Operation ($session.TryGetMediaPropertiesAsync()) $propsType
     [pscustomobject]@{ source=$id; title=$props.Title; artist=$props.Artist; playbackStatus=$session.GetPlaybackInfo().PlaybackStatus.ToString(); hasThumbnail=($null -ne $props.Thumbnail) }
 })
 ConvertTo-Json -InputObject $rows -Depth 4
+if($TimingFile){ConvertTo-Json -InputObject @($actionTimings.ToArray()) -Depth 4 | Set-Content -LiteralPath $TimingFile -Encoding utf8}

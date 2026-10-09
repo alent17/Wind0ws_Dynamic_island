@@ -1,0 +1,43 @@
+{
+  "baseCommit": "0055ebe3fa776f4e9499519870bbc206a1423a38",
+  "baselineM3Source": "2340164",
+  "differences": [
+    "src-tauri/src/services/cache.rs",
+    "src-tauri/src/services/color.rs",
+    "src-tauri/src/services/http_budget.rs",
+    "src-tauri/src/services/image.rs",
+    "src-tauri/src/services/image_budget.rs",
+    "src-tauri/src/services/media.rs",
+    "src-tauri/src/services/mod.rs",
+    "src-tauri/src/utils.rs",
+    "src/FloatingWindow.svelte",
+    "src/lib/artworkBudget.test.ts",
+    "src/lib/artworkBudget.ts"
+  ],
+  "sharedAdapterSha256": "9e99563780af9dd1999ba5fea7db5c4573bf45c800ad14c94cbd9c8e0616df24",
+  "sharedFrontendAdapterSha256": "a0e1b26d5185d4577adf836126ab03d84eff9bdfa4ab888c0db06c15720b025a",
+  "binarySha256": {
+    "before": "6692670cd9c4c734eec748c84d266dd28a22980e6f1a6a4c5a29488ec7b29623",
+    "after": "0769e245f6ce5b1d07b9ecc1c37919b7f7d34b9d2181861ed03d68cbb619c91d"
+  },
+  "cargoProfile": "release, opt-level=s, lto=true, codegen-units=1, panic=abort",
+  "corpusSha256": "121ae3af3c2feebc6b74ad0134b5ce7b2d92e9132fa7ef5c5b4c1d32b2b2b440",
+  "frozenCoversManifestSha256": "d3113418697a86cedee5c66e6fc75dacca5c0bd0a9f744c1d4da180c1114f86b",
+  "settingsSha256": "3e6aaa8368f36eae5f568ffec1041b9c89169b7a6aadcee9ff0c8c814c569a7b",
+  "measurementScope": "Same M2 and adapter; only M3 budget code differs; cover and ancillary metadata responses frozen; formal phases use only WinRT control, no attached CDP/profiler",
+  "replayHost": "127.0.0.2",
+  "validRunDirectory": "runs-session2",
+  "excludedRunDirectories": [
+    "runs",
+    "runs-final"
+  ],
+  "sharedCargoTomlSha256": "e5efad66657d8f33ae7e3fefae66611c9e2304d5ae583cdfbcac0b93d4c5b8fb",
+  "sharedCargoLockSha256": "483c3aa82b28c7da184d73d78c887e1daba02ef462e755c939870f80e3e449f4",
+  "validContinuousDiagnosticDirectory": "diagnostic-hover-fixed",
+  "validReopenDiagnosticDirectory": "diagnostic",
+  "frozenCorpusCounts": {
+    "replayKeys": 101,
+    "sourceUrls": 98,
+    "distinctFileSha256": 94
+  }
+}

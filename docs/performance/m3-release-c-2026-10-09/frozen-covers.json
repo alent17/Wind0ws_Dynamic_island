@@ -1,0 +1,1938 @@
+[
+  {
+    "index": 0,
+    "id": "1309915258",
+    "title": "きえないで",
+    "artists": [
+      "アイナ・ジ・エンド"
+    ],
+    "cover": "http://p3.music.126.net/knBg6w1jJtQANS1k_wdONQ==/109951163555268893.jpg",
+    "file": "0.img",
+    "sourceUrl": "https://p3.music.126.net/knBg6w1jJtQANS1k_wdONQ==/109951163555268893.jpg?param=1200y1200",
+    "sha256": "62189129db13913968c5f4d98255a2d65eb0c7a01b2f968de99d8aaf3168641e",
+    "bytes": 503607,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/0",
+    "durationMs": 291413
+  },
+  {
+    "index": 1,
+    "candidateCount": 1,
+    "id": "2625275173",
+    "title": "right or left",
+    "artists": [
+      "in"
+    ],
+    "cover": "http://p4.music.126.net/7CLbqiMkP_FVLr4aMaE4Ig==/109951169945593078.jpg",
+    "file": "1.img",
+    "sourceUrl": "https://p4.music.126.net/7CLbqiMkP_FVLr4aMaE4Ig==/109951169945593078.jpg?param=1200y1200",
+    "sha256": "93a4240dbcdaa3d250e5dc31f2903d8de9b7d3fb9062dabcd28003f6a874d653",
+    "bytes": 604924,
+    "width": 1170,
+    "height": 1170,
+    "format": "png",
+    "localUrl": "http://127.0.0.2:9234/cover/1",
+    "durationMs": 134815
+  },
+  {
+    "index": 2,
+    "candidateCount": 1,
+    "id": "2095882578",
+    "title": "美電球",
+    "artists": [
+      "Vaundy"
+    ],
+    "cover": "http://p3.music.126.net/V1_5Eo6LYhLCSQC2Bp-B9A==/109951169024610744.jpg",
+    "file": "2.img",
+    "sourceUrl": "https://p3.music.126.net/V1_5Eo6LYhLCSQC2Bp-B9A==/109951169024610744.jpg?param=1200y1200",
+    "sha256": "5c696a0cc200b95736182508ab4c6b4f5f94a857a4e575a904f25b28959403af",
+    "bytes": 380182,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/2",
+    "durationMs": 177005
+  },
+  {
+    "index": 3,
+    "candidateCount": 1,
+    "id": "33761710",
+    "title": "素晴らしい日々",
+    "artists": [
+      "ROTH BART BARON"
+    ],
+    "cover": "http://p3.music.126.net/KRS8Fjl8_O-X4wz2Foe-4A==/109951168152877707.jpg",
+    "file": "3.img",
+    "sourceUrl": "https://p3.music.126.net/KRS8Fjl8_O-X4wz2Foe-4A==/109951168152877707.jpg?param=1200y1200",
+    "sha256": "57e83a7552250fd7bbfba1a30261d070aff4cbe7a0a6f890e923e5a0a3b88020",
+    "bytes": 257458,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/3",
+    "durationMs": 353376
+  },
+  {
+    "index": 4,
+    "candidateCount": 1,
+    "id": "1365843837",
+    "title": "Karma",
+    "artists": [
+      "Caroline Kole",
+      "BRKLYN"
+    ],
+    "cover": "http://p3.music.126.net/peC8Xmt66w2_-FbMMEsxsQ==/109951164079515215.jpg",
+    "file": "4.img",
+    "sourceUrl": "https://p3.music.126.net/peC8Xmt66w2_-FbMMEsxsQ==/109951164079515215.jpg?param=1200y1200",
+    "sha256": "b47ae4948e40c43feb6f265a3859985c707f447c4c31bfb2591d65c216713554",
+    "bytes": 106211,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/4",
+    "durationMs": 153684
+  },
+  {
+    "index": 5,
+    "candidateCount": 1,
+    "id": "2644328090",
+    "title": "恋時雨 (Fujii Kaze Stadium Live \"Feelin' Good\")",
+    "artists": [
+      "藤井風"
+    ],
+    "cover": "http://p3.music.126.net/tc6vsg-HTZO0yz_nzjLKLA==/109951170128417681.jpg",
+    "file": "5.img",
+    "sourceUrl": "https://p3.music.126.net/tc6vsg-HTZO0yz_nzjLKLA==/109951170128417681.jpg?param=1200y1200",
+    "sha256": "3ae90fe0952f37695b42e53b49864d4c400360f74bbe5eb31f24d69082e76cd1",
+    "bytes": 1256413,
+    "width": 800,
+    "height": 800,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/5",
+    "durationMs": 98168
+  },
+  {
+    "index": 6,
+    "candidateCount": 1,
+    "id": "27974807",
+    "title": "Mars 2027",
+    "artists": [
+      "青葉市子"
+    ],
+    "cover": "http://p3.music.126.net/kBaUDijZJjP7-I4747KC0A==/109951167355380693.jpg",
+    "file": "6.img",
+    "sourceUrl": "https://p3.music.126.net/kBaUDijZJjP7-I4747KC0A==/109951167355380693.jpg?param=1200y1200",
+    "sha256": "b1333ffe0c548fe434d20224c4b743aa6ee2a0d67b2e2449101789a32f9ec69f",
+    "bytes": 10276,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/6",
+    "durationMs": 487085
+  },
+  {
+    "index": 7,
+    "candidateCount": 1,
+    "id": "1859129388",
+    "title": "じゃむ",
+    "artists": [
+      "鈴木真海子",
+      "iri"
+    ],
+    "cover": "http://p4.music.126.net/cTKwYUnjR_vcgNufZv_tUQ==/109951166286268341.jpg",
+    "file": "7.img",
+    "sourceUrl": "https://p4.music.126.net/cTKwYUnjR_vcgNufZv_tUQ==/109951166286268341.jpg?param=1200y1200",
+    "sha256": "fbbcdee002c4918c4ccba38cf06beed8077e734fb32e04fbfbed0034f2909ce3",
+    "bytes": 353353,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/7",
+    "durationMs": 290089
+  },
+  {
+    "index": 8,
+    "candidateCount": 1,
+    "id": "2095816192",
+    "title": "こわす",
+    "artists": [
+      "ひとひら"
+    ],
+    "cover": "http://p4.music.126.net/p7eKT94HbTiVJrx2tg6JEA==/109951169024050645.jpg",
+    "file": "8.img",
+    "sourceUrl": "https://p4.music.126.net/p7eKT94HbTiVJrx2tg6JEA==/109951169024050645.jpg?param=1200y1200",
+    "sha256": "85b18b041bca0d808c4e5cd9e27dfb7cf4c473a34a4bee16389a1610a86daca1",
+    "bytes": 813553,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/8",
+    "durationMs": 280360
+  },
+  {
+    "index": 9,
+    "candidateCount": 1,
+    "id": "2067379023",
+    "title": "F_A_R",
+    "artists": [
+      "toe"
+    ],
+    "cover": "http://p4.music.126.net/04NGP6IDy0gHdM-kCP6qQg==/109951168766165447.jpg",
+    "file": "9.img",
+    "sourceUrl": "https://p4.music.126.net/04NGP6IDy0gHdM-kCP6qQg==/109951168766165447.jpg?param=1200y1200",
+    "sha256": "14d652fe377574b11b5f94457fc9372666acfbf99a58c59dc6582eddbc6fc5e0",
+    "bytes": 147541,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/9",
+    "durationMs": 340532
+  },
+  {
+    "index": 10,
+    "candidateCount": 1,
+    "id": "2134817793",
+    "title": "副都心",
+    "artists": [
+      "ゲシュタルト乙女",
+      "荒井岳史"
+    ],
+    "cover": "http://p4.music.126.net/_GWVV3nnjeDZEiiy5xUECg==/109951169405435643.jpg",
+    "file": "10.img",
+    "sourceUrl": "https://p4.music.126.net/_GWVV3nnjeDZEiiy5xUECg==/109951169405435643.jpg?param=1200y1200",
+    "sha256": "64adcff6e2ad2b633d550f36c72ed523efb02523bdbddceaa3670c9888deb126",
+    "bytes": 1215421,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/10",
+    "durationMs": 212078
+  },
+  {
+    "index": 11,
+    "candidateCount": 1,
+    "id": "1981056465",
+    "title": "Toosie Slide (Sped Up)",
+    "artists": [
+      "Dance Fruits Music",
+      "Steve Void"
+    ],
+    "cover": "http://p4.music.126.net/VgCq7mTdMBvkE474zrNHpg==/109951168638072698.jpg",
+    "file": "11.img",
+    "sourceUrl": "https://p4.music.126.net/VgCq7mTdMBvkE474zrNHpg==/109951168638072698.jpg?param=1200y1200",
+    "sha256": "b0412d67a02f8b4301d8200e70f17ec2f1f445077226ee194bcd52fafd6b5fd2",
+    "bytes": 570498,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/11",
+    "durationMs": 147133
+  },
+  {
+    "index": 12,
+    "candidateCount": 1,
+    "id": "2101463342",
+    "title": "華奢な心",
+    "artists": [
+      "アイナ・ジ・エンド"
+    ],
+    "cover": "http://p3.music.126.net/1TIbL9XsUS7jAbTZPMzUbA==/109951169067970247.jpg",
+    "file": "12.img",
+    "sourceUrl": "https://p3.music.126.net/1TIbL9XsUS7jAbTZPMzUbA==/109951169067970247.jpg?param=1200y1200",
+    "sha256": "167d366469a43d239110644a9506b28d9653b4b80e7d71b1c715e7f70d745ac5",
+    "bytes": 673877,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/12",
+    "durationMs": 261057
+  },
+  {
+    "index": 13,
+    "candidateCount": 1,
+    "id": "1809691919",
+    "title": "Nevermore",
+    "artists": [
+      "Bialystocks"
+    ],
+    "cover": "http://p3.music.126.net/Fi2s3pzl18IuEwXzJbuBkA==/109951165692550513.jpg",
+    "file": "13.img",
+    "sourceUrl": "https://p3.music.126.net/Fi2s3pzl18IuEwXzJbuBkA==/109951165692550513.jpg?param=1200y1200",
+    "sha256": "396dd7e671cf1de8a43d7f5b44208ca70e07a1a7d889a6e67ba67eba240ff7a0",
+    "bytes": 1422856,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/13",
+    "durationMs": 303808
+  },
+  {
+    "index": 14,
+    "candidateCount": 1,
+    "id": "2100653098",
+    "title": "つづく",
+    "artists": [
+      "羊文学"
+    ],
+    "cover": "http://p3.music.126.net/bkaJrVMDpl4A0hc8ZpN9oQ==/109951169061183208.jpg",
+    "file": "14.img",
+    "sourceUrl": "https://p3.music.126.net/bkaJrVMDpl4A0hc8ZpN9oQ==/109951169061183208.jpg?param=1200y1200",
+    "sha256": "316d0c88b6ed9fdc3b548fc30ff5527106ea65c0f737e6dc27706faecddf0328",
+    "bytes": 60742,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/14",
+    "durationMs": 165720
+  },
+  {
+    "index": 15,
+    "candidateCount": 1,
+    "id": "2164196464",
+    "title": "The Loser",
+    "artists": [
+      "verzache"
+    ],
+    "cover": "http://p4.music.126.net/0kmBAMY2guJZYarop3_Yzg==/109951169663492548.jpg",
+    "file": "15.img",
+    "sourceUrl": "https://p4.music.126.net/0kmBAMY2guJZYarop3_Yzg==/109951169663492548.jpg?param=1200y1200",
+    "sha256": "e4c6d077eb367dee737eac6477cb912d18c1af20066e23e895b0e749cde48348",
+    "bytes": 38855,
+    "width": 800,
+    "height": 800,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/15",
+    "durationMs": 131586
+  },
+  {
+    "index": 16,
+    "candidateCount": 1,
+    "id": "2615170973",
+    "title": "プロポーズ",
+    "artists": [
+      "9Lana"
+    ],
+    "cover": "http://p4.music.126.net/XV1jpc9miaUBF0oBXpwRRQ==/109951169852428921.jpg",
+    "file": "16.img",
+    "sourceUrl": "https://p4.music.126.net/XV1jpc9miaUBF0oBXpwRRQ==/109951169852428921.jpg?param=1200y1200",
+    "sha256": "73dd9e92a6d606d7dab98f09e78b510edb7328c7db60b131f822aae75c9421b3",
+    "bytes": 198313,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/16",
+    "durationMs": 234451
+  },
+  {
+    "index": 17,
+    "candidateCount": 1,
+    "id": "2636402609",
+    "title": "贝比",
+    "artists": [
+      "LÜCY",
+      "JOYCE 就以斯"
+    ],
+    "cover": "http://p4.music.126.net/D2YZmn4ckwPVnjbfc-zH1A==/109951170053216108.jpg",
+    "file": "17.img",
+    "sourceUrl": "https://p4.music.126.net/D2YZmn4ckwPVnjbfc-zH1A==/109951170053216108.jpg?param=1200y1200",
+    "sha256": "dc1cb216e5fb107523622f399f4da929239ec22e41ba6dcd501a76015167ea3e",
+    "bytes": 455854,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/17",
+    "durationMs": 194706
+  },
+  {
+    "index": 18,
+    "candidateCount": 1,
+    "id": "22805931",
+    "title": "Bran-new Lovesong",
+    "artists": [
+      "the pillows"
+    ],
+    "cover": "http://p4.music.126.net/qTDyijSmJ31cwZWi_9YHSQ==/109951167950789050.jpg",
+    "file": "18.img",
+    "sourceUrl": "https://p4.music.126.net/qTDyijSmJ31cwZWi_9YHSQ==/109951167950789050.jpg?param=1200y1200",
+    "sha256": "74363f12afa0d38305876f69b00faf6cebd8d20a1953bcfe5394a7c9a2253826",
+    "bytes": 464413,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/18",
+    "durationMs": 268266
+  },
+  {
+    "index": 19,
+    "candidateCount": 1,
+    "id": "2631306308",
+    "title": "the girl",
+    "artists": [
+      "ヒメウズ（himeuzu）"
+    ],
+    "cover": "http://p3.music.126.net/llIwrrMFDAfkYW8mikPRmQ==/109951169995253490.jpg",
+    "file": "19.img",
+    "sourceUrl": "https://p3.music.126.net/llIwrrMFDAfkYW8mikPRmQ==/109951169995253490.jpg?param=1200y1200",
+    "sha256": "5f8febf8c17b21833a84dcfd350a730eb2bd7af26f8b2013539e7bc2c5432bc9",
+    "bytes": 1333579,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/19",
+    "durationMs": 256421
+  },
+  {
+    "index": 20,
+    "candidateCount": 1,
+    "id": "2120910824",
+    "title": "2016",
+    "artists": [
+      "aldn"
+    ],
+    "cover": "http://p4.music.126.net/YfjJ5hZk3M07GVnEBKdxfQ==/109951170450197023.jpg",
+    "file": "20.img",
+    "sourceUrl": "https://p4.music.126.net/YfjJ5hZk3M07GVnEBKdxfQ==/109951170450197023.jpg?param=1200y1200",
+    "sha256": "0ccce208063dc4e4a3dc48b945fdb054b8307ef61279bb59f692db4e956e05ef",
+    "bytes": 706705,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/20",
+    "durationMs": 180033
+  },
+  {
+    "index": 21,
+    "candidateCount": 2,
+    "id": "1331582593",
+    "title": "1999",
+    "artists": [
+      "羊文学"
+    ],
+    "cover": "http://p3.music.126.net/oOCyGd_fAFyPp0c6zQJfPQ==/109951168773487510.jpg",
+    "file": "21.img",
+    "sourceUrl": "https://p3.music.126.net/oOCyGd_fAFyPp0c6zQJfPQ==/109951168773487510.jpg?param=1200y1200",
+    "sha256": "9bb262e7954746bb039d200232a2f25d32a2cb55ca8d69179ffc4886e46b8097",
+    "bytes": 391449,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/21",
+    "durationMs": 289060
+  },
+  {
+    "index": 22,
+    "candidateCount": 1,
+    "id": "1960380468",
+    "title": "祥月 (Acoustic ver.)",
+    "artists": [
+      "あたらよ"
+    ],
+    "cover": "http://p3.music.126.net/HymDERNi6HQa0PHVxhvstQ==/109951167607871650.jpg",
+    "file": "22.img",
+    "sourceUrl": "https://p3.music.126.net/HymDERNi6HQa0PHVxhvstQ==/109951167607871650.jpg?param=1200y1200",
+    "sha256": "0ef6d6bce2d10f2b3c6d81ad5b4877582cb415b5415b2303a11ea948a8358351",
+    "bytes": 723355,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/22",
+    "durationMs": 253473
+  },
+  {
+    "index": 23,
+    "candidateCount": 1,
+    "id": "25723366",
+    "title": "雨のメッセージ",
+    "artists": [
+      "Lamp"
+    ],
+    "cover": "http://p3.music.126.net/zp_40v8e6xTh-5DWvL6wwg==/109951172245391924.jpg",
+    "file": "23.img",
+    "sourceUrl": "https://p3.music.126.net/zp_40v8e6xTh-5DWvL6wwg==/109951172245391924.jpg?param=1200y1200",
+    "sha256": "d5f0fee5de3633bd8fd40a19dbd215ed208f1d178a0497f273e5b473fe6ba4a9",
+    "bytes": 123925,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/23",
+    "durationMs": 326546
+  },
+  {
+    "index": 24,
+    "candidateCount": 1,
+    "id": "1901297404",
+    "title": "死の光",
+    "artists": [
+      "別野加奈"
+    ],
+    "cover": "http://p3.music.126.net/3l8uLfuFMdDdEQi8YY9JhQ==/109951166702029507.jpg",
+    "file": "24.img",
+    "sourceUrl": "https://p3.music.126.net/3l8uLfuFMdDdEQi8YY9JhQ==/109951166702029507.jpg?param=1200y1200",
+    "sha256": "02e1e281da480dfdef500278cc1b215fee47cd115276329a8fc6073d98e6a67f",
+    "bytes": 692421,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/24",
+    "durationMs": 571267
+  },
+  {
+    "index": 25,
+    "candidateCount": 1,
+    "id": "1842181934",
+    "title": "The Hardest",
+    "artists": [
+      "milet"
+    ],
+    "cover": "http://p3.music.126.net/VOuItKAXxFmEZGfxQmds8g==/109951166203233940.jpg",
+    "file": "25.img",
+    "sourceUrl": "https://p3.music.126.net/VOuItKAXxFmEZGfxQmds8g==/109951166203233940.jpg?param=1200y1200",
+    "sha256": "0178d68092c030ebc694ccc84aa22619353833aa25180434f2bb45f5a97e9ed1",
+    "bytes": 1028161,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/25",
+    "durationMs": 227276
+  },
+  {
+    "index": 26,
+    "candidateCount": 1,
+    "id": "2630316924",
+    "title": "inside",
+    "artists": [
+      "Juliana Chahayed",
+      "Jackson Lundy"
+    ],
+    "cover": "http://p3.music.126.net/HdaC-r1koQ8FYucDe81Emw==/109951174020053402.jpg",
+    "file": "26.img",
+    "sourceUrl": "https://p3.music.126.net/HdaC-r1koQ8FYucDe81Emw==/109951174020053402.jpg?param=1200y1200",
+    "sha256": "79599c476214a90878e610a8c9c385c6b480f85678bb16fbc6ea0c06186d3356",
+    "bytes": 584046,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/26",
+    "durationMs": 120624
+  },
+  {
+    "index": 27,
+    "candidateCount": 1,
+    "id": "2012379530",
+    "title": "七階から目薬",
+    "artists": [
+      "文藝天国"
+    ],
+    "cover": "http://p4.music.126.net/rMANY27hrHn4mmdKlJRUdA==/109951168213055966.jpg",
+    "file": "27.img",
+    "sourceUrl": "https://p4.music.126.net/rMANY27hrHn4mmdKlJRUdA==/109951168213055966.jpg?param=1200y1200",
+    "sha256": "2f2cb01a60d043fe5e0a1e1ffac316c9ac64bd31429e990b907f684b956cd81c",
+    "bytes": 963684,
+    "width": 1000,
+    "height": 1000,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/27",
+    "durationMs": 228330
+  },
+  {
+    "index": 28,
+    "candidateCount": 1,
+    "id": "607869",
+    "title": "呼吸",
+    "artists": [
+      "kyooo"
+    ],
+    "cover": "http://p3.music.126.net/KtrBMhs0S_xy3zOkH_Hfqw==/923589767332037.jpg",
+    "file": "28.img",
+    "sourceUrl": "https://p3.music.126.net/KtrBMhs0S_xy3zOkH_Hfqw==/923589767332037.jpg?param=1200y1200",
+    "sha256": "eb7b0a89d4e74c7df0790bc9bf13fdc59ab6629bf6e0fc983c0eaa75139a576e",
+    "bytes": 184922,
+    "width": 360,
+    "height": 360,
+    "format": "png",
+    "localUrl": "http://127.0.0.2:9234/cover/28",
+    "durationMs": 407000
+  },
+  {
+    "index": 29,
+    "candidateCount": 1,
+    "id": "2630215285",
+    "title": "あなたに抱きしめて",
+    "artists": [
+      "みゆな"
+    ],
+    "cover": "http://p4.music.126.net/90blKp304h9KgEbnw-51Eg==/109951169986971771.jpg",
+    "file": "29.img",
+    "sourceUrl": "https://p4.music.126.net/90blKp304h9KgEbnw-51Eg==/109951169986971771.jpg?param=1200y1200",
+    "sha256": "36b762ac1cc30382a71e934d66160f75a427494e004128d2e701c8780e955f1a",
+    "bytes": 759653,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/29",
+    "durationMs": 267969
+  },
+  {
+    "index": 30,
+    "candidateCount": 1,
+    "id": "30512400",
+    "title": "Love Will Set You Free",
+    "artists": [
+      "Kodaline"
+    ],
+    "cover": "http://p4.music.126.net/A4EyqbA5GRXt5IOHOFyJsg==/109951167891463524.jpg",
+    "file": "30.img",
+    "sourceUrl": "https://p4.music.126.net/A4EyqbA5GRXt5IOHOFyJsg==/109951167891463524.jpg?param=1200y1200",
+    "sha256": "bc4512de660c5862b03d3e6fd729bb01483e6625a3e56399c97740f36c4150b7",
+    "bytes": 1286678,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/30",
+    "durationMs": 260156
+  },
+  {
+    "index": 31,
+    "candidateCount": 1,
+    "id": "2627969488",
+    "title": "mocha",
+    "artists": [
+      "sucola"
+    ],
+    "cover": "http://p4.music.126.net/bcREMsC6__ugcbEOaUbFvw==/109951169968414095.jpg",
+    "file": "31.img",
+    "sourceUrl": "https://p4.music.126.net/bcREMsC6__ugcbEOaUbFvw==/109951169968414095.jpg?param=1200y1200",
+    "sha256": "d39582443cafe45bcd8805e21cc62942d4d29b87271507494f9aa11bfe110296",
+    "bytes": 328247,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/31",
+    "durationMs": 206854
+  },
+  {
+    "index": 32,
+    "candidateCount": 1,
+    "id": "22736702",
+    "title": "未完成",
+    "artists": [
+      "THE MUSMUS"
+    ],
+    "cover": "http://p3.music.126.net/gbn2zo1clYhF7zb2ZV-bxQ==/866415162711526.jpg",
+    "file": "32.img",
+    "sourceUrl": "https://p3.music.126.net/gbn2zo1clYhF7zb2ZV-bxQ==/866415162711526.jpg?param=1200y1200",
+    "sha256": "a4becbe49eb9e4a80a71c057c63a7526f34dc9a369cc10fd8a8a69aaff4a4b47",
+    "bytes": 479870,
+    "width": 530,
+    "height": 530,
+    "format": "png",
+    "localUrl": "http://127.0.0.2:9234/cover/32",
+    "durationMs": 234335
+  },
+  {
+    "index": 33,
+    "candidateCount": 1,
+    "id": "1395429170",
+    "title": "心の実",
+    "artists": [
+      "indigo la End"
+    ],
+    "cover": "http://p3.music.126.net/pYlBAtmPvT6iHUlqxKRsFA==/109951164412525191.jpg",
+    "file": "33.img",
+    "sourceUrl": "https://p3.music.126.net/pYlBAtmPvT6iHUlqxKRsFA==/109951164412525191.jpg?param=1200y1200",
+    "sha256": "9a9faeac3f5edf94f2cb4571f093a4f7d17adecedce3eb59cdb2226b347a92c9",
+    "bytes": 867257,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/33",
+    "durationMs": 242163
+  },
+  {
+    "index": 34,
+    "candidateCount": 1,
+    "id": "2040882585",
+    "title": "TATTOO",
+    "artists": [
+      "Official髭男dism"
+    ],
+    "cover": "http://p4.music.126.net/KN3dlVS_PTvQ7vORBXtsZw==/109951168556990671.jpg",
+    "file": "34.img",
+    "sourceUrl": "https://p4.music.126.net/KN3dlVS_PTvQ7vORBXtsZw==/109951168556990671.jpg?param=1200y1200",
+    "sha256": "e674d13fa44d67a2fa3e18be2df2d58c6928f231dc509c0c66c0c1ccf1a4e6d5",
+    "bytes": 2032275,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/34",
+    "durationMs": 288099
+  },
+  {
+    "index": 35,
+    "candidateCount": 1,
+    "id": "1976804526",
+    "title": "The Moon × 星なんて言わず",
+    "artists": [
+      "NakamuraEmi",
+      "藤原さくら"
+    ],
+    "cover": "http://p3.music.126.net/CykqsrB_6IGRkx6xDJFZvQ==/109951167830499835.jpg",
+    "file": "35.img",
+    "sourceUrl": "https://p3.music.126.net/CykqsrB_6IGRkx6xDJFZvQ==/109951167830499835.jpg?param=1200y1200",
+    "sha256": "8d1c8adef49ebcee45e217adb4e275d3e0b19ac3895be4c05fcabbe69a4b13bd",
+    "bytes": 1091652,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/35",
+    "durationMs": 323000
+  },
+  {
+    "index": 36,
+    "candidateCount": 1,
+    "id": "2071844822",
+    "title": "ただ好きと言えたら",
+    "artists": [
+      "蔦谷好位置",
+      "あたらよ"
+    ],
+    "cover": "http://p3.music.126.net/ugsVSiUU08mb-2lHAxw1rw==/109951168829113419.jpg",
+    "file": "36.img",
+    "sourceUrl": "https://p3.music.126.net/ugsVSiUU08mb-2lHAxw1rw==/109951168829113419.jpg?param=1200y1200",
+    "sha256": "881e7ebabefb065bc06e22c40bdd714e1488671e790daef34ee2f000d72d81a8",
+    "bytes": 783289,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/36",
+    "durationMs": 205876
+  },
+  {
+    "index": 37,
+    "candidateCount": 1,
+    "id": "2153824876",
+    "title": "Reunion Days",
+    "artists": [
+      "dinner in haze"
+    ],
+    "cover": "http://p4.music.126.net/DciduryUvXZliCx2iNbXVw==/109951169572176012.jpg",
+    "file": "37.img",
+    "sourceUrl": "https://p4.music.126.net/DciduryUvXZliCx2iNbXVw==/109951169572176012.jpg?param=1200y1200",
+    "sha256": "060e23ef95f4a576c5265b514c560009a93db43aa5ca0b7d08410c5a76c17273",
+    "bytes": 1045818,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/37",
+    "durationMs": 296907
+  },
+  {
+    "index": 38,
+    "candidateCount": 1,
+    "id": "1422397028",
+    "title": "犬かキャットかで死ぬまで喧嘩しよう!",
+    "artists": [
+      "Official髭男dism"
+    ],
+    "cover": "http://p3.music.126.net/Ynv82PaA1fiiLE2H6C0pAw==/109951165826372971.jpg",
+    "file": "38.img",
+    "sourceUrl": "https://p3.music.126.net/Ynv82PaA1fiiLE2H6C0pAw==/109951165826372971.jpg?param=1200y1200",
+    "sha256": "c99f0d66cd50343fc7b2e39cc1bd990a35b3eeb007f79a52ff01c604c5ce9e82",
+    "bytes": 709064,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/38",
+    "durationMs": 221333
+  },
+  {
+    "index": 39,
+    "candidateCount": 1,
+    "id": "448742017",
+    "title": "好きでよかった。",
+    "artists": [
+      "リーガルリリー"
+    ],
+    "cover": "http://p4.music.126.net/qpe-KYP4Iv9Dcd3qdx6tYw==/109951167830354401.jpg",
+    "file": "39.img",
+    "sourceUrl": "https://p4.music.126.net/qpe-KYP4Iv9Dcd3qdx6tYw==/109951167830354401.jpg?param=1200y1200",
+    "sha256": "a2413bdc866174fd1f005ca151db26235f373e264e087334a9ceda045b7821dd",
+    "bytes": 887109,
+    "width": 800,
+    "height": 800,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/39",
+    "durationMs": 910760
+  },
+  {
+    "index": 40,
+    "candidateCount": 1,
+    "id": "2074080731",
+    "title": "メメント",
+    "artists": [
+      "UNIDOTS"
+    ],
+    "cover": "http://p4.music.126.net/D-EFy_K9GiquLFTZ6LrymA==/109951168847401677.jpg",
+    "file": "40.img",
+    "sourceUrl": "https://p4.music.126.net/D-EFy_K9GiquLFTZ6LrymA==/109951168847401677.jpg?param=1200y1200",
+    "sha256": "032dead87a5a707c3a7cfb5530ef129504859453e8c949dd22bb4caf0096257f",
+    "bytes": 799313,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/40",
+    "durationMs": 273488
+  },
+  {
+    "index": 41,
+    "candidateCount": 1,
+    "id": "2114626833",
+    "title": "Once Upon A Time (House Mix)",
+    "artists": [
+      "Max Oazo",
+      "Moonessa"
+    ],
+    "cover": "http://p3.music.126.net/tyMdxKFIdPdc59zPGTuXuA==/109951169237097692.jpg",
+    "file": "41.img",
+    "sourceUrl": "https://p3.music.126.net/tyMdxKFIdPdc59zPGTuXuA==/109951169237097692.jpg?param=1200y1200",
+    "sha256": "4d795d95f56416d22c581bc77af4ff1aa734f74b619ccd8fce1ea8dc2cd17126",
+    "bytes": 142582,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/41",
+    "durationMs": 378461
+  },
+  {
+    "index": 42,
+    "candidateCount": 1,
+    "id": "22716679",
+    "title": "3びきのくま",
+    "artists": [
+      "青葉市子"
+    ],
+    "cover": "http://p4.music.126.net/mD0RvDaHzve0mxXJ2dhiWg==/769658139465211.jpg",
+    "file": "42.img",
+    "sourceUrl": "https://p4.music.126.net/mD0RvDaHzve0mxXJ2dhiWg==/769658139465211.jpg?param=1200y1200",
+    "sha256": "2e0713062edcff186df8826e997fa9a1fac8a8d8499b37f1e53dadb64fe1fcf5",
+    "bytes": 12490,
+    "width": 488,
+    "height": 488,
+    "format": "png",
+    "localUrl": "http://127.0.0.2:9234/cover/42",
+    "durationMs": 277394
+  },
+  {
+    "index": 43,
+    "candidateCount": 1,
+    "id": "27974812",
+    "title": "はるなつあきふゆ",
+    "artists": [
+      "青葉市子"
+    ],
+    "cover": "http://p3.music.126.net/kBaUDijZJjP7-I4747KC0A==/109951167355380693.jpg",
+    "file": "43.img",
+    "sourceUrl": "https://p3.music.126.net/kBaUDijZJjP7-I4747KC0A==/109951167355380693.jpg?param=1200y1200",
+    "sha256": "b1333ffe0c548fe434d20224c4b743aa6ee2a0d67b2e2449101789a32f9ec69f",
+    "bytes": 10276,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/43",
+    "durationMs": 381356
+  },
+  {
+    "index": 44,
+    "candidateCount": 1,
+    "id": "2079911807",
+    "title": "Super Ball",
+    "artists": [
+      "TOMOO"
+    ],
+    "cover": "http://p3.music.126.net/jc2HL_jDttb2-elcATpkNg==/109951168897053117.jpg",
+    "file": "44.img",
+    "sourceUrl": "https://p3.music.126.net/jc2HL_jDttb2-elcATpkNg==/109951168897053117.jpg?param=1200y1200",
+    "sha256": "b747f06ebdf175f0219f99affaf85d1f006ede6830e9e2b55f15cc4ab5fbb9d8",
+    "bytes": 2292449,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/44",
+    "durationMs": 203700
+  },
+  {
+    "index": 45,
+    "candidateCount": 2,
+    "id": "3313987312",
+    "title": "あわいに",
+    "artists": [
+      "TOMOO"
+    ],
+    "cover": "http://p3.music.126.net/A-yy_GpCqELH2oLo3oZZ8Q==/109951172233280059.jpg",
+    "file": "45.img",
+    "sourceUrl": "https://p3.music.126.net/A-yy_GpCqELH2oLo3oZZ8Q==/109951172233280059.jpg?param=1200y1200",
+    "sha256": "08aefc9acf2d8f7bdac12fbae296cf8394cba6bbec021e06cab16a71f8aebf82",
+    "bytes": 2085635,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/45",
+    "durationMs": 202443
+  },
+  {
+    "index": 46,
+    "candidateCount": 1,
+    "id": "1840913395",
+    "title": "アンディーヴと眠って",
+    "artists": [
+      "青葉市子"
+    ],
+    "cover": "http://p3.music.126.net/oPXtJuxUbuAW4eLT_NV_Lw==/109951169021776069.jpg",
+    "file": "46.img",
+    "sourceUrl": "https://p3.music.126.net/oPXtJuxUbuAW4eLT_NV_Lw==/109951169021776069.jpg?param=1200y1200",
+    "sha256": "5106b870e87d54b46f47ccab4d9407a241f0dac47d897400d6284a9e10e8c21c",
+    "bytes": 843774,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/46",
+    "durationMs": 306243
+  },
+  {
+    "index": 47,
+    "candidateCount": 1,
+    "id": "1422213314",
+    "title": "Kanata",
+    "artists": [
+      "baobab",
+      "Haruka Nakamura"
+    ],
+    "cover": "http://p4.music.126.net/rmQupxkFjxnCAzgWQzTiSg==/109951164693584252.jpg",
+    "file": "47.img",
+    "sourceUrl": "https://p4.music.126.net/rmQupxkFjxnCAzgWQzTiSg==/109951164693584252.jpg?param=1200y1200",
+    "sha256": "1eb34e19c6fccda6af22cecb7381090311b61c9e2d5b1afe8b1d1441b2d07ed5",
+    "bytes": 1012142,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/47",
+    "durationMs": 362226
+  },
+  {
+    "index": 48,
+    "candidateCount": 1,
+    "id": "2136493163",
+    "title": "墨田区 SUMMER NIGHT",
+    "artists": [
+      "未來電波基地"
+    ],
+    "cover": "http://p4.music.126.net/T3rj8vppgJQK5Faus2EGZA==/109951169419085515.jpg",
+    "file": "48.img",
+    "sourceUrl": "https://p4.music.126.net/T3rj8vppgJQK5Faus2EGZA==/109951169419085515.jpg?param=1200y1200",
+    "sha256": "a8c4e7f74cfaefa8539eb0f17d5312f6fab87eda877bea88994a79bd96bcb139",
+    "bytes": 327882,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/48",
+    "durationMs": 143600
+  },
+  {
+    "index": 49,
+    "candidateCount": 1,
+    "id": "1966162262",
+    "title": "未定",
+    "artists": [
+      "chilldspot"
+    ],
+    "cover": "http://p4.music.126.net/-o4Q5xtRonoCEfjzARg0dQ==/109951167724787454.jpg",
+    "file": "49.img",
+    "sourceUrl": "https://p4.music.126.net/-o4Q5xtRonoCEfjzARg0dQ==/109951167724787454.jpg?param=1200y1200",
+    "sha256": "91452962bc7b8e80955d4df364fe945f22178cbe76287715b62e1d173fc4adec",
+    "bytes": 1863673,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/49",
+    "durationMs": 200248
+  },
+  {
+    "index": 50,
+    "candidateCount": 1,
+    "id": "37610837",
+    "title": "光輪",
+    "artists": [
+      "Tenniscoats"
+    ],
+    "cover": "http://p3.music.126.net/nlS1RkLDd97HAzsmorn-Pw==/3429376769424015.jpg",
+    "file": "50.img",
+    "sourceUrl": "https://p3.music.126.net/nlS1RkLDd97HAzsmorn-Pw==/3429376769424015.jpg?param=1200y1200",
+    "sha256": "b8773c3937db2c82215c93710a5a99e15596797cf4c4bbb8ef79188fdf67ea17",
+    "bytes": 45788,
+    "width": 600,
+    "height": 600,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/50",
+    "durationMs": 376419
+  },
+  {
+    "index": 51,
+    "candidateCount": 1,
+    "id": "2621747483",
+    "title": "晴れのビート",
+    "artists": [
+      "Tanaka"
+    ],
+    "cover": "http://p3.music.126.net/BZGibhqpJexMl0a-W8wpuQ==/109951169912024639.jpg",
+    "file": "51.img",
+    "sourceUrl": "https://p3.music.126.net/BZGibhqpJexMl0a-W8wpuQ==/109951169912024639.jpg?param=1200y1200",
+    "sha256": "aa26b483dc5a6dbf9f77ecad6736740a6d5b8658ecc56e116ebe019f095b817a",
+    "bytes": 2513298,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/51",
+    "durationMs": 208477
+  },
+  {
+    "index": 52,
+    "candidateCount": 1,
+    "id": "778069",
+    "title": "YES -free flower-",
+    "artists": [
+      "My Little Lover"
+    ],
+    "cover": "http://p4.music.126.net/BBlrl_5Fm5HP2G5X0WFEmg==/109951163559745914.jpg",
+    "file": "52.img",
+    "sourceUrl": "https://p4.music.126.net/BBlrl_5Fm5HP2G5X0WFEmg==/109951163559745914.jpg?param=1200y1200",
+    "sha256": "94fb4b1eaf2d81c45b17ae0f75f8346e7c928a1a9f70f17a9ece70ac4d5f245b",
+    "bytes": 560302,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/52",
+    "durationMs": 307506
+  },
+  {
+    "index": 53,
+    "candidateCount": 1,
+    "id": "2140075921",
+    "title": "Swallows",
+    "artists": [
+      "Nowlu"
+    ],
+    "cover": "http://p4.music.126.net/OcuPF-NAdHG_HGrhnXlAYQ==/109951169448423114.jpg",
+    "file": "53.img",
+    "sourceUrl": "https://p4.music.126.net/OcuPF-NAdHG_HGrhnXlAYQ==/109951169448423114.jpg?param=1200y1200",
+    "sha256": "59952f41a3b1b586d2f33ca697cdc5e30edae3c56bb7c814dcdacb24379b6188",
+    "bytes": 888089,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/53",
+    "durationMs": 173074
+  },
+  {
+    "index": 54,
+    "candidateCount": 1,
+    "id": "2611324667",
+    "title": "糸しいひと",
+    "artists": [
+      "汐れいら"
+    ],
+    "cover": "http://p4.music.126.net/XlfREY-jWGJKaorIF9Ni7w==/109951169815987015.jpg",
+    "file": "54.img",
+    "sourceUrl": "https://p4.music.126.net/XlfREY-jWGJKaorIF9Ni7w==/109951169815987015.jpg?param=1200y1200",
+    "sha256": "93e801ac7cc217fd99f5487dbb7786732833cae8a6d0bba6ae25151f23107cca",
+    "bytes": 162238,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/54",
+    "durationMs": 301371
+  },
+  {
+    "index": 55,
+    "candidateCount": 1,
+    "id": "1971794265",
+    "title": "kid feat. 優河",
+    "artists": [
+      "Ryu Matsuyama",
+      "優河"
+    ],
+    "cover": "http://p4.music.126.net/FcH4_ED3Im3un-qMJpHLAg==/109951169932465971.jpg",
+    "file": "55.img",
+    "sourceUrl": "https://p4.music.126.net/FcH4_ED3Im3un-qMJpHLAg==/109951169932465971.jpg?param=1200y1200",
+    "sha256": "7f89d6cf29c5aa4227f9f6224bd9434e046b64a00cbacc845c36d69e3494501a",
+    "bytes": 921623,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/55",
+    "durationMs": 253822
+  },
+  {
+    "index": 56,
+    "candidateCount": 1,
+    "id": "838471",
+    "title": "黄昏泣き(Don't cry my child)",
+    "artists": [
+      "東京事変"
+    ],
+    "cover": "http://p4.music.126.net/nEsfFi3gcsSo_Nb5XFv3mA==/18338754440187012.jpg",
+    "file": "56.img",
+    "sourceUrl": "https://p4.music.126.net/nEsfFi3gcsSo_Nb5XFv3mA==/18338754440187012.jpg?param=1200y1200",
+    "sha256": "5636eea0657bf6e2b5c42456dbfcc5ab6241bb31e241e8eb9789f6a5539e2a22",
+    "bytes": 120764,
+    "width": 800,
+    "height": 800,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/56",
+    "durationMs": 208329
+  },
+  {
+    "index": 57,
+    "candidateCount": 1,
+    "id": "2601992596",
+    "title": "水槽のブランコ",
+    "artists": [
+      "Kitri"
+    ],
+    "cover": "http://p4.music.126.net/08k94oaXXrUKpFNwORc5TA==/109951169721272007.jpg",
+    "file": "57.img",
+    "sourceUrl": "https://p4.music.126.net/08k94oaXXrUKpFNwORc5TA==/109951169721272007.jpg?param=1200y1200",
+    "sha256": "b9003994fc1052c7cf823b9f6c53cce5853bf94a9d0dd8359e484fbde4f95b4d",
+    "bytes": 1797173,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/57",
+    "durationMs": 267253
+  },
+  {
+    "index": 58,
+    "candidateCount": 1,
+    "id": "1866523931",
+    "title": "Ginger",
+    "artists": [
+      "TOMOO"
+    ],
+    "cover": "http://p4.music.126.net/SHDCoXC1Df_o72QU03AObg==/109951166247115930.jpg",
+    "file": "58.img",
+    "sourceUrl": "https://p4.music.126.net/SHDCoXC1Df_o72QU03AObg==/109951166247115930.jpg?param=1200y1200",
+    "sha256": "dab6945dc8f8c7a5140b7c10a4f54675141820271a70c742ef171007ec48d685",
+    "bytes": 1462055,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/58",
+    "durationMs": 202413
+  },
+  {
+    "index": 59,
+    "candidateCount": 1,
+    "id": "2606546388",
+    "title": "The Ban",
+    "artists": [
+      "前島麻由"
+    ],
+    "cover": "http://p4.music.126.net/De7PWKtMHlinF535mB4cJA==/109951171350973326.jpg",
+    "file": "59.img",
+    "sourceUrl": "https://p4.music.126.net/De7PWKtMHlinF535mB4cJA==/109951171350973326.jpg?param=1200y1200",
+    "sha256": "dc6669af1503c3aee9c2ad740fd54ac930ead550d8c497a0e5e90614da532c91",
+    "bytes": 1377167,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/59",
+    "durationMs": 234745
+  },
+  {
+    "index": 60,
+    "candidateCount": 1,
+    "id": "2622948049",
+    "title": "plum",
+    "artists": [
+      "にしな"
+    ],
+    "cover": "http://p4.music.126.net/lI547aqcDwasRDqybJIwNg==/109951169923007601.jpg",
+    "file": "60.img",
+    "sourceUrl": "https://p4.music.126.net/lI547aqcDwasRDqybJIwNg==/109951169923007601.jpg?param=1200y1200",
+    "sha256": "6a3a5187f71de9755623c90d4f4dbfe6c45d64c78d7a183e80dcf2ab279feb34",
+    "bytes": 1047647,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/60",
+    "durationMs": 203810
+  },
+  {
+    "index": 61,
+    "candidateCount": 1,
+    "id": "1314812252",
+    "title": "まばたき",
+    "artists": [
+      "Special Favorite Music"
+    ],
+    "cover": "http://p4.music.126.net/8X3q7xPHLVIHf0885L2Lnw==/109951163909501923.jpg",
+    "file": "61.img",
+    "sourceUrl": "https://p4.music.126.net/8X3q7xPHLVIHf0885L2Lnw==/109951163909501923.jpg?param=1200y1200",
+    "sha256": "f0915d6f7e4c485e5da9a1139c84f0cdb872815b6ab26af410032ca9852109ac",
+    "bytes": 552004,
+    "width": 800,
+    "height": 800,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/61",
+    "durationMs": 376256
+  },
+  {
+    "index": 62,
+    "candidateCount": 1,
+    "id": "862352951",
+    "title": "かぐや姫",
+    "artists": [
+      "水曜日のカンパネラ"
+    ],
+    "cover": "http://p4.music.126.net/tHi92s4QoFmjXt-2Z2QfZw==/109951163437201628.jpg",
+    "file": "62.img",
+    "sourceUrl": "https://p4.music.126.net/tHi92s4QoFmjXt-2Z2QfZw==/109951163437201628.jpg?param=1200y1200",
+    "sha256": "2b825df261de57091b4523e8de0256928a94142857523cde22b8f7a3698676b9",
+    "bytes": 110049,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/62",
+    "durationMs": 243973
+  },
+  {
+    "index": 63,
+    "candidateCount": 2,
+    "id": "1422386854",
+    "title": "Tell Me Baby",
+    "artists": [
+      "Official髭男dism"
+    ],
+    "cover": "http://p4.music.126.net/Ynv82PaA1fiiLE2H6C0pAw==/109951165826372971.jpg",
+    "file": "63.img",
+    "sourceUrl": "https://p4.music.126.net/Ynv82PaA1fiiLE2H6C0pAw==/109951165826372971.jpg?param=1200y1200",
+    "sha256": "c99f0d66cd50343fc7b2e39cc1bd990a35b3eeb007f79a52ff01c604c5ce9e82",
+    "bytes": 709064,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/63",
+    "durationMs": 347253
+  },
+  {
+    "index": 64,
+    "candidateCount": 1,
+    "id": "2602244048",
+    "title": "Lithonia",
+    "artists": [
+      "Childish Gambino"
+    ],
+    "cover": "http://p3.music.126.net/o3qjuW6uKk0hJSVGibNRWw==/109951169732937196.jpg",
+    "file": "64.img",
+    "sourceUrl": "https://p3.music.126.net/o3qjuW6uKk0hJSVGibNRWw==/109951169732937196.jpg?param=1200y1200",
+    "sha256": "30ff77cb825be4b5bc4e9f6861814856181a4916fdcb4879bd04eac66852b70a",
+    "bytes": 157891,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/64",
+    "durationMs": 179356
+  },
+  {
+    "index": 65,
+    "candidateCount": 1,
+    "id": "1994722341",
+    "title": "風になれ",
+    "artists": [
+      "三浦透子"
+    ],
+    "cover": "http://p4.music.126.net/DH8FPb1-xOfzhHKpw4WHvQ==/109951168023207782.jpg",
+    "file": "65.img",
+    "sourceUrl": "https://p4.music.126.net/DH8FPb1-xOfzhHKpw4WHvQ==/109951168023207782.jpg?param=1200y1200",
+    "sha256": "a043a61e073a9f75499283e43e1924a8dbe33bbaebc16ba314e727dea3a32102",
+    "bytes": 876083,
+    "width": 800,
+    "height": 800,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/65",
+    "durationMs": 198754
+  },
+  {
+    "index": 66,
+    "candidateCount": 1,
+    "id": "1867900839",
+    "title": "あの街に風吹けば",
+    "artists": [
+      "羊文学"
+    ],
+    "cover": "http://p3.music.126.net/KX9_9pLqx1W2cSGLsSuwsA==/109951166263961694.jpg",
+    "file": "66.img",
+    "sourceUrl": "https://p3.music.126.net/KX9_9pLqx1W2cSGLsSuwsA==/109951166263961694.jpg?param=1200y1200",
+    "sha256": "250f34a320421395a74813b0c97e9b3e08e711455bb0c13850d4c2fe63ff0d0a",
+    "bytes": 495924,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/66",
+    "durationMs": 196696
+  },
+  {
+    "index": 67,
+    "candidateCount": 1,
+    "id": "27974808",
+    "title": "いりぐちでぐち",
+    "artists": [
+      "青葉市子"
+    ],
+    "cover": "http://p3.music.126.net/kBaUDijZJjP7-I4747KC0A==/109951167355380693.jpg",
+    "file": "67.img",
+    "sourceUrl": "https://p3.music.126.net/kBaUDijZJjP7-I4747KC0A==/109951167355380693.jpg?param=1200y1200",
+    "sha256": "b1333ffe0c548fe434d20224c4b743aa6ee2a0d67b2e2449101789a32f9ec69f",
+    "bytes": 10276,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/67",
+    "durationMs": 714693
+  },
+  {
+    "index": 68,
+    "candidateCount": 1,
+    "id": "642798",
+    "title": "ここでキスして。",
+    "artists": [
+      "椎名林檎"
+    ],
+    "cover": "http://p4.music.126.net/Su605VEKNTtvzOmsl9yvhw==/109951170216161827.jpg",
+    "file": "68.img",
+    "sourceUrl": "https://p4.music.126.net/Su605VEKNTtvzOmsl9yvhw==/109951170216161827.jpg?param=1200y1200",
+    "sha256": "acf2e0e5f485069166cfbfe65c6d6546118cff9f78ea91039ca5804d03ece267",
+    "bytes": 2325186,
+    "width": 1200,
+    "height": 1200,
+    "format": "png",
+    "localUrl": "http://127.0.0.2:9234/cover/68",
+    "durationMs": 258995
+  },
+  {
+    "index": 69,
+    "candidateCount": 1,
+    "id": "2133391374",
+    "title": "汽笛",
+    "artists": [
+      "大越佑華"
+    ],
+    "cover": "http://p3.music.126.net/lzgQ30vsHaHtRavO5BXKeQ==/109951169394034450.jpg",
+    "file": "69.img",
+    "sourceUrl": "https://p3.music.126.net/lzgQ30vsHaHtRavO5BXKeQ==/109951169394034450.jpg?param=1200y1200",
+    "sha256": "07580da64b48c4b860024e39ce43f79b96017b3700f133eca135625648d3ed86",
+    "bytes": 618340,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/69",
+    "durationMs": 309029
+  },
+  {
+    "index": 70,
+    "candidateCount": 2,
+    "id": "642277",
+    "title": "ポルターガイスト",
+    "artists": [
+      "椎名林檎"
+    ],
+    "cover": "http://p4.music.126.net/W4JdzEv6rWH-9axhEUGW3w==/719080604577566.jpg",
+    "file": "70.img",
+    "sourceUrl": "https://p4.music.126.net/W4JdzEv6rWH-9axhEUGW3w==/719080604577566.jpg?param=1200y1200",
+    "sha256": "5b22a00aaf89c51d359a59531d9032fe2db55e419c56b381670caf187a02b302",
+    "bytes": 277936,
+    "width": 384,
+    "height": 384,
+    "format": "png",
+    "localUrl": "http://127.0.0.2:9234/cover/70",
+    "durationMs": 260000
+  },
+  {
+    "index": 71,
+    "candidateCount": 1,
+    "id": "22664973",
+    "title": "Junior Sweet",
+    "artists": [
+      "Chara"
+    ],
+    "cover": "http://p4.music.126.net/AleEX8RiEAU7ZVi-DeyR4w==/109951167974852104.jpg",
+    "file": "71.img",
+    "sourceUrl": "https://p4.music.126.net/AleEX8RiEAU7ZVi-DeyR4w==/109951167974852104.jpg?param=1200y1200",
+    "sha256": "ea4c4bcf5307dc4defae1bbb62aff75d7864c63cfb397e2b61158a5cf7bf3092",
+    "bytes": 849928,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/71",
+    "durationMs": 388028
+  },
+  {
+    "index": 72,
+    "candidateCount": 1,
+    "id": "2166133980",
+    "title": "ブラウス",
+    "artists": [
+      "ゴホウビ"
+    ],
+    "cover": "http://p4.music.126.net/St_-m337wEHeLj0MgqsvDg==/109951169682479468.jpg",
+    "file": "72.img",
+    "sourceUrl": "https://p4.music.126.net/St_-m337wEHeLj0MgqsvDg==/109951169682479468.jpg?param=1200y1200",
+    "sha256": "4745439c6eca441e0dd247801c625b6bfed685d8b8aac0c70750b7f4e66ebdc3",
+    "bytes": 1080659,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/72",
+    "durationMs": 268666
+  },
+  {
+    "index": 73,
+    "candidateCount": 1,
+    "id": "1397248051",
+    "title": "Just Friends",
+    "artists": [
+      "Hayden James",
+      "Boy Matthews"
+    ],
+    "cover": "http://p4.music.126.net/aOVZVrDAqKbmFKHxZNnYuQ==/109951172804678091.jpg",
+    "file": "73.img",
+    "sourceUrl": "https://p4.music.126.net/aOVZVrDAqKbmFKHxZNnYuQ==/109951172804678091.jpg?param=1200y1200",
+    "sha256": "7008eb03fe924449424fd3c0dd00c19ec8526dfca70183eb62755b9e73cf6fc5",
+    "bytes": 275604,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/73",
+    "durationMs": 238991
+  },
+  {
+    "index": 74,
+    "candidateCount": 1,
+    "id": "22729983",
+    "title": "人間そっくり",
+    "artists": [
+      "plenty"
+    ],
+    "cover": "http://p4.music.126.net/ASCR4hrsBWtzqbwHACoLDA==/109951168763924813.jpg",
+    "file": "74.img",
+    "sourceUrl": "https://p4.music.126.net/ASCR4hrsBWtzqbwHACoLDA==/109951168763924813.jpg?param=1200y1200",
+    "sha256": "4fcffcb4dbef3fafc712c8e4edfe60c4ac76ff38808ec8520d80af2b2f97a181",
+    "bytes": 240009,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/74",
+    "durationMs": 224626
+  },
+  {
+    "index": 75,
+    "candidateCount": 2,
+    "id": "642681",
+    "title": "ギブス",
+    "artists": [
+      "椎名林檎"
+    ],
+    "cover": "http://p3.music.126.net/-XKZjmaW5GexeFew8Zg3TA==/109951163318832250.jpg",
+    "file": "75.img",
+    "sourceUrl": "https://p3.music.126.net/-XKZjmaW5GexeFew8Zg3TA==/109951163318832250.jpg?param=1200y1200",
+    "sha256": "298cae6ffda8421815f39049787fa8591892ea3193911f45a65aabd3ef294be7",
+    "bytes": 524922,
+    "width": 800,
+    "height": 800,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/75",
+    "durationMs": 328493
+  },
+  {
+    "index": 76,
+    "candidateCount": 1,
+    "id": "407000744",
+    "title": "Go!",
+    "artists": [
+      "M83",
+      "MAI LAN"
+    ],
+    "cover": "http://p4.music.126.net/yYCvJFsysLpXBWm6ry_M5g==/109951163506825950.jpg",
+    "file": "76.img",
+    "sourceUrl": "https://p4.music.126.net/yYCvJFsysLpXBWm6ry_M5g==/109951163506825950.jpg?param=1200y1200",
+    "sha256": "5e8890ae8d6c70b75e7b67cac0a2c2916afd1e33165c63cb799e0b390494bb28",
+    "bytes": 340216,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/76",
+    "durationMs": 235733
+  },
+  {
+    "index": 77,
+    "candidateCount": 1,
+    "id": "2083291964",
+    "title": "Tek It - Sped Up",
+    "artists": [
+      "Cream",
+      "Connor"
+    ],
+    "cover": "http://p4.music.126.net/NDSrB_ZHHzHKFOgXHqS7Dg==/109951168925502313.jpg",
+    "file": "77.img",
+    "sourceUrl": "https://p4.music.126.net/NDSrB_ZHHzHKFOgXHqS7Dg==/109951168925502313.jpg?param=1200y1200",
+    "sha256": "415cb0af2cff5b5574fe2f1b4a3aa7e1d8a6b8a0752876a6a89d03ef1fea3471",
+    "bytes": 487394,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/77",
+    "durationMs": 166791
+  },
+  {
+    "index": 78,
+    "candidateCount": 1,
+    "id": "2613671898",
+    "title": "Gift",
+    "artists": [
+      "Vaundy"
+    ],
+    "cover": "http://p4.music.126.net/9VW5XqTX0_fMJwCWC0aOTw==/109951169838487913.jpg",
+    "file": "78.img",
+    "sourceUrl": "https://p4.music.126.net/9VW5XqTX0_fMJwCWC0aOTw==/109951169838487913.jpg?param=1200y1200",
+    "sha256": "aea4fa7ed02465f3d6a09abfe30d70e3e7e9e3bd2b68c241012942520ea8ecf1",
+    "bytes": 286863,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/78",
+    "durationMs": 243043
+  },
+  {
+    "index": 79,
+    "candidateCount": 1,
+    "id": "2611323861",
+    "title": "Burning (English version)",
+    "artists": [
+      "羊文学"
+    ],
+    "cover": "http://p4.music.126.net/oiwQ-m84dDXgpMP9R9aEWQ==/109951169815973462.jpg",
+    "file": "79.img",
+    "sourceUrl": "https://p4.music.126.net/oiwQ-m84dDXgpMP9R9aEWQ==/109951169815973462.jpg?param=1200y1200",
+    "sha256": "90ccf60cd78d4a5c8a97271c95042011d6f262116eafa1f27d471118727573bf",
+    "bytes": 116141,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/79",
+    "durationMs": 234544
+  },
+  {
+    "index": 80,
+    "candidateCount": 1,
+    "id": "1819250251",
+    "title": "Meaningless",
+    "artists": [
+      "Charlotte Cardin"
+    ],
+    "cover": "http://p4.music.126.net/PydspXPuRkQsLTR-uF3D7g==/109951165714360799.jpg",
+    "file": "80.img",
+    "sourceUrl": "https://p4.music.126.net/PydspXPuRkQsLTR-uF3D7g==/109951165714360799.jpg?param=1200y1200",
+    "sha256": "148d9d250bf0f9c7dc97423fe9a5086afd59c8a2cdc6ad24073a0208f7da15e5",
+    "bytes": 894702,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/80",
+    "durationMs": 217493
+  },
+  {
+    "index": 81,
+    "candidateCount": 1,
+    "id": "734499",
+    "title": "こいのうた",
+    "artists": [
+      "GO!GO!7188"
+    ],
+    "cover": "http://p3.music.126.net/Ob57_3nD7SidO1iU3wr5bw==/109951167506294164.jpg",
+    "file": "81.img",
+    "sourceUrl": "https://p3.music.126.net/Ob57_3nD7SidO1iU3wr5bw==/109951167506294164.jpg?param=1200y1200",
+    "sha256": "60c71c117ec57b77896fa9f9d36d028c644fbbe94b39cfedf16c8bdb0393b0c5",
+    "bytes": 573660,
+    "width": 800,
+    "height": 800,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/81",
+    "durationMs": 356026
+  },
+  {
+    "index": 82,
+    "candidateCount": 1,
+    "id": "2025961925",
+    "title": "或る日の隅田川",
+    "artists": [
+      "未來電波基地"
+    ],
+    "cover": "http://p4.music.126.net/eexlt-lwdkJXbIA12CmfLw==/109951168429258242.jpg",
+    "file": "82.img",
+    "sourceUrl": "https://p4.music.126.net/eexlt-lwdkJXbIA12CmfLw==/109951168429258242.jpg?param=1200y1200",
+    "sha256": "bb919cd3c1672c0c6e96f07d7ef29058af9c03a31e07d09544f84c928c2d59e4",
+    "bytes": 544930,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/82",
+    "durationMs": 244883
+  },
+  {
+    "index": 83,
+    "candidateCount": 1,
+    "id": "22776740",
+    "title": "雨のち雨のち雨",
+    "artists": [
+      "GO!GO!7188"
+    ],
+    "cover": "http://p3.music.126.net/W6VJVfK_HYR7aYpZdI-F7w==/109951170216840313.jpg",
+    "file": "83.img",
+    "sourceUrl": "https://p3.music.126.net/W6VJVfK_HYR7aYpZdI-F7w==/109951170216840313.jpg?param=1200y1200",
+    "sha256": "d937922511b42071a0e00f8698aee387ef76b044a3c46a7dbe531f194e70cd91",
+    "bytes": 2314431,
+    "width": 1200,
+    "height": 1200,
+    "format": "png",
+    "localUrl": "http://127.0.0.2:9234/cover/83",
+    "durationMs": 283000
+  },
+  {
+    "index": 84,
+    "candidateCount": 1,
+    "id": "2606987187",
+    "title": "つよがるガール",
+    "artists": [
+      "ぼっちぼろまる",
+      "もっさ"
+    ],
+    "cover": "http://p4.music.126.net/pXpb4aB5LTKVpEzfoABXzw==/109951169771195510.jpg",
+    "file": "84.img",
+    "sourceUrl": "https://p4.music.126.net/pXpb4aB5LTKVpEzfoABXzw==/109951169771195510.jpg?param=1200y1200",
+    "sha256": "c8450145dcbf7aaf4d7b7bfeeca16a3038eb8a174d9933d93a110182ddacf6a3",
+    "bytes": 263969,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/84",
+    "durationMs": 189521
+  },
+  {
+    "index": 85,
+    "candidateCount": 1,
+    "id": "642810",
+    "title": "モルヒネ",
+    "artists": [
+      "椎名林檎"
+    ],
+    "cover": "http://p4.music.126.net/Su605VEKNTtvzOmsl9yvhw==/109951170216161827.jpg",
+    "file": "85.img",
+    "sourceUrl": "https://p4.music.126.net/Su605VEKNTtvzOmsl9yvhw==/109951170216161827.jpg?param=1200y1200",
+    "sha256": "acf2e0e5f485069166cfbfe65c6d6546118cff9f78ea91039ca5804d03ece267",
+    "bytes": 2325186,
+    "width": 1200,
+    "height": 1200,
+    "format": "png",
+    "localUrl": "http://127.0.0.2:9234/cover/85",
+    "durationMs": 221820
+  },
+  {
+    "index": 86,
+    "candidateCount": 1,
+    "id": "431753107",
+    "title": "Real Emotion",
+    "artists": [
+      "Paper Route"
+    ],
+    "cover": "http://p4.music.126.net/RqoCHbupCp8U3V7JqPF1KQ==/109951165975476532.jpg",
+    "file": "86.img",
+    "sourceUrl": "https://p4.music.126.net/RqoCHbupCp8U3V7JqPF1KQ==/109951165975476532.jpg?param=1200y1200",
+    "sha256": "7d87f29dacce2ec8267926d401ceb35ea95fa7fd67c5189534c406413fee247d",
+    "bytes": 1552592,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/86",
+    "durationMs": 280798
+  },
+  {
+    "index": 87,
+    "candidateCount": 1,
+    "id": "1842182556",
+    "title": "変身",
+    "artists": [
+      "羊文学"
+    ],
+    "cover": "http://p3.music.126.net/RgQVqYRHJ9AlhoNll9PiiQ==/109951165946840606.jpg",
+    "file": "87.img",
+    "sourceUrl": "https://p3.music.126.net/RgQVqYRHJ9AlhoNll9PiiQ==/109951165946840606.jpg?param=1200y1200",
+    "sha256": "f04bcecaec6122372ca0c87f6366945eb791a57831420bd65e79722c1a921585",
+    "bytes": 205235,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/87",
+    "durationMs": 201386
+  },
+  {
+    "index": 88,
+    "candidateCount": 1,
+    "id": "642786",
+    "title": "茜さす 帰路照らされど…",
+    "artists": [
+      "椎名林檎"
+    ],
+    "cover": "http://p3.music.126.net/Su605VEKNTtvzOmsl9yvhw==/109951170216161827.jpg",
+    "file": "88.img",
+    "sourceUrl": "https://p3.music.126.net/Su605VEKNTtvzOmsl9yvhw==/109951170216161827.jpg?param=1200y1200",
+    "sha256": "acf2e0e5f485069166cfbfe65c6d6546118cff9f78ea91039ca5804d03ece267",
+    "bytes": 2325186,
+    "width": 1200,
+    "height": 1200,
+    "format": "png",
+    "localUrl": "http://127.0.0.2:9234/cover/88",
+    "durationMs": 247248
+  },
+  {
+    "index": 89,
+    "candidateCount": 1,
+    "id": "515816187",
+    "title": "Body",
+    "artists": [
+      "Loud Luxury",
+      "Brando"
+    ],
+    "cover": "http://p3.music.126.net/wkO6wvEAaMCZFsIjeEjEOA==/109951163414238989.jpg",
+    "file": "89.img",
+    "sourceUrl": "smtc://cloudmusic.exe/515816187",
+    "sha256": "3db4c0d5bfc19716c6df641e5d5e758f02e3da8c97b5e4fa8ea24e1e12b1bfbc",
+    "bytes": 936,
+    "width": 108,
+    "height": 108,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/89",
+    "hdSourceUnavailable": true,
+    "note": "Provider cover and refreshed song metadata cover both returned HTTP 404. Frozen actual current player SMTC thumbnail, not invented album artwork.",
+    "durationMs": 163216
+  },
+  {
+    "index": 90,
+    "candidateCount": 1,
+    "id": "2611404792",
+    "title": "Feelin’ Go(o)d",
+    "artists": [
+      "藤井風"
+    ],
+    "cover": "http://p4.music.126.net/3Acfrw16gTfo9eiTawPEIQ==/109951169816657494.jpg",
+    "file": "90.img",
+    "sourceUrl": "https://p4.music.126.net/3Acfrw16gTfo9eiTawPEIQ==/109951169816657494.jpg?param=1200y1200",
+    "sha256": "96c06a14a0c306f54d14d75babe40c0b6825cf539b54c75c37ead1abaaf9ca93",
+    "bytes": 621642,
+    "width": 800,
+    "height": 800,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/90",
+    "durationMs": 260471
+  },
+  {
+    "index": 91,
+    "candidateCount": 1,
+    "id": "2604400274",
+    "title": "ラッキーカラー",
+    "artists": [
+      "あいみょん"
+    ],
+    "cover": "http://p3.music.126.net/asJPR41Ss2zRKpp9KgEfLg==/109951169744866897.jpg",
+    "file": "91.img",
+    "sourceUrl": "https://p3.music.126.net/asJPR41Ss2zRKpp9KgEfLg==/109951169744866897.jpg?param=1200y1200",
+    "sha256": "6ce7f5cbdad06ff47eeb81456489f97554b3c017d7e2d0692564e92faba149b7",
+    "bytes": 1208069,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/91",
+    "durationMs": 218580
+  },
+  {
+    "index": 92,
+    "candidateCount": 1,
+    "id": "2611597012",
+    "title": "ざらめ",
+    "artists": [
+      "あいみょん"
+    ],
+    "cover": "http://p4.music.126.net/NOhV-IQjBlFajZtrYrRohQ==/109951169818913699.jpg",
+    "file": "92.img",
+    "sourceUrl": "https://p4.music.126.net/NOhV-IQjBlFajZtrYrRohQ==/109951169818913699.jpg?param=1200y1200",
+    "sha256": "6ce7f5cbdad06ff47eeb81456489f97554b3c017d7e2d0692564e92faba149b7",
+    "bytes": 1208069,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/92",
+    "durationMs": 282464
+  },
+  {
+    "index": 93,
+    "candidateCount": 1,
+    "id": "1811129640",
+    "title": "Volta",
+    "artists": [
+      "Boogie Belgique"
+    ],
+    "cover": "http://p4.music.126.net/3-azPsjYHzZUpIV5OD76lQ==/109951166592594157.jpg",
+    "file": "93.img",
+    "sourceUrl": "https://p4.music.126.net/3-azPsjYHzZUpIV5OD76lQ==/109951166592594157.jpg?param=1200y1200",
+    "sha256": "6b2af137ca957a3b00aca3117058c83993685272841323f6e588c488fc67738d",
+    "bytes": 1806145,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/93",
+    "durationMs": 279583
+  },
+  {
+    "index": 94,
+    "candidateCount": 1,
+    "id": "2092432438",
+    "title": "Meet The Frownies X Lovely Bastards",
+    "artists": [
+      "Dustum"
+    ],
+    "cover": "http://p3.music.126.net/1WkLgUHqbJsNM4na6NGR4g==/109951168995623583.jpg",
+    "file": "94.img",
+    "sourceUrl": "https://p3.music.126.net/1WkLgUHqbJsNM4na6NGR4g==/109951168995623583.jpg?param=1200y1200",
+    "sha256": "b15f80ff2c24aa33c2a435ed5c3c8e8ac28ce669c726d03eea3bab349fe740b7",
+    "bytes": 77049,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/94",
+    "durationMs": 150815
+  },
+  {
+    "index": 95,
+    "candidateCount": 1,
+    "id": "411349945",
+    "title": "Can't Help Falling in Love",
+    "artists": [
+      "Haley Reinhart"
+    ],
+    "cover": "http://p4.music.126.net/Hg9SUoSNUdhf-Khu_8Gw7Q==/109951163322263694.jpg",
+    "file": "95.img",
+    "sourceUrl": "https://p4.music.126.net/Hg9SUoSNUdhf-Khu_8Gw7Q==/109951163322263694.jpg?param=1200y1200",
+    "sha256": "7b12134043f5f5c1e38dcc7b840a602ba7a812f3ddcb229ef9bbe5a2c74868fc",
+    "bytes": 323641,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/95",
+    "durationMs": 173174
+  },
+  {
+    "index": 96,
+    "candidateCount": 1,
+    "id": "631492",
+    "title": "夕立",
+    "artists": [
+      "日食なつこ"
+    ],
+    "cover": "http://p4.music.126.net/rCtm5gjyQq9LFnycQ3gB1Q==/2323268069554838.jpg",
+    "file": "96.img",
+    "sourceUrl": "https://p4.music.126.net/rCtm5gjyQq9LFnycQ3gB1Q==/2323268069554838.jpg?param=1200y1200",
+    "sha256": "2031948995fc9201b84c3e5ebdd1510a3f378ea58d2d1b9019d2eb4c1fe18a4c",
+    "bytes": 322980,
+    "width": 363,
+    "height": 363,
+    "format": "png",
+    "localUrl": "http://127.0.0.2:9234/cover/96",
+    "durationMs": 181974
+  },
+  {
+    "index": 97,
+    "candidateCount": 1,
+    "id": "41640126",
+    "title": "Train",
+    "artists": [
+      "chestnut bakery"
+    ],
+    "cover": "http://p3.music.126.net/jAsUci6NL9Ph5roTtHJDPQ==/109951172571371129.jpg",
+    "file": "97.img",
+    "sourceUrl": "https://p3.music.126.net/jAsUci6NL9Ph5roTtHJDPQ==/109951172571371129.jpg?param=1200y1200",
+    "sha256": "a39899e047d170ed7094c398302c43f16005c7ef3a579d5e9eeca94442345d3b",
+    "bytes": 74692,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/97",
+    "durationMs": 371866
+  },
+  {
+    "index": 98,
+    "candidateCount": 1,
+    "id": "2153671776",
+    "title": "Museum of My Mess",
+    "artists": [
+      "mindfreakk!"
+    ],
+    "cover": "http://p4.music.126.net/cVf5QqfjE8qPPnMyMix5QQ==/109951169571156071.jpg",
+    "file": "98.img",
+    "sourceUrl": "https://p4.music.126.net/cVf5QqfjE8qPPnMyMix5QQ==/109951169571156071.jpg?param=1200y1200",
+    "sha256": "14a7260328a25ab178a45da09168f995cb01d4df7e8ff9c9a416522752511395",
+    "bytes": 380044,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/98",
+    "durationMs": 269048
+  },
+  {
+    "index": 99,
+    "candidateCount": 2,
+    "id": "3322002920",
+    "title": "Burning",
+    "artists": [
+      "羊文学"
+    ],
+    "cover": "http://p3.music.126.net/tFsFs7ebBJKbFfZ-DnAUZw==/109951172346014802.jpg",
+    "file": "99.img",
+    "sourceUrl": "https://p3.music.126.net/tFsFs7ebBJKbFfZ-DnAUZw==/109951172346014802.jpg?param=1200y1200",
+    "sha256": "65ad69a6c1ff9abd9c0205504fa4146a06f6efa65ea60a0f517dc894f04788b6",
+    "bytes": 152758,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/99",
+    "durationMs": 235450
+  },
+  {
+    "index": 100,
+    "candidateCount": 2,
+    "id": "2095883508",
+    "title": "mabataki",
+    "artists": [
+      "Vaundy"
+    ],
+    "cover": "http://p4.music.126.net/V1_5Eo6LYhLCSQC2Bp-B9A==/109951169024610744.jpg",
+    "file": "100.img",
+    "sourceUrl": "https://p4.music.126.net/V1_5Eo6LYhLCSQC2Bp-B9A==/109951169024610744.jpg?param=1200y1200",
+    "sha256": "5c696a0cc200b95736182508ab4c6b4f5f94a857a4e575a904f25b28959403af",
+    "bytes": 380182,
+    "width": 1200,
+    "height": 1200,
+    "format": "jpeg",
+    "localUrl": "http://127.0.0.2:9234/cover/100",
+    "durationMs": 246108
+  }
+]

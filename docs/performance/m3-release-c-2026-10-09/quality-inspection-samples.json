@@ -1,0 +1,59 @@
+[
+  {
+    "index": 81,
+    "title": "こいのうた",
+    "hdSourceUnavailable": false,
+    "comparison": "decoded actual displayed source images resized to fixed 180x180",
+    "mse": 0.3641872427983539,
+    "psnrDb": 52.51755632147383,
+    "maxChannelDifference": 7,
+    "changedChannelFraction": 0.295298353909465,
+    "renderComparison": {
+      "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+      "width": 184,
+      "height": 185,
+      "mse": 1412.3893948296122,
+      "psnrDb": 16.631259129399425,
+      "maxChannelDifference": 167,
+      "changedChannelFraction": 0.6175675675675676
+    }
+  },
+  {
+    "index": 49,
+    "title": "未定",
+    "hdSourceUnavailable": false,
+    "comparison": "decoded actual displayed source images resized to fixed 180x180",
+    "mse": 8.042469135802468,
+    "psnrDb": 39.07690957961779,
+    "maxChannelDifference": 32,
+    "changedChannelFraction": 0.6441563786008231,
+    "renderComparison": {
+      "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+      "width": 184,
+      "height": 185,
+      "mse": 1107.6734332158246,
+      "psnrDb": 17.68668621285102,
+      "maxChannelDifference": 240,
+      "changedChannelFraction": 0.68490990990991
+    }
+  },
+  {
+    "index": 70,
+    "title": "ポルターガイスト",
+    "hdSourceUnavailable": false,
+    "comparison": "decoded actual displayed source images resized to fixed 180x180",
+    "mse": 0,
+    "psnrDb": null,
+    "maxChannelDifference": 0,
+    "changedChannelFraction": 0,
+    "renderComparison": {
+      "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+      "width": 184,
+      "height": 185,
+      "mse": 859.8767724245985,
+      "psnrDb": 18.786441432180105,
+      "maxChannelDifference": 174,
+      "changedChannelFraction": 0.7998335291813553
+    }
+  }
+]

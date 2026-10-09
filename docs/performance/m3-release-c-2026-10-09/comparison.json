@@ -1,0 +1,726 @@
+{
+  "runs": [
+    {
+      "label": "before-r1",
+      "variant": "before",
+      "sampleCount": 596,
+      "rendererPids": [
+        10304,
+        11184
+      ],
+      "tracks": 100,
+      "continuousSeconds": 511.079,
+      "recoverySeconds": 302.181,
+      "treePrivateCommitPeakMiB": 640.98828125,
+      "rendererPrivateCommitPeakMiB": 370.4765625,
+      "gpuCommittedPeakMiB": 81.53515625,
+      "sceneGpuCommittedPeakMiB": 81.53515625,
+      "cpuMachineAveragePercent": 1.9126064431796312,
+      "cpuMachineP95Percent": 4.070194979208155,
+      "firstPaintMedianMs": 639.5,
+      "firstPaintP95Ms": 1052,
+      "hdPaintMedianMs": 936.5,
+      "hdPaintP95Ms": 1314,
+      "recoveryLastMinuteTreeCommitMedianMiB": 489.5390625,
+      "recoveryLastMinuteRendererCommitMedianMiB": 296.7578125,
+      "recoveryLastMinuteGpuCommittedMedianMiB": 28.921875,
+      "peakBuffers": {
+        "downloadBufferedBytesPeak": 10053192,
+        "decodedBuffersTrackedBytesPeak": 0,
+        "encodedBuffersTrackedBytesPeak": 0
+      },
+      "hdResolvedTracks": 100,
+      "partialPostCacheProbeReads": [
+        {
+          "url": "http://127.0.0.2:9234/cover/25",
+          "observedBytes": 344064,
+          "expectedBytes": 1028161,
+          "hash64": "4bf65b64f58a720c"
+        },
+        {
+          "url": "http://127.0.0.2:9234/cover/34",
+          "observedBytes": 1171456,
+          "expectedBytes": 2032275,
+          "hash64": "16283ab55f898714"
+        },
+        {
+          "url": "http://127.0.0.2:9234/cover/39",
+          "observedBytes": 0,
+          "expectedBytes": 887109,
+          "hash64": "d1fba762150c532c"
+        },
+        {
+          "url": "http://127.0.0.2:9234/cover/68",
+          "observedBytes": 835584,
+          "expectedBytes": 2325186,
+          "hash64": "7e7bb34eca9b840f"
+        }
+      ],
+      "finalDisplayDimensionsMatchFrozenCorpus": true,
+      "recoveryMinuteMedians": [
+        {
+          "minute": 1,
+          "samples": 45,
+          "treeCommitMiB": 525.37109375,
+          "rendererCommitMiB": 321.66015625,
+          "gpuCommitMiB": 41.078125,
+          "cpuMachinePercent": 0
+        },
+        {
+          "minute": 2,
+          "samples": 47,
+          "treeCommitMiB": 489.9453125,
+          "rendererCommitMiB": 296.94921875,
+          "gpuCommitMiB": 28.01953125,
+          "cpuMachinePercent": 0
+        },
+        {
+          "minute": 3,
+          "samples": 46,
+          "treeCommitMiB": 488.80859375,
+          "rendererCommitMiB": 296.73828125,
+          "gpuCommitMiB": 28.01953125,
+          "cpuMachinePercent": 0.0
+        },
+        {
+          "minute": 4,
+          "samples": 45,
+          "treeCommitMiB": 490.26171875,
+          "rendererCommitMiB": 297.68359375,
+          "gpuCommitMiB": 28.92578125,
+          "cpuMachinePercent": 0.10063377703650811
+        },
+        {
+          "minute": 5,
+          "samples": 46,
+          "treeCommitMiB": 489.546875,
+          "rendererCommitMiB": 296.767578125,
+          "gpuCommitMiB": 28.921875,
+          "cpuMachinePercent": 0.09922998318266918
+        }
+      ],
+      "primaryCanvasBackingBytesMedian": 5760000.0,
+      "perProcessPagefileHighWaterBytes": {
+        "17984": 9363456,
+        "11456": 13037568,
+        "27420": 163696640,
+        "26320": 131436544,
+        "10304": 203489280,
+        "11184": 217219072,
+        "13692": 3649536,
+        "34092": 98508800
+      }
+    },
+    {
+      "label": "before-r2",
+      "variant": "before",
+      "sampleCount": 600,
+      "rendererPids": [
+        10716,
+        24700
+      ],
+      "tracks": 100,
+      "continuousSeconds": 510.722,
+      "recoverySeconds": 302.154,
+      "treePrivateCommitPeakMiB": 662.6171875,
+      "rendererPrivateCommitPeakMiB": 375.88671875,
+      "gpuCommittedPeakMiB": 77.87109375,
+      "sceneGpuCommittedPeakMiB": 77.87109375,
+      "cpuMachineAveragePercent": 1.8886635953608162,
+      "cpuMachineP95Percent": 4.255123575532638,
+      "firstPaintMedianMs": 681.5,
+      "firstPaintP95Ms": 1061,
+      "hdPaintMedianMs": 885.5,
+      "hdPaintP95Ms": 1503,
+      "recoveryLastMinuteTreeCommitMedianMiB": 496.6875,
+      "recoveryLastMinuteRendererCommitMedianMiB": 303.11328125,
+      "recoveryLastMinuteGpuCommittedMedianMiB": 28.5234375,
+      "peakBuffers": {
+        "downloadBufferedBytesPeak": 10053192,
+        "decodedBuffersTrackedBytesPeak": 0,
+        "encodedBuffersTrackedBytesPeak": 0
+      },
+      "hdResolvedTracks": 100,
+      "partialPostCacheProbeReads": [
+        {
+          "url": "http://127.0.0.2:9234/cover/34",
+          "observedBytes": 1114112,
+          "expectedBytes": 2032275,
+          "hash64": "f367d819f3f0a01e"
+        },
+        {
+          "url": "http://127.0.0.2:9234/cover/46",
+          "observedBytes": 557056,
+          "expectedBytes": 843774,
+          "hash64": "d486621ad292fabf"
+        },
+        {
+          "url": "http://127.0.0.2:9234/cover/53",
+          "observedBytes": 221184,
+          "expectedBytes": 888089,
+          "hash64": "65f76e0c45f6a4ba"
+        },
+        {
+          "url": "http://127.0.0.2:9234/cover/80",
+          "observedBytes": 753664,
+          "expectedBytes": 894702,
+          "hash64": "3db2d53bbef0c385"
+        },
+        {
+          "url": "http://127.0.0.2:9234/cover/83",
+          "observedBytes": 532480,
+          "expectedBytes": 2314431,
+          "hash64": "4db8816413fdd191"
+        },
+        {
+          "url": "http://127.0.0.2:9234/cover/85",
+          "observedBytes": 729088,
+          "expectedBytes": 2325186,
+          "hash64": "e33879b7770dd304"
+        }
+      ],
+      "finalDisplayDimensionsMatchFrozenCorpus": true,
+      "recoveryMinuteMedians": [
+        {
+          "minute": 1,
+          "samples": 45,
+          "treeCommitMiB": 530.7421875,
+          "rendererCommitMiB": 325.234375,
+          "gpuCommitMiB": 39.3359375,
+          "cpuMachinePercent": 0.09930752560500494
+        },
+        {
+          "minute": 2,
+          "samples": 46,
+          "treeCommitMiB": 496.58984375,
+          "rendererCommitMiB": 302.81640625,
+          "gpuCommitMiB": 28.03125,
+          "cpuMachinePercent": 0.09757861682790327
+        },
+        {
+          "minute": 3,
+          "samples": 47,
+          "treeCommitMiB": 496.49609375,
+          "rendererCommitMiB": 303.36328125,
+          "gpuCommitMiB": 28.03125,
+          "cpuMachinePercent": 0.09536466103645282
+        },
+        {
+          "minute": 4,
+          "samples": 46,
+          "treeCommitMiB": 497.435546875,
+          "rendererCommitMiB": 303.55078125,
+          "gpuCommitMiB": 28.4609375,
+          "cpuMachinePercent": 0.10009485627202674
+        },
+        {
+          "minute": 5,
+          "samples": 45,
+          "treeCommitMiB": 496.6484375,
+          "rendererCommitMiB": 303.10546875,
+          "gpuCommitMiB": 28.5234375,
+          "cpuMachinePercent": 0.09601223962187577
+        }
+      ],
+      "primaryCanvasBackingBytesMedian": 5760000.0,
+      "perProcessPagefileHighWaterBytes": {
+        "24804": 166653952,
+        "11424": 130699264,
+        "32392": 8441856,
+        "33084": 3571712,
+        "10716": 220123136,
+        "19368": 12996608,
+        "25548": 102150144,
+        "24700": 204066816
+      }
+    },
+    {
+      "label": "before-r3",
+      "variant": "before",
+      "sampleCount": 596,
+      "rendererPids": [
+        2004,
+        5192
+      ],
+      "tracks": 100,
+      "continuousSeconds": 511.135,
+      "recoverySeconds": 302.182,
+      "treePrivateCommitPeakMiB": 613.98828125,
+      "rendererPrivateCommitPeakMiB": 374.18359375,
+      "gpuCommittedPeakMiB": 81.68359375,
+      "sceneGpuCommittedPeakMiB": 81.68359375,
+      "cpuMachineAveragePercent": 1.9661410179738448,
+      "cpuMachineP95Percent": 4.566580348464511,
+      "firstPaintMedianMs": 607.0,
+      "firstPaintP95Ms": 1083,
+      "hdPaintMedianMs": 865.0,
+      "hdPaintP95Ms": 1479,
+      "recoveryLastMinuteTreeCommitMedianMiB": 493.53515625,
+      "recoveryLastMinuteRendererCommitMedianMiB": 301.29296875,
+      "recoveryLastMinuteGpuCommittedMedianMiB": 28.7109375,
+      "peakBuffers": {
+        "downloadBufferedBytesPeak": 8342540,
+        "decodedBuffersTrackedBytesPeak": 0,
+        "encodedBuffersTrackedBytesPeak": 0
+      },
+      "hdResolvedTracks": 100,
+      "partialPostCacheProbeReads": [
+        {
+          "url": "http://127.0.0.2:9234/cover/5",
+          "observedBytes": 778240,
+          "expectedBytes": 1256413,
+          "hash64": "dbeb475e36d182a5"
+        },
+        {
+          "url": "http://127.0.0.2:9234/cover/57",
+          "observedBytes": 778240,
+          "expectedBytes": 1797173,
+          "hash64": "3af15425d1e1288e"
+        },
+        {
+          "url": "http://127.0.0.2:9234/cover/72",
+          "observedBytes": 966656,
+          "expectedBytes": 1080659,
+          "hash64": "363270d890f6c126"
+        },
+        {
+          "url": "http://127.0.0.2:9234/cover/93",
+          "observedBytes": 532480,
+          "expectedBytes": 1806145,
+          "hash64": "9714ee2b061e5354"
+        },
+        {
+          "url": "http://127.0.0.2:9234/cover/97",
+          "observedBytes": 16384,
+          "expectedBytes": 74692,
+          "hash64": "515834f8df00e5c1"
+        }
+      ],
+      "finalDisplayDimensionsMatchFrozenCorpus": true,
+      "recoveryMinuteMedians": [
+        {
+          "minute": 1,
+          "samples": 46,
+          "treeCommitMiB": 528.396484375,
+          "rendererCommitMiB": 324.65234375,
+          "gpuCommitMiB": 40.92578125,
+          "cpuMachinePercent": 0.09701920909553197
+        },
+        {
+          "minute": 2,
+          "samples": 46,
+          "treeCommitMiB": 492.58203125,
+          "rendererCommitMiB": 300.4296875,
+          "gpuCommitMiB": 27.87109375,
+          "cpuMachinePercent": 0.0
+        },
+        {
+          "minute": 3,
+          "samples": 46,
+          "treeCommitMiB": 492.484375,
+          "rendererCommitMiB": 300.921875,
+          "gpuCommitMiB": 27.87109375,
+          "cpuMachinePercent": 0.0
+        },
+        {
+          "minute": 4,
+          "samples": 45,
+          "treeCommitMiB": 493.29296875,
+          "rendererCommitMiB": 301.3203125,
+          "gpuCommitMiB": 28.58984375,
+          "cpuMachinePercent": 0.09895081861236012
+        },
+        {
+          "minute": 5,
+          "samples": 46,
+          "treeCommitMiB": 493.5234375,
+          "rendererCommitMiB": 301.29296875,
+          "gpuCommitMiB": 28.712890625,
+          "cpuMachinePercent": 0.09803939188957525
+        }
+      ],
+      "primaryCanvasBackingBytesMedian": 5760000.0,
+      "perProcessPagefileHighWaterBytes": {
+        "28860": 13180928,
+        "2004": 205426688,
+        "5928": 164364288,
+        "5192": 221270016,
+        "30808": 131903488,
+        "21056": 3645440,
+        "24548": 8486912,
+        "9840": 98725888
+      }
+    },
+    {
+      "label": "after-r1",
+      "variant": "after",
+      "sampleCount": 596,
+      "rendererPids": [
+        9032,
+        28908
+      ],
+      "tracks": 100,
+      "continuousSeconds": 511.356,
+      "recoverySeconds": 302.142,
+      "treePrivateCommitPeakMiB": 795.9375,
+      "rendererPrivateCommitPeakMiB": 578.296875,
+      "gpuCommittedPeakMiB": 36.78515625,
+      "sceneGpuCommittedPeakMiB": 36.78515625,
+      "cpuMachineAveragePercent": 2.7834820070223714,
+      "cpuMachineP95Percent": 7.88690145760197,
+      "firstPaintMedianMs": 618.0,
+      "firstPaintP95Ms": 1061,
+      "hdPaintMedianMs": 930.0,
+      "hdPaintP95Ms": 1486,
+      "recoveryLastMinuteTreeCommitMedianMiB": 703.978515625,
+      "recoveryLastMinuteRendererCommitMedianMiB": 513.451171875,
+      "recoveryLastMinuteGpuCommittedMedianMiB": 23.31640625,
+      "peakBuffers": {
+        "downloadBufferedBytesPeak": 196608,
+        "decodedBuffersTrackedBytesPeak": 5760000,
+        "encodedBuffersTrackedBytesPeak": 0
+      },
+      "hdResolvedTracks": 100,
+      "partialPostCacheProbeReads": [],
+      "finalDisplayDimensionsMatchFrozenCorpus": true,
+      "recoveryMinuteMedians": [
+        {
+          "minute": 1,
+          "samples": 46,
+          "treeCommitMiB": 710.412109375,
+          "rendererCommitMiB": 516.9609375,
+          "gpuCommitMiB": 25.5703125,
+          "cpuMachinePercent": 0.0988932307196476
+        },
+        {
+          "minute": 2,
+          "samples": 46,
+          "treeCommitMiB": 708.765625,
+          "rendererCommitMiB": 518.30859375,
+          "gpuCommitMiB": 22.81640625,
+          "cpuMachinePercent": 0.09859075262283093
+        },
+        {
+          "minute": 3,
+          "samples": 46,
+          "treeCommitMiB": 702.416015625,
+          "rendererCommitMiB": 511.83203125,
+          "gpuCommitMiB": 23.28515625,
+          "cpuMachinePercent": 0.047157853939720246
+        },
+        {
+          "minute": 4,
+          "samples": 46,
+          "treeCommitMiB": 703.314453125,
+          "rendererCommitMiB": 512.681640625,
+          "gpuCommitMiB": 23.28515625,
+          "cpuMachinePercent": 0.09958240505143187
+        },
+        {
+          "minute": 5,
+          "samples": 46,
+          "treeCommitMiB": 703.916015625,
+          "rendererCommitMiB": 513.400390625,
+          "gpuCommitMiB": 23.34765625,
+          "cpuMachinePercent": 0.09661641608349626
+        }
+      ],
+      "primaryCanvasBackingBytesMedian": 135424.0,
+      "perProcessPagefileHighWaterBytes": {
+        "28908": 339185664,
+        "34032": 3559424,
+        "34192": 128987136,
+        "15312": 118267904,
+        "27872": 10084352,
+        "9032": 321122304,
+        "32688": 121253888,
+        "30856": 13590528
+      }
+    },
+    {
+      "label": "after-r2",
+      "variant": "after",
+      "sampleCount": 596,
+      "rendererPids": [
+        23392,
+        28812
+      ],
+      "tracks": 100,
+      "continuousSeconds": 511.169,
+      "recoverySeconds": 302.158,
+      "treePrivateCommitPeakMiB": 802.10546875,
+      "rendererPrivateCommitPeakMiB": 579.2890625,
+      "gpuCommittedPeakMiB": 36.32421875,
+      "sceneGpuCommittedPeakMiB": 36.32421875,
+      "cpuMachineAveragePercent": 2.7450875698352872,
+      "cpuMachineP95Percent": 7.658227145507464,
+      "firstPaintMedianMs": 611.5,
+      "firstPaintP95Ms": 1079,
+      "hdPaintMedianMs": 903.0,
+      "hdPaintP95Ms": 1478,
+      "recoveryLastMinuteTreeCommitMedianMiB": 610.505859375,
+      "recoveryLastMinuteRendererCommitMedianMiB": 426.681640625,
+      "recoveryLastMinuteGpuCommittedMedianMiB": 22.5859375,
+      "peakBuffers": {
+        "downloadBufferedBytesPeak": 196608,
+        "decodedBuffersTrackedBytesPeak": 5760000,
+        "encodedBuffersTrackedBytesPeak": 0
+      },
+      "hdResolvedTracks": 100,
+      "partialPostCacheProbeReads": [],
+      "finalDisplayDimensionsMatchFrozenCorpus": true,
+      "recoveryMinuteMedians": [
+        {
+          "minute": 1,
+          "samples": 45,
+          "treeCommitMiB": 692.66015625,
+          "rendererCommitMiB": 506.0625,
+          "gpuCommitMiB": 24.7421875,
+          "cpuMachinePercent": 0.0978908674893818
+        },
+        {
+          "minute": 2,
+          "samples": 46,
+          "treeCommitMiB": 690.671875,
+          "rendererCommitMiB": 506.333984375,
+          "gpuCommitMiB": 22.4921875,
+          "cpuMachinePercent": 0.09860174303707729
+        },
+        {
+          "minute": 3,
+          "samples": 46,
+          "treeCommitMiB": 691.150390625,
+          "rendererCommitMiB": 507.21484375,
+          "gpuCommitMiB": 22.5234375,
+          "cpuMachinePercent": 0.0940296431530554
+        },
+        {
+          "minute": 4,
+          "samples": 46,
+          "treeCommitMiB": 619.2734375,
+          "rendererCommitMiB": 435.43359375,
+          "gpuCommitMiB": 22.5859375,
+          "cpuMachinePercent": 0.10144894518125724
+        },
+        {
+          "minute": 5,
+          "samples": 46,
+          "treeCommitMiB": 610.5390625,
+          "rendererCommitMiB": 426.74609375,
+          "gpuCommitMiB": 22.6171875,
+          "cpuMachinePercent": 0.1002883884311743
+        }
+      ],
+      "primaryCanvasBackingBytesMedian": 135424.0,
+      "perProcessPagefileHighWaterBytes": {
+        "30408": 9691136,
+        "20924": 132100096,
+        "21128": 13156352,
+        "30340": 3637248,
+        "32540": 121389056,
+        "23392": 338087936,
+        "28812": 320172032,
+        "33136": 115965952
+      }
+    },
+    {
+      "label": "after-r3",
+      "variant": "after",
+      "sampleCount": 585,
+      "rendererPids": [
+        20816,
+        21888
+      ],
+      "tracks": 100,
+      "continuousSeconds": 512.752,
+      "recoverySeconds": 302.126,
+      "treePrivateCommitPeakMiB": 785.2890625,
+      "rendererPrivateCommitPeakMiB": 569.8828125,
+      "gpuCommittedPeakMiB": 37.08203125,
+      "sceneGpuCommittedPeakMiB": 46.75,
+      "cpuMachineAveragePercent": 2.7453226554991352,
+      "cpuMachineP95Percent": 7.625254404317013,
+      "firstPaintMedianMs": 552.0,
+      "firstPaintP95Ms": 1062,
+      "hdPaintMedianMs": 902.5,
+      "hdPaintP95Ms": 1431,
+      "recoveryLastMinuteTreeCommitMedianMiB": 715.09375,
+      "recoveryLastMinuteRendererCommitMedianMiB": 523.88671875,
+      "recoveryLastMinuteGpuCommittedMedianMiB": 19.98828125,
+      "peakBuffers": {
+        "downloadBufferedBytesPeak": 196608,
+        "decodedBuffersTrackedBytesPeak": 5760000,
+        "encodedBuffersTrackedBytesPeak": 0
+      },
+      "hdResolvedTracks": 100,
+      "partialPostCacheProbeReads": [],
+      "finalDisplayDimensionsMatchFrozenCorpus": true,
+      "recoveryMinuteMedians": [
+        {
+          "minute": 1,
+          "samples": 41,
+          "treeCommitMiB": 713.07421875,
+          "rendererCommitMiB": 518.65625,
+          "gpuCommitMiB": 24.25,
+          "cpuMachinePercent": 0.09635443414657202
+        },
+        {
+          "minute": 2,
+          "samples": 43,
+          "treeCommitMiB": 712.609375,
+          "rendererCommitMiB": 519.48046875,
+          "gpuCommitMiB": 22.03125,
+          "cpuMachinePercent": 0.08902749182622356
+        },
+        {
+          "minute": 3,
+          "samples": 45,
+          "treeCommitMiB": 712.84765625,
+          "rendererCommitMiB": 520.01171875,
+          "gpuCommitMiB": 22.15625,
+          "cpuMachinePercent": 0.09696678223990551
+        },
+        {
+          "minute": 4,
+          "samples": 45,
+          "treeCommitMiB": 714.4765625,
+          "rendererCommitMiB": 523.06640625,
+          "gpuCommitMiB": 22.03125,
+          "cpuMachinePercent": 0.10027314854888507
+        },
+        {
+          "minute": 5,
+          "samples": 46,
+          "treeCommitMiB": 715.109375,
+          "rendererCommitMiB": 523.869140625,
+          "gpuCommitMiB": 19.98828125,
+          "cpuMachinePercent": 0.09824686298942745
+        }
+      ],
+      "primaryCanvasBackingBytesMedian": 135424.0,
+      "perProcessPagefileHighWaterBytes": {
+        "28256": 3645440,
+        "20816": 318169088,
+        "6948": 125698048,
+        "21888": 346042368,
+        "24200": 143290368,
+        "2440": 13025280,
+        "20264": 9592832,
+        "29704": 123703296
+      }
+    }
+  ],
+  "threeRoundMedians": {
+    "treePrivateCommitPeakMiB": {
+      "beforeMedian": 640.98828125,
+      "afterMedian": 795.9375,
+      "delta": 154.94921875,
+      "deltaPercent": 24.173486986038405
+    },
+    "rendererPrivateCommitPeakMiB": {
+      "beforeMedian": 374.18359375,
+      "afterMedian": 578.296875,
+      "delta": 204.11328125,
+      "deltaPercent": 54.54896597801464
+    },
+    "gpuCommittedPeakMiB": {
+      "beforeMedian": 81.53515625,
+      "afterMedian": 36.78515625,
+      "delta": -44.75,
+      "deltaPercent": -54.88430029224357
+    },
+    "sceneGpuCommittedPeakMiB": {
+      "beforeMedian": 81.53515625,
+      "afterMedian": 36.78515625,
+      "delta": -44.75,
+      "deltaPercent": -54.88430029224357
+    },
+    "cpuMachineAveragePercent": {
+      "beforeMedian": 1.9126064431796312,
+      "afterMedian": 2.7453226554991352,
+      "delta": 0.832716212319504,
+      "deltaPercent": 43.538293792169114
+    },
+    "cpuMachineP95Percent": {
+      "beforeMedian": 4.255123575532638,
+      "afterMedian": 7.658227145507464,
+      "delta": 3.403103569974826,
+      "deltaPercent": 79.97660959937787
+    },
+    "firstPaintMedianMs": {
+      "beforeMedian": 639.5,
+      "afterMedian": 611.5,
+      "delta": -28.0,
+      "deltaPercent": -4.37842064112588
+    },
+    "firstPaintP95Ms": {
+      "beforeMedian": 1061,
+      "afterMedian": 1062,
+      "delta": 1,
+      "deltaPercent": 0.09425070688029447
+    },
+    "hdPaintMedianMs": {
+      "beforeMedian": 885.5,
+      "afterMedian": 903.0,
+      "delta": 17.5,
+      "deltaPercent": 1.976284584980248
+    },
+    "hdPaintP95Ms": {
+      "beforeMedian": 1479,
+      "afterMedian": 1478,
+      "delta": -1,
+      "deltaPercent": -0.06761325219742931
+    },
+    "recoveryLastMinuteTreeCommitMedianMiB": {
+      "beforeMedian": 493.53515625,
+      "afterMedian": 703.978515625,
+      "delta": 210.443359375,
+      "deltaPercent": 42.63999366813091
+    },
+    "recoveryLastMinuteRendererCommitMedianMiB": {
+      "beforeMedian": 301.29296875,
+      "afterMedian": 513.451171875,
+      "delta": 212.158203125,
+      "deltaPercent": 70.4159157796476
+    },
+    "recoveryLastMinuteGpuCommittedMedianMiB": {
+      "beforeMedian": 28.7109375,
+      "afterMedian": 22.5859375,
+      "delta": -6.125,
+      "deltaPercent": -21.333333333333336
+    },
+    "primaryCanvasBackingBytesMedian": {
+      "beforeMedian": 5760000.0,
+      "afterMedian": 135424.0,
+      "delta": -5624576.0,
+      "deltaPercent": -97.64888888888889
+    },
+    "downloadBufferedBytesPeak": {
+      "beforeMedian": 10053192,
+      "afterMedian": 196608,
+      "delta": -9856584,
+      "deltaPercent": -98.04432263901853
+    },
+    "decodedBuffersTrackedBytesPeak": {
+      "beforeMedian": 0,
+      "afterMedian": 5760000,
+      "delta": 5760000,
+      "deltaPercent": null
+    },
+    "encodedBuffersTrackedBytesPeak": {
+      "beforeMedian": 0,
+      "afterMedian": 0,
+      "delta": 0,
+      "deltaPercent": null
+    }
+  },
+  "identicalFullLengthInputObservationsAcrossAllSixRuns": true,
+  "distinctInputs": 101,
+  "limits": [
+    "The baseline input-file probe reads the saved mutable cache file, not the HTTP response. Short reads during concurrent cache writes are recorded separately, never treated as different frozen source bodies; all 101 full-length observations must agree across all six runs. The immutable replay server supplies the same frozen bytes.",
+    "OS peaks are sampled; per-process pagefile high-water values must not be summed as a simultaneous process-tree peak.",
+    "Buffer counters track declared scopes only; decoder scratch and browser decoded-image allocations are excluded.",
+    "Paint timestamps mark native receipt of draw completion, not compositor presentation.",
+    "GPU recovery conclusions require the full curves; an endpoint alone does not prove a plateau or leak."
+  ]
+}
