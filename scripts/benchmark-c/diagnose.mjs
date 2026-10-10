@@ -6,7 +6,7 @@ import {join,resolve} from 'node:path';
 const exec=promisify(execFile),variant=process.argv[2],mode=process.argv[3];
 assert(['before','after'].includes(variant)&&['continuous','reopen'].includes(mode));
 const batch=process.env.ISLE_BENCH_DIAGNOSTIC_BATCH||'diagnostic';assert(/^[a-z0-9-]+$/.test(batch));
-const base=resolve('dist/performance/m3-release-c-2026-10-09'),output=join(base,batch,`${variant}-${mode}`);
+const base=resolve(process.env.ISLE_BENCH_ROOT||'dist/performance/m3-release-c-2026-10-09'),output=join(base,batch,`${variant}-${mode}`);
 await mkdir(output,{recursive:true});assert(!(await stat(join(output,'events.jsonl')).catch(()=>null)),'Fresh diagnostic output required');
 await copyFile(join(base,'binaries',variant,'isle.exe'),join(output,'isle.exe'));
 await copyFile(join(base,'frozen-covers.json'),join(output,'frozen-covers.json'));

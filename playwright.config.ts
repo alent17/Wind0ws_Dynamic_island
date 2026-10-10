@@ -9,7 +9,8 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:1422",
     browserName: "chromium",
-    launchOptions: { channel: "chrome" },
+    // These fixtures are local; system proxies can stall module navigation.
+    launchOptions: { channel: "chrome", args: ["--no-proxy-server"] },
     viewport: { width: 1280, height: 760 },
     reducedMotion: "reduce",
     screenshot: "only-on-failure",

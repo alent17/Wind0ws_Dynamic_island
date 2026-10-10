@@ -9,7 +9,7 @@ const label=process.argv[2],variant=process.argv[3];
 const pilot=process.env.ISLE_BENCH_PILOT==='1';
 assert((pilot?/^(before|after)-pilot\d+$/:/^(before|after)-r[123]$/).test(label)&&['before','after'].includes(variant));
 const batch=process.env.ISLE_BENCH_BATCH||'runs-final';assert(/^[a-z0-9-]+$/.test(batch));
-const base=resolve('dist/performance/m3-release-c-2026-10-09'),output=join(base,batch,label);
+const base=resolve(process.env.ISLE_BENCH_ROOT||'dist/performance/m3-release-c-2026-10-09'),output=join(base,batch,label);
 await mkdir(output,{recursive:true});
 assert(!(await stat(join(output,'events.jsonl')).catch(()=>null)),'Use a new output directory; prior samples must not be overwritten');
 const binary=join(base,'binaries',variant,'isle.exe'),exe=join(output,'isle.exe');

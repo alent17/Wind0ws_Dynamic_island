@@ -10,6 +10,9 @@ if(!rootPid)throw new Error('Set ISLE_ROOT_PID to the native diagnostic process'
 const endpoint=process.env.ISLE_CDP_ENDPOINT||'http://127.0.0.1:9228';
 const output=resolve(process.argv[2]||'dist/performance/acceptance-2026-10-08/artwork');
 const captureQuality=process.env.ARTWORK_CAPTURE_QUALITY==='1';
+const renderDpr=Number(process.env.ARTWORK_RENDER_DPR||0);
+if(renderDpr && ![1,1.5,2].includes(renderDpr))throw new Error('Unsupported rendering DPR');
+const dpiPages=new WeakSet(),dpiSessions=[],captureSessions=new WeakMap();
 const qualityCorpus=captureQuality?JSON.parse(await readFile(resolve(output,'../frozen-covers.json'),'utf8')):[];
 await mkdir(output,{recursive:true});
 const browser=await chromium.connectOverCDP(endpoint);
@@ -23,6 +26,8 @@ if(![0,25].includes(reopenInterval))throw new Error('ARTWORK_REOPEN_INTERVAL mus
 const report=resume ? JSON.parse(await readFile(resolve(output,'artwork-acceptance.json'),'utf8')) : {runtime:process.env.ISLE_RUNTIME_DESCRIPTION||'Native WebView2 diagnostics; build type unspecified',startedUtc:new Date().toISOString(),tracks:[],snapshots:[],errors:[],reopens:[],expectedChanges:100};
 report.reopens ??= [];
 report.reopenInterval=reopenInterval;
+report.renderingDpr=renderDpr||'native';
+report.dpiScope=renderDpr?'WebView2 rendering DPR emulation; Windows display scaling and hit-testing excluded':'native rendering';
 const flush=()=>writeFile(resolve(output,'artwork-acceptance.json'),JSON.stringify(report,null,2));
 const pause=ms=>new Promise(done=>setTimeout(done,ms));
 async function nativePoint(index) {
@@ -31,10 +36,34 @@ async function nativePoint(index) {
 async function floatingPage() {
  for(let attempt=0;attempt<40;attempt++) {
   const page=context.pages().find(page=>page.url().includes('window=floating'));
-  if(page) { await page.waitForLoadState('domcontentloaded'); return page; }
+  if(page) {
+   await page.waitForLoadState('domcontentloaded');
+   if(renderDpr&&!dpiPages.has(page)){
+    const session=await context.newCDPSession(page);dpiSessions.push(session);captureSessions.set(page,session);
+    await session.send('Emulation.setDeviceMetricsOverride',{width:200,height:395,deviceScaleFactor:renderDpr,mobile:false});
+    await page.reload({waitUntil:'domcontentloaded'});
+    if(await page.evaluate(()=>devicePixelRatio)!==renderDpr)throw new Error('Rendering DPR was not applied');
+    dpiPages.add(page);
+   }
+   return page;
+  }
   await pause(250);
  }
  throw new Error('Floating WebView2 target did not open');
+}
+// Playwright screenshot preparation can reset externally supplied DPR metrics.
+// Capture through the held CDP session and assert the actual DPR on both sides.
+async function diagnosticScreenshot(page,selector,path) {
+ let session=captureSessions.get(page);
+ if(!session){session=await context.newCDPSession(page);captureSessions.set(page,session);dpiSessions.push(session);}
+ const dpiBefore=await page.evaluate(()=>devicePixelRatio);
+ if(renderDpr&&dpiBefore!==renderDpr)throw new Error(`DPR changed before capture: ${dpiBefore}`);
+ const clip=selector?await page.locator(selector).evaluate(element=>{
+  const box=element.getBoundingClientRect();return {x:box.x+scrollX,y:box.y+scrollY,width:box.width,height:box.height,scale:1};
+ }):undefined;
+ const result=await session.send('Page.captureScreenshot',{format:'png',fromSurface:true,...(clip?{clip}:{}),captureBeyondViewport:false});
+ if(await page.evaluate(()=>devicePixelRatio)!==dpiBefore)throw new Error('DPR changed during capture');
+ const bytes=Buffer.from(result.data,'base64');if(path)await writeFile(path,bytes);return bytes;
 }
 async function canvasState(page,expectedTitle) {
  const state=await page.evaluate(async expected=>{
@@ -64,16 +93,19 @@ async function canvasState(page,expectedTitle) {
   try {
    const url=await page.evaluate(()=>document.querySelector('img.compact-cover-image')?.src);
    const bytes=await diagnosticImageBytes(url);
-   const actual=await page.locator('canvas.album-art-new').screenshot();
+   const actual=await diagnosticScreenshot(page,'canvas.album-art-new');
    await page.evaluate(async data=>{
     const original=document.querySelector('canvas.album-art-new'),box=original.getBoundingClientRect(),style=getComputedStyle(original);
     const image=new Image();image.src=data;await image.decode();
     const reference=document.createElement('canvas');reference.dataset.benchmarkReference='true';reference.width=original.width;reference.height=original.height;
-    reference.getContext('2d').drawImage(image,0,0,reference.width,reference.height);
+    const referenceContext=reference.getContext('2d'),originalContext=original.getContext('2d');
+    referenceContext.imageSmoothingEnabled=originalContext.imageSmoothingEnabled;
+    referenceContext.imageSmoothingQuality=originalContext.imageSmoothingQuality;
+    referenceContext.drawImage(image,0,0,reference.width,reference.height);
     Object.assign(reference.style,{position:'fixed',left:`${box.left}px`,top:`${box.top}px`,width:`${box.width}px`,height:`${box.height}px`,zIndex:'2147483647',pointerEvents:'none',borderRadius:style.borderRadius,filter:style.filter,willChange:style.willChange,backfaceVisibility:style.backfaceVisibility,imageRendering:style.imageRendering});
     document.body.append(reference);
    },`data:image/png;base64,${bytes.toString('base64')}`);
-   const expected=await page.locator('canvas[data-benchmark-reference]').screenshot();
+   const expected=await diagnosticScreenshot(page,'canvas[data-benchmark-reference]');
    const decode=async buffer=>sharp(buffer).removeAlpha().raw().toBuffer({resolveWithObject:true});
    const [a,b]=await Promise.all([decode(actual),decode(expected)]);
    let equal=a.info.width===b.info.width&&a.info.height===b.info.height;
@@ -133,8 +165,8 @@ async function qualitySource(page,index) {
  // Separate diagnostic pass: capture actual CSS-sized raster presentation too.
  // Source bytes alone cannot reveal a regression from a smaller Canvas backing.
  await pause(300);
- await page.locator('canvas.album-art-new').screenshot({path:resolve(output,`quality-render-${index}.png`)});
- const presentation=await page.locator('canvas.album-art-new').evaluate(canvas=>({cssWidth:canvas.getBoundingClientRect().width,cssHeight:canvas.getBoundingClientRect().height,dpi:devicePixelRatio,opacity:getComputedStyle(canvas).opacity}));
+ await diagnosticScreenshot(page,'canvas.album-art-new',resolve(output,`quality-render-${index}.png`));
+ const presentation=await page.locator('canvas.album-art-new').evaluate(canvas=>({cssWidth:canvas.getBoundingClientRect().width,cssHeight:canvas.getBoundingClientRect().height,dpi:devicePixelRatio,opacity:getComputedStyle(canvas).opacity,smoothingQuality:canvas.getContext('2d').imageSmoothingQuality}));
  (report.qualitySources ??= []).push({index,width:value.width,height:value.height,bytes:bytes.length,presentation});
 }
 async function heapSnapshot(page,index,postGc=false) {
@@ -172,7 +204,7 @@ try {
  await settledArtwork(floating,media.title);
  await heapSnapshot(floating,0);
  await nativePoint(0);
- await floating.screenshot({path:resolve(output,'floating-0.png')});
+ await diagnosticScreenshot(floating,null,resolve(output,'floating-0.png'));
  }
  for(let index=resume+1;index<=100;index++) {
   const previous=`${media.source}|${media.title}|${media.artist}`;
@@ -190,7 +222,7 @@ try {
   if(index%25===0) {
    await heapSnapshot(floating,index);
    await nativePoint(index);
-   await floating.screenshot({path:resolve(output,`floating-${index}.png`)});
+   await diagnosticScreenshot(floating,null,resolve(output,`floating-${index}.png`));
    if(reopenInterval) {
    await invoke('close_floating_window');
    await pause(1000);

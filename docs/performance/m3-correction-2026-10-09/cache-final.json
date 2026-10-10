@@ -1,0 +1,92 @@
+[
+  {
+    "label": "before-r1",
+    "scope": "Final on-disk media files after app exit, not an in-flight or browser-memory peak",
+    "formats": {
+      "JPEG": {
+        "files": 91,
+        "bytes": 63541342
+      },
+      "PNG": {
+        "files": 10,
+        "bytes": 11173111
+      }
+    },
+    "totalBytes": 74714453
+  },
+  {
+    "label": "before-r2",
+    "scope": "Final on-disk media files after app exit, not an in-flight or browser-memory peak",
+    "formats": {
+      "JPEG": {
+        "files": 91,
+        "bytes": 63541342
+      },
+      "PNG": {
+        "files": 10,
+        "bytes": 11173111
+      }
+    },
+    "totalBytes": 74714453
+  },
+  {
+    "label": "before-r3",
+    "scope": "Final on-disk media files after app exit, not an in-flight or browser-memory peak",
+    "formats": {
+      "JPEG": {
+        "files": 91,
+        "bytes": 63541342
+      },
+      "PNG": {
+        "files": 10,
+        "bytes": 11173111
+      }
+    },
+    "totalBytes": 74714453
+  },
+  {
+    "label": "after-r1",
+    "scope": "Final on-disk media files after app exit, not an in-flight or browser-memory peak",
+    "formats": {
+      "JPEG": {
+        "files": 91,
+        "bytes": 63541342
+      },
+      "PNG": {
+        "files": 10,
+        "bytes": 11173111
+      }
+    },
+    "totalBytes": 74714453
+  },
+  {
+    "label": "after-r2",
+    "scope": "Final on-disk media files after app exit, not an in-flight or browser-memory peak",
+    "formats": {
+      "JPEG": {
+        "files": 91,
+        "bytes": 63541342
+      },
+      "PNG": {
+        "files": 10,
+        "bytes": 11173111
+      }
+    },
+    "totalBytes": 74714453
+  },
+  {
+    "label": "after-r3",
+    "scope": "Final on-disk media files after app exit, not an in-flight or browser-memory peak",
+    "formats": {
+      "JPEG": {
+        "files": 91,
+        "bytes": 63541342
+      },
+      "PNG": {
+        "files": 10,
+        "bytes": 11173111
+      }
+    },
+    "totalBytes": 74714453
+  }
+]

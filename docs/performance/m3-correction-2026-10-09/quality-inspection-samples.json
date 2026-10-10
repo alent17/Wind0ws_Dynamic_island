@@ -1,0 +1,59 @@
+[
+  {
+    "index": 45,
+    "title": "あわいに",
+    "hdSourceUnavailable": false,
+    "comparison": "decoded actual displayed source images resized to fixed 180x180",
+    "mse": 0,
+    "psnrDb": null,
+    "maxChannelDifference": 0,
+    "changedChannelFraction": 0,
+    "renderComparison": {
+      "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+      "width": 184,
+      "height": 185,
+      "mse": 9.792401096748922e-06,
+      "psnrDb": 98.22191167000122,
+      "maxChannelDifference": 1,
+      "changedChannelFraction": 9.792401096748922e-06
+    }
+  },
+  {
+    "index": 1,
+    "title": "right or left",
+    "hdSourceUnavailable": false,
+    "comparison": "decoded actual displayed source images resized to fixed 180x180",
+    "mse": 0,
+    "psnrDb": null,
+    "maxChannelDifference": 0,
+    "changedChannelFraction": 0,
+    "renderComparison": {
+      "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+      "width": 184,
+      "height": 185,
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0
+    }
+  },
+  {
+    "index": 2,
+    "title": "美電球",
+    "hdSourceUnavailable": false,
+    "comparison": "decoded actual displayed source images resized to fixed 180x180",
+    "mse": 0,
+    "psnrDb": null,
+    "maxChannelDifference": 0,
+    "changedChannelFraction": 0,
+    "renderComparison": {
+      "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+      "width": 184,
+      "height": 185,
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0
+    }
+  }
+]

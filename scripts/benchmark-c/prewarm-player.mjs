@@ -1,6 +1,6 @@
 import {readFile,writeFile} from 'node:fs/promises';
 import {Player} from './player.mjs';
-const folder='dist/performance/m3-release-c-2026-10-09';
+const folder=process.env.ISLE_BENCH_ROOT||'dist/performance/m3-release-c-2026-10-09';
 const corpus=JSON.parse(await readFile(`${folder}/corpus.json`,'utf8'));
 const player=await Player.connect(),rows=[];
 const pause=ms=>new Promise(done=>setTimeout(done,ms));

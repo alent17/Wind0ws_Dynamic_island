@@ -1,0 +1,15 @@
+{
+  "invalidDprBatches": [
+    "quality-dpr15",
+    "quality-dpr2"
+  ],
+  "invalidDprReason": "Playwright screenshot preparation reset emulated DPR; actual captured DPR was 1",
+  "failedReferenceDpr2": {
+    "batch": "quality-fixed-dpr2",
+    "completeTracks": 30,
+    "failure": "Error: Artwork did not settle for latest track: {\"title\":\"mocha\",\"titleMatches\":true,\"canvasCount\":1,\"connected\":true,\"width\":108,\"height\":108,\"imageReady\":false,\"urlMatchesPixels\":null}",
+    "cachedFileBytes": 328247,
+    "independentCachedDecode": "sharp full raw decode succeeded",
+    "rootCause": "Unconfirmed; full fresh paired rerun retained original assertions"
+  }
+}

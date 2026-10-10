@@ -1,7 +1,7 @@
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
-const root='dist/performance/m3-release-c-2026-10-09';await mkdir(`${root}/covers`,{recursive:true});
+const root=process.env.ISLE_BENCH_ROOT||'dist/performance/m3-release-c-2026-10-09';await mkdir(`${root}/covers`,{recursive:true});
 const corpus=JSON.parse(await readFile(`${root}/corpus.json`,'utf8')),queue=JSON.parse(await readFile(`${root}/queue.json`,'utf8'));
 const rows=[{index:0,...queue.find(song=>song.id==='1309915258')},...corpus];
 const original=JSON.parse(await readFile(`${root}/queue-backup.json`,'utf8'));

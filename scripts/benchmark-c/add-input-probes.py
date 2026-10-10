@@ -8,7 +8,7 @@ for variant in ('before','after'):
         p=base/'src-tauri/src/services/cache.rs';s=p.read_text(encoding='utf-8')
         anchor='    save_cache_file(url, &bytes, content_type)'
         assert anchor in s
-        s=s.replace(anchor,'    let saved=save_cache_file(url, &bytes, content_type)?;\n    crate::benchmark_c::input_file(url, std::path::Path::new(&saved));\n    Ok(saved)',1)
+        s=s.replace(anchor,'    crate::benchmark_c::input_bytes(url, &bytes);\n'+anchor,1)
     else:
         p=base/'src-tauri/src/services/http_budget.rs';s=p.read_text(encoding='utf-8')
         anchor='    save_response(response, directory, limit, permit).await'

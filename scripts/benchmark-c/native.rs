@@ -11,6 +11,8 @@ static DECODED: AtomicU64 = AtomicU64::new(0);
 static DECODED_PEAK: AtomicU64 = AtomicU64::new(0);
 static ENCODED: AtomicU64 = AtomicU64::new(0);
 static ENCODED_PEAK: AtomicU64 = AtomicU64::new(0);
+static DECODE_CALLS: AtomicU64 = AtomicU64::new(0);
+static ENCODE_CALLS: AtomicU64 = AtomicU64::new(0);
 static COVERS: OnceLock<Vec<Value>> = OnceLock::new();
 pub fn cover_url(title: &str) -> Option<String> {
     fn key(value:&str)->String{value.chars().filter(|c|c.is_alphanumeric()).flat_map(|c|c.to_lowercase()).collect()}
@@ -36,6 +38,17 @@ fn counters(kind: &str) -> (&'static AtomicU64,&'static AtomicU64) {
 }
 impl Drop for Buffer { fn drop(&mut self){counters(self.kind).0.fetch_sub(self.bytes,Ordering::Relaxed);} }
 pub fn decoded(image: &image::DynamicImage) -> Buffer {Buffer::new("decoded",image.as_bytes().len())}
+pub fn codec(kind: &str, milliseconds: u128, input: usize, output: usize) {
+    if kind=="decode" { DECODE_CALLS.fetch_add(1,Ordering::Relaxed); }
+    else { ENCODE_CALLS.fetch_add(1,Ordering::Relaxed); }
+    record(json!({"kind":"codec","operation":kind,"milliseconds":milliseconds,"inputBytes":input,"outputBytes":output}));
+}
+pub fn input_bytes(url: &str, bytes: &[u8]) {
+    use std::hash::Hasher;
+    let mut hash=std::collections::hash_map::DefaultHasher::new();
+    for chunk in bytes.chunks(8192){hash.write(chunk);}
+    record(json!({"kind":"download-input","url":url,"bytes":bytes.len(),"hash64":format!("{:016x}",hash.finish())}));
+}
 pub fn input_file(url: &str, path: &std::path::Path) {
     use std::{io::Read, hash::Hasher};
     let Ok(mut file)=std::fs::File::open(path) else{return};
@@ -46,7 +59,7 @@ pub fn input_file(url: &str, path: &std::path::Path) {
 pub fn record(value: Value) {
     let Some(directory)=DIRECTORY.get() else{return}; let Ok(_lock)=LOG.lock() else{return};
     if let Ok(mut file)=OpenOptions::new().create(true).append(true).open(directory.join("events.jsonl")) {
-        let row=json!({"at":SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis(),"event":value,"downloadBufferedBytesPeak":DOWNLOAD_PEAK.load(Ordering::Relaxed),"decodedBuffersTrackedBytesPeak":DECODED_PEAK.load(Ordering::Relaxed),"encodedBuffersTrackedBytesPeak":ENCODED_PEAK.load(Ordering::Relaxed)});
+        let row=json!({"at":SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis(),"event":value,"downloadBufferedBytesPeak":DOWNLOAD_PEAK.load(Ordering::Relaxed),"decodedBuffersTrackedBytesPeak":DECODED_PEAK.load(Ordering::Relaxed),"encodedBuffersTrackedBytesPeak":ENCODED_PEAK.load(Ordering::Relaxed),"decodeCalls":DECODE_CALLS.load(Ordering::Relaxed),"encodeCalls":ENCODE_CALLS.load(Ordering::Relaxed)});
         let _=writeln!(file,"{}",row);
     }
 }

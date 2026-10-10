@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { artworkValue, snapshotDecision, withoutArtwork, type ArtworkSnapshotToken } from "$lib/mediaArtwork";
   import { createCanvasArtworkRenderer, type CanvasArtworkRequest } from "$lib/canvasArtwork";
-  import { ArtworkResultCache, artworkCacheKey, artworkCanvasSize } from "$lib/artworkBudget";
+  import { ArtworkResultCache, artworkCacheKey, artworkCanvasSize, boundedArtworkCanvasSize } from "$lib/artworkBudget";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { convertFileSrc, invoke } from "@tauri-apps/api/core";
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
@@ -1032,9 +1032,12 @@
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // 设置 Canvas 尺寸与图片一致
-    const raster = artworkCanvasSize(img.width, img.height,
-      Math.max(canvas.clientWidth, canvas.clientHeight, 1), window.devicePixelRatio || 1);
+    // Normal artwork retains its bounded source raster, avoiding a second
+    // resample before compositor scaling. Pixel art uses
+    // the visible raster and its existing nearest-neighbor path.
+    const raster = pixelated
+      ? artworkCanvasSize(img.width, img.height, Math.max(canvas.clientWidth, canvas.clientHeight, 1), window.devicePixelRatio || 1)
+      : boundedArtworkCanvasSize(img.width, img.height);
     canvas.width = raster.width;
     canvas.height = raster.height;
 
@@ -1119,6 +1122,8 @@
     } else {
       // 正常渲染高清图
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     }
   }

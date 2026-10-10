@@ -49,6 +49,12 @@ for variant in ('before','after'):
     if variant=='after':
         p=base/'src-tauri/src/services/image_budget.rs';s=p.read_text(encoding='utf-8')
         s=s.replace('pub fn fit(img: DynamicImage) -> DynamicImage {','pub fn fit(img: DynamicImage) -> DynamicImage {\n    let _source_buffer = crate::benchmark_c::decoded(&img);',1)
+        if 'pub fn prepare_artwork' in s:
+            s=s.replace('        if let Some(content_type) = mime {','        if let Some(content_type) = mime {\n            let _preserved_buffer = crate::benchmark_c::decoded(&image);',1)
+        s=s.replace('    reader(bytes)?\n        .decode()', '    let started=std::time::Instant::now();\n    let image=reader(bytes)?\n        .decode()',1)
+        s=s.replace('.map_err(|e| AppError::parse(format!("图片解码失败：{e}")))\n}', '.map_err(|e| AppError::parse(format!("图片解码失败：{e}")))?;\n    crate::benchmark_c::codec("decode",started.elapsed().as_millis(),bytes.len(),image.as_bytes().len());\n    Ok(image)\n}',1)
+        s=s.replace('pub fn encode_png(img: &DynamicImage) -> AppResult<Vec<u8>> {','pub fn encode_png(img: &DynamicImage) -> AppResult<Vec<u8>> {\n    let started=std::time::Instant::now();',1)
+        s=s.replace('    Ok(output.0.into_inner())','    crate::benchmark_c::codec("encode",started.elapsed().as_millis(),img.as_bytes().len(),output.0.get_ref().len());\n    Ok(output.0.into_inner())',1)
         p.write_text(s,encoding='utf-8')
     hashes={str(p.relative_to(base)).replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for folder in ('src','src-tauri/src') for p in (base/folder).rglob('*') if p.is_file()}
     (root/f'{variant}-source-hashes.json').write_text(json.dumps(hashes,indent=2),encoding='utf-8')

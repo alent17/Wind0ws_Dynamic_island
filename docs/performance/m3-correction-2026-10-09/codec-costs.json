@@ -1,0 +1,32 @@
+{
+  "rounds": [
+    {
+      "borrowedInputs": 101,
+      "inputs": 101,
+      "newOutputBytes": 74714453,
+      "normalizeMs": 7747.5141,
+      "oldOutputBytes": 170855819,
+      "prepareMs": 1782.9595,
+      "round": 1
+    },
+    {
+      "borrowedInputs": 101,
+      "inputs": 101,
+      "newOutputBytes": 74714453,
+      "normalizeMs": 7399.9785999999995,
+      "oldOutputBytes": 170855819,
+      "prepareMs": 1519.8372,
+      "round": 2
+    },
+    {
+      "borrowedInputs": 101,
+      "inputs": 101,
+      "newOutputBytes": 74714453,
+      "normalizeMs": 7393.2443,
+      "oldOutputBytes": 170855819,
+      "prepareMs": 1624.8896,
+      "round": 3
+    }
+  ],
+  "scope": "Native image library from Release dependencies; three serial passes of identical frozen inputs. Full bounded validation remains; not Renderer retention or app CPU attribution."
+}

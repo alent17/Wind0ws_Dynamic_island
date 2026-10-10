@@ -1,0 +1,42 @@
+{
+  "collectedUtc": "2026-10-10T12:56:54.6379038Z",
+  "processors": [
+    {
+      "Name": "AMD Ryzen 5 5600 6-Core Processor              ",
+      "NumberOfCores": 6,
+      "NumberOfLogicalProcessors": 12
+    }
+  ],
+  "physicalMemoryBytes": 34243780608,
+  "gpu": [
+    {
+      "Name": "MuMu Virtual Display Adapter",
+      "DriverVersion": "20.36.41.498"
+    },
+    {
+      "Name": "NVIDIA GeForce RTX 5060 Ti",
+      "DriverVersion": "32.0.16.1742"
+    }
+  ],
+  "node": "v24.14.0",
+  "python": "Python 3.12.10",
+  "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",
+  "cargo": "cargo 1.94.1 (29ea6fb6a 2026-03-24)",
+  "os": "Microsoft Windows 11 家庭版 Insider Preview",
+  "osBuild": "26340",
+  "logicalCores": 12,
+  "processVersions": [
+    [
+      "isle.exe",
+      "1.0.11"
+    ],
+    [
+      "msedgewebview2.exe",
+      "154.0.4258.62"
+    ]
+  ],
+  "gpuCounterStatus": "available: per-PID engines; engine percentages must not be summed as total GPU utilization",
+  "rawBatch": "runs-2026-10-10",
+  "startedUtc": "2026-10-10T11:27:21.315Z",
+  "endedUtc": "2026-10-10T12:56:09.861Z"
+}

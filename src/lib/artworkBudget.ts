@@ -7,6 +7,12 @@ export function artworkCanvasSize(width: number, height: number, logicalEdge: nu
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
 }
 
+/** Keep the already bounded source raster; let the compositor scale it once. */
+export function boundedArtworkCanvasSize(width: number, height: number) {
+  const scale = Math.min(1, MAX_ARTWORK_EDGE / Math.max(1, width, height));
+  return {width:Math.max(1,Math.round(width*scale)),height:Math.max(1,Math.round(height*scale))};
+}
+
 /** Conservative UTF-16 accounting, including keys; oversized values bypass retention. */
 export class ArtworkResultCache {
   private entries = new Map<string, string>();

@@ -142,10 +142,11 @@ async fn download_cover_as_data_url(client: &reqwest::Client, url: &str) -> AppR
     )
     .await?;
     let bytes = super::image_budget::read_limited(std::fs::File::open(&downloaded.path)?)?;
-    let normalized = super::image_budget::normalize(&bytes)?;
+    let prepared = super::image_budget::prepare_artwork(&bytes)?;
     Ok(format!(
-        "data:image/png;base64,{}",
-        general_purpose::STANDARD.encode(normalized)
+        "data:{};base64,{}",
+        prepared.content_type,
+        general_purpose::STANDARD.encode(&prepared.bytes)
     ))
 }
 
@@ -757,10 +758,11 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
                         {
                             let mut buffer = vec![0u8; size as usize];
                             if reader.ReadBytes(&mut buffer).is_ok() {
-                                if let Ok(png) = super::image_budget::normalize(&buffer) {
+                                if let Ok(prepared) = super::image_budget::prepare_artwork(&buffer) {
                                     thumbnail_base64 = format!(
-                                        "data:image/png;base64,{}",
-                                        general_purpose::STANDARD.encode(png)
+                                        "data:{};base64,{}",
+                                        prepared.content_type,
+                                        general_purpose::STANDARD.encode(&prepared.bytes)
                                     );
                                 }
                             }

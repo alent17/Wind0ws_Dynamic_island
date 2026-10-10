@@ -1,0 +1,118 @@
+{
+  "scope": "Shared tested settings; location fields redacted, not a hash-equivalent copy",
+  "settings": {
+    "islandStyle": "floating",
+    "islandEdge": "top",
+    "islandEdgePosition": 50,
+    "collapsedEdgeShoulderRadius": 4,
+    "expandedEdgeShoulderRadius": 31,
+    "compactLength": 115,
+    "language": "system",
+    "fontId": "misans",
+    "captureHideOnScreenshot": false,
+    "captureHideOnRecording": false,
+    "captureHideOnFullscreen": false,
+    "captureHideOnScreenShare": false,
+    "showSpectrum": true,
+    "spectrumMode": "realtime",
+    "enableAnimations": true,
+    "windowOpacity": 255,
+    "alwaysOnTop": true,
+    "floatingWindowAlwaysOnTop": false,
+    "reduceAnimations": false,
+    "showDebugInfo": false,
+    "logLevel": "Info",
+    "monitorIndex": 1,
+    "playerWeights": {
+      "generic": 10,
+      "bilibili": 50,
+      "netease": 50,
+      "spotify": 50,
+      "apple": 50,
+      "qqmusic": 50
+    },
+    "playerOrderIds": [
+      "cloudmusic.exe",
+      "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App"
+    ],
+    "selectedPlayerIds": [
+      "cloudmusic.exe",
+      "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App"
+    ],
+    "idleContentEnabled": true,
+    "idleRotationSeconds": 5,
+    "idleItems": [
+      {
+        "id": "clock",
+        "kind": "clock",
+        "enabled": true,
+        "text": ""
+      },
+      {
+        "id": "date",
+        "kind": "date",
+        "enabled": true,
+        "text": ""
+      },
+      {
+        "id": "weather",
+        "kind": "weather",
+        "enabled": true,
+        "text": ""
+      },
+      {
+        "id": "network",
+        "kind": "network",
+        "enabled": true,
+        "text": ""
+      },
+      {
+        "id": "cpu",
+        "kind": "cpu",
+        "enabled": true,
+        "text": ""
+      },
+      {
+        "id": "memory",
+        "kind": "memory",
+        "enabled": true,
+        "text": ""
+      },
+      {
+        "id": "battery",
+        "kind": "battery",
+        "enabled": true,
+        "text": ""
+      }
+    ],
+    "weatherLocation": null,
+    "floatingWindowX": -1913,
+    "floatingWindowY": 34,
+    "floatingWindowWidth": 200,
+    "floatingWindowHeight": 395,
+    "floatingFillColor": "#ffffff",
+    "floatingUseAlbumColor": false,
+    "showSettingsTool": true,
+    "showFloatingTool": true,
+    "showVolumeTool": true,
+    "showTimerTool": true,
+    "showHideTool": true,
+    "showClockTool": true,
+    "showWeatherTool": true,
+    "showCustomFunctionPanel": false,
+    "enableMvPlayback": false,
+    "lockFloatingWindow": true,
+    "enableHdCover": true,
+    "floatingCircularAlbum": false,
+    "enablePixelArt": false,
+    "enableHalftone": false,
+    "cacheDirectory": null,
+    "autoStart": false,
+    "hideSettingsButton": false,
+    "hideMonitorSelector": false,
+    "hideFloatingWindow": false,
+    "expandedCornerRadius": 63,
+    "alwaysShowTopBar": true,
+    "clockTimeZone": "system"
+  }
+}

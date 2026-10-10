@@ -1,6 +1,6 @@
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
-const folder='dist/performance/m3-release-c-2026-10-09';
+const folder=process.env.ISLE_BENCH_ROOT||'dist/performance/m3-release-c-2026-10-09';
 const rows=JSON.parse(await readFile(`${folder}/frozen-covers.json`,'utf8'));
 const images=new Map(await Promise.all(rows.map(async row=>[String(row.index),await readFile(`${folder}/covers/${row.file}`)])));
 const pause=ms=>new Promise(done=>setTimeout(done,ms));

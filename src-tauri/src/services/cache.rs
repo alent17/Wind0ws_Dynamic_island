@@ -381,10 +381,12 @@ pub async fn download_and_cache(url: &str, content_type: &str) -> AppResult<Stri
     let mut stored_type = content_type;
     if is_image(content_type) {
         let bytes = super::image_budget::read_limited(fs::File::open(&downloaded.path)?)?;
-        let normalized = super::image_budget::normalize(&bytes)?;
-        fs::write(&downloaded.path, &normalized)?;
-        downloaded.size = normalized.len() as u64;
-        stored_type = "image/png";
+        let prepared = super::image_budget::prepare_artwork(&bytes)?;
+        if matches!(prepared.bytes, std::borrow::Cow::Owned(_)) {
+            fs::write(&downloaded.path, &prepared.bytes)?;
+        }
+        downloaded.size = prepared.bytes.len() as u64;
+        stored_type = prepared.content_type;
     }
     save_cache_file(url, &downloaded.path, downloaded.size, stored_type, false)
 }

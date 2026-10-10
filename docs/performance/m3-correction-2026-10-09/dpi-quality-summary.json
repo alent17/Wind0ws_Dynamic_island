@@ -1,0 +1,101 @@
+[
+  {
+    "dpr": 1,
+    "batch": "quality-dpr1",
+    "samples": 100,
+    "sourceExactMatches": 100,
+    "renderExactMatches": 99,
+    "renderWorstMse": 9.792401096748922e-06,
+    "screenshotDimensions": {
+      "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+      "width": 184,
+      "height": 185,
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0
+    },
+    "detachedCanvasCounts": [
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ]
+  },
+  {
+    "dpr": 1.5,
+    "batch": "quality-fixed-dpr15",
+    "samples": 100,
+    "sourceExactMatches": 100,
+    "renderExactMatches": 100,
+    "renderWorstMse": 0,
+    "screenshotDimensions": {
+      "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+      "width": 276,
+      "height": 276,
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0
+    },
+    "detachedCanvasCounts": [
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ]
+  },
+  {
+    "dpr": 2,
+    "batch": "quality-fixed2-dpr2",
+    "samples": 100,
+    "sourceExactMatches": 100,
+    "renderExactMatches": 99,
+    "renderWorstMse": 4.922810333963453e-06,
+    "screenshotDimensions": {
+      "scope": "Actual CSS-sized Canvas element screenshots in a separate diagnostic pass",
+      "width": 368,
+      "height": 368,
+      "mse": 0,
+      "psnrDb": null,
+      "maxChannelDifference": 0,
+      "changedChannelFraction": 0
+    },
+    "detachedCanvasCounts": [
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    ]
+  }
+]

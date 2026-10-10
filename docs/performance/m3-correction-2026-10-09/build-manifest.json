@@ -1,0 +1,35 @@
+{
+  "baseCommit": "821df847252e24d8136e99fbdcab80de9785c868",
+  "sharedM2Commit": "0055ebe",
+  "beforeBudgetSource": "2340164",
+  "candidate": "B: validated original encodings and bounded source Canvas raster; no second normal resample",
+  "differences": [
+    "src-tauri/src/services/cache.rs",
+    "src-tauri/src/services/color.rs",
+    "src-tauri/src/services/http_budget.rs",
+    "src-tauri/src/services/image.rs",
+    "src-tauri/src/services/image_budget.rs",
+    "src-tauri/src/services/media.rs",
+    "src-tauri/src/services/mod.rs",
+    "src-tauri/src/utils.rs",
+    "src/FloatingWindow.svelte",
+    "src/lib/artworkBudget.test.ts",
+    "src/lib/artworkBudget.ts"
+  ],
+  "binarySha256": {
+    "before": "33ac6d0ff7a288eb04e39d212f6fdf37f1e4ec4e563718088bc1473c9fb25f65",
+    "after": "84831c98bad72f645935f6956f0159827bfb0a0c7ad85c021ac0381e8d16ee66"
+  },
+  "sharedAdapterSha256": "1ffa78349f334a11a34721adbe8801a147c8c0ba00f5166247e4e916a5997b8b",
+  "corpusSha256": "121ae3af3c2feebc6b74ad0134b5ce7b2d92e9132fa7ef5c5b4c1d32b2b2b440",
+  "frozenCoversManifestSha256": "d3113418697a86cedee5c66e6fc75dacca5c0bd0a9f744c1d4da180c1114f86b",
+  "settingsSha256": "e9a04bde190f19941e763644ffce83b9edf1a466897793d9d12e28b752d19cfd",
+  "cargoProfile": "release, opt-level=s, lto=true, codegen-units=1, panic=abort",
+  "validRunDirectory": "runs-2026-10-10",
+  "sharedCondition": "lockFloatingWindow=true; 200x395 and nativeDPR1",
+  "dpiQualityScope": "Native WebView2 rendering DPR emulation; Windows display scaling/hit testing excluded",
+  "excludedRunDirectories": [
+    "runs"
+  ],
+  "restartReason": "Host boot 2026-10-10 08:22; after-r2 interrupted during recovery. Restart all six rounds, no mixed cohort."
+}

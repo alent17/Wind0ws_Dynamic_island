@@ -2,7 +2,7 @@
 import argparse,io,tarfile,subprocess,shutil,json,hashlib
 from pathlib import Path
 
-parser=argparse.ArgumentParser();parser.add_argument('output');args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('output');parser.add_argument('--candidate-working-tree',action='store_true');args=parser.parse_args()
 root=Path(args.output).resolve();assert not root.exists(),'Use a new build source directory'
 root.mkdir(parents=True)
 paths=['src','src-tauri','public','static','package.json','package-lock.json','index.html','studio.html','svelte.config.js','vite.config.js','tsconfig.json','jsconfig.json']
@@ -31,6 +31,11 @@ p.write_text(s,encoding='utf-8')
 # Keep Cargo feature/dependency declarations identical: tokio sync is a shared
 # dependency capability, not an enabled resource budget in the baseline.
 fixture=Path(__file__).resolve().parent
+if args.candidate_working_tree:
+    workspace=fixture.parent.parent
+    # Copy only reviewed M3 files; unrelated working-tree edits stay excluded.
+    for name in ('src-tauri/src/services/image_budget.rs','src-tauri/src/services/cache.rs','src-tauri/src/services/media.rs','src/FloatingWindow.svelte','src/lib/artworkBudget.ts','src/lib/artworkBudget.test.ts'):
+        shutil.copy2(workspace/name,root/'after'/name)
 for script in ('instrument.py','add-input-probes.py','add-cover-replay.py','add-metadata-replay.py'):
     subprocess.run(['python',str(fixture/script),str(root)],check=True)
 shared=['src-tauri/src/lib.rs','src/App.svelte','src/lib/mediaArtwork.ts','src/lib/mediaStore.ts','src-tauri/src/benchmark_c.rs','src/lib/benchmarkC.ts']

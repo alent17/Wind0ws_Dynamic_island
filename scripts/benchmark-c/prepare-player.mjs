@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile,writeFile,stat} from 'node:fs/promises';
 import {Player} from './player.mjs';
-const folder='dist/performance/m3-release-c-2026-10-09',player=await Player.connect();
+const folder=process.env.ISLE_BENCH_ROOT||'dist/performance/m3-release-c-2026-10-09',player=await Player.connect();
 const pause=ms=>new Promise(done=>setTimeout(done,ms));
 try {
  const backup=`${folder}/queue-backup.json`;

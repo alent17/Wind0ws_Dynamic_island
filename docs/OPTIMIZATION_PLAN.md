@@ -373,7 +373,8 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Risk:** 过早释放旧Canvas导致crossfade闪烁；修改需保留cover→cover动画。
   - **Verification:** cover→空会话→cover、cover→无图曲目→cover循环100次；故意延迟旧Image.onload，最终封面始终最新。heap快照检索Detached Canvas及retainer，关闭窗口后listener/ref回基线；比较Renderer privateBytes/GPU与回稳时间。
 
-- [ ] **M3 · 🔴 P0 — Bound input, decode and cache bytes; reject crash inputs**
+- [x] **M3 · 🔴 P0 — Bound input, decode and cache bytes; reject crash inputs**
+  - **2026-10-10 回归修正验收：** 合规静态 JPEG/PNG 完整有界校验后保留原编码；普通 Canvas 保留受 1280 edge 限制的源栅格，像素模式及全部资源/非法输入保护保留。全新匹配 Release C 前后各三轮：Tree/Renderer 峰值 −1.10%/−1.57%，恢复末分钟 +2.07%/+3.39%，CPU +8.79%（+0.168 个百分点），均在预设回归门槛内；下载缓冲峰值 −98.04%。三档 renderer DPR 1/1.5/2 前后各 100 首画质及每 25 首重开回归通过，Detached Canvas=0。M3 按上述范围勾选，不宣称整体内存收益；GPU 长期回稳和 Windows 实际跨屏 DPI 仍待验证。见 [修正验收报告](performance/m3-correction-2026-10-09/REPORT.md)。
   - **2026-10-08 实施状态：** 已落实图片/下载/解码/并发/缓存/Canvas 预算及错误输入校验，50 项 Rust、73 项前端、9 项 UI 及实际原生命令验证通过。完整同条件 Release C 对照未完成，暂不勾选。见 [M3 实施记录](performance/m3-2026-10-08/IMPLEMENTATION.md)。
   - **2026-10-09 Release C 对照：** 相同 M2 修复、固定 100 首、连续浮窗、前后各三轮正式采样及五分钟恢复已完成。三轮中位数：GPU 峰值 −54.88%，但进程树 Private Commit 峰值 +24.17%、Renderer 峰值 +54.55%、CPU 平均值 +43.54%；恢复末分钟 Renderer Commit +70.42%。下载缓冲/Canvas backing 下降不能代替整体内存收益验收，M3 保持 `[ ]`；GPU 长期回稳仍未证实。见 [完整对照报告](performance/m3-release-c-2026-10-09/REPORT.md)。
   - **Problem:** SMTC按stream size分配且u64转u32未验证；HTTP缺Content-Length时整包读取后才超限拒绝；原图尺寸解码/Canvas和数量LRU没有项目字节预算；pixel_size=0进入step_by(0)会panic，release abort。
@@ -674,4 +675,4 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
 - [Microsoft CoInitializeEx](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coinitializeex)：每次成功初始化，包括S_FALSE，需对应CoUninitialize，并遵守线程apartment模型。
 - [Chrome DevTools memory problems](https://developer.chrome.com/docs/devtools/memory-problems)：用retained对象、Detached DOM与heap snapshots区分bloat/leak；Chrome fixture不等同native WebView2总开销。
 
-**当前执行状态：B1、M1 已完成；M2 封面正确性/Canvas 所有权验收完成并独立提交。B0 完整基线尚未完成；M3 预算实现已提交，本轮同条件 Release C 六轮对照已完成，但整体 Commit/CPU 回归，保持未勾选。GPU/内存长期稳定仍未证实。其他阶段不动，本轮限于 M3 Release C 记录与验收，不继续改业务实现。**
+**当前执行状态：B1、M1 已完成；M2 封面正确性/Canvas 所有权验收完成。M3 资源保护与 2026-10-10 匹配 Release C 回归修正验收通过并勾选，三档 renderer DPR 画质和重开回归通过；CPU/恢复 Commit 仍略高，未宣称整体内存收益。B0 完整基线、GPU/内存长期稳定和 Windows 跨屏 DPI 仍待验证。本阶段独立记录、提交并停止，M4 和后续阶段不动。**

@@ -2,6 +2,7 @@
 //! are independent from the disk cache quota.
 use crate::error::{AppError, AppResult};
 use image::{DynamicImage, GenericImageView, ImageFormat, ImageReader, Limits};
+use std::borrow::Cow;
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use std::sync::{Condvar, Mutex};
 
@@ -153,6 +154,63 @@ pub fn normalize(bytes: &[u8]) -> AppResult<Vec<u8>> {
     encode_png(&fit(decode(bytes)?))
 }
 
+pub struct PreparedArtwork<'a> {
+    pub bytes: Cow<'a, [u8]>,
+    pub content_type: &'static str,
+}
+
+// Only static browser-native formats can bypass encoding. APNG must still
+// become a bounded single frame, rather than retaining an animation stream.
+fn static_png(bytes: &[u8]) -> bool {
+    let mut position = 8usize;
+    while let Some(header) = bytes.get(position..position.saturating_add(8)) {
+        let length = u32::from_be_bytes(header[..4].try_into().unwrap()) as usize;
+        if &header[4..8] == b"acTL" {
+            return false;
+        }
+        if &header[4..8] == b"IEND" {
+            return true;
+        }
+        let Some(next) = position
+            .checked_add(length)
+            .and_then(|value| value.checked_add(12))
+        else {
+            return false;
+        };
+        if next > bytes.len() {
+            return false;
+        }
+        position = next;
+    }
+    false
+}
+
+pub fn prepare_artwork(bytes: &[u8]) -> AppResult<PreparedArtwork<'_>> {
+    let _work = ImageWork::enter()?;
+    // Retain the full bounded decode: header-only acceptance would let corrupt
+    // pixel data through. The fast path skips encoding, never validation.
+    let image = decode(bytes)?;
+    let format = image::guess_format(bytes)
+        .map_err(|error| AppError::parse(format!("无法识别封面格式：{error}")))?;
+    let mime = match format {
+        ImageFormat::Jpeg if bytes.ends_with(&[0xff, 0xd9]) => Some("image/jpeg"),
+        ImageFormat::Png if static_png(bytes) => Some("image/png"),
+        _ => None,
+    };
+    if image.width() <= MAX_ARTWORK_EDGE && image.height() <= MAX_ARTWORK_EDGE {
+        if let Some(content_type) = mime {
+            return Ok(PreparedArtwork {
+                bytes: Cow::Borrowed(bytes),
+                content_type,
+            });
+        }
+    }
+    Ok(PreparedArtwork {
+        bytes: Cow::Owned(encode_png(&fit(image))?),
+        content_type: "image/png",
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,5 +255,55 @@ mod tests {
     fn rejects_truncated_png_pixel_data() {
         let encoded = encode_png(&DynamicImage::new_rgb8(8, 8)).unwrap();
         assert!(decode(&encoded[..encoded.len() / 2]).is_err());
+    }
+    #[test]
+    fn retains_valid_jpeg_and_static_png_bytes_without_an_encoded_copy() {
+        let image = DynamicImage::new_rgb8(96, 48);
+        let png = encode_png(&image).unwrap();
+        let mut jpeg = Cursor::new(Vec::new());
+        image.write_to(&mut jpeg, ImageFormat::Jpeg).unwrap();
+        for (bytes, mime) in [(&png, "image/png"), (jpeg.get_ref(), "image/jpeg")] {
+            let prepared = prepare_artwork(bytes).unwrap();
+            assert_eq!(prepared.content_type, mime);
+            assert!(matches!(prepared.bytes, Cow::Borrowed(_)));
+            assert_eq!(prepared.bytes.as_ref(), bytes);
+        }
+        assert!(prepare_artwork(&png[..png.len() / 2]).is_err());
+        assert!(prepare_artwork(b"not an image").is_err());
+    }
+    #[test]
+    fn preparation_keeps_resize_and_animation_guards() {
+        let large = encode_png(&DynamicImage::new_rgb8(2560, 1440)).unwrap();
+        let prepared = prepare_artwork(&large).unwrap();
+        assert!(matches!(prepared.bytes, Cow::Owned(_)));
+        assert_eq!(dimensions(&prepared.bytes).unwrap(), (1280, 720));
+        fn chunk(kind: &[u8; 4], data: &[u8]) -> Vec<u8> {
+            let mut value = (data.len() as u32).to_be_bytes().to_vec();
+            value.extend_from_slice(kind);
+            value.extend_from_slice(data);
+            let mut crc = u32::MAX;
+            for byte in kind.iter().chain(data) {
+                crc ^= u32::from(*byte);
+                for _ in 0..8 {
+                    crc = (crc >> 1) ^ (0xedb88320 & 0u32.wrapping_sub(crc & 1));
+                }
+            }
+            value.extend_from_slice(&(!crc).to_be_bytes());
+            value
+        }
+        let png = encode_png(&DynamicImage::new_rgb8(8, 8)).unwrap();
+        let mut animated = png[..33].to_vec(); // Insert after the IHDR chunk.
+        animated.extend(chunk(b"acTL", &[0, 0, 0, 1, 0, 0, 0, 0]));
+        let mut control = vec![0u8; 26];
+        control[4..8].copy_from_slice(&8u32.to_be_bytes());
+        control[8..12].copy_from_slice(&8u32.to_be_bytes());
+        control[20..22].copy_from_slice(&1u16.to_be_bytes());
+        control[22..24].copy_from_slice(&1u16.to_be_bytes());
+        animated.extend(chunk(b"fcTL", &control));
+        animated.extend_from_slice(&png[33..]);
+        let still = prepare_artwork(&animated).unwrap();
+        assert!(matches!(still.bytes, Cow::Owned(_)));
+        assert!(static_png(&still.bytes));
+        assert_eq!(dimensions(&still.bytes).unwrap(), (8, 8));
     }
 }

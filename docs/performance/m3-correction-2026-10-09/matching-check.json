@@ -1,0 +1,17 @@
+{
+  "sharedM2AndAdapters": true,
+  "referenceBinaryIdenticalToCandidateAControl": true,
+  "differences": [
+    "src-tauri/src/services/cache.rs",
+    "src-tauri/src/services/color.rs",
+    "src-tauri/src/services/http_budget.rs",
+    "src-tauri/src/services/image.rs",
+    "src-tauri/src/services/image_budget.rs",
+    "src-tauri/src/services/media.rs",
+    "src-tauri/src/services/mod.rs",
+    "src-tauri/src/utils.rs",
+    "src/FloatingWindow.svelte",
+    "src/lib/artworkBudget.test.ts",
+    "src/lib/artworkBudget.ts"
+  ]
+}
