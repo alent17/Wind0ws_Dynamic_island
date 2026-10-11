@@ -1,6 +1,7 @@
 # Isle Optimization Plan
 
-> 2026-10-12 更新：M4 封面请求合并及过期任务取消已通过最终候选三轮 Release C 对照、100 首连续切换/四次浮窗重开，以及 owner 共享、取消、显式清空、同曲目换封面和失败重试测试。解码、下载输入、CPU 与封面延迟改善；进程树峰值基本持平、Renderer 峰值略增 3.72%，恢复读数下降。M4 勾选并独立提交；不宣称整体内存峰值收益。M5 及后续阶段不动。见 [M4 验收报告](performance/m4-2026-10-11/REPORT.md)。
+> 2026-10-12 更新：M4 封面请求合并及过期任务取消已通过最终候选三轮 Release C 对照、100 首连续切换/四次浮窗重开，以及 owner 共享、取消、显式清空、同曲目换封面和失败重试测试。解码、下载输入、CPU 与封面延迟改善；进程树峰值基本持平、Renderer 峰值略增 3.72%，恢复读数下降。M4 勾选并独立提交；不宣称整体内存峰值收益。见 [M4 验收报告](performance/m4-2026-10-11/REPORT.md)。
+> 2026-10-12 M5 更新：迟到 listener、图片超时/销毁、动画及等待任务回归通过；匹配 Release 的 100 次副窗开关对照显示，DOM/监听器保持稳定，句柄增长从基线 +612 降至 +69（增长主要集中在前 10 次测量开关，随后基本平台）。进程树私有提交仍增长约 25–30 MiB，前后相近，故不将其解读为内存回稳；第 6 首图片超时仍未定位。M5 勾选并独立提交。见 [M5 验收报告](performance/m5-2026-10-12/REPORT.md)。
 
 > 2026-10-09 更新：M2 浮窗重开空封面已记录真实事件时序、修复并通过封面正确性/Canvas 所有权验收：100 首真实切歌及四次重开全部通过，Detached Canvas=0。M2 勾选；GPU 长期回稳及 Release 性能收益未确认，不能据此判定内存/Idle 达标。M3 保持未勾选，后续 Release C 前后构建必须包含同一 M2 修复。见 [M2 验收报告](performance/m2-reopen-2026-10-08/ACCEPTANCE.md)。
 
@@ -66,7 +67,7 @@
 | 9 | **确定：动画完成标准与隐藏状态不统一。** 多路 spring、封面 250 ms、页面 100/180 ms、原生位置 spring 分离；收起时封面主动消失；手动隐藏等固定 460 ms，自动隐藏未先收起却按 Compact 位移。 | `IslandSurface.svelte:286–438,626–633`、`App.svelte:1038–1088`、`commands/window.rs:1128–1278` | A1/A3/A4 |
 | 10 | **确定：视觉与命中区域的缩放公式不一致，UI 整体 zoom 也过小。** App scale=.625×layoutScale，即 .3875–.625；geometry helper 却把它下限截到 .62。封面/按钮/字号随页面整体缩小，工具条入口密集。 | `App.svelte:756–758`、`islandGeometry.ts:208,300–319`、`IslandSurface.svelte:253–258,815,846–869` | I2/U1/U2 |
 
-此外：设置的跨窗口并发更新/非原子写入（M6）、重复封面解析与过期主色返回（M4）、EventManager 迟到注册缺口（M5）、自动化配置失效（B1）也必须进入计划。
+此外：设置的跨窗口并发更新/非原子写入（M6）、自动化配置失效（B1）也必须进入计划。EventManager 迟到注册缺口已纳入并通过 M5 验收。
 
 ## 3. 动画逐项审查
 
@@ -86,7 +87,7 @@
 - **border-radius/clip-path**：radii 插值与肩部 polygon 每帧更新；可能触发 paint/mask，是否独立 GPU layer 不能仅凭 CSS 判断。Floating 的 clip-path=none 时仍生成 polygon 供命中区域，适合走 round-rect 快路径。
 - **position/translate/scale**：CSS anchor transform、expanded scale 与原生 SetWindowPos 是不同坐标空间；pressed 表面 scale=.97 与命中 polygon 暂时不同，需容差而非再加逐帧 IPC。
 - **spring**：六个 spring 分别负责不同属性，并非六个 writer 写同一属性；竞争在状态目标、内容挂载和完成时机。统一所有权比强制“只剩一个 spring”更重要。
-- **requestAnimationFrame**：主要持续候选是开启 debug FPS；封面是 250 ms 期间连续 rAF；RollingDigit 双 rAF 有界但未显式取消。Spectrum 现有 30 Hz capped timer 并非每帧空转 rAF。
+- **requestAnimationFrame**：主要持续候选是开启 debug FPS；IslandSurface 已无旧封面 250 ms 连续 rAF 循环；RollingDigit 双 rAF 有界，M5 为其增加显式取消。Spectrum 现有 30 Hz capped timer 并非每帧空转 rAF。
 - **getBoundingClientRect**：封面目标每帧调用是重点；ArcVolumeControl 每个 pointermove 测量是较低优先级且需核实是否仍可达；VolumePanel 仅点击提交测量一次，不应一概标高频。
 - **native resize**：普通展开/收起已没有逐帧 resize。`animate_window_bounds` 在隐藏/恢复/放置期间约每 16 ms 调 SetWindowPos，重复提交 w/h，没有只移动标志；同尺寸是否仍引起昂贵 composition 必须 ETW 确认。
 
@@ -166,7 +167,7 @@ hover 只给轻微底色/亮度；pressed 用短 scale/opacity；active 用低�
 - `artworkUrl/rawCoverUrl` 同时保留 SMTC/HD 不一定泄漏，但身份需要 source + track + artVersion，避免跨播放器同名歌曲命中 `title|artist` 旧缓存。
 - `localStorage` 只有一条 last-played 记录，data URI 超过 900,000 字符不持久化；存在同步写入和大字符串保留成本，没有“100 首记录无限增长”证据。后续优先持久化 track ID/缓存文件 key。
 - HD resolver 缓存的是 URL/data URL；URL 字符预算不包含磁盘文件或 decode/GPU。浮窗 12 项 LRU 只有数量上限，还需要总字节/图片像素预算及短 key。
-- `new Image()` 不是天然泄漏；CoverArt 已清除回调，Spectrum 取色有 5 秒 timeout，但后者 timeout 后未完整清回调/取消源。App 的 HD/recovery preload 没有统一 teardown；Floating 的 pendingImages 有 destroy 清理但没有逐个超时/并发限制。
+- `new Image()` 不是天然泄漏；CoverArt 已清除回调。M5 工作区现以共享 `loadImage` 统一处理取色、HD/recovery 与浮窗预加载的成功、失败、超时和 Abort 清理；是否通过仍须以真实 100 次副窗开关和增长对照验收。
 - 推荐首先用 **Rust 限尺寸后的缓存文件 + asset URL**；缩略图尺寸按显示逻辑尺寸×DPI 限制，HD 仅大视图需要时请求。评估 WebP 与处理成本，透明度/质量正确后再切格式。
 - Object URL 适合 webview 内临时 Blob，不作为跨窗口共享封面身份；必须在旧 DOM/动画不再使用后 revoke。当前 CSP 没有 `blob:`，不能直接替换后破坏图片显示；asset URL、原生路径、data URI 的解析接口也需统一。
 - Floating 的 Rust 取色/图片函数接受 data URI/路径，前端 HD 返回的是 convertFileSrc URL：需显式传 cache key/path，而非把 asset URL 当本地文件名。正常主色回调也要校验 track/art revision。
@@ -175,14 +176,14 @@ hover 只给轻微底色/亮度；pressed 用短 scale/opacity；active 用低�
 
 | 对象 | 当前已清理 | 剩余缺口/判断 |
 |---|---|---|
-| App onMount/listen | createAsyncCleanup、interval/DOM listener、capture/mouse cleanup | recovery/HD Image 没有统一取消；resume 600 ms 重试、手动隐藏等待、placement WAAPI 缺统一 owner。 |
-| IslandSurface 六路订阅 | 所有 subscribe 都有 unsubscribe；matchMedia listener 有 cleanup | cover rAF/await tick 没有 teardown epoch/cancel；取消订阅不能替代取消待完成动画。 |
+| App onMount/listen | createAsyncCleanup、interval/DOM listener、capture/mouse cleanup | M5 工作区已把 recovery/HD Image、恢复等待和 placement WAAPI 接入销毁/代次保护；待真实开关对照验收。 |
+| IslandSurface 六路订阅 | 所有 subscribe 都有 unsubscribe；matchMedia listener 有 cleanup | 旧 cover rAF 循环已不存在；await tick 后的焦点 DOM 写入增加销毁检查，取消订阅仍不能替代取消待完成动画。 |
 | Spectrum store/组件 | refcount、代次、watchdog clear、timer/rAF clear、Rust Destroyed release | 减少动画/系统偏好 gate 传递不一致；恢复策略需 native 健康状态，不能只重试已 running 的 start。 |
 | mediaStore/settingsStore | 迟到 listener、初次 snapshot 竞态、disconnect/generation | mediaStore 相同快照仍写新对象；多 webview 有多个独立 store，并非全应用单例。 |
-| EventManager | 独立 listener throttle/debounce 状态、off/destroy 清理 | await listen 后无 isDestroyed 二次检查。当前全局 destroy 没有主调用证据，标为潜在封装缺陷，而非已证实循环泄漏。 |
+| EventManager | 独立 listener throttle/debounce 状态、off/destroy 清理 | M5 工作区在 await listen 返回后复查销毁状态并立即释放迟到 listener；待延迟注册回归和整体验收。 |
 | Floating | DOM listener、Tauri listener、timer、AbortController、pendingImages、refs onDestroy | cover 变空时 Canvas refs 不清；部分请求只丢弃结果不取消；图像绘制/取色缺少最后结果检查。 |
 | Timer/Studio/VisibleWindow | interval 清理、late listener 清理、真正隐藏时卸载 | capture CSS hide 不触发卸载；Timer idle 条纹无限动画；预览 clock 1 Hz 对 HH:mm 过频。 |
-| RollingDigit/Marquee | matchMedia cleanup、ResizeObserver disconnect、WAAPI cancel | RollingDigit 双 rAF 未取消但有界；Marquee 在持续布局变化下可能重启，应测并合并测量。 |
+| RollingDigit/Marquee | matchMedia cleanup、ResizeObserver disconnect、WAAPI cancel | RollingDigit 双 rAF 现记录并取消待执行 frame，写状态前检查卸载；Marquee 在持续布局变化下可能重启，应测并合并测量。 |
 | 程序入口 contextmenu | 与 document 同生命周期 | 不是每次组件挂载累计的 listener，保持低优先级。 |
 
 ## 6. 所有周期性/动画任务清单
@@ -397,14 +398,14 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Risk:** 取消共有single-flight时误伤另一窗口；缓存key缺source会串歌；过度取消在弱网络下反复失败。
   - **Verification:** 双窗口同时请求同歌计数只一次；同名不同source不混；故意让第1首最后返回，第100首始终最终结果。关闭窗口后在途任务有界退出；C记录network/decode/IPC次数与private commit。正常HD升级无需重新切歌即可显示。
 
-- [ ] **M5 · 🟠 P1 — Close late-listener, Image and animation teardown gaps**
-  - **Problem:** EventManager await listen之后未复查destroy；Surface cover rAF/await tick无teardown cancellation；App若销毁，预加载Image/恢复等待/placement Animation缺统一取消；部分图像超时只reject未清handler。
+- [x] **M5 · 🟠 P1 — Close late-listener, Image and animation teardown gaps**
+  - **Problem:** 历史审查发现 EventManager await listen 后未复查 destroy；IslandSurface 旧封面 rAF 循环现已移除，剩余 await tick 后焦点 DOM 写入需检查销毁状态；App 预加载 Image、恢复等待和 placement Animation 需统一取消；图片超时必须清 handler 与 source。
   - **File:** `src/utils/eventManager.ts:30–64,104–115`、`src/lib/asyncCleanup.ts`、`src/lib/components/island/IslandSurface.svelte:333–438`、`src/App.svelte:87–121,387–419,802–865,1038–1064,1512–1534`、`src/lib/spectrumColors.ts:15–31`、`src/FloatingWindow.svelte:479–489`、`src/lib/components/time/RollingDigit.svelte:41–48`。
   - **Reason:** 多数cleanup已有实现，应补具体缺口。EventManager缺陷目前是潜在封装竞态；有界双rAF本身不证明长期泄漏。
-  - **Proposed change:** async注册返回后若owner已销毁立即unlisten；统一dispose/epoch、取消rAF/WAAPI/timeout、图像handler与source，设置逐图超时与并发限制；复用createAsyncCleanup，不新增另一个全局资源注册器。
+  - **Proposed change:** async注册返回后若owner已销毁立即unlisten；用dispose/epoch取消rAF/WAAPI/timeout、图像handler与source；图片请求有逐图超时；复用createAsyncCleanup，不新增另一个全局资源注册器。
   - **Expected benefit:** 卸载后不会继续更新状态或保留DOM/closure，开关窗和中断动画可稳定回收。
   - **Risk:** 把document生命周期listener误当组件泄漏；销毁前强制取消共有任务使其他窗口失去状态。
-  - **Verification:** mock延迟listen返回，在destroy之后unlisten调用一次且getListenerCount为0；动画中卸载后无额外frame写入；图像超时后pending集合归零；真实副窗100次开关比较DOM/listener/线程/句柄post-warmup基线。
+  - **Verification:** mock延迟listen返回，在destroy之后unlisten调用一次且getListenerCount为0；动画中卸载后无额外frame写入；图像超时后pending集合归零；匹配 Release 各进行10次预热与100次副窗开关，DOM/监听器无净增长；句柄净增由基线+612降至+69，增长集中在前10次测量开关后平台。进程树私有提交在10秒恢复后仍各增约30.36 MiB/25.32 MiB，前后差异不足以证明长期内存回稳；保持该限制，不归因为泄漏。没有活动媒体会话，Release image request计数为0；图片错误/超时/Abort由单元测试覆盖。M5 已勾选，详见 [M5 验收报告](performance/m5-2026-10-12/REPORT.md)。第6首超时继续作为未定位现象记录，复现时补图片错误和请求时序。
 
 - [ ] **M6 · 🟠 P1 — Serialize settings commits and make persistence recoverable**
   - **Problem:** update_settings读snapshot后跨await保存，多窗口可覆盖彼此patch；save先改内存再spawn_blocking写文件，写入顺序可反转；fs::write直接覆盖，不是原子提交；Studio吞掉保存错误。
@@ -678,4 +679,4 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
 - [Microsoft CoInitializeEx](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coinitializeex)：每次成功初始化，包括S_FALSE，需对应CoUninitialize，并遵守线程apartment模型。
 - [Chrome DevTools memory problems](https://developer.chrome.com/docs/devtools/memory-problems)：用retained对象、Detached DOM与heap snapshots区分bloat/leak；Chrome fixture不等同native WebView2总开销。
 
-**当前执行状态：B1、M1–M4 已完成并各自验收。M3 资源保护、匹配 Release C 回归修正及三档 renderer DPR 画质通过；M4 合并/取消在最终源码 Release C 对照中减少处理工作量、改善 CPU 和封面延迟，但 Renderer 峰值轻微上升，不宣称整体内存收益。B0 完整基线、GPU/内存长期稳定和 Windows 跨屏 DPI 仍待验证。M5 及后续阶段不动。**
+**当前执行状态：B1、M1–M5 已完成并各自验收。M3 资源保护、匹配 Release C 回归修正及三档 renderer DPR 画质通过；M4 合并/取消减少处理工作量、改善 CPU 和封面延迟，但 Renderer 峰值轻微上升，不宣称整体内存收益；M5 修复迟到监听、图片及动画/等待任务的卸载清理，100次副窗开关后DOM/监听器稳定，句柄增长显著降低。B0 完整基线、GPU/内存长期稳定和 Windows 跨屏 DPI 仍待验证；第6首超时仍未定位。M6 及后续阶段不动。**

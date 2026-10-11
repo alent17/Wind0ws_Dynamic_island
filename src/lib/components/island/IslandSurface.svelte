@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack, tick } from "svelte";
+  import { onMount, onDestroy, untrack, tick } from "svelte";
   import { spring, tweened } from "svelte/motion";
   import { Airplay, ArrowLeft, Clock, CloudSun, EyeOff, GalleryHorizontalEnd, ListMusic, Music2, Play, Settings, Shuffle, SkipBack, SkipForward, Star, Timer, Volume2, VolumeX } from "lucide-svelte";
   import MediaProgress from "$lib/components/media/MediaProgress.svelte";
@@ -286,9 +286,12 @@
     return () => { disposed = true; observer.disconnect(); };
   });
 
+  let surfaceDisposed = false;
+  onDestroy(() => { surfaceDisposed = true; });
   async function navigate(next: IslandPage) {
     page = next;
     await tick();
+    if (surfaceDisposed) return;
     pageRoot?.querySelector<HTMLButtonElement>(next === "music" ? ".feature-menu button" : ".page-back")?.focus({ preventScroll: true });
   }
   function goBack() {
@@ -357,7 +360,7 @@
     pageExiting = true;
     const timeout = setTimeout(() => {
       renderedPage = next; pageExiting = false;
-      void tick().then(() => { if (page === next && mode === "expanded") pageRoot?.querySelector<HTMLButtonElement>(next === "music" ? ".feature-menu button" : ".page-back")?.focus({preventScroll:true}); });
+      void tick().then(() => { if (!surfaceDisposed && page === next && mode === "expanded") pageRoot?.querySelector<HTMLButtonElement>(next === "music" ? ".feature-menu button" : ".page-back")?.focus({preventScroll:true}); });
     }, 100);
     return () => clearTimeout(timeout);
   });

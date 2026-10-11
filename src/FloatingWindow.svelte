@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { loadImage } from "$lib/imageLoad";
   import { artworkValue, snapshotDecision, withoutArtwork, type ArtworkSnapshotToken } from "$lib/mediaArtwork";
   import { createCanvasArtworkRenderer, type CanvasArtworkRequest } from "$lib/canvasArtwork";
   import { createArtworkOwner } from "$lib/artworkOwner";
@@ -171,22 +172,18 @@
     }, 80);
   }
 
-  let cancelCoverPreload: (() => void) | undefined;
-  function preloadCover(url: string): Promise<boolean> {
-    cancelCoverPreload?.();
-    if (!url) return Promise.resolve(false);
-    return new Promise(resolve => {
-      const image = pageImage();
-      if (url.startsWith("http") && !url.includes("asset.localhost")) image.crossOrigin = "Anonymous";
-      const finish = (ready: boolean) => {
-        image.onload=null;image.onerror=null;pendingImages.delete(image);
-        if (cancelCoverPreload === cancel) cancelCoverPreload=undefined;
-        resolve(ready);
-      };
-      const cancel = () => {finish(false);image.src="";};
-      cancelCoverPreload=cancel;
-      image.onload=()=>finish(true);image.onerror=()=>finish(false);image.src=url;
-    });
+  let coverPreload: AbortController | undefined;
+  function cancelCoverPreload() { coverPreload?.abort(); coverPreload = undefined; }
+  async function preloadCover(url: string): Promise<boolean> {
+    cancelCoverPreload();
+    if (!url || disposed) return false;
+    const controller = new AbortController(); coverPreload = controller;
+    try {
+      const image = await loadImage(url, controller.signal);
+      image.removeAttribute("src");
+      return !disposed && !controller.signal.aborted;
+    } catch { return false; }
+    finally { if (coverPreload === controller) coverPreload = undefined; }
   }
 
   async function resolveTrackCover(
@@ -197,7 +194,7 @@
     fallbackCover: string,
     alreadyResolved = false,
   ) {
-    coverOwner.cancel(); cancelCoverPreload?.();
+    coverOwner.cancel(); cancelCoverPreload();
     const requestId = ++coverRequestId;
 
     // Never leave the previous track's artwork visible while the HD lookup runs.
@@ -491,15 +488,6 @@
 
   let disposed = false;
   const pageRequests = new AbortController();
-  const pendingImages = new Set<HTMLImageElement>();
-  function pageImage() {
-    const image = new Image();
-    pendingImages.add(image);
-    const done = () => pendingImages.delete(image);
-    image.addEventListener("load", done, {once:true});
-    image.addEventListener("error", done, {once:true});
-    return image;
-  }
   function trackListener(dispose: () => void) {
     if (disposed) { dispose(); throw new DOMException("Page disposed", "AbortError"); }
     eventListeners.push(dispose);
@@ -726,7 +714,7 @@
       const cover = artworkValue(payload);
       if (cover === undefined) return;
       if (payload.artworkResolved && cover) {
-        coverOwner.cancel(); cancelCoverPreload?.(); coverRequestId++;
+        coverOwner.cancel(); cancelCoverPreload(); coverRequestId++;
         if (displayCover !== cover) transitionCover(cover);
         return;
       }
@@ -734,7 +722,7 @@
       artworkRevision++;
       mediaState.albumArt = cover;
       if (!cover) {
-        coverRequestId++; coverOwner.cancel(); cancelCoverPreload?.(); colorOwner.cancel(); pixelOwner.cancel();
+        coverRequestId++; coverOwner.cancel(); cancelCoverPreload(); colorOwner.cancel(); pixelOwner.cancel();
         displayCover = "";
         previousCover = "";
       } else {
@@ -779,7 +767,7 @@
         lastReportedPosition = undefined;
         pendingSeekUntil = 0;
         mvRequestId += 1;
-        coverRequestId += 1; coverOwner.cancel(); cancelCoverPreload?.(); colorOwner.cancel(); pixelOwner.cancel();
+        coverRequestId += 1; coverOwner.cancel(); cancelCoverPreload(); colorOwner.cancel(); pixelOwner.cancel();
         durationRequestId += 1;
         mediaState = {
           title: PLACEHOLDER_TITLE,
@@ -919,10 +907,8 @@
 
   onDestroy(() => {
     disposed = true;
-    coverOwner.cancel(); cancelCoverPreload?.(); colorOwner.cancel(); pixelOwner.cancel();
+    coverOwner.cancel(); cancelCoverPreload(); colorOwner.cancel(); pixelOwner.cancel();
     pageRequests.abort();
-    for (const image of pendingImages) { image.onerror?.(new Event("error")); image.onload = null; image.onerror = null; image.src = ""; }
-    pendingImages.clear();
     coverRequestId++; mvRequestId++; durationRequestId++;
 
     window.removeEventListener("blur", handlePointerLeave);

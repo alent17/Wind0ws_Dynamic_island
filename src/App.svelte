@@ -10,6 +10,16 @@
   import { islandMode, islandState, islandView, transitionIsland } from "$lib/islandStore";
   import { connectSettingsStore, refreshSettingsStore, settingsStore } from "$lib/settingsStore";
   import { createAsyncCleanup } from "$lib/asyncCleanup";
+  import { waitForOwner } from "$lib/asyncWait";
+  import { loadImage } from "$lib/imageLoad";
+  const lifetime = createAsyncCleanup();
+  let metadataImage: AbortController | undefined;
+  onDestroy(() => {
+    lifetime.dispose(); metadataImage?.abort();
+    ++windowPlacementRevision; ++placementTransitionRevision; ++manualHideSequence;
+    placementAnimation?.cancel(); placementAnimation = null;
+    windowReady = false;
+  });
   import { idleApi } from "$lib/api/idle";
   import { audioApi } from "$lib/api/audio";
   import { refreshSpectrumDevice } from "$lib/spectrumStore";
@@ -87,7 +97,7 @@
   let metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
 
   async function recoverMissingMetadata() {
-    if (!hasMediaSession || !lastSongKey || !trackTitle || trackTitle === "未知曲目") return;
+    if (lifetime.disposed || !hasMediaSession || !lastSongKey || !trackTitle || trackTitle === "未知曲目") return;
     if (durationMs > 0 && (artworkUrl || currentSource !== "netease")) return;
     const recovery = metadataRecovery;
     if (recovery.pending || Date.now() < recovery.nextAttempt) return;
@@ -95,7 +105,7 @@
     recovery.pending = true;
     try {
       const info = await mediaApi.getNeteaseSongInfo(trackTitle, artistName === "未知艺术家" ? "" : artistName);
-      if (key !== lastSongKey || recovery !== metadataRecovery || !info) return;
+      if (lifetime.disposed || key !== lastSongKey || recovery !== metadataRecovery || !info) return;
       if (!durationMs && info.duration && info.duration > 0) {
         // Preserve the elapsed clock while duration was unavailable.
         currentTimeMs = projectedPosition(islandMedia, Date.now());
@@ -103,19 +113,25 @@
         durationMs = info.duration;
       }
       if (!artworkUrl && info.albumPic) {
-        const image = new Image();
-        image.onload = () => {
-          if (key !== lastSongKey || recovery !== metadataRecovery) return;
-          rawCoverUrl = info.albumPic!;
-          artworkUrl = info.albumPic!;
+        metadataImage?.abort();
+        const controller = new AbortController(); metadataImage = controller;
+        let image: HTMLImageElement | undefined;
+        try {
+          image = await loadImage(info.albumPic, controller.signal);
+          if (lifetime.disposed || controller.signal.aborted || key !== lastSongKey || recovery !== metadataRecovery || artworkUrl) return;
+          rawCoverUrl = info.albumPic;
+          artworkUrl = info.albumPic;
           void syncFloatingMediaClock();
-        };
-        image.src = info.albumPic;
+        } finally {
+          image?.removeAttribute("src");
+          if (metadataImage === controller) metadataImage = undefined;
+        }
       }
       void syncFloatingMediaClock();
     } catch (error) {
-      console.warn("[媒体信息] 补查失败，将自动重试", error);
+      if (!lifetime.disposed && !(error instanceof DOMException && error.name === "AbortError")) console.warn("[媒体信息] 补查失败，将自动重试", error);
     } finally {
+      if (lifetime.disposed) return;
       recovery.pending = false;
       recovery.attempts += 1;
       recovery.nextAttempt = Date.now() + Math.min(60_000, 5_000 * 2 ** Math.min(recovery.attempts - 1, 4));
@@ -176,15 +192,16 @@
 
   const mainCoverOwner = createArtworkOwner("cover");
   let hdArtworkResolved = $state(false);
-  let pendingHdImage: HTMLImageElement | undefined;
+  let pendingHdImage: AbortController | undefined;
   function cancelMainCover() {
     mainCoverOwner.cancel();
-    if (pendingHdImage) { pendingHdImage.onload=null; pendingHdImage.onerror=null; pendingHdImage.src=""; pendingHdImage=undefined; }
+    pendingHdImage?.abort(); pendingHdImage = undefined;
   }
   $effect(() => { if (!$appSettings.enableHdCover) cancelMainCover(); });
   let lastSyncedArtwork = "";
   let lastSyncedTrack = "";
   function syncFloatingMediaClock() {
+    if (lifetime.disposed) return Promise.resolve();
     const syncedAt = Date.now();
     const snapshot: MediaState = {
       ...islandMedia,
@@ -398,14 +415,15 @@
   async function resumeLastTrack() {
     const saved = lastPlayedMedia;
     const appName = saved ? playerApps[saved.source] : "";
-    if (!saved || !appName || resumingLastTrack) return;
+    if (lifetime.disposed || !saved || !appName || resumingLastTrack) return;
 
     resumingLastTrack = true;
     try {
       await windowApi.openApplication(appName);
+      if (lifetime.disposed) return;
 
       const activateIfReady = async (current: MediaState) => {
-        if (!sameRememberedTrack(current, saved)) return false;
+        if (lifetime.disposed || !sameRememberedTrack(current, saved)) return false;
         if (!current.isPlaying) await mediaApi.controlMedia("play_pause");
         return true;
       };
@@ -417,8 +435,9 @@
 
       const deadline = Date.now() + 12_000;
       while (Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 600));
+        if (!await waitForOwner(lifetime, 600)) return;
         const sessions = await mediaApi.listMediaSessions().catch(() => []);
+        if (lifetime.disposed) return;
         if (!sessions.some((session) => session.source === saved.source)) continue;
         const reopened = await mediaApi.getMediaInfo().catch(() => null);
         if (reopened && await activateIfReady(reopened)) return;
@@ -426,7 +445,7 @@
     } catch (error) {
       console.error("恢复上次播放失败:", error);
     } finally {
-      resumingLastTrack = false;
+      if (!lifetime.disposed) resumingLastTrack = false;
     }
   }
 
@@ -755,7 +774,7 @@
     const allMonitors = shouldRefreshMonitors
       ? await windowApi.getMonitors()
       : placementMonitors;
-    if (!allMonitors.length) return;
+    if (lifetime.disposed || revision !== windowPlacementRevision || !allMonitors.length) return;
     if (shouldRefreshMonitors) {
       placementMonitors = allMonitors;
       placementMonitorsRefreshedAt = Date.now();
@@ -800,7 +819,7 @@
     const boundsKey = `${target.x}:${target.y}:${target.width}:${target.height}`;
     if (boundsKey === lastAppliedBounds) return;
     await windowApi.animateWindowBounds(target.width, target.height, target.x, target.y, animate);
-    if (revision === windowPlacementRevision) lastAppliedBounds = boundsKey;
+    if (!lifetime.disposed && revision === windowPlacementRevision) lastAppliedBounds = boundsKey;
   }
 
   function edgeTransform(edge: IslandEdge) {
@@ -811,12 +830,13 @@
   }
 
   async function transitionPlacement(nextStyle: IslandStyle, nextEdge: IslandEdge) {
+    if (lifetime.disposed) return;
     if (nextEdge === renderedIslandEdge) {
       // The fixed host reserves the floating gap in both modes, so the surface
       // can stay visible while its anchor and silhouette morph in place. Only
       // the one-pixel edge overlap changes at the native level; apply it once
       // without starting the expensive SetWindowPos animation loop.
-      placementTransitionRevision += 1;
+      const revision = ++placementTransitionRevision;
       placementAnimation?.cancel();
       suppressPlacementEffect = true;
       renderedIslandStyle = nextStyle;
@@ -828,6 +848,7 @@
         isHidden,
         false,
       ).catch((error) => logger.warn("布局切换定位失败", error));
+      if (lifetime.disposed || revision !== placementTransitionRevision) return;
       suppressPlacementEffect = false;
       return;
     }
@@ -843,7 +864,7 @@
         { duration: reduced ? 120 : 140, easing: "cubic-bezier(0.23, 1, 0.32, 1)", fill: "forwards" },
       );
       await placementAnimation.finished.catch(() => undefined);
-      if (revision !== placementTransitionRevision) return;
+      if (lifetime.disposed || revision !== placementTransitionRevision) return;
     }
     suppressPlacementEffect = true;
     renderedIslandStyle = nextStyle;
@@ -859,7 +880,7 @@
       isHidden,
       false,
     ).catch((error) => logger.warn("布局切换定位失败", error));
-    if (revision !== placementTransitionRevision) { suppressPlacementEffect = false; return; }
+    if (lifetime.disposed || revision !== placementTransitionRevision) return;
     suppressPlacementEffect = false;
     if (!fixedHostElement) return;
     placementAnimation?.cancel();
@@ -869,6 +890,8 @@
         { duration: reduced ? 120 : 180, easing: "cubic-bezier(0.23, 1, 0.32, 1)", fill: "forwards" },
       );
       await placementAnimation.finished.catch(() => undefined);
+      if (lifetime.disposed || revision !== placementTransitionRevision) return;
+      placementAnimation?.cancel(); placementAnimation = null;
     } else {
       fixedHostElement.style.opacity = "1";
       fixedHostElement.style.transform = "translate3d(0,0,0)";
@@ -961,20 +984,22 @@
     return `rgb(${r},${g},${b})`;
   }
 
-  async function extractSpectrumColors(imgSrc: string) {
+  async function extractSpectrumColors(imgSrc: string, signal: AbortSignal) {
     if (!imgSrc) return;
     try {
-      const colors = await extractSpectrumColorsFromImage(imgSrc);
-      if (!colors || artworkUrl !== imgSrc) return;
+      const colors = await extractSpectrumColorsFromImage(imgSrc, signal);
+      if (lifetime.disposed || signal.aborted || !colors || artworkUrl !== imgSrc) return;
       spectrumTopColor = formatRgb(...colors.top);
       spectrumBottomColor = formatRgb(...colors.bottom);
     } catch (error) {
-      console.warn("取色失败，将保留当前频谱颜色", error);
+      if (!signal.aborted) console.warn("取色失败，将保留当前频谱颜色", error);
     }
   }
 
   $effect(() => {
-    if (artworkUrl) extractSpectrumColors(artworkUrl);
+    const controller = new AbortController();
+    if (artworkUrl) void extractSpectrumColors(artworkUrl, controller.signal);
+    return () => controller.abort();
   });
 
   async function handleMediaAction(action: string, e?: MouseEvent) {
@@ -1060,9 +1085,9 @@
     transitionIsland({ type: "hover-leave" });
 
     if (wasExpanded && $appSettings.enableAnimations && !$appSettings.reduceAnimations && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      await new Promise((resolve) => setTimeout(resolve, ISLAND_MOTION.collapseDuration + ISLAND_MOTION.outwardDelay));
+      if (!await waitForOwner(lifetime, ISLAND_MOTION.collapseDuration + ISLAND_MOTION.outwardDelay)) return;
     }
-    if (sequence !== manualHideSequence) return;
+    if (lifetime.disposed || sequence !== manualHideSequence) return;
 
     manualHideActive = true;
     syncCaptureVisibility();
@@ -1074,6 +1099,7 @@
   }
 
   function handleCaptureModeChange(snapshot: CaptureSnapshot) {
+    if (lifetime.disposed) return;
     captureSnapshot = { ...EMPTY_CAPTURE_SNAPSHOT, ...snapshot };
     syncCaptureVisibility(captureSnapshot);
   }
@@ -1232,7 +1258,7 @@
   });
 
   onMount(() => {
-    const cleanups = createAsyncCleanup();
+    const cleanups = lifetime;
 
     (async () => {
       console.log("[App.svelte] onMount 开始监听事件");
@@ -1242,13 +1268,15 @@
       // race with the slower bootstrap work below.
       const unlistenTimerRequest = await listen(
         Events.TIMER_REQUEST_STATE,
-        () => void emit(Events.TIMER_STATE_CHANGED, timerSnapshot()),
+        () => { if (!lifetime.disposed) void emit(Events.TIMER_STATE_CHANGED, timerSnapshot()); },
       );
       cleanups.add(unlistenTimerRequest);
+      if (cleanups.disposed) return;
 
       const unlistenTimerAction = await listen(
         Events.TIMER_ACTION,
         (event) => {
+          if (lifetime.disposed) return;
           const payload = event.payload as { action?: string; durationMs?: number };
           if (payload?.action === "start" && Number(payload.durationMs) > 0) handleTimerStart(Number(payload.durationMs));
           else if (payload?.action === "pause") handleTimerPause();
@@ -1258,9 +1286,11 @@
         },
       );
       cleanups.add(unlistenTimerAction);
+      if (cleanups.disposed) return;
 
       const settingsConnection = await connectSettingsStore(normalizedSettings);
       cleanups.add(settingsConnection.disconnect);
+      if (cleanups.disposed) return;
       const loadedSettings = settingsConnection.settings;
       const appWindow = getCurrentWindow();
       await appWindow.setAlwaysOnTop(loadedSettings.alwaysOnTop ?? true);
@@ -1270,6 +1300,7 @@
       const unlistenSettings = await eventManager.on(
         Events.SETTINGS_UPDATED,
         (s: any) => {
+          if (lifetime.disposed) return;
           if (s) {
             console.log("[设置] 实时更新:", $appSettings);
 
@@ -1282,16 +1313,19 @@
         },
       );
       cleanups.add(unlistenSettings);
+      if (cleanups.disposed) return;
 
       const unlistenSettingsChanged = await eventManager.on(
         Events.SETTINGS_CHANGED,
         (settingName: any) => {
+          if (lifetime.disposed) return;
           console.log("[设置] 单项变更:", settingName);
 
           if (settingName === "monitorIndex") {
             windowApi
               .getCurrentMonitorIndex()
               .then((idx: number) => {
+                if (lifetime.disposed) return;
                 currentMonitorIndex = idx;
                 if (monitors[idx]) {
                   moveToMonitor(monitors[idx]).catch(console.error);
@@ -1304,9 +1338,11 @@
         },
       );
       cleanups.add(unlistenSettingsChanged);
+      if (cleanups.disposed) return;
 
       try {
         const allMonitors = await availableMonitors();
+        if (lifetime.disposed) return;
         monitors = allMonitors.map((m, idx) => {
           let name = m.name || `显示器 ${idx + 1}`;
           name = name.replace(/^\\\\\.\\DISPLAY/, "");
@@ -1343,6 +1379,7 @@
           );
         } else {
           const activeMonitor = await currentMonitor();
+          if (lifetime.disposed) return;
           currentMonitorIndex = activeMonitor
             ? allMonitors.findIndex((m) => m.name === activeMonitor.name)
             : 0;
@@ -1366,7 +1403,7 @@
 
       // Keep the transparent native host hidden until the WebView has mounted,
       // the saved display has been resolved, and its responsive bounds are in place.
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      if (!await waitForOwner(lifetime)) return;
       renderedIslandStyle = normalizedStyle($appSettings.islandStyle);
       renderedIslandEdge = normalizedEdge($appSettings.islandEdge);
       await applyWindowPlacement(
@@ -1377,18 +1414,23 @@
         isHidden,
         false,
       ).catch((error) => logger.warn("启动窗口定位失败", error));
+      if (lifetime.disposed) return;
       await windowApi.showMainWindow().catch((error) => logger.error("启动时显示灵动岛失败", error));
 
+      if (lifetime.disposed) return;
       const unlistenFloatingWindowClosed = await eventManager.on(
         Events.FLOATING_WINDOW_CLOSED,
         () => {
+          if (lifetime.disposed) return;
           isFloatingWindowOpen = false;
           console.log("[悬浮窗] 已关闭，更新状态");
         },
       );
       cleanups.add(unlistenFloatingWindowClosed);
+      if (cleanups.disposed) return;
 
       const unlistenMediaUpdate = await onMediaUpdate((data: any) => {
+        if (lifetime.disposed) return;
         const receivedAt = Date.now();
         // A removed session is an authoritative idle transition, not a metadata gap.
         if (!data.source) {
@@ -1399,6 +1441,7 @@
           isPlaying = false;
           currentSource = "";
           lastSongKey = null;
+          metadataImage?.abort(); metadataImage = undefined;
           metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
           lastReportedPosition = undefined;
           pendingSeekUntil = 0;
@@ -1460,13 +1503,14 @@
         if (songChanged) {
           pendingSeekUntil = 0;
           lastSongKey = currentSongKey;
+          metadataImage?.abort(); metadataImage = undefined;
           metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
         }
 
         if (currentSource === "netease" && lastNeteaseModeProbeKey !== currentSongKey) {
           lastNeteaseModeProbeKey = currentSongKey;
           void mediaApi.getNeteasePlaybackMode().then((mode) => {
-            if (lastSongKey === currentSongKey && currentSource === "netease") {
+            if (!lifetime.disposed && lastSongKey === currentSongKey && currentSource === "netease") {
               neteasePlaybackMode = mode ?? undefined;
             }
           }).catch((error) => logger.debug("网易云播放模式当前不可读取", error));
@@ -1489,6 +1533,7 @@
           }
 
           if (coverChanged) {
+            metadataImage?.abort(); metadataImage = undefined;
             cancelMainCover(); hdArtworkResolved=false;
             rawCoverUrl = newCover;
 
@@ -1520,20 +1565,24 @@
             const requestedCover = newCover;
             void mainCoverOwner
               .request<import("$lib/api/types").ResolvedCover | null>({ title:data.title, artist:data.artist || "", source:data.source || currentSource },newCover)
-              .then((resolved) => {
-                if (!resolved || lastSongKey !== requestedTrackKey || rawCoverUrl !== requestedCover || !$appSettings.enableHdCover) return;
+              .then(async (resolved) => {
+                if (lifetime.disposed || !resolved || lastSongKey !== requestedTrackKey || rawCoverUrl !== requestedCover || !$appSettings.enableHdCover) return;
                 const resolvedUrl = /^[a-z]:[\\/]/i.test(resolved.url)
                   ? convertFileSrc(resolved.url)
                   : resolved.url;
-                const image = new Image(); pendingHdImage=image;
-                image.onload = () => {
-                  if (lastSongKey !== requestedTrackKey || rawCoverUrl !== requestedCover || pendingHdImage !== image || !$appSettings.enableHdCover) return;
-                  pendingHdImage=undefined; image.onload=null;
-                  hdArtworkResolved=true;
+                pendingHdImage?.abort();
+                const controller = new AbortController(); pendingHdImage = controller;
+                let image: HTMLImageElement | undefined;
+                try {
+                  image = await loadImage(resolvedUrl, controller.signal);
+                  if (lifetime.disposed || controller.signal.aborted || lastSongKey !== requestedTrackKey || rawCoverUrl !== requestedCover || !$appSettings.enableHdCover) return;
+                  hdArtworkResolved = true;
                   artworkUrl = resolvedUrl;
                   void syncFloatingMediaClock();
-                };
-                image.src = resolvedUrl;
+                } finally {
+                  image?.removeAttribute("src");
+                  if (pendingHdImage === controller) pendingHdImage = undefined;
+                }
               })
               .catch(() => undefined);
           }
@@ -1544,9 +1593,10 @@
         void syncFloatingMediaClock();
       });
       cleanups.add(unlistenMediaUpdate);
+      if (cleanups.disposed) return;
       const recoveryTimer = setInterval(() => void recoverMissingMetadata(), 5_000);
       cleanups.add(() => clearInterval(recoveryTimer));
-    })();
+    })().catch(error => { if (!lifetime.disposed) logger.error("初始化失败", error); });
 
     return () => {
       cleanups.dispose();

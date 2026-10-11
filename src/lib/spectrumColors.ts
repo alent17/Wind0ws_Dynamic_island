@@ -1,3 +1,4 @@
+import { loadImage } from "./imageLoad";
 export type Rgb = [number, number, number];
 
 type Hsl = {
@@ -12,16 +13,11 @@ export type SpectrumColorPair = {
 };
 
 /** Read an album cover with the same sampling used by every island surface. */
-export async function extractSpectrumColorsFromImage(src: string): Promise<SpectrumColorPair | null> {
+export async function extractSpectrumColorsFromImage(src: string, signal?: AbortSignal): Promise<SpectrumColorPair | null> {
   if (!src) return null;
-  const image = new Image();
-  if (!src.startsWith("file://") && !src.startsWith("data:")) image.crossOrigin = "Anonymous";
-  await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("Artwork load timed out")), 5_000);
-    image.onload = () => { clearTimeout(timeout); resolve(); };
-    image.onerror = () => { clearTimeout(timeout); reject(new Error("Artwork load failed")); };
-    image.src = src;
-  });
+  const image = await loadImage(src, signal);
+  try {
+  if (signal?.aborted) return null;
   const canvas = document.createElement("canvas");
   canvas.width = 24;
   canvas.height = 24;
@@ -29,6 +25,7 @@ export async function extractSpectrumColorsFromImage(src: string): Promise<Spect
   if (!context) return null;
   context.drawImage(image, 0, 0, 24, 24);
   return extractSpectrumColorsFromPixels(context.getImageData(0, 0, 24, 24).data, 24, 24);
+  } finally { image.removeAttribute("src"); }
 }
 
 const clamp = (value: number, min: number, max: number) =>

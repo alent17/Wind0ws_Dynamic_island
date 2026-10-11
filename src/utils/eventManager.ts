@@ -18,7 +18,7 @@ interface ListenerEntry {
   config: ListenerConfig;
 }
 
-class EventManager {
+export class EventManager {
   private listeners: Map<string, ListenerEntry[]> = new Map();
   private pendingTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private lastEmitTime: Map<string, number> = new Map();
@@ -48,6 +48,12 @@ class EventManager {
         if (this.isDestroyed) return;
         wrappedHandler(e.payload);
       });
+
+      if (this.isDestroyed) {
+        unlisten();
+        this.clearListenerState(event, listenerId);
+        return () => {};
+      }
 
       const entry: ListenerEntry = { id: listenerId, unlisten, config };
 

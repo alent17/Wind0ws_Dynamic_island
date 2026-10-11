@@ -1,18 +1,21 @@
 /** Owns cleanup callbacks, including callbacks returned after disposal. */
 export function createAsyncCleanup() {
   let disposed = false;
-  const cleanups: Array<() => void> = [];
+  const cleanups = new Set<() => void>();
 
   return {
     get disposed() { return disposed; },
     add(cleanup: () => void) {
       if (disposed) cleanup();
-      else cleanups.push(cleanup);
+      else cleanups.add(cleanup);
+      return () => cleanups.delete(cleanup);
     },
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const cleanup of cleanups.splice(0)) cleanup();
+      const pending = [...cleanups];
+      cleanups.clear();
+      for (const cleanup of pending) cleanup();
     },
   };
 }

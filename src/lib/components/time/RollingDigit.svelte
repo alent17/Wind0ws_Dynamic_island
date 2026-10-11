@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { rollingDigitDelta } from "$lib/rollingNumber";
 
   let { value = "0", reduceMotion = false } = $props<{ value?: string; reduceMotion?: boolean }>();
@@ -9,6 +9,9 @@
   let ready = $state(false);
   let recentering = $state(false);
   let systemReduceMotion = $state(false);
+  let recenterFrame = 0;
+  let disposed = false;
+  onDestroy(() => { disposed = true; cancelAnimationFrame(recenterFrame); });
   const motionDisabled = $derived(reduceMotion || systemReduceMotion);
 
   onMount(() => {
@@ -44,7 +47,13 @@
     if (position === center) return;
     recentering = true;
     position = center;
-    requestAnimationFrame(() => requestAnimationFrame(() => recentering = false));
+    recenterFrame = requestAnimationFrame(() => {
+      if (disposed) return;
+      recenterFrame = requestAnimationFrame(() => {
+        recenterFrame = 0;
+        if (!disposed) recentering = false;
+      });
+    });
   }
 </script>
 
