@@ -70,7 +70,8 @@ async function canvasState(page,expectedTitle) {
   const title=document.querySelector('.track-title')?.textContent?.trim();
   const canvas=document.querySelector('canvas.album-art-new');
   const image=document.querySelector('img.compact-cover-image');
-  const result={title,titleMatches:title===expected,canvasCount:document.querySelectorAll('canvas.album-art-new').length,connected:canvas?.isConnected||false,width:canvas?.width||0,height:canvas?.height||0,imageReady:!!image?.complete && !!image?.naturalWidth,urlMatchesPixels:null};
+  const imageUrl=image?.currentSrc||image?.src||'';
+  const result={title,titleMatches:title===expected,canvasCount:document.querySelectorAll('canvas.album-art-new').length,connected:canvas?.isConnected||false,width:canvas?.width||0,height:canvas?.height||0,imageReady:!!image?.complete && !!image?.naturalWidth,imageComplete:image?.complete||false,imageNaturalWidth:image?.naturalWidth||0,imageNaturalHeight:image?.naturalHeight||0,imageUrlKind:imageUrl.startsWith('data:')?'data':imageUrl.startsWith('http://127.0.0.2:9234/')?'fixture':imageUrl.startsWith('http')?'http':imageUrl.startsWith('http://asset.localhost/')?'asset':'other',imageUrlChars:imageUrl.length,imageUrlTail:imageUrl.slice(-96),urlMatchesPixels:null};
   if(!canvas || !image?.src || !result.imageReady || !canvas.width || !canvas.height) return result;
   try {
    const reference=new Image();

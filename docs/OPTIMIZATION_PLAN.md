@@ -1,5 +1,7 @@
 # Isle Optimization Plan
 
+> 2026-10-12 更新：M4 封面请求合并及过期任务取消已通过最终候选三轮 Release C 对照、100 首连续切换/四次浮窗重开，以及 owner 共享、取消、显式清空、同曲目换封面和失败重试测试。解码、下载输入、CPU 与封面延迟改善；进程树峰值基本持平、Renderer 峰值略增 3.72%，恢复读数下降。M4 勾选并独立提交；不宣称整体内存峰值收益。M5 及后续阶段不动。见 [M4 验收报告](performance/m4-2026-10-11/REPORT.md)。
+
 > 2026-10-09 更新：M2 浮窗重开空封面已记录真实事件时序、修复并通过封面正确性/Canvas 所有权验收：100 首真实切歌及四次重开全部通过，Detached Canvas=0。M2 勾选；GPU 长期回稳及 Release 性能收益未确认，不能据此判定内存/Idle 达标。M3 保持未勾选，后续 Release C 前后构建必须包含同一 M2 修复。见 [M2 验收报告](performance/m2-reopen-2026-10-08/ACCEPTANCE.md)。
 
 > 2026-10-08 历史记录：三轮最新 Release OS 基线已采集；M1 正确性/资源压力验收通过。该轮 M2 第 50 首重开失败，详见 [原验收报告](performance/acceptance-2026-10-08/REPORT.md)。完整 B0 的 IPC/ETW/噪声校准仍待补。
@@ -385,7 +387,8 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Risk:** 太低上限损害封面清晰度/合法MV；WebP改变画质/处理时间；format检测与SMTC当前固定PNG MIME需一并核实。
   - **Verification:** chunked无Content-Length超限响应、截断图片、异常像素尺寸、SMTC超限、pixel_size=0/极大值均可控错误；正常1×/1.5×/2×DPI封面清晰。用C对比下载并发、decode内存峰值、Renderer/GPU；不能仅看磁盘配额。
 
-- [ ] **M4 · 🟠 P1 — Coalesce artwork work and cancel superseded requests**
+- [x] **M4 · 🟠 P1 — Coalesce artwork work and cancel superseded requests**
+  - **2026-10-12 验收：** 最终源码 Release C 前后三轮、每轮 100 首连续浮窗及五分钟恢复完成；native decode 中位数 605→527（−12.9%），download-input 403→315（−21.8%），CPU 平均 −9.47%，first-paint −25.38%，HD-paint −14.80%。进程树峰值 +0.32%、Renderer 峰值 +3.72%，GPU 峰值 +0.93%；恢复末分钟进程树/Renderer Commit −2.22%/−2.92%。最终 Release 真实播放器复验 100 首和四次重开通过，Canvas 连通且像素一致 100/100，五个快照 Detached Canvas=0。首次独立诊断在第 6 首等待图片完成时失败；用同一最终 Release、新目录重跑后该曲及完整序列通过，故保留首次失败记录并不归因于代码根因。84 项前端、56 项 Rust 通过，Svelte 检查零错误/警告。M4 勾选并独立提交；峰值内存轻微上升，不宣称整体内存峰值收益。M5 及后续阶段不动。见 [M4 验收报告](performance/m4-2026-10-11/REPORT.md)。
   - **Problem:** App/浮窗各自高清解析；duration/MV搜索也下载图片；快速切歌旧Rust下载仍完成，process_image请求Map只按同key合并、无总并发上限；浮窗主色无revision检查；同歌分支忽略新albumArt。
   - **File:** `src/App.svelte:87–121,965–968,1512–1534`、`src/FloatingWindow.svelte:169–238,329–349,782–814,948–994`、`src-tauri/src/services/media.rs:381–430,891–913`、`src-tauri/src/services/cache.rs:287–337`、`src-tauri/src/utils.rs:27–81`。
   - **Reason:** 迟到结果丢弃并不取消下载/decode，双窗口重复请求放大CPU、内存与网络；asset URL与Rust path接口不匹配导致重复失败。
@@ -675,4 +678,4 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
 - [Microsoft CoInitializeEx](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coinitializeex)：每次成功初始化，包括S_FALSE，需对应CoUninitialize，并遵守线程apartment模型。
 - [Chrome DevTools memory problems](https://developer.chrome.com/docs/devtools/memory-problems)：用retained对象、Detached DOM与heap snapshots区分bloat/leak；Chrome fixture不等同native WebView2总开销。
 
-**当前执行状态：B1、M1 已完成；M2 封面正确性/Canvas 所有权验收完成。M3 资源保护与 2026-10-10 匹配 Release C 回归修正验收通过并勾选，三档 renderer DPR 画质和重开回归通过；CPU/恢复 Commit 仍略高，未宣称整体内存收益。B0 完整基线、GPU/内存长期稳定和 Windows 跨屏 DPI 仍待验证。本阶段独立记录、提交并停止，M4 和后续阶段不动。**
+**当前执行状态：B1、M1–M4 已完成并各自验收。M3 资源保护、匹配 Release C 回归修正及三档 renderer DPR 画质通过；M4 合并/取消在最终源码 Release C 对照中减少处理工作量、改善 CPU 和封面延迟，但 Renderer 峰值轻微上升，不宣称整体内存收益。B0 完整基线、GPU/内存长期稳定和 Windows 跨屏 DPI 仍待验证。M5 及后续阶段不动。**

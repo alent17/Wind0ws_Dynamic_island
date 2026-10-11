@@ -17,6 +17,7 @@ static WORK: (Mutex<(usize, usize)>, Condvar) = (Mutex::new((0, 0)), Condvar::ne
 pub struct ImageWork;
 impl ImageWork {
     pub fn enter() -> AppResult<Self> {
+        super::artwork_jobs::checkpoint()?;
         let mut state = WORK
             .0
             .lock()
@@ -26,12 +27,18 @@ impl ImageWork {
         }
         state.1 += 1;
         while state.0 >= 2 {
+            if let Err(error) = super::artwork_jobs::checkpoint() {
+                state.1 -= 1;
+                return Err(error);
+            }
             state = WORK
                 .1
-                .wait(state)
-                .map_err(|_| AppError::lock("图片工作等待失败"))?;
+                .wait_timeout(state, std::time::Duration::from_millis(50))
+                .map_err(|_| AppError::lock("图片工作等待失败"))?
+                .0;
         }
         state.1 -= 1;
+        super::artwork_jobs::checkpoint()?;
         state.0 += 1;
         Ok(Self)
     }
@@ -95,6 +102,8 @@ pub fn dimensions(bytes: &[u8]) -> AppResult<(u32, u32)> {
 }
 
 pub fn decode(bytes: &[u8]) -> AppResult<DynamicImage> {
+    super::artwork_jobs::checkpoint()?;
+    super::artwork_jobs::trace_bytes("decode", bytes);
     dimensions(bytes)?; // Header inspection only; exactly one full decode.
     reader(bytes)?
         .decode()
@@ -186,10 +195,12 @@ fn static_png(bytes: &[u8]) -> bool {
 }
 
 pub fn prepare_artwork(bytes: &[u8]) -> AppResult<PreparedArtwork<'_>> {
+    super::artwork_jobs::trace_bytes("prepare", bytes);
     let _work = ImageWork::enter()?;
     // Retain the full bounded decode: header-only acceptance would let corrupt
     // pixel data through. The fast path skips encoding, never validation.
     let image = decode(bytes)?;
+    super::artwork_jobs::checkpoint()?;
     let format = image::guess_format(bytes)
         .map_err(|error| AppError::parse(format!("无法识别封面格式：{error}")))?;
     let mime = match format {

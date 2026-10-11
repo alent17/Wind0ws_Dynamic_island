@@ -466,6 +466,7 @@ pub fn run() {
         .manage(SpectrumState(Mutex::new((audio::SpectrumCapture::new(), std::collections::HashSet::new()))))
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
+                services::artwork_jobs::registry().close_window(window.label());
                 release_spectrum(&window.state::<SpectrumState>(), window.label());
             }
         })
@@ -519,6 +520,8 @@ pub fn run() {
             commands::get_netease_playback_mode,
             commands::get_netease_mv_url_cmd,
             commands::resolve_hd_cover,
+            commands::request_artwork,
+            commands::cancel_artwork,
             commands::control_media,
             commands::cycle_netease_playback_mode,
             commands::seek_media,

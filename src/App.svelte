@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createArtworkOwner } from "$lib/artworkOwner";
   import { artworkValue, withoutArtwork } from "$lib/mediaArtwork";
   import { onMount, onDestroy, untrack } from "svelte";
   import { convertFileSrc } from "@tauri-apps/api/core";
@@ -173,12 +174,21 @@
   });
   let displayedPosition = $derived(projectedPosition(islandMedia, clockNow));
 
+  const mainCoverOwner = createArtworkOwner("cover");
+  let hdArtworkResolved = $state(false);
+  let pendingHdImage: HTMLImageElement | undefined;
+  function cancelMainCover() {
+    mainCoverOwner.cancel();
+    if (pendingHdImage) { pendingHdImage.onload=null; pendingHdImage.onerror=null; pendingHdImage.src=""; pendingHdImage=undefined; }
+  }
+  $effect(() => { if (!$appSettings.enableHdCover) cancelMainCover(); });
   let lastSyncedArtwork = "";
   let lastSyncedTrack = "";
   function syncFloatingMediaClock() {
     const syncedAt = Date.now();
     const snapshot: MediaState = {
       ...islandMedia,
+      artworkResolved: hdArtworkResolved,
       positionMs: projectedPosition(islandMedia, syncedAt),
       lastUpdatedTimestamp: syncedAt,
     };
@@ -1382,6 +1392,7 @@
         const receivedAt = Date.now();
         // A removed session is an authoritative idle transition, not a metadata gap.
         if (!data.source) {
+          cancelMainCover(); hdArtworkResolved=false;
           rememberCurrentTrack(true);
           hasMediaSession = false;
           transitionIsland({ type: "media-session", active: false });
@@ -1478,6 +1489,7 @@
           }
 
           if (coverChanged) {
+            cancelMainCover(); hdArtworkResolved=false;
             rawCoverUrl = newCover;
 
             if (
@@ -1499,21 +1511,25 @@
           }
 
           if (
-            songChanged &&
+            coverChanged &&
+            (newCover || songChanged) &&
             $appSettings.enableHdCover &&
             data.title
           ) {
             const requestedTrackKey = currentSongKey;
-            void mediaApi
-              .resolveHdCover(data.title, data.artist || "", data.source || currentSource)
+            const requestedCover = newCover;
+            void mainCoverOwner
+              .request<import("$lib/api/types").ResolvedCover | null>({ title:data.title, artist:data.artist || "", source:data.source || currentSource },newCover)
               .then((resolved) => {
-                if (!resolved || lastSongKey !== requestedTrackKey) return;
+                if (!resolved || lastSongKey !== requestedTrackKey || rawCoverUrl !== requestedCover || !$appSettings.enableHdCover) return;
                 const resolvedUrl = /^[a-z]:[\\/]/i.test(resolved.url)
                   ? convertFileSrc(resolved.url)
                   : resolved.url;
-                const image = new Image();
+                const image = new Image(); pendingHdImage=image;
                 image.onload = () => {
-                  if (lastSongKey !== requestedTrackKey) return;
+                  if (lastSongKey !== requestedTrackKey || rawCoverUrl !== requestedCover || pendingHdImage !== image || !$appSettings.enableHdCover) return;
+                  pendingHdImage=undefined; image.onload=null;
+                  hdArtworkResolved=true;
                   artworkUrl = resolvedUrl;
                   void syncFloatingMediaClock();
                 };
@@ -1539,6 +1555,7 @@
 
   onDestroy(() => {
     stopDebugFps();
+    cancelMainCover();
     if (timerFinishedTimeout !== null) clearTimeout(timerFinishedTimeout);
     if (manualHideTimeout !== null) clearTimeout(manualHideTimeout);
   });

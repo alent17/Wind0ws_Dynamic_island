@@ -37,12 +37,13 @@ try {
  sampler=spawn('powershell',['-NoProfile','-File',resolve('scripts/measure-native.ps1'),'-RootPid',String(app.pid),'-Seconds','2400','-IncludeGpu','-Label',label,'-OutputDirectory',output,'-StopFile',join(output,'sampler.stop')],{windowsHide:true,stdio:['ignore','pipe','pipe']});
  sampler.stdout.on('data',data=>process.stdout.write(data));sampler.stderr.on('data',data=>process.stderr.write(data));
  for(const song of (pilot?corpus.slice(0,3):corpus)){
-  const at=Date.now();await command('mark',{phase:'track',index:song.index,id:song.id,title:song.title});const control=await playerAction('Next');
+  const marker=await command('mark',{phase:'track',index:song.index,id:song.id,title:song.title});const at=marker.at,started=performance.now();const control=await playerAction('Next');
   let paints=[],hd=[];
   for(let i=0;i<100;i++){
    const rows=(await events()).filter(row=>row.at>=at&&row.event.title===song.title);
    paints=rows.filter(row=>row.event.kind==='paint');hd=rows.filter(row=>row.event.kind==='hd-resolved');
-   if(paints.length&&hd.length&&Date.now()-at>=5000)break;
+   if(paints.length&&hd.length&&performance.now()-started>=5000)break;
+   if(app.exitCode!==null)throw new Error(`Native process exited during artwork wait: ${app.exitCode}`);
    if(i===99)throw new Error(`Artwork/HD completion timeout: ${song.index} ${song.title}`);
    await pause(200);
   }

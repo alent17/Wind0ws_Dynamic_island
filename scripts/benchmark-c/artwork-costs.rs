@@ -10,6 +10,10 @@ mod error {
     }
     impl From<std::io::Error> for AppError {fn from(value:std::io::Error)->Self {Self(value.to_string())}}
 }
+mod artwork_jobs {
+    pub fn checkpoint()->crate::error::AppResult<()> {Ok(())}
+    pub fn trace_bytes(_: &str, _: &[u8]) {}
+}
 #[path="../../src-tauri/src/services/image_budget.rs"] mod image_budget;
 fn main() {
     let args:Vec<_>=std::env::args().collect();

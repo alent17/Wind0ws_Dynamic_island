@@ -1,10 +1,11 @@
 from pathlib import Path
 import json,hashlib,sys,shutil
 root=Path(sys.argv[1]).resolve()
+paired_budgeted='--paired-budgeted' in sys.argv[2:]
 for variant in ('before','after'):
     base=root/variant
     shutil.copy2(Path(__file__).resolve().parent/'native.rs',base/'src-tauri/src/benchmark_c.rs')
-    if variant=='before':
+    if variant=='before' and not paired_budgeted:
         p=base/'src-tauri/src/services/cache.rs';s=p.read_text(encoding='utf-8')
         anchor='    save_cache_file(url, &bytes, content_type)'
         assert anchor in s

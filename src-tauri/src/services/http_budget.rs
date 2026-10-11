@@ -27,6 +27,7 @@ pub async fn download(
     directory: &Path,
     limit: u64,
 ) -> AppResult<Download> {
+    super::artwork_jobs::checkpoint()?;
     let permit = DOWNLOADS
         .acquire()
         .await
@@ -38,6 +39,8 @@ pub async fn download(
         .map_err(|e| AppError::network(format!("下载失败：{e}")))?
         .error_for_status()
         .map_err(|e| AppError::network(format!("下载响应失败：{e}")))?;
+    super::artwork_jobs::checkpoint()?;
+    super::artwork_jobs::trace_bytes("download", url.as_bytes());
     save_response(response, directory, limit, permit).await
 }
 
@@ -69,6 +72,7 @@ async fn save_response(
         .await
         .map_err(|e| AppError::network(format!("读取下载失败：{e}")))?
     {
+        super::artwork_jobs::checkpoint()?;
         let next = result
             .size
             .checked_add(chunk.len() as u64)

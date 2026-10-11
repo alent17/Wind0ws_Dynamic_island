@@ -100,6 +100,7 @@ export interface MediaCapabilities {
 }
 
 export interface MediaState {
+  artworkResolved?: boolean;
   title: string;
   artist: string;
   albumArt: string;

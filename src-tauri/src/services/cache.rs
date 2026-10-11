@@ -342,6 +342,23 @@ pub fn get_cached_media(url: &str) -> AppResult<Option<String>> {
 /// 如果文件已缓存，直接返回路径
 /// 否则下载、保存并返回路径
 pub async fn download_and_cache(url: &str, content_type: &str) -> AppResult<String> {
+    if is_image(content_type) {
+        static REQUEST: AtomicU64 = AtomicU64::new(1);
+        let id = REQUEST.fetch_add(1, Ordering::Relaxed);
+        let owned_url = url.to_owned();
+        let owned_type = content_type.to_owned();
+        let key =
+            super::artwork_jobs::identity(format!("download|{content_type}|{url}").as_bytes());
+        return super::artwork_jobs::registry()
+            .run("native-download", &id.to_string(), 1, key, async move {
+                download_and_cache_inner(&owned_url, &owned_type).await
+            })
+            .await;
+    }
+    download_and_cache_inner(url, content_type).await
+}
+async fn download_and_cache_inner(url: &str, content_type: &str) -> AppResult<String> {
+    super::artwork_jobs::checkpoint()?;
     let parsed = reqwest::Url::parse(url).map_err(|_| AppError::business(3003, "无效的 URL"))?;
     match parsed.scheme() {
         "https" => {}
@@ -388,6 +405,7 @@ pub async fn download_and_cache(url: &str, content_type: &str) -> AppResult<Stri
         downloaded.size = prepared.bytes.len() as u64;
         stored_type = prepared.content_type;
     }
+    super::artwork_jobs::checkpoint()?;
     save_cache_file(url, &downloaded.path, downloaded.size, stored_type, false)
 }
 

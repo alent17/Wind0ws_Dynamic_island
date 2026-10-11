@@ -5,7 +5,7 @@ export interface CanvasArtworkRequest {
 }
 
 interface ArtworkDependencies {
-  process: (url: string) => Promise<string>;
+  process: (url: string, signal?: AbortSignal) => Promise<string>;
   paint: (canvas: HTMLCanvasElement, image: HTMLImageElement) => void;
   createImage?: () => HTMLImageElement;
   onError?: (error: unknown) => void;
@@ -17,8 +17,10 @@ export function createCanvasArtworkRenderer(canvas: HTMLCanvasElement, dependenc
   let epoch = 0;
   let disposed = false;
   let cancelImage: (() => void) | undefined;
+  let processing: AbortController | undefined;
 
   function releaseImage() {
+    processing?.abort(); processing = undefined;
     cancelImage?.();
     cancelImage = undefined;
   }
@@ -66,7 +68,8 @@ export function createCanvasArtworkRenderer(canvas: HTMLCanvasElement, dependenc
         load(request.url, generation);
         return;
       }
-      void dependencies.process(request.url).then(
+      processing = new AbortController();
+      void dependencies.process(request.url, processing.signal).then(
         url => load(url, generation, request.url),
         () => load(request.url, generation),
       );

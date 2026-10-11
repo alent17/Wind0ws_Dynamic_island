@@ -16,9 +16,12 @@ fn data_url(image: &image::DynamicImage) -> AppResult<String> {
 }
 
 pub async fn process_image(image_path: &str, enable_pixel_art: bool) -> AppResult<String> {
-    let _work = ImageWork::enter()?;
     let bytes = load_image_data(image_path)?;
-    let image = image_budget::fit(image_budget::decode(&bytes)?);
+    process_image_bytes(&bytes, enable_pixel_art)
+}
+pub fn process_image_bytes(bytes: &[u8], enable_pixel_art: bool) -> AppResult<String> {
+    let _work = ImageWork::enter()?;
+    let image = image_budget::fit(image_budget::decode(bytes)?);
     let image = if enable_pixel_art {
         pixelate_image(&image, 12)
     } else {

@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { artworkValue, snapshotDecision, withoutArtwork, type ArtworkSnapshotToken } from "$lib/mediaArtwork";
   import { createCanvasArtworkRenderer, type CanvasArtworkRequest } from "$lib/canvasArtwork";
+  import { createArtworkOwner } from "$lib/artworkOwner";
   import { ArtworkResultCache, artworkCacheKey, artworkCanvasSize, boundedArtworkCanvasSize } from "$lib/artworkBudget";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -170,17 +171,21 @@
     }, 80);
   }
 
+  let cancelCoverPreload: (() => void) | undefined;
   function preloadCover(url: string): Promise<boolean> {
+    cancelCoverPreload?.();
     if (!url) return Promise.resolve(false);
-
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const image = pageImage();
-      if (url.startsWith("http") && !url.includes("asset.localhost")) {
-        image.crossOrigin = "Anonymous";
-      }
-      image.onload = () => resolve(true);
-      image.onerror = () => resolve(false);
-      image.src = url;
+      if (url.startsWith("http") && !url.includes("asset.localhost")) image.crossOrigin = "Anonymous";
+      const finish = (ready: boolean) => {
+        image.onload=null;image.onerror=null;pendingImages.delete(image);
+        if (cancelCoverPreload === cancel) cancelCoverPreload=undefined;
+        resolve(ready);
+      };
+      const cancel = () => {finish(false);image.src="";};
+      cancelCoverPreload=cancel;
+      image.onload=()=>finish(true);image.onerror=()=>finish(false);image.src=url;
     });
   }
 
@@ -190,19 +195,17 @@
     artist: string,
     source: string,
     fallbackCover: string,
+    alreadyResolved = false,
   ) {
+    coverOwner.cancel(); cancelCoverPreload?.();
     const requestId = ++coverRequestId;
 
     // Never leave the previous track's artwork visible while the HD lookup runs.
     transitionCover(fallbackCover, "left");
-    if (!enableHDCover || !title) return;
+    if (!enableHDCover || !title || alreadyResolved) return;
 
     try {
-      const resolved = await mediaApi.resolveHdCover(
-        title,
-        artist,
-        source || "generic",
-      );
+      const resolved = await coverOwner.request<import("$lib/api/types").ResolvedCover | null>({ title, artist, source: source || "generic" }, fallbackCover);
       if (
         !resolved?.url ||
         requestId !== coverRequestId ||
@@ -221,7 +224,9 @@
         }
       }
     } catch (error) {
-      console.warn("[高清封面] 获取失败，继续使用系统封面:", error);
+      if (!disposed && requestId === coverRequestId && trackKey === currentTrackKey) {
+        console.warn("[高清封面] 获取失败，继续使用系统封面:", error);
+      }
     }
   }
 
@@ -331,23 +336,25 @@
     return `linear-gradient(180deg, rgb(${top.r}, ${top.g}, ${top.b}) 0%, rgb(${r}, ${g}, ${b}) 50%, rgb(${bottom.r}, ${bottom.g}, ${bottom.b}) 100%)`;
   }
 
+  const coverOwner = createArtworkOwner("cover");
+  const colorOwner = createArtworkOwner("color");
+  const pixelOwner = createArtworkOwner("pixel");
   async function extractColors(imgSrc: string) {
     if (!useAlbumColor || !imgSrc) return;
 
     try {
-      const [r, g, b] = await invoke<[number, number, number]>(
-        "extract_dominant_color",
-        { imagePath: imgSrc },
-      );
+      const [r, g, b] = await colorOwner.request<[number, number, number]>({ imagePath: imgSrc });
 
       // Ignore an in-flight result if the user disabled album coloring while
       // the native color extraction was running.
-      if (!useAlbumColor) return;
+      if (disposed || !useAlbumColor || displayCover !== imgSrc) return;
 
       albumAccentColor = `rgb(${r}, ${g}, ${b})`;
       albumAccentGradient = createAlbumFill(r, g, b);
     } catch (error) {
-      console.error("[颜色提取] 失败:", error);
+      if (!disposed && useAlbumColor && displayCover === imgSrc) {
+        console.error("[颜色提取] 失败:", error);
+      }
     }
   }
 
@@ -356,6 +363,7 @@
     newCover: string,
     direction: "left" | "right" = "left",
   ) {
+    colorOwner.cancel();
     displayCover = newCover;
     if (newCover && useAlbumColor) void extractColors(newCover);
     previousCover = "";
@@ -580,7 +588,7 @@
       Events.HD_COVER_CHANGED,
       ({ enableHDCover: enabled }: any) => {
         enableHDCover = enabled;
-        coverRequestId += 1;
+        coverRequestId += 1; coverOwner.cancel();
         if (!currentTrackKey) return;
 
         if (enabled) {
@@ -625,6 +633,7 @@
         setCircularAlbum(value.floatingCircularAlbum ?? DEFAULT_SETTINGS.floatingCircularAlbum);
         configuredFillColor = value.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
         useAlbumColor = nextUseAlbumColor;
+        if (!nextUseAlbumColor) colorOwner.cancel();
         if (shouldRefreshAlbumColor && displayCover) void extractColors(displayCover);
       }
     });
@@ -716,11 +725,16 @@
     const receiveSameTrackArtwork = (payload: any) => {
       const cover = artworkValue(payload);
       if (cover === undefined) return;
+      if (payload.artworkResolved && cover) {
+        coverOwner.cancel(); cancelCoverPreload?.(); coverRequestId++;
+        if (displayCover !== cover) transitionCover(cover);
+        return;
+      }
       if (cover && cover === mediaState.albumArt && displayCover) return;
       artworkRevision++;
       mediaState.albumArt = cover;
       if (!cover) {
-        coverRequestId++;
+        coverRequestId++; coverOwner.cancel(); cancelCoverPreload?.(); colorOwner.cancel(); pixelOwner.cancel();
         displayCover = "";
         previousCover = "";
       } else {
@@ -765,7 +779,7 @@
         lastReportedPosition = undefined;
         pendingSeekUntil = 0;
         mvRequestId += 1;
-        coverRequestId += 1;
+        coverRequestId += 1; coverOwner.cancel(); cancelCoverPreload?.(); colorOwner.cancel(); pixelOwner.cancel();
         durationRequestId += 1;
         mediaState = {
           title: PLACEHOLDER_TITLE,
@@ -813,6 +827,7 @@
           payload.artist || "",
           payload.source || "generic",
           smtcCover,
+          Boolean(payload.artworkResolved),
         );
         void resolveMissingDuration(
           newTrackKey,
@@ -904,6 +919,7 @@
 
   onDestroy(() => {
     disposed = true;
+    coverOwner.cancel(); cancelCoverPreload?.(); colorOwner.cancel(); pixelOwner.cancel();
     pageRequests.abort();
     for (const image of pendingImages) { image.onerror?.(new Event("error")); image.onload = null; image.onerror = null; image.src = ""; }
     pendingImages.clear();
@@ -939,7 +955,7 @@
   // when the cover branch exits. No document queries or detached refs remain.
   function coverCanvas(canvas: HTMLCanvasElement, request: CanvasArtworkRequest) {
     const renderer = createCanvasArtworkRenderer(canvas, {
-      process: (url) => processImageBackend(url, true),
+      process: (url, signal) => processImageBackend(url, true, signal),
       paint: (target, image) => renderCachedImage(target, image, false),
       onError: (error) => console.error("[Canvas] 图片加载失败:", error),
     });
@@ -950,46 +966,17 @@
   // 缓存处理后的图片。浮动窗可能长时间切歌，使用有上限的 LRU，避免
   // 专辑封面 base64 无限留在 WebView 内存中。
   const processedImageCache = new ArtworkResultCache();
-  let fingerprintJobs = 0;
-  const processingPromises = new Map<string, Promise<string>>();
-
-  // 使用后端 API 处理图片（支持像素化）
-  async function processImageBackend(
-    imageUrl: string,
-    enablePixelArt: boolean,
-  ): Promise<string> {
-    if (disposed || processingPromises.size + fingerprintJobs >= 2) return imageUrl;
-    fingerprintJobs++;
-    let cacheKey: string;
-    try { cacheKey = await artworkCacheKey(imageUrl, enablePixelArt); }
-    finally { fingerprintJobs--; }
-    if (disposed) return imageUrl;
-    const cached = processedImageCache.get(cacheKey);
-    if (cached) {
-      // The byte-bounded cache updates recency on lookup.
-      return cached;
-    }
-    const pending = processingPromises.get(cacheKey);
-    if (pending) return pending;
-
-    const processing = (async () => {
-      try {
-        const processedBase64 = await invoke<string>("process_image", {
-          imagePath: imageUrl,
-          enablePixelArt: enablePixelArt,
-        });
-        if (disposed) return imageUrl;
-        processedImageCache.set(cacheKey, processedBase64);
-        return processedBase64;
-      } catch (error) {
-        console.error("[图片处理] 后端处理失败:", error);
-        return imageUrl;
-      } finally {
-        processingPromises.delete(cacheKey);
-      }
-    })();
-    processingPromises.set(cacheKey, processing);
-    return processing;
+  async function processImageBackend(imageUrl: string, enablePixelArt: boolean, signal?: AbortSignal): Promise<string> {
+    if (disposed || signal?.aborted) throw new DOMException("Artwork disposed", "AbortError");
+    // Only data URLs are immutable by their bytes. File paths may be rewritten.
+    const key = imageUrl.startsWith("data:") ? await artworkCacheKey(imageUrl, enablePixelArt) : undefined;
+    if (signal?.aborted || disposed) throw new DOMException("Artwork superseded", "AbortError");
+    const cached = key ? processedImageCache.get(key) : undefined;
+    if (cached) return cached;
+    const result = await pixelOwner.request<string>({imagePath:imageUrl,enablePixelArt},undefined,signal);
+    if (disposed || signal?.aborted) throw new DOMException("Artwork superseded", "AbortError");
+    if (key) processedImageCache.set(key,result);
+    return result;
   }
 
   // 智能图片质量分析函数

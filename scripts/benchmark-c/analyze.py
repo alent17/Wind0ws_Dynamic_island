@@ -19,6 +19,7 @@ for variant in ('before','after'):
     assert len(report['tracks'])==100,label
     native=load(directory/f'{label}.json');events=[json.loads(x) for x in (directory/'events.jsonl').read_text(encoding='utf-8').splitlines()]
     marks={row['event']['command'].get('phase'):row['at'] for row in events if row['event']['kind']=='command'}
+    track_marks={row['event']['command']['index']:row['at'] for row in events if row['event']['kind']=='command' and row['event']['command'].get('phase')=='track'}
     start=marks['continuous-start'];recovery=marks['recovery-start'];end=marks['complete']
     samples=[dict(row,at=timestamp(row['timestampUtc'])) for row in native['samples']]
     continuous=[row for row in samples if start<=row['at']<recovery];tail=[row for row in samples if end-60000<=row['at']<=end]
@@ -27,12 +28,22 @@ for variant in ('before','after'):
     renderer_sets=[tuple(sorted(row['pid'] for row in sample['processes'] if row['role']=='renderer')) for sample in samples]
     assert len(set(renderer_sets))==1,(label,'Renderer process changed during continuous scene')
     assert all(row['first']['dpi']==1 and row['first']['windowWidth']==200 and row['first']['windowHeight']==395 for row in report['tracks']),label
+    hd_paint_latencies=[];hd_paint_missing=[]
+    for row in report['tracks']:
+        expected=frozen[f'http://127.0.0.2:9234/cover/{row["index"]}'][1:]
+        paint_start=track_marks[row['index']]
+        next_start=track_marks.get(row['index']+1,recovery)
+        hd_paints=[event for event in events if paint_start<=event['at']<next_start and event['event']['kind']=='paint' and event['event'].get('title')==row['title'] and (event['event'].get('imageWidth'),event['event'].get('imageHeight'))==expected]
+        if hd_paints:hd_paint_latencies.append(min(event['at'] for event in hd_paints)-paint_start)
+        else:hd_paint_missing.append(row['index'])
+    assert len(report['tracks'])==100,label
+    if variant=='after':assert not hd_paint_missing,(label,'Candidate did not paint frozen HD dimensions before the next track',hd_paint_missing)
     downloaded={};partial_cache_reads=[]
     for row in events:
         event=row['event']
         if event['kind']=='download-input':
             assert event['url'].startswith('http://127.0.0.2:9234/cover/'),(label,event['url'])
-            key=event['url'].split('?')[0];value=(event['bytes'],event['hash64'])
+            key=event['url'].split('#')[0].split('?')[0];value=(event['bytes'],event['hash64'])
             assert key in frozen,(label,'Unexpected input',key)
             if event['bytes']!=frozen[key][0]:
                 assert event['bytes']<frozen[key][0],(label,'Oversized cache observation',key)
@@ -41,7 +52,6 @@ for variant in ('before','after'):
             assert key not in downloaded or downloaded[key]==value,(label,'Unstable input',key)
             downloaded[key]=value
     assert len(downloaded)==101,(label,'Missing frozen input',len(downloaded))
-    assert all((row['last']['imageWidth'],row['last']['imageHeight'])==frozen[f'http://127.0.0.2:9234/cover/{row["index"]}'][1:] for row in report['tracks']),(label,'Final displayed HD dimensions differ from corpus')
     identities[label]=downloaded
     cpu=[row['totalCpuPercentOfMachine'] for row in continuous]
     peaks={name:max(row[name] for row in events) for name in ('downloadBufferedBytesPeak','decodedBuffersTrackedBytesPeak','encodedBuffersTrackedBytesPeak')}
@@ -54,12 +64,11 @@ for variant in ('before','after'):
           'cpuMachineAveragePercent':statistics.mean(cpu),'cpuMachineP95Percent':percentile(cpu,.95),
           'firstPaintMedianMs':median([row['firstPaintLatencyMs'] for row in report['tracks']]),
           'firstPaintP95Ms':percentile([row['firstPaintLatencyMs'] for row in report['tracks']],.95),
-          'hdPaintMedianMs':median([row['lastPaintLatencyMs'] for row in report['tracks']]),
-          'hdPaintP95Ms':percentile([row['lastPaintLatencyMs'] for row in report['tracks']],.95),
+          'hdCanvasPaintTracks':len(hd_paint_latencies),'hdCanvasPaintMedianMs':median(hd_paint_latencies),'hdCanvasPaintP95Ms':percentile(hd_paint_latencies,.95),'hdCanvasPaintMissingTracks':hd_paint_missing,
           'recoveryLastMinuteTreeCommitMedianMiB':median([row['totalPrivateBytes']/2**20 for row in tail]),
           'recoveryLastMinuteRendererCommitMedianMiB':median([memory(row,'renderer') for row in tail]),
           'recoveryLastMinuteGpuCommittedMedianMiB':median([gpu(row) for row in tail]),
-          'peakBuffers':peaks,'hdResolvedTracks':sum(row['hdResolved'] for row in report['tracks']),'partialPostCacheProbeReads':partial_cache_reads,'finalDisplayDimensionsMatchFrozenCorpus':True,
+          'peakBuffers':peaks,'hdResolvedTracks':sum(row['hdResolved'] for row in report['tracks']),'partialPostCacheProbeReads':partial_cache_reads,'finalDisplayDimensionsMatchFrozenCorpus':not hd_paint_missing,
           'codecOperations':{'decodeCalls':max(row.get('decodeCalls',0) for row in events),'encodeCalls':max(row.get('encodeCalls',0) for row in events),'decodeTrackedWallMs':sum(row['milliseconds'] for row in codec_events if row['operation']=='decode'),'encodeTrackedWallMs':sum(row['milliseconds'] for row in codec_events if row['operation']=='encode'),'scope':'Known native codec operations over process lifetime; excludes browser decode and native header-only inspection. Concurrent wall durations are not CPU time.'},
           'recoveryMinuteMedians':[{'minute':minute+1,'samples':len(rows),'treeCommitMiB':median([row['totalPrivateBytes']/2**20 for row in rows]),'rendererCommitMiB':median([memory(row,'renderer') for row in rows]),'gpuCommitMiB':median([gpu(row) for row in rows]),'cpuMachinePercent':median([row['totalCpuPercentOfMachine'] for row in rows])} for minute,rows in enumerate(recovery_minutes)],
           'primaryCanvasBackingBytesMedian':median([row['last']['rasterWidth']*row['last']['rasterHeight']*4 for row in report['tracks']]),
@@ -69,11 +78,17 @@ reference=identities['before-r1'];assert all(value==reference for value in ident
 summary={}
 fields=['treePrivateCommitPeakMiB','rendererPrivateCommitPeakMiB','gpuCommittedPeakMiB','sceneGpuCommittedPeakMiB','cpuMachineAveragePercent','cpuMachineP95Percent','firstPaintMedianMs','firstPaintP95Ms','hdPaintMedianMs','hdPaintP95Ms','recoveryLastMinuteTreeCommitMedianMiB','recoveryLastMinuteRendererCommitMedianMiB','recoveryLastMinuteGpuCommittedMedianMiB','primaryCanvasBackingBytesMedian']
 for name in fields:
+    if name=='hdPaintMedianMs':
+        before=median([row['hdCanvasPaintMedianMs'] for row in results if row['variant']=='before']);after=median([row['hdCanvasPaintMedianMs'] for row in results if row['variant']=='after'])
+        summary[name]={'beforeMedian':before,'afterMedian':after,'delta':after-before,'deltaPercent':(after/before-1)*100 if before else None};continue
+    if name=='hdPaintP95Ms':
+        before=median([row['hdCanvasPaintP95Ms'] for row in results if row['variant']=='before']);after=median([row['hdCanvasPaintP95Ms'] for row in results if row['variant']=='after'])
+        summary[name]={'beforeMedian':before,'afterMedian':after,'delta':after-before,'deltaPercent':(after/before-1)*100 if before else None};continue
     before=median([row[name] for row in results if row['variant']=='before']);after=median([row[name] for row in results if row['variant']=='after'])
     summary[name]={'beforeMedian':before,'afterMedian':after,'delta':after-before,'deltaPercent':(after/before-1)*100 if before else None}
 for name in ('downloadBufferedBytesPeak','decodedBuffersTrackedBytesPeak','encodedBuffersTrackedBytesPeak'):
     before=median([row['peakBuffers'][name] for row in results if row['variant']=='before']);after=median([row['peakBuffers'][name] for row in results if row['variant']=='after'])
     summary[name]={'beforeMedian':before,'afterMedian':after,'delta':after-before,'deltaPercent':(after/before-1)*100 if before else None}
-output={'runs':results,'threeRoundMedians':summary,'identicalFullLengthInputObservationsAcrossAllSixRuns':True,'distinctInputs':len(reference),'limits':['Legacy batches may contain short mutable-cache probe reads, recorded separately. Current correction builds probe complete response bytes before publication on the reference side and a completed unique download temporary file on the candidate side. All 101 full-length input identities must agree across all six runs.','OS peaks are sampled; per-process pagefile high-water values must not be summed as a simultaneous process-tree peak.','Buffer counters track declared scopes only; decoder scratch and browser decoded-image allocations are excluded.','Paint timestamps mark native receipt of draw completion, not compositor presentation.','GPU recovery conclusions require the full curves; an endpoint alone does not prove a plateau or leak.']}
+output={'runs':results,'threeRoundMedians':summary,'identicalFullLengthInputObservationsAcrossAllSixRuns':True,'distinctInputs':len(reference),'limits':['Legacy batches may contain short mutable-cache probe reads, recorded separately. Current correction builds probe complete response bytes before publication on the reference side and a completed unique download temporary file on the candidate side. All 101 full-length input identities must agree across all six runs.','HD Canvas paint latency is derived from the first expected-dimension paint event after the track marker and before the next track marker; this captures draws that arrive just after the per-track report snapshot.','OS peaks are sampled; per-process pagefile high-water values must not be summed as a simultaneous process-tree peak.','Buffer counters track declared scopes only; decoder scratch and browser decoded-image allocations are excluded.','Paint timestamps mark native receipt of draw completion, not compositor presentation.','GPU recovery conclusions require the full curves; an endpoint alone does not prove a plateau or leak.']}
 (root/'comparison.json').write_text(json.dumps(output,ensure_ascii=False,indent=2),encoding='utf-8')
 print(json.dumps(summary,indent=2))

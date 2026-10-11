@@ -7,6 +7,90 @@ use crate::event_bus::EVENT_BUS;
 use crate::models::{MediaSessionInfo, MediaState, NeteaseSong, ResolvedCover};
 use tauri::AppHandle;
 
+#[tauri::command]
+pub fn cancel_artwork(window: tauri::WebviewWindow, slot: String, revision: u64) -> AppResult<()> {
+    validate_artwork_owner(&slot, revision)?;
+    crate::services::artwork_jobs::registry().cancel(window.label(), &slot, revision);
+    Ok(())
+}
+fn validate_artwork_owner(slot: &str, revision: u64) -> AppResult<()> {
+    if !["cover", "color", "pixel"].contains(&slot)
+        || revision > 9_007_199_254_740_991
+        || revision == 0
+    {
+        return Err(AppError::business(3006, "无效封面所有者"));
+    }
+    Ok(())
+}
+#[tauri::command]
+pub async fn request_artwork(
+    window: tauri::WebviewWindow,
+    slot: String,
+    revision: u64,
+    image_path: Option<String>,
+    title: Option<String>,
+    artist: Option<String>,
+    source: Option<String>,
+    cover_version: Option<String>,
+    enable_pixel_art: Option<bool>,
+) -> AppResult<serde_json::Value> {
+    use crate::services::{artwork_jobs as jobs, color, image, media};
+    validate_artwork_owner(&slot, revision)?;
+    static READS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(8);
+    let _admission = READS
+        .try_acquire()
+        .map_err(|_| AppError::business(3005, "封面请求已满"))?;
+    if slot == "cover" {
+        let title = title.unwrap_or_default();
+        let artist = artist.unwrap_or_default();
+        let source = source.unwrap_or_default();
+        let version = cover_version.unwrap_or_default();
+        if title.len() + artist.len() + source.len() > 4096 || version.len() > 128 {
+            return Err(AppError::business(3006, "封面身份过长"));
+        }
+        let key = jobs::identity(
+            serde_json::to_string(&("cover", &title, &artist, &source, &version))?.as_bytes(),
+        );
+        let result = jobs::registry()
+            .run(window.label(), &slot, revision, key, async move {
+                media::resolve_hd_cover_versioned(&title, &artist, &source, &version).await
+            })
+            .await?;
+        Ok(serde_json::to_value(result)?)
+    } else {
+        let path = image_path.unwrap_or_default();
+        if path.len() > crate::services::image_budget::MAX_IMAGE_URI_CHARS {
+            return Err(AppError::business(3004, "封面输入过长"));
+        }
+        let pixel = slot == "pixel" && enable_pixel_art.unwrap_or(true);
+        let pixel_key = [u8::from(pixel)];
+        let key = jobs::identity_parts(&[slot.as_bytes(), &pixel_key, path.as_bytes()]);
+        if slot == "color" {
+            let result = jobs::registry()
+                .run(window.label(), &slot, revision, key, async move {
+                    jobs::blocking(move || {
+                        let bytes = crate::utils::load_image_data(&path)?;
+                        color::extract_dominant_color_bytes(&bytes)
+                    })
+                    .await
+                })
+                .await?;
+            Ok(serde_json::to_value(result)?)
+        } else {
+            let result = jobs::registry()
+                .run(window.label(), &slot, revision, key, async move {
+                    jobs::blocking(move || {
+                        let bytes = crate::utils::load_image_data(&path)?;
+                        image::process_image_bytes(&bytes, pixel)
+                    })
+                    .await
+                })
+                .await?;
+            Ok(serde_json::to_value(result)?)
+        }
+    }
+}
+
 /// 获取当前播放的媒体信息
 #[tauri::command]
 pub async fn get_media_info_cmd(app: AppHandle) -> AppResult<MediaState> {

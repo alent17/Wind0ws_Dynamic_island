@@ -5,6 +5,7 @@ from pathlib import Path
 import re, shutil, json, hashlib, sys
 
 root=Path(sys.argv[1]).resolve()
+paired_budgeted='--paired-budgeted' in sys.argv[2:]
 fixture=Path(__file__).resolve().parent
 for variant in ('before','after'):
     base=root/variant
@@ -22,18 +23,22 @@ for variant in ('before','after'):
     p=base/'src/FloatingWindow.svelte';s=p.read_text(encoding='utf-8')
     s=s.replace('<script lang="ts">','<script lang="ts">\n  import { reportBenchmarkC } from "$lib/benchmarkC";',1)
     anchor='        source || "generic",\n      );'
-    assert anchor in s
-    s=s.replace(anchor,anchor+'\n      void reportBenchmarkC({kind:"hd-resolved",title,artist,found:!!resolved?.url});',1)
-    draw='ctx.drawImage(img, 0, 0, canvas.width, canvas.height);' if variant=='after' else 'ctx.drawImage(img, 0, 0);'
-    assert draw in s
-    s=s.replace(draw,draw+'\n      if(canvas.classList.contains("album-art-new")) void reportBenchmarkC({kind:"paint",title:mediaState.title,artist:mediaState.artist,track:currentTrackKey,imageWidth:img.naturalWidth,imageHeight:img.naturalHeight,rasterWidth:canvas.width,rasterHeight:canvas.height,dpi:devicePixelRatio,windowWidth:innerWidth,windowHeight:innerHeight});',1)
+    if anchor in s:
+        s=s.replace(anchor,anchor+'\n      void reportBenchmarkC({kind:"hd-resolved",title,artist,found:!!resolved?.url});',1)
+    else:
+        assert paired_budgeted
+        a=s.index('      const resolved = await coverOwner.request');b=s.index(';',a)+1
+        s=s[:b]+'\n      void reportBenchmarkC({kind:"hd-resolved",title,artist,found:!!resolved?.url});'+s[b:]
+    paint='paint: (target, image) => renderCachedImage(target, image, false),'
+    assert paint in s
+    s=s.replace(paint,'paint: (target, image) => { renderCachedImage(target, image, false); if(target.classList.contains("album-art-new")) void reportBenchmarkC({kind:"paint",title:mediaState.title,artist:mediaState.artist,track:currentTrackKey,imageWidth:image.naturalWidth,imageHeight:image.naturalHeight,rasterWidth:target.width,rasterHeight:target.height,dpi:devicePixelRatio,windowWidth:innerWidth,windowHeight:innerHeight}); },',1)
     p.write_text(s,encoding='utf-8')
     # Baseline complete response buffers versus budgeted transport chunks.
     for name in ('cache','media'):
         p=base/f'src-tauri/src/services/{name}.rs';s=p.read_text(encoding='utf-8')
         s=re.sub(r'(let bytes = response\s*\.bytes\(\)[\s\S]*?\?;)',r'\1\n    let _transport_buffer = crate::benchmark_c::Buffer::new("download", bytes.len());',s)
         p.write_text(s,encoding='utf-8')
-    if variant=='after':
+    if variant=='after' or paired_budgeted:
         p=base/'src-tauri/src/services/http_budget.rs';s=p.read_text(encoding='utf-8')
         anchor='        let next = result'
         assert anchor in s
@@ -46,7 +51,7 @@ for variant in ('before','after'):
         s=re.sub(r'(let (img_data|bytes) = load_image_data\([^;]+;)',lambda m:m[0]+f'\n    let _encoded_buffer = crate::benchmark_c::Buffer::new("encoded", {m[2]}.len());',s)
         s=re.sub(r'(let (_?img|image) = (?:image::load_from_memory|(?:super::)?image_budget::(?:fit|decode))[^;]*;)',lambda m:m[0]+f'\n    let _decoded_buffer = crate::benchmark_c::decoded(&{m[2]});',s)
         p.write_text(s,encoding='utf-8')
-    if variant=='after':
+    if variant=='after' or paired_budgeted:
         p=base/'src-tauri/src/services/image_budget.rs';s=p.read_text(encoding='utf-8')
         s=s.replace('pub fn fit(img: DynamicImage) -> DynamicImage {','pub fn fit(img: DynamicImage) -> DynamicImage {\n    let _source_buffer = crate::benchmark_c::decoded(&img);',1)
         if 'pub fn prepare_artwork' in s:

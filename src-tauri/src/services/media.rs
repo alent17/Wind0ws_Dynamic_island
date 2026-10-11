@@ -365,11 +365,20 @@ pub async fn resolve_hd_cover(
     artist: &str,
     source: &str,
 ) -> AppResult<Option<ResolvedCover>> {
+    resolve_hd_cover_versioned(title, artist, source, "").await
+}
+pub async fn resolve_hd_cover_versioned(
+    title: &str,
+    artist: &str,
+    source: &str,
+    version: &str,
+) -> AppResult<Option<ResolvedCover>> {
     let cache_key = format!(
-        "{}|{}|{}",
+        "{}|{}|{}|{}",
         normalize_media_text(title),
         normalize_media_text(artist),
-        source.to_lowercase()
+        source.to_lowercase(),
+        version
     );
     if cache_key.starts_with('|') {
         return Ok(None);
@@ -396,12 +405,22 @@ pub async fn resolve_hd_cover(
         .build()
         .map_err(|error| AppError::network(format!("Cover client failed: {error}")))?;
     let mut resolved = None;
+    let mut failed = false;
     for provider in cover_provider_order(source) {
         let attempt = match provider {
             "apple" => cover_from_apple(&client, title, artist).await,
             _ => cover_from_netease(&client, title, artist).await,
         };
+        if attempt.is_err() {
+            failed = true;
+        }
         if let Ok(Some(mut cover)) = attempt {
+            if !version.is_empty() {
+                let mut url = reqwest::Url::parse(&cover.url)
+                    .map_err(|_| AppError::parse("封面 URL 无效"))?;
+                url.set_fragment(Some(version));
+                cover.url = url.to_string();
+            }
             match crate::services::cache::download_and_cache(&cover.url, "image/jpeg").await {
                 Ok(cached_path) => {
                     cover.url = cached_path;
@@ -409,6 +428,7 @@ pub async fn resolve_hd_cover(
                     break;
                 }
                 Err(error) => {
+                    failed = true;
                     // Keep high-resolution artwork working if the install
                     // directory is temporarily unavailable.
                     match download_cover_as_data_url(&client, &cover.url).await {
@@ -427,6 +447,10 @@ pub async fn resolve_hd_cover(
                 }
             }
         }
+    }
+    super::artwork_jobs::checkpoint()?;
+    if resolved.is_none() && failed {
+        return Err(AppError::network("高清封面请求失败，请重试"));
     }
     if let Ok(mut cache) = COVER_CACHE
         .get_or_init(|| Mutex::new(HashMap::new()))
@@ -724,61 +748,48 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
 
     let title = info.Title().unwrap_or_default().to_string();
     let artist = info.Artist().unwrap_or_default().to_string();
-    let track_id = format!("{}|{}", title, artist);
-
-    // 处理封面图片（带缓存）
+    // Thumbnail versions are content identities, not just title/artist. Read
+    // the bounded stream each poll; unchanged bytes reuse the prepared image.
     let mut thumbnail_base64 = String::new();
-    let mut needs_update = true;
-
-    {
-        let state = app.state::<AppState>();
-        if let Ok(cache) = state.media_cache.lock() {
-            if cache.track_id == track_id && !cache.base64_img.is_empty() {
-                thumbnail_base64 = cache.base64_img.clone();
-                needs_update = false;
-            }
-        };
-    }
-
-    if needs_update {
-        if let Ok(thumbnail_ref) = info.Thumbnail() {
-            if let Ok(stream) = thumbnail_ref
-                .OpenReadAsync()
-                .and_then(|operation| operation.get())
-            {
-                if let Ok(reader) = DataReader::CreateDataReader(&stream) {
-                    if let Ok(size) =
-                        super::image_budget::checked_stream_size(stream.Size().unwrap_or(0))
+    if let Ok(thumbnail_ref) = info.Thumbnail() {
+        if let Ok(stream) = thumbnail_ref
+            .OpenReadAsync()
+            .and_then(|operation| operation.get())
+        {
+            if let Ok(reader) = DataReader::CreateDataReader(&stream) {
+                if let Ok(size) =
+                    super::image_budget::checked_stream_size(stream.Size().unwrap_or(0))
+                {
+                    if reader
+                        .LoadAsync(size)
+                        .and_then(|operation| operation.get())
+                        .ok()
+                        == Some(size)
                     {
-                        if reader
-                            .LoadAsync(size)
-                            .and_then(|operation| operation.get())
-                            .ok()
-                            == Some(size)
-                        {
-                            let mut buffer = vec![0u8; size as usize];
-                            if reader.ReadBytes(&mut buffer).is_ok() {
-                                if let Ok(prepared) = super::image_budget::prepare_artwork(&buffer) {
+                        let mut bytes = vec![0u8; size as usize];
+                        if reader.ReadBytes(&mut bytes).is_ok() {
+                            let identity =
+                                format!("{}|{}", raw_id, super::artwork_jobs::identity(&bytes));
+                            let state = app.state::<AppState>();
+                            if let Ok(mut cache) = state.media_cache.lock() {
+                                if cache.track_id == identity && !cache.base64_img.is_empty() {
+                                    thumbnail_base64 = cache.base64_img.clone();
+                                } else if let Ok(prepared) =
+                                    super::image_budget::prepare_artwork(&bytes)
+                                {
                                     thumbnail_base64 = format!(
                                         "data:{};base64,{}",
                                         prepared.content_type,
                                         general_purpose::STANDARD.encode(&prepared.bytes)
                                     );
+                                    cache.track_id = identity;
+                                    cache.base64_img = thumbnail_base64.clone();
                                 }
-                            }
+                            };
                         }
                     }
                 }
             }
-        }
-
-        // 更新缓存
-        if !thumbnail_base64.is_empty() {
-            let state = app.state::<AppState>();
-            if let Ok(mut cache) = state.media_cache.lock() {
-                cache.track_id = track_id.clone();
-                cache.base64_img = thumbnail_base64.clone();
-            };
         }
     }
 

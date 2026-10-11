@@ -4,6 +4,7 @@
 //! 命令层负责 Tauri IPC，服务层负责具体业务实现
 
 pub(crate) mod apartment;
+pub(crate) mod artwork_jobs;
 pub mod cache;
 pub mod color;
 pub mod idle;
