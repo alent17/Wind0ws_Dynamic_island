@@ -94,16 +94,16 @@ pub async fn request_artwork(
 /// 获取当前播放的媒体信息
 #[tauri::command]
 pub async fn get_media_info_cmd(app: AppHandle) -> AppResult<MediaState> {
-    tauri::async_runtime::spawn_blocking(move || crate::services::media::get_media_info(&app))
+    super::native_task::run_native(move || crate::services::media::get_media_info(&app))
         .await
-        .map_err(|error| AppError::media(format!("读取媒体信息任务失败：{}", error)))?
+        .map_err(|error| AppError::media(format!("读取媒体信息任务失败：{error}")))?
 }
 
 /// Cycle a NetEase playback mode through the bounded local CDP adapter.
 /// All socket work runs on Tauri's blocking pool, never the UI thread.
 #[tauri::command]
 pub async fn cycle_netease_playback_mode() -> AppResult<String> {
-    tauri::async_runtime::spawn_blocking(|| {
+    super::native_task::run_background(|| {
         use crate::services::netease_cdp::{mode_key, next_mode, LocalCdpClient};
 
         let client = LocalCdpClient::default();
@@ -123,7 +123,7 @@ pub async fn cycle_netease_playback_mode() -> AppResult<String> {
 
 #[tauri::command]
 pub async fn get_netease_playback_mode() -> AppResult<Option<String>> {
-    tauri::async_runtime::spawn_blocking(|| {
+    super::native_task::run_background(|| {
         use crate::services::netease_cdp::{mode_key, LocalCdpClient};
 
         LocalCdpClient::default()
@@ -137,9 +137,9 @@ pub async fn get_netease_playback_mode() -> AppResult<Option<String>> {
 
 #[tauri::command]
 pub async fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
-    tauri::async_runtime::spawn_blocking(crate::services::media::list_media_sessions)
+    super::native_task::run_native(crate::services::media::list_media_sessions)
         .await
-        .map_err(|error| AppError::media(format!("读取媒体会话任务失败：{}", error)))?
+        .map_err(|error| AppError::media(format!("读取媒体会话任务失败：{error}")))?
 }
 
 /// 从网易云音乐获取歌曲信息
@@ -175,52 +175,75 @@ pub async fn resolve_hd_cover(
 ///
 /// 操作完成后会自动更新媒体状态并通知前端
 #[tauri::command]
-pub fn control_media(app: AppHandle, action: String) -> AppResult<()> {
-    // Wait for the GSMTC operation here. The command used to return before
-    // Windows had completed the request, which made the island appear to
-    // toggle while playback did not change and hid all backend errors.
-    crate::services::media::control_media(&app, &action)?;
+pub async fn control_media(app: AppHandle, action: String) -> AppResult<()> {
+    let refresh_app = app.clone();
+    let refresh_play_state = action == "play_pause";
+    super::native_task::run_native(move || crate::services::media::control_media(&app, &action))
+        .await
+        .map_err(|error| AppError::media(format!("媒体控制后台任务失败：{error}")))??;
 
-    // Refresh play/pause state shortly after the player applies the command.
-    // This keeps the island responsive without relying solely on the 1-second
-    // media listener interval.
-    if action == "play_pause" {
-        std::thread::sleep(std::time::Duration::from_millis(150));
-        if let Ok(info) = crate::services::media::get_media_info(&app) {
+    // Keep the short confirmation refresh off the UI thread. Preserve the
+    // existing command contract: a successful toggle
+    // returns only after the follow-up snapshot has been attempted.
+    if refresh_play_state {
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        let result = super::native_task::run_native(move || {
+            crate::services::media::get_media_info(&refresh_app)
+        })
+        .await;
+        if let Ok(Ok(info)) = result {
             let _ = EVENT_BUS.emit(crate::event_bus::EVENT_MEDIA_UPDATE, &info);
         }
     }
-
     Ok(())
 }
 
 #[tauri::command]
-pub fn seek_media(app: AppHandle, position_ms: u64) -> AppResult<()> {
-    crate::services::media::seek_media(&app, position_ms)
+pub async fn seek_media(app: AppHandle, position_ms: u64) -> AppResult<()> {
+    super::native_task::run_native(move || crate::services::media::seek_media(&app, position_ms))
+        .await
+        .map_err(|error| AppError::media(format!("seek 后台任务失败：{error}")))?
 }
 
 #[tauri::command]
-pub fn toggle_shuffle(app: AppHandle) -> AppResult<()> {
-    crate::services::media::toggle_shuffle(&app)
+pub async fn toggle_shuffle(app: AppHandle) -> AppResult<()> {
+    super::native_task::run_native(move || crate::services::media::toggle_shuffle(&app))
+        .await
+        .map_err(|error| AppError::media(format!("shuffle 后台任务失败：{error}")))?
 }
 
 #[tauri::command]
-pub fn cycle_repeat(app: AppHandle) -> AppResult<()> {
-    crate::services::media::cycle_repeat(&app)
+pub async fn cycle_repeat(app: AppHandle) -> AppResult<()> {
+    super::native_task::run_native(move || crate::services::media::cycle_repeat(&app))
+        .await
+        .map_err(|error| AppError::media(format!("repeat 后台任务失败：{error}")))?
 }
 
 /// 提取图片主色调
 #[tauri::command]
-pub fn extract_dominant_color(image_path: String) -> AppResult<(u8, u8, u8)> {
-    crate::services::color::extract_dominant_color(&image_path)
+pub async fn extract_dominant_color(image_path: String) -> AppResult<(u8, u8, u8)> {
+    super::native_task::run_background(move || {
+        crate::services::color::extract_dominant_color(&image_path)
+    })
+    .await
+    .map_err(|error| AppError::business(3010, format!("取色后台任务失败：{error}")))?
 }
 
 #[tauri::command]
 pub async fn process_image(image_path: String, enable_pixel_art: bool) -> AppResult<String> {
-    crate::services::image::process_image(&image_path, enable_pixel_art).await
+    super::native_task::run_background(move || {
+        crate::services::image::process_image(&image_path, enable_pixel_art)
+    })
+    .await
+    .map_err(|error| AppError::business(3010, format!("图片处理后台任务失败：{error}")))?
 }
 
 #[tauri::command]
-pub fn pixelate_cover(image_path: String, pixel_size: u32) -> AppResult<String> {
-    crate::services::image::pixelate_cover(&image_path, pixel_size)
+pub async fn pixelate_cover(image_path: String, pixel_size: u32) -> AppResult<String> {
+    super::native_task::run_background(move || {
+        crate::services::image::pixelate_cover(&image_path, pixel_size)
+    })
+    .await
+    .map_err(|error| AppError::business(3010, format!("像素化后台任务失败：{error}")))?
 }
+

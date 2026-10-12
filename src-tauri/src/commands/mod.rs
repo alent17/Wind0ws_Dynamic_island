@@ -8,6 +8,7 @@ mod cache;
 mod idle;
 mod media;
 mod monitor;
+mod native_task;
 mod settings;
 mod window;
 
@@ -18,3 +19,4 @@ pub use media::*;
 pub use monitor::*;
 pub use settings::*;
 pub use window::*;
+

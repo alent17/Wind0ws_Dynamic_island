@@ -15,7 +15,7 @@ fn data_url(image: &image::DynamicImage) -> AppResult<String> {
     ))
 }
 
-pub async fn process_image(image_path: &str, enable_pixel_art: bool) -> AppResult<String> {
+pub fn process_image(image_path: &str, enable_pixel_art: bool) -> AppResult<String> {
     let bytes = load_image_data(image_path)?;
     process_image_bytes(&bytes, enable_pixel_art)
 }
@@ -123,3 +123,4 @@ mod tests {
         assert_eq!(result.get_pixel(1, 0).0, [100, 30, 50, 255]);
     }
 }
+

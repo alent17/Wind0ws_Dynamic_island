@@ -2,27 +2,33 @@
 //!
 //! 提供缓存管理、目录选择和媒体缓存命令
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::models::CacheStats;
 
 /// 清空缓存
 #[tauri::command]
-pub fn clear_cache() -> AppResult<()> {
-    crate::services::cache::clear_cache()
+pub async fn clear_cache() -> AppResult<()> {
+    super::native_task::run_background(crate::services::cache::clear_cache)
+        .await
+        .map_err(|error| AppError::cache(format!("缓存清理后台任务失败：{error}")))?
 }
 
 /// 获取缓存统计信息
 #[tauri::command]
-pub fn get_cache_stats() -> AppResult<CacheStats> {
-    crate::services::cache::get_cache_stats()
+pub async fn get_cache_stats() -> AppResult<CacheStats> {
+    super::native_task::run_background(crate::services::cache::get_cache_stats)
+        .await
+        .map_err(|error| AppError::cache(format!("读取缓存统计后台任务失败：{error}")))?
 }
 
 /// 获取已缓存的媒体文件路径
 ///
 /// 如果文件已缓存，返回本地路径；否则返回 None
 #[tauri::command]
-pub fn get_cached_media(url: String) -> AppResult<Option<String>> {
-    crate::services::cache::get_cached_media(&url)
+pub async fn get_cached_media(url: String) -> AppResult<Option<String>> {
+    super::native_task::run_background(move || crate::services::cache::get_cached_media(&url))
+        .await
+        .map_err(|error| AppError::cache(format!("读取缓存后台任务失败：{error}")))?
 }
 
 /// 下载并缓存媒体文件
@@ -33,3 +39,4 @@ pub fn get_cached_media(url: String) -> AppResult<Option<String>> {
 pub async fn download_and_cache(url: String, content_type: String) -> AppResult<String> {
     crate::services::cache::download_and_cache(&url, &content_type).await
 }
+

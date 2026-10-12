@@ -426,6 +426,7 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Expected benefit:** 点击播放/拖音量/封面处理期间主线程不长时间停顿，动画和点击穿透响应更稳。
   - **Risk:** 任意跨线程传COM对象不安全；仅加async关键字不足；返回过早导致假播放状态；blocking任务不可被强制取消需并发/过期预算。
   - **Verification:** 播放/暂停、seek、连续音量输入与同时展开trace，native UI线程不再执行150ms sleep/图片decode；操作失败能传到UI，状态以播放器结果为准。比较D的p95/p99帧时、命令延迟、watchdog重启与线程峰值；相关Rust/native测试通过。
+    - **2026-10-12 状态：实现和副屏 Release 控制测试完成，C1 保持 `[ ]`。** Rust 检查通过，63 passed/0 failed/1 ignored；C1 媒体控制、seek、32 次音量命令及16次展开/收起均成功，RAF p95 为5.1 ms。经授权的 PresentMon 应用级 GPU 进程采样显示：M6 部分基线交互最大间隔30.03 ms；C1 两轮在第15次收起→展开时重现615–630 ms呈现间隔（对应 CPU busy 约614–634 ms、GPU time <1 ms）。M6 进程在同步命令中失去响应，未能完成相同命令序列；线程峰值245→241也不是完整匹配样本。实现和错误传播有证据支持，但呈现长尾原因未明且缺少完整匹配基线，故不勾选 C1。此次上传仅记录实现及未完成验收，不代表阶段通过。详见 [C1 部分验收报告](performance/c1-2026-10-12/REPORT.md)；C2 及后续阶段未动。
 
 - [ ] **C2 · 🟠 P1 — Replace permanent polling with demand and events**
   - **Problem:** media1Hz、screenshot20Hz、fullscreen/recording2Hz、cursor远处5Hz长期运行，与可见性/设置不完整关联；media每次重新获取manager/属性，Capture关闭也消耗检测。
@@ -680,3 +681,4 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
 - [Chrome DevTools memory problems](https://developer.chrome.com/docs/devtools/memory-problems)：用retained对象、Detached DOM与heap snapshots区分bloat/leak；Chrome fixture不等同native WebView2总开销。
 
 **当前执行状态：B1、M1–M6 已完成并各自验收。M3 资源保护、匹配 Release C 回归修正及三档 renderer DPR 画质通过；M4 合并/取消减少处理工作量、改善 CPU 和封面延迟，但 Renderer 峰值轻微上升，不宣称整体内存收益；M5 修复迟到监听、图片及动画/等待任务的卸载清理，100次副窗开关后DOM/监听器稳定，句柄增长显著降低；M6 完成设置事务、恢复、失败补偿及 Studio 重试验收，Release 保存延迟中位数增加12.5 ms并如实记录。B0 完整基线、GPU/内存长期稳定和 Windows 跨屏 DPI 仍待验证；第6首超时仍未定位。**
+
