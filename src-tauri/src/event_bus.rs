@@ -71,6 +71,8 @@ pub const EVENT_AUDIO_SPECTRUM: &str = "audio-spectrum";
 ///
 /// 当设置被保存到文件后触发
 pub const EVENT_SETTINGS_UPDATED: &str = "settings-updated";
+/// Successful settings transaction revision; the legacy snapshot event remains unchanged.
+pub const EVENT_SETTINGS_COMMITTED: &str = "settings-committed";
 
 /// 设置变更事件
 ///

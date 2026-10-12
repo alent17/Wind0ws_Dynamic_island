@@ -54,7 +54,7 @@ fn default_idle_items() -> Vec<IdleContentItem> {
 /// Persisted settings shared by the legacy player surfaces and the current
 /// Isle Studio. Missing fields from newer, reduced settings files are filled
 /// from the legacy defaults.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppPreferences {
     pub island_style: String,

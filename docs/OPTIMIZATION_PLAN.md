@@ -407,14 +407,14 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Risk:** 把document生命周期listener误当组件泄漏；销毁前强制取消共有任务使其他窗口失去状态。
   - **Verification:** mock延迟listen返回，在destroy之后unlisten调用一次且getListenerCount为0；动画中卸载后无额外frame写入；图像超时后pending集合归零；匹配 Release 各进行10次预热与100次副窗开关，DOM/监听器无净增长；句柄净增由基线+612降至+69，增长集中在前10次测量开关后平台。进程树私有提交在10秒恢复后仍各增约30.36 MiB/25.32 MiB，前后差异不足以证明长期内存回稳；保持该限制，不归因为泄漏。没有活动媒体会话，Release image request计数为0；图片错误/超时/Abort由单元测试覆盖。M5 已勾选，详见 [M5 验收报告](performance/m5-2026-10-12/REPORT.md)。第6首超时继续作为未定位现象记录，复现时补图片错误和请求时序。
 
-- [ ] **M6 · 🟠 P1 — Serialize settings commits and make persistence recoverable**
-  - **Problem:** update_settings读snapshot后跨await保存，多窗口可覆盖彼此patch；save先改内存再spawn_blocking写文件，写入顺序可反转；fs::write直接覆盖，不是原子提交；Studio吞掉保存错误。
+- [x] **M6 · 🟠 P1 — Serialize settings commits and make persistence recoverable**
+  - **Problem:** update_settings读snapshot后跨await保存，多窗口可覆盖彼此patch；save先改内存再spawn_blocking写文件，写入顺序可反转；fs::write直接覆盖，不是原子提交；Studio吞掉保存错误。现已统一事务、原子替换/备份恢复和可重试错误提示。
   - **File:** `src-tauri/src/commands/settings.rs:59–113,209–230,421–466`、`src-tauri/src/services/settings.rs:58–72`、`src-tauri/src/commands/window.rs`中的设置写入、`src/Studio.svelte:231–247`。
   - **Reason:** 与动画/IPC优化同时发生时容易被误诊为“状态竞争”；配置丢失/损坏会造成长期稳定性问题。
   - **Proposed change:** 后端唯一写入队列将merge→validate→persist→publish变成带revision事务；使用Windows可替换的原子落盘方案，失败保留可恢复旧版本与明确UI错误。legacy setter与浮窗位置写入也进入同owner；避免锁持有期间做长Windows调用/磁盘I/O。
   - **Expected benefit:** 多窗口更新不丢失，崩溃/写入失败后配置可恢复，广播有权威版本。
   - **Risk:** 外部副作用（topmost/autostart）不天然原子，需要约定失败/回滚；Windows重命名覆盖语义不能照搬Unix。
-  - **Verification:** 并发不同patch/位置保存100轮，最后所有字段与revision正确、disk与memory一致；模拟写权限/中途失败/副作用失败，UI报告错误且重启不回默认。已有设置迁移测试通过，前后I/O时间无明显回归。
+  - **Verification:** Windows 测试 EXE 缺少 Common Controls v6 manifest 的启动故障已修复；Rust 测试 61 passed、0 failed、1 ignored，覆盖100个并发设置/位置提交、revision/磁盘/内存一致性、写入与外部操作失败补偿及备份恢复。Release Studio 副屏故障注入验证了失败提示、保留待重试修改、关闭拦截及重试落盘；损坏主配置后从备份重启恢复。M5/M6 匹配 Release Studio 保存耗时各4轮，中位数27/39.5 ms（增加12.5 ms，绝对延迟仍低于40 ms）。记录见 [M6 实施与验收状态](performance/m6-2026-10-12/REPORT.md)。
 
 ### Phase 2 — CPU / Background Tasks
 
@@ -679,4 +679,4 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
 - [Microsoft CoInitializeEx](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coinitializeex)：每次成功初始化，包括S_FALSE，需对应CoUninitialize，并遵守线程apartment模型。
 - [Chrome DevTools memory problems](https://developer.chrome.com/docs/devtools/memory-problems)：用retained对象、Detached DOM与heap snapshots区分bloat/leak；Chrome fixture不等同native WebView2总开销。
 
-**当前执行状态：B1、M1–M5 已完成并各自验收。M3 资源保护、匹配 Release C 回归修正及三档 renderer DPR 画质通过；M4 合并/取消减少处理工作量、改善 CPU 和封面延迟，但 Renderer 峰值轻微上升，不宣称整体内存收益；M5 修复迟到监听、图片及动画/等待任务的卸载清理，100次副窗开关后DOM/监听器稳定，句柄增长显著降低。B0 完整基线、GPU/内存长期稳定和 Windows 跨屏 DPI 仍待验证；第6首超时仍未定位。M6 及后续阶段不动。**
+**当前执行状态：B1、M1–M6 已完成并各自验收。M3 资源保护、匹配 Release C 回归修正及三档 renderer DPR 画质通过；M4 合并/取消减少处理工作量、改善 CPU 和封面延迟，但 Renderer 峰值轻微上升，不宣称整体内存收益；M5 修复迟到监听、图片及动画/等待任务的卸载清理，100次副窗开关后DOM/监听器稳定，句柄增长显著降低；M6 完成设置事务、恢复、失败补偿及 Studio 重试验收，Release 保存延迟中位数增加12.5 ms并如实记录。B0 完整基线、GPU/内存长期稳定和 Windows 跨屏 DPI 仍待验证；第6首超时仍未定位。**

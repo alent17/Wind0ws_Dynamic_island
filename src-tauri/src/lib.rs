@@ -37,6 +37,13 @@
 //! - `commands`: Tauri IPC 命令
 //! - `event_bus`: 事件总线
 
+// The Tauri-generated resource library embeds Common Controls v6 in the app
+// executable. Cargo's library unit-test harness does not receive Tauri's
+// `rustc-link-arg-bins`, so link it only into Windows unit-test executables.
+#[cfg(all(test, target_os = "windows"))]
+#[link(name = "resource", kind = "static")]
+unsafe extern "C" {}
+
 use std::sync::Mutex;
 use tauri::{
     image::Image,

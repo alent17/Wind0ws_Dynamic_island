@@ -5,14 +5,16 @@
 use crate::error::{AppError, AppResult};
 use crate::models::AppPreferences;
 use std::fs;
-use std::io::ErrorKind;
-use std::path::Path;
+use std::io::{ErrorKind, Write};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{AppHandle, Manager};
 
 const AUTOSTART_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 const AUTOSTART_VALUE: &str = "Isle";
 const LEGACY_AUTOSTART_VALUE: &str = "Wind0wsDynamicIsland";
 const AUTOSTART_ARGUMENT: &str = "--startup";
+static SETTINGS_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 /// 从配置文件读取设置
 ///
@@ -21,13 +23,16 @@ const AUTOSTART_ARGUMENT: &str = "--startup";
 pub fn read_settings_file(app: &AppHandle) -> Option<AppPreferences> {
     let config_dir = app.path().app_data_dir().ok()?;
     let config_path = config_dir.join("settings.json");
+    read_settings_from_path(&config_path)
+}
 
-    if !config_path.exists() {
-        return None;
-    }
+fn read_settings_from_path(config_path: &Path) -> Option<AppPreferences> {
+    parse_settings(&fs::read_to_string(config_path).ok()?)
+        .or_else(|| parse_settings(&fs::read_to_string(backup_path(config_path)).ok()?))
+}
 
-    let content = fs::read_to_string(config_path).ok()?;
-    let mut value: serde_json::Value = serde_json::from_str(&content).ok()?;
+fn parse_settings(content: &str) -> Option<AppPreferences> {
+    let mut value: serde_json::Value = serde_json::from_str(content).ok()?;
     if let Some(settings) = value.as_object_mut() {
         // Older releases allowed several families; keep the setting key but use MiSans everywhere.
         settings.insert(
@@ -67,9 +72,74 @@ pub fn write_settings_file(app: &AppHandle, settings: &AppPreferences) -> AppRes
     }
 
     let config_path = config_dir.join("settings.json");
-    let content = serde_json::to_string_pretty(settings).map_err(AppError::Serialization)?;
+    write_settings_snapshot(&config_path, settings)
+}
 
-    fs::write(config_path, content).map_err(AppError::Io)
+pub(crate) fn write_settings_snapshot(
+    config_path: &Path,
+    settings: &AppPreferences,
+) -> AppResult<()> {
+    let content = serde_json::to_string_pretty(settings).map_err(AppError::Serialization)?;
+    write_atomic_with_backup(config_path, content.as_bytes())
+}
+
+pub(crate) fn write_atomic_with_backup(config_path: &Path, content: &[u8]) -> AppResult<()> {
+    let parent = config_path
+        .parent()
+        .ok_or_else(|| AppError::config("设置文件路径没有父目录"))?;
+    fs::create_dir_all(parent).map_err(AppError::Io)?;
+    let sequence = SETTINGS_TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let temp_path = parent.join(format!(".settings-{}-{sequence}.tmp", std::process::id()));
+    let backup_path = backup_path(config_path);
+
+    let result = (|| {
+        let mut temp = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)
+            .map_err(AppError::Io)?;
+        temp.write_all(content).map_err(AppError::Io)?;
+        temp.sync_all().map_err(AppError::Io)?;
+        drop(temp);
+        replace_file_preserving_backup(&temp_path, config_path, &backup_path)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    result
+}
+
+fn backup_path(config_path: &Path) -> PathBuf {
+    let name = config_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("settings");
+    config_path.with_file_name(format!("{name}.bak"))
+}
+
+fn replace_file_preserving_backup(temp: &Path, target: &Path, backup: &Path) -> AppResult<()> {
+    if target.exists() {
+        let target_is_recoverable = fs::read_to_string(target)
+            .ok()
+            .and_then(|content| parse_settings(&content))
+            .is_some();
+        let backup_is_recoverable = fs::read_to_string(backup)
+            .ok()
+            .and_then(|content| parse_settings(&content))
+            .is_some();
+        if target_is_recoverable || !backup_is_recoverable {
+            fs::copy(target, backup).map_err(AppError::Io)?;
+            fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(backup)
+                .and_then(|file| file.sync_all())
+                .map_err(AppError::Io)?;
+        }
+    }
+    // Rust's Windows implementation uses MoveFileExW with
+    // MOVEFILE_REPLACE_EXISTING; on Unix this is an atomic same-volume rename.
+    fs::rename(temp, target).map_err(AppError::Io)
 }
 
 /// 设置开机自启动
@@ -198,7 +268,12 @@ fn normalize_windows_path(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{command_executable, normalize_windows_path, startup_command};
+    use super::{
+        backup_path, command_executable, normalize_windows_path, read_settings_from_path,
+        startup_command, write_atomic_with_backup, write_settings_snapshot,
+    };
+    use crate::models::AppPreferences;
+    use std::fs;
     use std::path::Path;
 
     #[test]
@@ -227,5 +302,62 @@ mod tests {
             startup_command(Path::new(r"C:\Apps\Isle\isle.exe")),
             r#""C:\Apps\Isle\isle.exe" --startup"#
         );
+    }
+
+    #[test]
+    fn atomic_replacement_keeps_previous_snapshot_and_does_not_destroy_failed_target() {
+        let root = std::env::temp_dir().join(format!("isle-settings-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("test temp directory");
+        let path = root.join("settings.json");
+        write_atomic_with_backup(&path, br#"{"revision":1}"#).expect("initial write");
+        write_atomic_with_backup(&path, br#"{"revision":2}"#).expect("replacement");
+        assert_eq!(
+            fs::read_to_string(&path).expect("primary"),
+            r#"{"revision":2}"#
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("settings.json.bak")).expect("backup"),
+            r#"{"revision":1}"#
+        );
+
+        let invalid_target = root.join("directory-target");
+        fs::create_dir(&invalid_target).expect("target directory");
+        assert!(write_atomic_with_backup(&invalid_target, b"new").is_err());
+        assert!(invalid_target.is_dir());
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn corrupted_primary_recovers_the_previous_parseable_settings_snapshot() {
+        let root =
+            std::env::temp_dir().join(format!("isle-settings-recovery-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("test temp directory");
+        let path = root.join("settings.json");
+        let previous = AppPreferences {
+            window_opacity: 177,
+            ..AppPreferences::default()
+        };
+        let current = AppPreferences {
+            window_opacity: 88,
+            ..AppPreferences::default()
+        };
+        write_settings_snapshot(&path, &previous).expect("initial settings");
+        write_settings_snapshot(&path, &current).expect("replacement settings");
+        fs::write(&path, b"truncated json").expect("simulate interrupted/corrupt primary");
+        assert_eq!(read_settings_from_path(&path), Some(previous.clone()));
+        let recovered = AppPreferences {
+            window_opacity: 30,
+            ..AppPreferences::default()
+        };
+        write_settings_snapshot(&path, &recovered).expect("write after recovery");
+        assert_eq!(
+            read_settings_from_path(&backup_path(&path)),
+            Some(previous),
+            "a corrupt primary must not replace a valid recovery snapshot"
+        );
+        assert_eq!(read_settings_from_path(&path), Some(recovered));
+        fs::remove_dir_all(root).expect("cleanup");
     }
 }

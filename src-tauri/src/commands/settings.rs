@@ -10,6 +10,8 @@ use crate::services::{
 };
 use crate::state::AppState;
 use std::collections::HashMap;
+use std::future::Future;
+use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Manager, State};
 
 /// Clear the Windows-wide capture protection flag.
@@ -48,19 +50,7 @@ pub fn get_preferences(state: State<'_, AppState>) -> AppResult<AppPreferences> 
     Ok(settings.clone())
 }
 
-/// 保存应用设置
-///
-/// 同时处理：
-/// - 持久化到配置文件
-/// - 更新窗口置顶状态
-/// - 更新开机自启动
-/// - 发送相关事件通知前端
-#[tauri::command]
-pub async fn save_settings(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    mut settings: AppSettings,
-) -> AppResult<()> {
+fn normalize_settings(settings: &mut AppPreferences) {
     settings.compact_length = settings.compact_length.clamp(80, 300);
     settings.island_edge_position = settings.island_edge_position.min(100);
     settings.collapsed_edge_shoulder_radius = settings.collapsed_edge_shoulder_radius.min(16);
@@ -72,12 +62,10 @@ pub async fn save_settings(
         let mut seen = std::collections::HashSet::new();
         ids.retain(|id| !id.trim().is_empty() && seen.insert(id.clone()));
     }
-    {
-        let mut seen = std::collections::HashSet::new();
-        settings
-            .player_order_ids
-            .retain(|id| !id.trim().is_empty() && seen.insert(id.clone()));
-    }
+    let mut seen = std::collections::HashSet::new();
+    settings
+        .player_order_ids
+        .retain(|id| !id.trim().is_empty() && seen.insert(id.clone()));
     settings.idle_items.retain_mut(|item| {
         if item.kind == "custom" {
             item.text = item.text.trim().chars().take(120).collect();
@@ -89,122 +77,229 @@ pub async fn save_settings(
             )
         }
     });
-    let always_on_top = settings.always_on_top;
-    let auto_start = settings.auto_start;
+}
 
-    // 保存旧设置用于比较变更
-    let old_settings: Option<AppSettings> = {
-        let mut state_settings = state
-            .settings
-            .lock()
-            .map_err(|_| AppError::lock("Failed to lock settings"))?;
-        let old = state_settings.clone();
-        *state_settings = settings.clone();
-        Some(old)
-    };
+async fn apply_auto_start(enable: bool) -> AppResult<()> {
+    tauri::async_runtime::spawn_blocking(move || set_auto_start(enable))
+        .await
+        .map_err(|error| AppError::config(format!("更新开机启动任务失败：{error}")))?
+}
 
-    // 持久化到文件
-    let app_for_write = app.clone();
-    let settings_for_write = settings.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        write_settings_file(&app_for_write, &settings_for_write)
-    })
-    .await
-    .map_err(|error| AppError::config(format!("保存设置任务失败：{}", error)))??;
+async fn apply_external_changes(
+    app: &AppHandle,
+    from: &AppPreferences,
+    to: &AppPreferences,
+) -> AppResult<()> {
+    let top_changed = from.always_on_top != to.always_on_top;
+    let floating_top_changed =
+        from.floating_window_always_on_top != to.floating_window_always_on_top;
+    let auto_start_changed = from.auto_start != to.auto_start;
+    let capture_preferences_changed = from.capture_hide_on_screenshot
+        != to.capture_hide_on_screenshot
+        || from.capture_hide_on_recording != to.capture_hide_on_recording
+        || from.capture_hide_on_fullscreen != to.capture_hide_on_fullscreen
+        || from.capture_hide_on_screen_share != to.capture_hide_on_screen_share;
 
-    // 仅在相关设置真正变化时调用 Windows API。发布版中注册表和
-    // SetWindowDisplayAffinity 都可能阻塞数秒，不能在每次普通保存时执行。
-    if old_settings
-        .as_ref()
-        .is_some_and(|old| old.always_on_top != settings.always_on_top)
-    {
-        apply_island_always_on_top(&app, always_on_top)?;
-    }
-    if old_settings.as_ref().is_some_and(|old| {
-        old.floating_window_always_on_top != settings.floating_window_always_on_top
-    }) {
-        apply_floating_window_always_on_top(&app, settings.floating_window_always_on_top)?;
-    }
-    if old_settings.as_ref().is_some_and(|old| {
-        old.capture_hide_on_screenshot != settings.capture_hide_on_screenshot
-            || old.capture_hide_on_recording != settings.capture_hide_on_recording
-            || old.capture_hide_on_fullscreen != settings.capture_hide_on_fullscreen
-            || old.capture_hide_on_screen_share != settings.capture_hide_on_screen_share
-    }) {
-        reset_content_protection(&app);
-    }
-
-    // 只有开关本身发生变化时才访问开机启动注册表。
-    if old_settings
-        .as_ref()
-        .is_some_and(|old| old.auto_start != settings.auto_start)
-    {
-        set_auto_start(auto_start)?;
-    }
-
-    // 发送设置变更事件
-    if let Some(old) = old_settings {
-        if old.enable_halftone != settings.enable_halftone {
-            let _ = EVENT_BUS.emit(
-                crate::event_bus::EVENT_HALFTONE_CHANGED,
-                serde_json::json!({"enableHalftone": settings.enable_halftone}),
-            );
-        }
-        if old.enable_pixel_art != settings.enable_pixel_art {
-            let _ = EVENT_BUS.emit(
-                crate::event_bus::EVENT_PIXEL_ART_CHANGED,
-                serde_json::json!({"enablePixelArt": settings.enable_pixel_art}),
-            );
-        }
-        if old.enable_hd_cover != settings.enable_hd_cover {
-            let _ = EVENT_BUS.emit(
-                crate::event_bus::EVENT_HD_COVER_CHANGED,
-                serde_json::json!({"enableHDCover": settings.enable_hd_cover}),
-            );
-        }
-        if old.enable_mv_playback != settings.enable_mv_playback {
-            let _ = EVENT_BUS.emit(
-                crate::event_bus::EVENT_MV_PLAYBACK_CHANGED,
-                serde_json::json!({"enable": settings.enable_mv_playback}),
-            );
-        }
-        if old.lock_floating_window != settings.lock_floating_window {
-            let _ = EVENT_BUS.emit(
-                crate::event_bus::EVENT_LOCK_FLOATING_WINDOW_CHANGED,
-                serde_json::json!({"lock": settings.lock_floating_window}),
-            );
-        }
-        if old.always_on_top != settings.always_on_top {
-            let _ = EVENT_BUS.emit(
-                crate::event_bus::EVENT_ALWAYS_ON_TOP_CHANGED,
-                serde_json::json!({"isAlwaysOnTop": settings.always_on_top}),
-            );
-        }
-        if old.floating_window_always_on_top != settings.floating_window_always_on_top {
-            let _ = EVENT_BUS.emit(
-                crate::event_bus::EVENT_FLOATING_WINDOW_ALWAYS_ON_TOP_CHANGED,
-                serde_json::json!({
-                    "isAlwaysOnTop": settings.floating_window_always_on_top
-                }),
-            );
-        }
-        if old.expanded_corner_radius != settings.expanded_corner_radius {
-            let _ = EVENT_BUS.emit(
-                crate::event_bus::EVENT_CORNER_RADIUS_CHANGED,
-                settings.expanded_corner_radius,
-            );
+    if top_changed {
+        if let Err(error) = apply_island_always_on_top(app, to.always_on_top) {
+            return Err(error);
         }
     }
-
-    let _ = EVENT_BUS.emit(crate::event_bus::EVENT_SETTINGS_UPDATED, settings.clone());
-
+    if floating_top_changed {
+        if let Err(error) =
+            apply_floating_window_always_on_top(app, to.floating_window_always_on_top)
+        {
+            let mut rollback_errors = Vec::new();
+            if top_changed {
+                if let Err(rollback) = apply_island_always_on_top(app, from.always_on_top) {
+                    rollback_errors.push(rollback.to_string());
+                }
+            }
+            return Err(if rollback_errors.is_empty() {
+                error
+            } else {
+                AppError::config(format!(
+                    "{error}；外部设置回滚失败：{}",
+                    rollback_errors.join("；")
+                ))
+            });
+        }
+    }
+    if auto_start_changed {
+        if let Err(error) = apply_auto_start(to.auto_start).await {
+            let mut rollback_errors = Vec::new();
+            if let Err(rollback) = apply_auto_start(from.auto_start).await {
+                rollback_errors.push(rollback.to_string());
+            }
+            if floating_top_changed {
+                if let Err(rollback) =
+                    apply_floating_window_always_on_top(app, from.floating_window_always_on_top)
+                {
+                    rollback_errors.push(rollback.to_string());
+                }
+            }
+            if top_changed {
+                if let Err(rollback) = apply_island_always_on_top(app, from.always_on_top) {
+                    rollback_errors.push(rollback.to_string());
+                }
+            }
+            return Err(if rollback_errors.is_empty() {
+                error
+            } else {
+                AppError::config(format!(
+                    "{error}；外部设置回滚失败：{}",
+                    rollback_errors.join("；")
+                ))
+            });
+        }
+    }
+    if capture_preferences_changed {
+        reset_content_protection(app);
+    }
     Ok(())
 }
 
-/// Apply only the changed settings fields. The in-memory settings are merged
-/// first so validation, side effects, and the settings-updated event remain
-/// identical to a regular save while Studio avoids sending a full snapshot
-/// for every small preference change.
+async fn commit_settings<F>(app: AppHandle, state: &AppState, mutate: F) -> AppResult<()>
+where
+    F: FnOnce(&mut AppPreferences) -> AppResult<()> + Send,
+{
+    let apply_app = app.clone();
+    let rollback_app = app.clone();
+    commit_settings_transaction(
+        state,
+        mutate,
+        move |old, next| async move { apply_external_changes(&apply_app, &old, &next).await },
+        move |next| async move {
+            let app_for_write = app.clone();
+            tauri::async_runtime::spawn_blocking(move || write_settings_file(&app_for_write, &next))
+                .await
+                .map_err(|error| AppError::config(format!("保存设置任务失败：{error}")))?
+        },
+        move |next, old| async move { apply_external_changes(&rollback_app, &next, &old).await },
+    )
+    .await
+}
+
+async fn commit_settings_transaction<F, A, AFut, P, PFut, R, RFut>(
+    state: &AppState,
+    mutate: F,
+    apply: A,
+    persist: P,
+    rollback: R,
+) -> AppResult<()>
+where
+    F: FnOnce(&mut AppPreferences) -> AppResult<()> + Send,
+    A: FnOnce(AppPreferences, AppPreferences) -> AFut + Send,
+    AFut: Future<Output = AppResult<()>> + Send,
+    P: FnOnce(AppPreferences) -> PFut + Send,
+    PFut: Future<Output = AppResult<()>> + Send,
+    R: FnOnce(AppPreferences, AppPreferences) -> RFut + Send,
+    RFut: Future<Output = AppResult<()>> + Send,
+{
+    let _writer = state.settings_writer.lock().await;
+    let old = state
+        .settings
+        .lock()
+        .map_err(|_| AppError::lock("Failed to lock settings"))?
+        .clone();
+    let mut next = old.clone();
+    mutate(&mut next)?;
+    normalize_settings(&mut next);
+    if next == old {
+        return Ok(());
+    }
+
+    apply(old.clone(), next.clone()).await?;
+    if let Err(error) = persist(next.clone()).await {
+        return match rollback(next, old).await {
+            Ok(()) => Err(error),
+            Err(rollback) => Err(AppError::config(format!(
+                "{error}；外部设置回滚失败：{rollback}"
+            ))),
+        };
+    }
+
+    *state
+        .settings
+        .lock()
+        .map_err(|_| AppError::lock("Failed to lock settings"))? = next.clone();
+    let revision = state.settings_revision.fetch_add(1, Ordering::SeqCst) + 1;
+    emit_setting_diffs(&old, &next);
+    let _ = EVENT_BUS.emit(crate::event_bus::EVENT_SETTINGS_UPDATED, next.clone());
+    let _ = EVENT_BUS.emit(
+        crate::event_bus::EVENT_SETTINGS_COMMITTED,
+        serde_json::json!({"revision": revision}),
+    );
+    Ok(())
+}
+
+fn emit_setting_diffs(old: &AppPreferences, settings: &AppPreferences) {
+    if old.enable_halftone != settings.enable_halftone {
+        let _ = EVENT_BUS.emit(
+            crate::event_bus::EVENT_HALFTONE_CHANGED,
+            serde_json::json!({"enableHalftone": settings.enable_halftone}),
+        );
+    }
+    if old.enable_pixel_art != settings.enable_pixel_art {
+        let _ = EVENT_BUS.emit(
+            crate::event_bus::EVENT_PIXEL_ART_CHANGED,
+            serde_json::json!({"enablePixelArt": settings.enable_pixel_art}),
+        );
+    }
+    if old.enable_hd_cover != settings.enable_hd_cover {
+        let _ = EVENT_BUS.emit(
+            crate::event_bus::EVENT_HD_COVER_CHANGED,
+            serde_json::json!({"enableHDCover": settings.enable_hd_cover}),
+        );
+    }
+    if old.enable_mv_playback != settings.enable_mv_playback {
+        let _ = EVENT_BUS.emit(
+            crate::event_bus::EVENT_MV_PLAYBACK_CHANGED,
+            serde_json::json!({"enable": settings.enable_mv_playback}),
+        );
+    }
+    if old.lock_floating_window != settings.lock_floating_window {
+        let _ = EVENT_BUS.emit(
+            crate::event_bus::EVENT_LOCK_FLOATING_WINDOW_CHANGED,
+            serde_json::json!({"lock": settings.lock_floating_window}),
+        );
+    }
+    if old.always_on_top != settings.always_on_top {
+        let _ = EVENT_BUS.emit(
+            crate::event_bus::EVENT_ALWAYS_ON_TOP_CHANGED,
+            serde_json::json!({"isAlwaysOnTop": settings.always_on_top}),
+        );
+    }
+    if old.floating_window_always_on_top != settings.floating_window_always_on_top {
+        let _ = EVENT_BUS.emit(
+            crate::event_bus::EVENT_FLOATING_WINDOW_ALWAYS_ON_TOP_CHANGED,
+            serde_json::json!({"isAlwaysOnTop": settings.floating_window_always_on_top}),
+        );
+    }
+    if old.expanded_corner_radius != settings.expanded_corner_radius {
+        let _ = EVENT_BUS.emit(
+            crate::event_bus::EVENT_CORNER_RADIUS_CHANGED,
+            settings.expanded_corner_radius,
+        );
+    }
+    if old.monitor_index != settings.monitor_index {
+        let _ = EVENT_BUS.emit(crate::event_bus::EVENT_SETTINGS_CHANGED, "monitor_index");
+    }
+}
+
+#[tauri::command]
+pub async fn save_settings(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    settings: AppSettings,
+) -> AppResult<()> {
+    commit_settings(app, &state, move |current| {
+        *current = settings;
+        Ok(())
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn update_settings(
     app: AppHandle,
@@ -213,28 +308,22 @@ pub async fn update_settings(
 ) -> AppResult<()> {
     let patch_object = patch
         .as_object()
-        .ok_or_else(|| AppError::business(3001, "设置补丁必须是对象"))?;
-    let current = {
-        let settings = state
-            .settings
-            .lock()
-            .map_err(|_| AppError::lock("Failed to lock settings"))?;
-        serde_json::to_value(settings.clone()).map_err(AppError::Serialization)?
-    };
-    let mut merged = current
-        .as_object()
         .cloned()
-        .ok_or_else(|| AppError::config("当前设置格式无效"))?;
-    for (key, value) in patch_object {
-        merged.insert(key.clone(), value.clone());
-    }
-    let settings = serde_json::from_value(serde_json::Value::Object(merged))
-        .map_err(AppError::Serialization)?;
-    save_settings(app, state, settings).await
+        .ok_or_else(|| AppError::business(3001, "设置补丁必须是对象"))?;
+    commit_settings(app, &state, move |current| {
+        let mut merged = serde_json::to_value(&*current)?
+            .as_object()
+            .cloned()
+            .ok_or_else(|| AppError::config("当前设置格式无效"))?;
+        for (key, value) in patch_object {
+            merged.insert(key, value);
+        }
+        *current = serde_json::from_value(serde_json::Value::Object(merged))?;
+        Ok(())
+    })
+    .await
 }
 
-/// Current Isle Studio compatibility endpoint. Both surfaces intentionally
-/// persist the same complete settings object.
 #[tauri::command]
 pub async fn save_preferences(
     app: AppHandle,
@@ -246,30 +335,16 @@ pub async fn save_preferences(
 
 /// 设置窗口置顶
 #[tauri::command]
-pub fn set_always_on_top(
+pub async fn set_always_on_top(
     app: AppHandle,
     state: State<'_, AppState>,
     enable: bool,
 ) -> AppResult<()> {
-    let changed;
-    {
-        let mut settings = state
-            .settings
-            .lock()
-            .map_err(|_| AppError::lock("Failed to lock settings"))?;
-        changed = settings.always_on_top != enable;
+    commit_settings(app, &state, move |settings| {
         settings.always_on_top = enable;
-        write_settings_file(&app, &settings)?;
-    }
-
-    apply_island_always_on_top(&app, enable)?;
-    if changed {
-        let _ = EVENT_BUS.emit(
-            crate::event_bus::EVENT_ALWAYS_ON_TOP_CHANGED,
-            serde_json::json!({"isAlwaysOnTop": enable}),
-        );
-    }
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// Apply the configured topmost state to the main island only.
@@ -284,30 +359,16 @@ fn apply_island_always_on_top(app: &AppHandle, enable: bool) -> AppResult<()> {
 
 /// Set the floating player's independent topmost preference.
 #[tauri::command]
-pub fn set_floating_window_always_on_top(
+pub async fn set_floating_window_always_on_top(
     app: AppHandle,
     state: State<'_, AppState>,
     enable: bool,
 ) -> AppResult<()> {
-    let changed;
-    {
-        let mut settings = state
-            .settings
-            .lock()
-            .map_err(|_| AppError::lock("Failed to lock settings"))?;
-        changed = settings.floating_window_always_on_top != enable;
+    commit_settings(app, &state, move |settings| {
         settings.floating_window_always_on_top = enable;
-        write_settings_file(&app, &settings)?;
-    }
-
-    apply_floating_window_always_on_top(&app, enable)?;
-    if changed {
-        let _ = EVENT_BUS.emit(
-            crate::event_bus::EVENT_FLOATING_WINDOW_ALWAYS_ON_TOP_CHANGED,
-            serde_json::json!({"isAlwaysOnTop": enable}),
-        );
-    }
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 fn apply_floating_window_always_on_top(app: &AppHandle, enable: bool) -> AppResult<()> {
@@ -321,18 +382,16 @@ fn apply_floating_window_always_on_top(app: &AppHandle, enable: bool) -> AppResu
 
 /// 设置窗口不透明度
 #[tauri::command]
-pub fn set_window_opacity(
+pub async fn set_window_opacity(
     app: AppHandle,
     state: State<'_, AppState>,
     opacity: u8,
 ) -> AppResult<()> {
-    let mut settings = state
-        .settings
-        .lock()
-        .map_err(|_| AppError::lock("Failed to lock settings"))?;
-    settings.window_opacity = opacity;
-    write_settings_file(&app, &settings)?;
-    Ok(())
+    commit_settings(app, &state, move |settings| {
+        settings.window_opacity = opacity;
+        Ok(())
+    })
+    .await
 }
 
 /// 获取播放器优先级权重配置
@@ -347,39 +406,31 @@ pub fn get_player_weights(state: State<'_, AppState>) -> AppResult<HashMap<Strin
 
 /// 设置单个播放器的优先级权重
 #[tauri::command]
-pub fn set_player_weight(
+pub async fn set_player_weight(
     app: AppHandle,
     state: State<'_, AppState>,
     player: String,
     weight: u32,
 ) -> AppResult<()> {
-    let mut settings = state
-        .settings
-        .lock()
-        .map_err(|_| AppError::lock("Failed to lock settings"))?;
-    settings.player_weights.insert(player, weight);
-
-    let _ = EVENT_BUS.emit(crate::event_bus::EVENT_SETTINGS_UPDATED, &*settings);
-
-    write_settings_file(&app, &settings)?;
-
-    Ok(())
+    commit_settings(app, &state, move |settings| {
+        settings.player_weights.insert(player, weight);
+        Ok(())
+    })
+    .await
 }
 
 /// 批量设置播放器优先级权重
 #[tauri::command]
-pub fn set_player_weights(
+pub async fn set_player_weights(
     app: AppHandle,
     state: State<'_, AppState>,
     weights: HashMap<String, u32>,
 ) -> AppResult<()> {
-    let mut settings = state
-        .settings
-        .lock()
-        .map_err(|_| AppError::lock("Failed to lock settings"))?;
-    settings.player_weights = weights;
-    write_settings_file(&app, &settings)?;
-    Ok(())
+    commit_settings(app, &state, move |settings| {
+        settings.player_weights = weights;
+        Ok(())
+    })
+    .await
 }
 
 /// 设置开机自启动
@@ -389,25 +440,11 @@ pub async fn set_auto_start_cmd(
     state: State<'_, AppState>,
     enable: bool,
 ) -> AppResult<()> {
-    tauri::async_runtime::spawn_blocking(move || set_auto_start(enable))
-        .await
-        .map_err(|error| AppError::config(format!("更新开机启动任务失败：{}", error)))??;
-
-    let settings = {
-        let mut settings = state
-            .settings
-            .lock()
-            .map_err(|_| AppError::lock("Failed to lock settings"))?;
+    commit_settings(app, &state, move |settings| {
         settings.auto_start = enable;
-        settings.clone()
-    };
-
-    let app_for_write = app.clone();
-    tauri::async_runtime::spawn_blocking(move || write_settings_file(&app_for_write, &settings))
-        .await
-        .map_err(|error| AppError::config(format!("保存设置任务失败：{}", error)))??;
-
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// 获取开机自启动状态
@@ -420,7 +457,7 @@ pub async fn get_auto_start() -> AppResult<bool> {
 
 /// 保存悬浮窗口位置和大小
 #[tauri::command]
-pub fn save_floating_window_position(
+pub async fn save_floating_window_position(
     app: AppHandle,
     state: State<'_, AppState>,
     x: i32,
@@ -428,19 +465,14 @@ pub fn save_floating_window_position(
     width: u32,
     height: u32,
 ) -> AppResult<()> {
-    let mut settings = state
-        .settings
-        .lock()
-        .map_err(|_| AppError::lock("Failed to lock settings"))?;
-
-    settings.floating_window_x = Some(x);
-    settings.floating_window_y = Some(y);
-    settings.floating_window_width = Some(width.max(200));
-    settings.floating_window_height = Some(height.max(200));
-
-    write_settings_file(&app, &settings)?;
-
-    Ok(())
+    commit_settings(app, &state, move |settings| {
+        settings.floating_window_x = Some(x);
+        settings.floating_window_y = Some(y);
+        settings.floating_window_width = Some(width.max(200));
+        settings.floating_window_height = Some(height.max(200));
+        Ok(())
+    })
+    .await
 }
 
 /// 获取悬浮窗口位置和大小
@@ -462,5 +494,178 @@ pub fn get_floating_window_position(
         Ok(Some((x, y, w, h)))
     } else {
         Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod settings_commit_tests {
+    use super::commit_settings_transaction;
+    use crate::models::AppPreferences;
+    use crate::services::settings::{write_atomic_with_backup, write_settings_snapshot};
+    use crate::state::AppState;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+    use std::time::Instant;
+
+    #[tokio::test]
+    async fn one_hundred_concurrent_setting_and_position_writes_keep_disk_memory_and_revision_aligned(
+    ) {
+        let root = std::env::temp_dir().join(format!("isle-settings-race-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("create test directory");
+        let path = root.join("settings.json");
+        let state = Arc::new(AppState::default());
+        let started = Instant::now();
+        let mut tasks = Vec::with_capacity(100);
+
+        for index in 0..100_u32 {
+            let state = Arc::clone(&state);
+            let path = path.clone();
+            tasks.push(tokio::spawn(async move {
+                commit_settings_transaction(
+                    &state,
+                    move |next| {
+                        next.player_weights.insert(format!("writer-{index}"), index);
+                        next.floating_window_x = Some(index as i32);
+                        next.floating_window_y = Some(-(index as i32));
+                        next.floating_window_width = Some(200 + index);
+                        next.floating_window_height = Some(300 + index);
+                        Ok(())
+                    },
+                    |_, _| async { Ok(()) },
+                    move |next| async move {
+                        tokio::task::yield_now().await;
+                        write_settings_snapshot(&path, &next)
+                    },
+                    |_, _| async { Ok(()) },
+                )
+                .await
+                .expect("atomic settings commit");
+            }));
+        }
+
+        for task in tasks {
+            task.await.expect("settings writer task");
+        }
+        let elapsed = started.elapsed();
+        let memory = state.settings.lock().expect("settings lock").clone();
+        let disk: AppPreferences =
+            serde_json::from_slice(&std::fs::read(&path).expect("persisted settings"))
+                .expect("parse persisted settings");
+        assert_eq!(memory, disk);
+        assert_eq!(state.settings_revision.load(Ordering::SeqCst), 100);
+        for index in 0..100_u32 {
+            assert_eq!(
+                memory.player_weights.get(&format!("writer-{index}")),
+                Some(&index)
+            );
+        }
+        assert!(memory.floating_window_x.is_some());
+        assert!(memory.floating_window_y.is_some());
+        assert!(memory.floating_window_width.unwrap_or_default() >= 200);
+        assert!(memory.floating_window_height.unwrap_or_default() >= 300);
+        eprintln!("100 serialized atomic settings commits: {elapsed:?}");
+        assert!(
+            elapsed.as_secs() < 10,
+            "settings writes exceeded the broad latency guard: {elapsed:?}"
+        );
+        std::fs::remove_dir_all(root).expect("remove test directory");
+    }
+
+    #[test]
+    fn reports_direct_write_and_atomic_replace_latency_for_equal_payloads() {
+        let root =
+            std::env::temp_dir().join(format!("isle-settings-latency-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("create test directory");
+        let direct_path = root.join("direct.json");
+        let atomic_path = root.join("settings.json");
+        let payload = serde_json::to_vec(&AppPreferences::default()).expect("serialize settings");
+        let direct_started = Instant::now();
+        for _ in 0..100 {
+            std::fs::write(&direct_path, &payload).expect("direct baseline write");
+        }
+        let direct_elapsed = direct_started.elapsed();
+        let atomic_started = Instant::now();
+        for _ in 0..100 {
+            write_atomic_with_backup(&atomic_path, &payload).expect("atomic settings write");
+        }
+        let atomic_elapsed = atomic_started.elapsed();
+        assert_eq!(
+            std::fs::read(&direct_path).expect("direct bytes"),
+            std::fs::read(&atomic_path).expect("atomic bytes")
+        );
+        eprintln!("100 equal-payload writes: direct={direct_elapsed:?}, atomic={atomic_elapsed:?}");
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[tokio::test]
+    async fn failed_disk_and_external_operations_leave_committed_settings_unchanged() {
+        let root =
+            std::env::temp_dir().join(format!("isle-settings-failure-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("create test directory");
+        let invalid_target = root.join("settings.json");
+        std::fs::create_dir(&invalid_target).expect("force a persistence failure");
+        let state = AppState::default();
+        let external_state = Arc::new(AtomicBool::new(false));
+        let applied = Arc::clone(&external_state);
+        let compensated = Arc::clone(&external_state);
+        let result = commit_settings_transaction(
+            &state,
+            |next| {
+                next.window_opacity = 120;
+                Ok(())
+            },
+            move |_, _| async move {
+                applied.store(true, Ordering::SeqCst);
+                Ok(())
+            },
+            move |next| async move { write_settings_snapshot(&invalid_target, &next) },
+            move |_, _| async move {
+                compensated.store(false, Ordering::SeqCst);
+                Ok(())
+            },
+        )
+        .await;
+        assert!(result.is_err());
+        assert_eq!(
+            state.settings.lock().expect("settings lock").window_opacity,
+            255
+        );
+        assert_eq!(state.settings_revision.load(Ordering::SeqCst), 0);
+        assert!(!external_state.load(Ordering::SeqCst));
+
+        let state = AppState::default();
+        let disk_attempted = Arc::new(AtomicBool::new(false));
+        let observed = Arc::clone(&disk_attempted);
+        let result = commit_settings_transaction(
+            &state,
+            |next| {
+                next.window_opacity = 90;
+                Ok(())
+            },
+            |_, _| async {
+                Err(crate::error::AppError::window(
+                    "simulated OS setting failure",
+                ))
+            },
+            move |_| async move {
+                observed.store(true, Ordering::SeqCst);
+                Ok(())
+            },
+            |_, _| async { Ok(()) },
+        )
+        .await;
+        assert!(result.is_err());
+        assert_eq!(
+            state.settings.lock().expect("settings lock").window_opacity,
+            255
+        );
+        assert_eq!(state.settings_revision.load(Ordering::SeqCst), 0);
+        assert!(!disk_attempted.load(Ordering::SeqCst));
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 }

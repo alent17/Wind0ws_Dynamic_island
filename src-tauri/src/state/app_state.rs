@@ -4,7 +4,8 @@
 //! 通过 Tauri 的状态管理机制注入到命令处理函数中
 
 use crate::models::AppPreferences;
-use std::sync::Mutex;
+use std::sync::{atomic::AtomicU64, Mutex};
+use tokio::sync::Mutex as AsyncMutex;
 
 /// 媒体缓存状态
 ///
@@ -33,6 +34,10 @@ pub struct MediaCache {
 pub struct AppState {
     /// 应用设置（持久化到配置文件）
     pub settings: Mutex<AppPreferences>,
+    /// Serializes the complete merge → persist → publish transaction.
+    pub settings_writer: AsyncMutex<()>,
+    /// Monotonic revision for successful settings commits.
+    pub settings_revision: AtomicU64,
     /// 媒体缓存（运行时临时缓存）
     pub media_cache: Mutex<MediaCache>,
 }
@@ -42,6 +47,8 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             settings: Mutex::new(AppPreferences::default()),
+            settings_writer: AsyncMutex::new(()),
+            settings_revision: AtomicU64::new(0),
             media_cache: Mutex::new(MediaCache::default()),
         }
     }

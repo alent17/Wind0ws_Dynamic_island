@@ -1,6 +1,5 @@
 use crate::error::{AppError, AppResult};
 use crate::event_bus::EVENT_BUS;
-use crate::services::write_settings_file;
 use crate::state::AppState;
 use serde::Deserialize;
 use std::sync::{
@@ -1457,21 +1456,11 @@ pub async fn get_current_monitor_index(state: tauri::State<'_, AppState>) -> App
 }
 
 #[tauri::command]
-pub fn set_current_monitor_index(
+pub async fn set_current_monitor_index(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
     index: u32,
 ) -> AppResult<()> {
-    let mut settings = state
-        .settings
-        .lock()
-        .map_err(|_| AppError::lock("Failed to lock settings"))?;
-    settings.monitor_index = index;
-
-    write_settings_file(&app, &settings)?;
-
-    let _ = EVENT_BUS.emit(crate::event_bus::EVENT_SETTINGS_CHANGED, "monitor_index");
-
-    Ok(())
+    crate::commands::update_settings(app, state, serde_json::json!({"monitorIndex": index})).await
 }
 

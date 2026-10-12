@@ -44,7 +44,7 @@
     };
   }
 
-  let mode=$state<IslandMode>("expanded"); let scenario=$state<Scenario>("playing"); let progress=$state(50); let settings=$state<AppPreferences>({...DEFAULT_SETTINGS}); let monitors=$state<MonitorInfo[]>([]); let cacheMessage=$state("");
+  let mode=$state<IslandMode>("expanded"); let scenario=$state<Scenario>("playing"); let progress=$state(50); let settings=$state<AppPreferences>({...DEFAULT_SETTINGS}); let monitors=$state<MonitorInfo[]>([]); let cacheMessage=$state(""); let settingsSaveFailed=$state(false);
   const previewClock = $derived(formatClock(settings.clockTimeZone, $locale, previewNow));
   let nativeRuntime=$state(false); let followingLive=$state(false); let liveMedia=$state<MediaState>(DEMO_MEDIA); let liveMediaDisconnect:undefined|(()=>void); let stageWidth=$state(0); let stageHeight=$state(0); let previewReady=$state(false);
   let idleSnapshot=$state<IdleSnapshot|null>(null);
@@ -172,7 +172,7 @@
       const appWindow=getCurrentWindow();
       closePromise=appWindow.onCloseRequested(async(event)=>{
         event.preventDefault();
-        await persist();
+        try{await persist()}catch{return}
         await appWindow.destroy();
       });
     }
@@ -219,7 +219,7 @@
       deferredTimers.forEach(timer=>clearTimeout(timer));
       if(closePromise)void closePromise.then(unlisten=>unlisten()).catch(()=>{});
       if(saveTimer)clearTimeout(saveTimer);
-      void persist();
+      void persist().catch(()=>{});
       unsubscribeSettingsStore?.();
       unsubscribeSettingsStore=undefined;
       disconnectSettingsStore?.();
@@ -239,12 +239,21 @@
         persistPending=false;
         const patch={...pendingSettingsPatch};
         pendingSettingsPatch={};
-        if(Object.keys(patch).length) await settingsApi.updateSettings(patch).catch(()=>{});
+        if(!Object.keys(patch).length)continue;
+        try{
+          await settingsApi.updateSettings(patch);
+          settingsSaveFailed=false;
+        }catch(error){
+          pendingSettingsPatch={...patch,...pendingSettingsPatch};
+          persistPending=false;
+          settingsSaveFailed=true;
+          throw error;
+        }
       }
     })().finally(()=>{persistInFlight=undefined});
     await persistInFlight;
   }
-  function schedulePersist(){if(saveTimer)clearTimeout(saveTimer);saveTimer=setTimeout(()=>void persist(),300)}
+  function schedulePersist(){if(saveTimer)clearTimeout(saveTimer);saveTimer=setTimeout(()=>void persist().catch(()=>{}),300)}
   function commitPreference(patch:Partial<AppPreferences>){
     settings={...settings,...patch};
     pendingSettingsPatch={...pendingSettingsPatch,...patch};
@@ -256,8 +265,8 @@
     const enabled=!settings.floatingCircularAlbum;
     updatePreference(enabled?{floatingCircularAlbum:true,enableMvPlayback:false}:{floatingCircularAlbum:false});
   }
-  async function setAlwaysOnTop(value:boolean){const previous=settings.alwaysOnTop;settings={...settings,alwaysOnTop:value};if(!nativeRuntime)return;try{await settingsApi.setAlwaysOnTop(value)}catch(error){settings={...settings,alwaysOnTop:previous};console.error("[置顶] 应用设置失败:",error)}}
-  async function setAutoStart(value:boolean){const previous=settings.autoStart;settings={...settings,autoStart:value};if(!nativeRuntime)return;try{await settingsApi.setAutoStart(value)}catch{settings={...settings,autoStart:previous}}}
+  function setAlwaysOnTop(value:boolean){updatePreference({alwaysOnTop:value})}
+  function setAutoStart(value:boolean){updatePreference({autoStart:value})}
   function resetAppearanceDraft(){appearanceDraft=createAppearanceDraft(settings);previewTarget=null}
   async function applyAppearance(){
     if(!appearanceDirty||applyingAppearance)return;
@@ -267,6 +276,8 @@
       await persist();
       syncAppearanceDrafts();
       previewTarget=null;
+    }catch{
+      // The pending patch remains available to the retry action.
     }finally{applyingAppearance=false}
   }
   function setLanguage(value:AppLanguage){setLocale(value);updatePreference({language:value})}
@@ -313,7 +324,7 @@
   async function searchWeather(){weatherMessage=t("searching");try{weatherResults=await idleApi.searchLocations(weatherQuery,$locale==="zh-CN"?"zh":$locale);weatherMessage=weatherResults.length?"":t("noCity")}catch{weatherMessage=t("weatherFailed")}}
   function weatherLocationLabel(item:WeatherLocationCandidate){return [...new Set([item.name,item.admin2,item.admin1,item.country].filter(Boolean))].join(" · ")}
   function weatherCandidateDetail(item:WeatherLocationCandidate){const label=[...new Set([item.admin2,item.admin1,item.country].filter(Boolean))].join(" · ");const duplicates=weatherResults.filter(other=>weatherLocationLabel(other)===weatherLocationLabel(item)).length;return duplicates>1?`${label} · ${item.latitude.toFixed(2)}, ${item.longitude.toFixed(2)}`:label}
-  function selectWeather(item:WeatherLocationCandidate){updatePreference({weatherLocation:{name:weatherLocationLabel(item),latitude:item.latitude,longitude:item.longitude}});weatherResults=[];weatherMessage=t("citySaved");void persist().then(()=>{if(!studioDisposed)void refreshIdleSnapshot()})}
+  function selectWeather(item:WeatherLocationCandidate){updatePreference({weatherLocation:{name:weatherLocationLabel(item),latitude:item.latitude,longitude:item.longitude}});weatherResults=[];weatherMessage=t("citySaved");void persist().then(()=>{if(!studioDisposed)void refreshIdleSnapshot()}).catch(()=>{})}
   async function clearCache(){cacheMessage=t("clearing");try{await cacheApi.clearCache();cacheMessage=t("cacheCleared")}catch{cacheMessage=t("clearFailed")}}
 </script>
 
@@ -330,6 +341,9 @@
       <span><strong>{nativeRuntime&&followingLive?t("currentMusic"):nativeRuntime?t("previewReady"):t("browserDemo")}</strong><small>{t("previewLabel")}</small></span>
     </div>
   </header>
+  {#if settingsSaveFailed}
+    <div class="settings-save-error" role="alert"><span>{t("settingsSaveFailed")}</span><button type="button" onclick={()=>void persist().catch(()=>{})}>{t("retrySave")}</button></div>
+  {/if}
   <div class="workspace">
     <section class="stage" class:attached-top-preview={appearanceDraft.islandStyle === "edge" && appearanceDraft.islandEdge === "top"} aria-label={t("previewLabel")} bind:clientWidth={stageWidth} bind:clientHeight={stageHeight}>
       <div class="stage-topline"><span><i aria-hidden="true"></i>{t("previewLabel")}</span><small>{nativeRuntime&&followingLive?t("currentMusic"):nativeRuntime?t("previewReady"):t("browserDemo")}</small></div>
@@ -430,6 +444,7 @@
   :global(body){overflow:auto}
   main{--studio-ink:#15161a;--studio-muted:#747680;--studio-line:#e3e4e8;--studio-panel:#f5f5f7;--studio-surface:#fff;--studio-accent:#3158c8;min-height:100vh;padding:0 32px 54px;box-sizing:border-box;background:#f7f7f9}
   .studio-header{max-width:1240px;margin:0 auto 24px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+  .settings-save-error{max-width:1240px;margin:-10px auto 18px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #a84f4f;border-radius:10px;background:#3b2022;color:#ffdada;font-size:12px}.settings-save-error button{flex:none;padding:6px 10px;border:1px solid #d48282;border-radius:7px;background:#532a2d;color:#fff;cursor:pointer}
   .studio-brand{min-width:0}.studio-wordmark{display:block;margin-bottom:8px;color:#92939b;font-size:11px;font-weight:700;letter-spacing:.16em}.studio-brand h1{margin:0;color:var(--studio-ink);font-size:26px;line-height:1.05;letter-spacing:-.04em}.studio-brand p{max-width:48ch;margin:8px 0 0;color:var(--studio-muted);font-size:12px;line-height:1.5}
   .studio-status{display:flex;align-items:center;gap:9px;flex:none;padding:9px 11px;border:1px solid var(--studio-line);border-radius:12px;background:rgba(255,255,255,.72);color:var(--studio-muted)}.studio-status i,.stage-topline i{width:7px;height:7px;border-radius:50%;background:var(--studio-accent);box-shadow:0 0 0 4px rgba(49,88,200,.11)}.studio-status span{display:flex;flex-direction:column;gap:2px;min-width:0}.studio-status strong{color:var(--studio-ink);font-size:12px;font-weight:600}.studio-status small{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--studio-muted);font-size:11px}.studio-status.browser i{background:#9c9da5;box-shadow:0 0 0 4px rgba(156,157,165,.12)}
   .workspace{max-width:1240px;margin:auto;display:grid;grid-template-columns:minmax(380px,.86fr) minmax(440px,1.14fr);gap:24px;align-items:start}
