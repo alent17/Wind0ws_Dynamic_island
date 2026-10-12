@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 60178)
-Total output lines: 6987
-
 {
   "generatedAt": "2026-10-12T10:17:48.133Z",
   "builds": {
@@ -2892,7 +2889,1192 @@ Total output lines: 6987
             "fullyInsideIntervalSummary": {
               "rows": 769,
               "p50": 4.9998,
-              "p95": 5.0314,…10178 tokens truncated…    }
+              "p95": 5.0314,
+              "p99": 10.0077,
+              "max": 50.0191,
+              "over16_7": 1,
+              "over50": 1,
+              "cpuBusyP95": 5.4128,
+              "gpuTimeP95": 5.0069
+            },
+            "longIntervalsOver50ms": [
+              {
+                "ms": 105.0386,
+                "cpuBusy": 107.6059,
+                "gpuTime": 1.1221,
+                "displayedAt": "2026-10-12T10:14:01.521Z",
+                "intervalStart": "2026-10-12T10:14:01.415Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  1
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 119.98790000000001,
+                "cpuBusy": 120.6534,
+                "gpuTime": 0.3699,
+                "displayedAt": "2026-10-12T10:14:01.884Z",
+                "intervalStart": "2026-10-12T10:14:01.764Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  1,
+                  2
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 109.96610000000001,
+                "cpuBusy": 115.259,
+                "gpuTime": 0.3016,
+                "displayedAt": "2026-10-12T10:14:02.238Z",
+                "intervalStart": "2026-10-12T10:14:02.128Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  2,
+                  3
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 119.9867,
+                "cpuBusy": 118.5152,
+                "gpuTime": 0.7464,
+                "displayedAt": "2026-10-12T10:14:02.599Z",
+                "intervalStart": "2026-10-12T10:14:02.479Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  3,
+                  4
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 104.97200000000001,
+                "cpuBusy": 110.4179,
+                "gpuTime": 0.5493,
+                "displayedAt": "2026-10-12T10:14:02.953Z",
+                "intervalStart": "2026-10-12T10:14:02.848Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  4,
+                  5
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 114.9894,
+                "cpuBusy": 112.2527,
+                "gpuTime": 0.1957,
+                "displayedAt": "2026-10-12T10:14:03.310Z",
+                "intervalStart": "2026-10-12T10:14:03.195Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  5,
+                  6
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 109.994,
+                "cpuBusy": 112.9666,
+                "gpuTime": 0.5764,
+                "displayedAt": "2026-10-12T10:14:03.666Z",
+                "intervalStart": "2026-10-12T10:14:03.556Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  6,
+                  7
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 110.0062,
+                "cpuBusy": 114.3879,
+                "gpuTime": 0.5795,
+                "displayedAt": "2026-10-12T10:14:04.024Z",
+                "intervalStart": "2026-10-12T10:14:03.913Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  7,
+                  8
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 50.0191,
+                "cpuBusy": 54.1968,
+                "gpuTime": 54.6536,
+                "displayedAt": "2026-10-12T10:14:04.317Z",
+                "intervalStart": "2026-10-12T10:14:04.266Z",
+                "classification": "inside-animation",
+                "transitions": [
+                  8
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 69.98490000000001,
+                "cpuBusy": 65.176,
+                "gpuTime": 0.5821,
+                "displayedAt": "2026-10-12T10:14:04.382Z",
+                "intervalStart": "2026-10-12T10:14:04.312Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  8,
+                  9
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 109.9893,
+                "cpuBusy": 112.3515,
+                "gpuTime": 0.2947,
+                "displayedAt": "2026-10-12T10:14:04.737Z",
+                "intervalStart": "2026-10-12T10:14:04.627Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  9,
+                  10
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 110.0048,
+                "cpuBusy": 112.2584,
+                "gpuTime": 0.4681,
+                "displayedAt": "2026-10-12T10:14:05.095Z",
+                "intervalStart": "2026-10-12T10:14:04.984Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  10,
+                  11
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 109.9775,
+                "cpuBusy": 115.5572,
+                "gpuTime": 0.6848,
+                "displayedAt": "2026-10-12T10:14:05.454Z",
+                "intervalStart": "2026-10-12T10:14:05.344Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  11,
+                  12
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 115.0061,
+                "cpuBusy": 114.0579,
+                "gpuTime": 0.8017,
+                "displayedAt": "2026-10-12T10:14:05.812Z",
+                "intervalStart": "2026-10-12T10:14:05.696Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  12,
+                  13
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 109.96860000000001,
+                "cpuBusy": 111.3032,
+                "gpuTime": 0.2064,
+                "displayedAt": "2026-10-12T10:14:06.167Z",
+                "intervalStart": "2026-10-12T10:14:06.057Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  13,
+                  14
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 115.0151,
+                "cpuBusy": 115.5879,
+                "gpuTime": 0.3407,
+                "displayedAt": "2026-10-12T10:14:06.525Z",
+                "intervalStart": "2026-10-12T10:14:06.409Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  14,
+                  15
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              },
+              {
+                "ms": 115.01700000000001,
+                "cpuBusy": 114.7852,
+                "gpuTime": 0.2332,
+                "displayedAt": "2026-10-12T10:14:06.884Z",
+                "intervalStart": "2026-10-12T10:14:06.768Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  15,
+                  16
+                ],
+                "pid": "35696",
+                "swapChain": "0x25B975B0510",
+                "source": "0"
+              }
+            ]
+          },
+          {
+            "transitionDurationMs": {
+              "p50": 349.5,
+              "p95": 351.1000000014901,
+              "min": 345.29999999701977,
+              "max": 351.1000000014901
+            },
+            "presentationWindow": {
+              "rows": 786,
+              "p50": 5.0005,
+              "p95": 5.0456,
+              "p99": 114.9822,
+              "max": 124.9989,
+              "over16_7": 18,
+              "over50": 16,
+              "cpuBusyP95": 5.5276,
+              "gpuTimeP95": 5.0601
+            },
+            "intervalsDuringAnimation": {
+              "rows": 786,
+              "p50": 5.0005,
+              "p95": 5.0456,
+              "p99": 114.9822,
+              "max": 124.9989,
+              "over16_7": 18,
+              "over50": 16,
+              "cpuBusyP95": 5.5276,
+              "gpuTimeP95": 5.0601
+            },
+            "fullyInsideIntervalSummary": {
+              "rows": 767,
+              "p50": 5.0002,
+              "p95": 5.0294,
+              "p99": 10.0043,
+              "max": 89.99900000000001,
+              "over16_7": 2,
+              "over50": 1,
+              "cpuBusyP95": 5.395,
+              "gpuTimeP95": 5.0601
+            },
+            "longIntervalsOver50ms": [
+              {
+                "ms": 85.0219,
+                "cpuBusy": 88.5394,
+                "gpuTime": 0.8508,
+                "displayedAt": "2026-10-12T10:16:53.774Z",
+                "intervalStart": "2026-10-12T10:16:53.688Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  1
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 120.00590000000001,
+                "cpuBusy": 120.4516,
+                "gpuTime": 0.3374,
+                "displayedAt": "2026-10-12T10:16:54.138Z",
+                "intervalStart": "2026-10-12T10:16:54.017Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  1,
+                  2
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 109.99980000000001,
+                "cpuBusy": 115.7645,
+                "gpuTime": 0.5489,
+                "displayedAt": "2026-10-12T10:16:54.492Z",
+                "intervalStart": "2026-10-12T10:16:54.382Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  2,
+                  3
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 114.992,
+                "cpuBusy": 115.5141,
+                "gpuTime": 0.2028,
+                "displayedAt": "2026-10-12T10:16:54.847Z",
+                "intervalStart": "2026-10-12T10:16:54.732Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  3,
+                  4
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 109.9867,
+                "cpuBusy": 113.5709,
+                "gpuTime": 113.9501,
+                "displayedAt": "2026-10-12T10:16:55.200Z",
+                "intervalStart": "2026-10-12T10:16:55.090Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  4,
+                  5
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 115.0082,
+                "cpuBusy": 116.507,
+                "gpuTime": 0.2992,
+                "displayedAt": "2026-10-12T10:16:55.559Z",
+                "intervalStart": "2026-10-12T10:16:55.443Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  5,
+                  6
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 114.9638,
+                "cpuBusy": 115.294,
+                "gpuTime": 0.6145,
+                "displayedAt": "2026-10-12T10:16:55.918Z",
+                "intervalStart": "2026-10-12T10:16:55.803Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  6,
+                  7
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 109.9912,
+                "cpuBusy": 114.425,
+                "gpuTime": 0.2587,
+                "displayedAt": "2026-10-12T10:16:56.272Z",
+                "intervalStart": "2026-10-12T10:16:56.162Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  7,
+                  8
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 114.9822,
+                "cpuBusy": 115.8429,
+                "gpuTime": 0.2651,
+                "displayedAt": "2026-10-12T10:16:56.632Z",
+                "intervalStart": "2026-10-12T10:16:56.517Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  8,
+                  9
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 110.00580000000001,
+                "cpuBusy": 113.8699,
+                "gpuTime": 0.2081,
+                "displayedAt": "2026-10-12T10:16:56.991Z",
+                "intervalStart": "2026-10-12T10:16:56.880Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  9,
+                  10
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 124.9989,
+                "cpuBusy": 5.1099,
+                "gpuTime": 0.214,
+                "displayedAt": "2026-10-12T10:16:57.357Z",
+                "intervalStart": "2026-10-12T10:16:57.232Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  10,
+                  11
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 89.99900000000001,
+                "cpuBusy": 92.6862,
+                "gpuTime": 0.1765,
+                "displayedAt": "2026-10-12T10:16:57.684Z",
+                "intervalStart": "2026-10-12T10:16:57.594Z",
+                "classification": "inside-animation",
+                "transitions": [
+                  11
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 115.01140000000001,
+                "cpuBusy": 116.8726,
+                "gpuTime": 0.6026,
+                "displayedAt": "2026-10-12T10:16:58.064Z",
+                "intervalStart": "2026-10-12T10:16:57.948Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  12,
+                  13
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 115.0257,
+                "cpuBusy": 116.7658,
+                "gpuTime": 0.1983,
+                "displayedAt": "2026-10-12T10:16:58.424Z",
+                "intervalStart": "2026-10-12T10:16:58.308Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  13,
+                  14
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 99.9833,
+                "cpuBusy": 98.2784,
+                "gpuTime": 0.3112,
+                "displayedAt": "2026-10-12T10:16:58.788Z",
+                "intervalStart": "2026-10-12T10:16:58.688Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  14,
+                  15
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              },
+              {
+                "ms": 114.9932,
+                "cpuBusy": 115.2605,
+                "gpuTime": 0.1795,
+                "displayedAt": "2026-10-12T10:16:59.143Z",
+                "intervalStart": "2026-10-12T10:16:59.028Z",
+                "classification": "crosses-boundary",
+                "transitions": [
+                  15,
+                  16
+                ],
+                "pid": "24372",
+                "swapChain": "0x1BC214DB280",
+                "source": "0"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "candidate": {
+      "rounds": [
+        {
+          "round": 1,
+          "capture": {
+            "complete": true,
+            "elevated": false,
+            "startedUtc": "2026-10-12T10:08:28.9345894Z",
+            "finishedUtc": "2026-10-12T10:09:15.1038795Z",
+            "bytes": 829044,
+            "offsetHours": 16,
+            "processIds": [
+              "30616"
+            ],
+            "swapChains": [
+              "0x19F1F16B380",
+              "0x19F1F0EEC50"
+            ],
+            "vidPnSources": [
+              "0"
+            ]
+          },
+          "conditions": {
+            "monitor": "\\\\.\\DISPLAY2",
+            "scaleFactor": 1,
+            "sessions": [
+              {
+                "id": "cloudmusic.exe",
+                "source": "netease",
+                "isPlaying": false
+              }
+            ],
+            "volume": 33,
+            "mediaPaused": true,
+            "mediaCommandSuccess": true,
+            "volumeCommandSuccess": true,
+            "finalVolume": 33,
+            "finalPaused": true,
+            "windowDisplayCounts": {
+              "\\\\.\\DISPLAY2": 2848
+            },
+            "uniqueWindowRects": 2
+          },
+          "modes": {
+            "animation-only": {
+              "transitionCount": 16,
+              "transitionDurationMs": {
+                "p50": 528,
+                "p95": 539.1000000014901,
+                "min": 465.6000000014901,
+                "max": 539.1000000014901
+              },
+              "presentationWindow": {
+                "rows": 1267,
+                "p50": 5.0002,
+                "p95": 5.0999,
+                "p99": 110.0018,
+                "max": 159.6654,
+                "over16_7": 17,
+                "over50": 16,
+                "cpuBusyP95": 5.3807,
+                "gpuTimeP95": 5.0384
+              },
+              "intervalsDuringAnimation": {
+                "rows": 1265,
+                "p50": 5.0002,
+                "p95": 5.0999,
+                "p99": 110.0018,
+                "max": 159.6654,
+                "over16_7": 17,
+                "over50": 16,
+                "cpuBusyP95": 5.3807,
+                "gpuTimeP95": 5.0384
+              },
+              "fullyInsideIntervalSummary": {
+                "rows": 1247,
+                "p50": 5.0001,
+                "p95": 5.0541,
+                "p99": 10.0025,
+                "max": 100.00500000000001,
+                "over16_7": 3,
+                "over50": 2,
+                "cpuBusyP95": 5.348,
+                "gpuTimeP95": 5.0384
+              },
+              "longIntervalsOver50ms": [
+                {
+                  "ms": 159.6654,
+                  "cpuBusy": 157.5044,
+                  "gpuTime": 2.0733,
+                  "displayedAt": "2026-10-12T10:08:31.665Z",
+                  "intervalStart": "2026-10-12T10:08:31.505Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    1
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 115.01360000000001,
+                  "cpuBusy": 118.4318,
+                  "gpuTime": 1.3641,
+                  "displayedAt": "2026-10-12T10:08:32.640Z",
+                  "intervalStart": "2026-10-12T10:08:32.524Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    2,
+                    3
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 114.9843,
+                  "cpuBusy": 116.2516,
+                  "gpuTime": 0.4123,
+                  "displayedAt": "2026-10-12T10:08:33.179Z",
+                  "intervalStart": "2026-10-12T10:08:33.064Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    3,
+                    4
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 125.29220000000001,
+                  "cpuBusy": 126.4674,
+                  "gpuTime": 0.3554,
+                  "displayedAt": "2026-10-12T10:08:33.668Z",
+                  "intervalStart": "2026-10-12T10:08:33.542Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    4,
+                    5
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 115.3172,
+                  "cpuBusy": 117.2915,
+                  "gpuTime": 0.2929,
+                  "displayedAt": "2026-10-12T10:08:34.206Z",
+                  "intervalStart": "2026-10-12T10:08:34.090Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    5,
+                    6
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 130.0172,
+                  "cpuBusy": 129.2855,
+                  "gpuTime": 129.5303,
+                  "displayedAt": "2026-10-12T10:08:34.698Z",
+                  "intervalStart": "2026-10-12T10:08:34.567Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    6,
+                    7
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 125.0163,
+                  "cpuBusy": 126.5244,
+                  "gpuTime": 0.5036,
+                  "displayedAt": "2026-10-12T10:08:35.248Z",
+                  "intervalStart": "2026-10-12T10:08:35.122Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    7,
+                    8
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 114.96000000000001,
+                  "cpuBusy": 0.6989,
+                  "gpuTime": 0.2133,
+                  "displayedAt": "2026-10-12T10:08:35.728Z",
+                  "intervalStart": "2026-10-12T10:08:35.613Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    8,
+                    9
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 125.3311,
+                  "cpuBusy": 123.4474,
+                  "gpuTime": 0.4292,
+                  "displayedAt": "2026-10-12T10:08:36.274Z",
+                  "intervalStart": "2026-10-12T10:08:36.148Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    9,
+                    10
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 110.0018,
+                  "cpuBusy": 116.1916,
+                  "gpuTime": 0.6215,
+                  "displayedAt": "2026-10-12T10:08:36.748Z",
+                  "intervalStart": "2026-10-12T10:08:36.637Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    10,
+                    11
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 119.6847,
+                  "cpuBusy": 119.3889,
+                  "gpuTime": 0.325,
+                  "displayedAt": "2026-10-12T10:08:37.293Z",
+                  "intervalStart": "2026-10-12T10:08:37.173Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    11,
+                    12
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 109.99050000000001,
+                  "cpuBusy": 114.6896,
+                  "gpuTime": 0.409,
+                  "displayedAt": "2026-10-12T10:08:37.766Z",
+                  "intervalStart": "2026-10-12T10:08:37.656Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    12,
+                    13
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 120.36080000000001,
+                  "cpuBusy": 120.768,
+                  "gpuTime": 0.3774,
+                  "displayedAt": "2026-10-12T10:08:38.311Z",
+                  "intervalStart": "2026-10-12T10:08:38.190Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    13,
+                    14
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 100.00500000000001,
+                  "cpuBusy": 104.9991,
+                  "gpuTime": 0.2981,
+                  "displayedAt": "2026-10-12T10:08:38.778Z",
+                  "intervalStart": "2026-10-12T10:08:38.677Z",
+                  "classification": "inside-animation",
+                  "transitions": [
+                    14
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 119.9997,
+                  "cpuBusy": 118.7309,
+                  "gpuTime": 0.1927,
+                  "displayedAt": "2026-10-12T10:08:39.333Z",
+                  "intervalStart": "2026-10-12T10:08:39.213Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    15,
+                    16
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 95.004,
+                  "cpuBusy": 96.8355,
+                  "gpuTime": 0.8325,
+                  "displayedAt": "2026-10-12T10:08:39.794Z",
+                  "intervalStart": "2026-10-12T10:08:39.698Z",
+                  "classification": "inside-animation",
+                  "transitions": [
+                    16
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                }
+              ]
+            },
+            "combined": {
+              "transitionCount": 16,
+              "transitionDurationMs": {
+                "p50": 521,
+                "p95": 537.1000000014901,
+                "min": 465.79999999701977,
+                "max": 537.1000000014901
+              },
+              "presentationWindow": {
+                "rows": 1273,
+                "p50": 4.9998,
+                "p95": 5.0494,
+                "p99": 74.9914,
+                "max": 145.0102,
+                "over16_7": 19,
+                "over50": 16,
+                "cpuBusyP95": 5.3692,
+                "gpuTimeP95": 5.0221
+              },
+              "intervalsDuringAnimation": {
+                "rows": 1273,
+                "p50": 4.9998,
+                "p95": 5.0494,
+                "p99": 74.9914,
+                "max": 145.0102,
+                "over16_7": 19,
+                "over50": 16,
+                "cpuBusyP95": 5.3692,
+                "gpuTimeP95": 5.0221
+              },
+              "fullyInsideIntervalSummary": {
+                "rows": 1254,
+                "p50": 4.9996,
+                "p95": 5.0374,
+                "p99": 9.9832,
+                "max": 69.9863,
+                "over16_7": 4,
+                "over50": 2,
+                "cpuBusyP95": 5.3027,
+                "gpuTimeP95": 5.0135
+              },
+              "longIntervalsOver50ms": [
+                {
+                  "ms": 114.9788,
+                  "cpuBusy": 121.3788,
+                  "gpuTime": 0.6223,
+                  "displayedAt": "2026-10-12T10:08:42.828Z",
+                  "intervalStart": "2026-10-12T10:08:42.713Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    1,
+                    2
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 120.3314,
+                  "cpuBusy": 122.1672,
+                  "gpuTime": 122.5893,
+                  "displayedAt": "2026-10-12T10:08:43.314Z",
+                  "intervalStart": "2026-10-12T10:08:43.193Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    2,
+                    3
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 69.9863,
+                  "cpuBusy": 72.587,
+                  "gpuTime": 0.7401,
+                  "displayedAt": "2026-10-12T10:08:43.810Z",
+                  "intervalStart": "2026-10-12T10:08:43.740Z",
+                  "classification": "inside-animation",
+                  "transitions": [
+                    3
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 120.3486,
+                  "cpuBusy": 121.3488,
+                  "gpuTime": 0.4862,
+                  "displayedAt": "2026-10-12T10:08:44.338Z",
+                  "intervalStart": "2026-10-12T10:08:44.217Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    4,
+                    5
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 55.0216,
+                  "cpuBusy": 58.6322,
+                  "gpuTime": 0.6565,
+                  "displayedAt": "2026-10-12T10:08:44.816Z",
+                  "intervalStart": "2026-10-12T10:08:44.760Z",
+                  "classification": "inside-animation",
+                  "transitions": [
+                    5
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 64.99810000000001,
+                  "cpuBusy": 61.9417,
+                  "gpuTime": 0.3326,
+                  "displayedAt": "2026-10-12T10:08:44.878Z",
+                  "intervalStart": "2026-10-12T10:08:44.813Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    5,
+                    6
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 115.0026,
+                  "cpuBusy": 2.4795,
+                  "gpuTime": 0.149,
+                  "displayedAt": "2026-10-12T10:08:45.359Z",
+                  "intervalStart": "2026-10-12T10:08:45.243Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    6,
+                    7
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 74.9914,
+                  "cpuBusy": 80.1024,
+                  "gpuTime": 80.2549,
+                  "displayedAt": "2026-10-12T10:08:45.904Z",
+                  "intervalStart": "2026-10-12T10:08:45.829Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    7,
+                    8
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 115.3546,
+                  "cpuBusy": 116.4654,
+                  "gpuTime": 0.5895,
+                  "displayedAt": "2026-10-12T10:08:46.378Z",
+                  "intervalStart": "2026-10-12T10:08:46.262Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    8,
+                    9
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 90.00750000000001,
+                  "cpuBusy": 86.9389,
+                  "gpuTime": 0.1933,
+                  "displayedAt": "2026-10-12T10:08:46.915Z",
+                  "intervalStart": "2026-10-12T10:08:46.824Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    9,
+                    10
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 114.99300000000001,
+                  "cpuBusy": 114.4547,
+                  "gpuTime": 0.4833,
+                  "displayedAt": "2026-10-12T10:08:47.393Z",
+                  "intervalStart": "2026-10-12T10:08:47.278Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    10,
+                    11
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 104.99730000000001,
+                  "cpuBusy": 101.9709,
+                  "gpuTime": 0.4397,
+                  "displayedAt": "2026-10-12T10:08:47.936Z",
+                  "intervalStart": "2026-10-12T10:08:47.831Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    11,
+                    12
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 145.0102,
+                  "cpuBusy": 145.2698,
+                  "gpuTime": 0.3875,
+                  "displayedAt": "2026-10-12T10:08:48.443Z",
+                  "intervalStart": "2026-10-12T10:08:48.297Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    12,
+                    13
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 99.9877,
+                  "cpuBusy": 106.3063,
+                  "gpuTime": 106.1702,
+                  "displayedAt": "2026-10-12T10:08:48.969Z",
+                  "intervalStart": "2026-10-12T10:08:48.869Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    13,
+                    14
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 114.9799,
+                  "cpuBusy": 120.8791,
+                  "gpuTime": 0.4782,
+                  "displayedAt": "2026-10-12T10:08:49.453Z",
+                  "intervalStart": "2026-10-12T10:08:49.338Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    14,
+                    15
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                },
+                {
+                  "ms": 130.34820000000002,
+                  "cpuBusy": 130.0159,
+                  "gpuTime": 0.23,
+                  "displayedAt": "2026-10-12T10:08:50.003Z",
+                  "intervalStart": "2026-10-12T10:08:49.872Z",
+                  "classification": "crosses-boundary",
+                  "transitions": [
+                    15,
+                    16
+                  ],
+                  "pid": "30616",
+                  "swapChain": "0x19F1F0EEC50",
+                  "source": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "round": 2,
+          "capture": {
+            "complete": true,
+            "elevated": false,
+            "startedUtc": "2026-10-12T10:12:01.0084253Z",
+            "finishedUtc": "2026-10-12T10:12:47.1278360Z",
+            "bytes": 824679,
+            "offsetHours": 16,
+            "processIds": [
+              "15952"
+            ],
+            "swapChains": [
+              "0x19FBD248920",
+              "0x19FBD0B2CC0"
+            ],
+            "vidPnSources": [
+              "0"
+            ]
+          },
+          "conditions": {
+            "monitor": "\\\\.\\DISPLAY2",
+            "scaleFactor": 1,
+            "sessions": [
+              {
+                "id": "cloudmusic.exe",
+                "source": "netease",
+                "isPlaying": false
+              }
             ],
             "volume": 33,
             "mediaPaused": true,
