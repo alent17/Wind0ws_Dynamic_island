@@ -41,9 +41,11 @@
 </span>
 
 <style>
-  .mode-control-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;width:38px;height:48px;flex:none}
-  .mode-control{width:38px;height:48px;display:grid;place-items:center;padding:0;border:0;border-radius:9px;color:rgba(255,255,255,.72);background:transparent;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}
-  .mode-control:hover:not(:disabled){color:#fff;background:rgba(255,255,255,.1)}
+  .mode-control-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;flex:none}
+  .mode-control{position:relative;isolation:isolate;width:48px;height:48px;display:grid;place-items:center;padding:0;border:0;border-radius:9px;color:rgba(255,255,255,.72);background:transparent;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}
+  .mode-control::before{content:"";position:absolute;inset:-2.5px;z-index:-1;border-radius:inherit;background:rgba(255,255,255,.1);opacity:0;pointer-events:none;transition:opacity 150ms ease}
+  .mode-control:hover:not(:disabled){color:#fff}
+  .mode-control:hover:not(:disabled)::before{opacity:1}
   .mode-control:active:not(:disabled){transform:scale(.92)}
   .mode-control:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .mode-control:disabled{opacity:.42;cursor:default}

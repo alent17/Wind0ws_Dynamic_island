@@ -6,11 +6,15 @@ export type AppLanguage = "system" | "zh-CN" | "en" | "ja";
 
 export interface AppSettings {
   neteaseProgressMode: NeteaseProgressMode;
+  neteaseAutoConnect: boolean;
+  neteaseExecutablePath: string | null;
   islandStyle: IslandStyle;
   islandEdge: IslandEdge;
   islandEdgePosition: number;
   collapsedEdgeShoulderRadius: number;
   expandedEdgeShoulderRadius: number;
+  floatingExpandedLength: number;
+  edgeExpandedLength: number;
   floatingCompactLength: number;
   edgeCompactLength: number;
   language: AppLanguage;
@@ -31,6 +35,7 @@ export interface AppSettings {
   monitorIndex: number;
   playerWeights: Record<string, number>;
   playerOrderIds: string[];
+  playerSourceOverrides: Record<string, string>;
   selectedPlayerIds: string[] | null;
   idleContentEnabled: boolean;
   idleRotationSeconds: number;
@@ -187,11 +192,15 @@ export interface AppError {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   neteaseProgressMode: "real",
+  neteaseAutoConnect: false,
+  neteaseExecutablePath: null,
   islandStyle: "floating",
   islandEdge: "top",
   islandEdgePosition: 50,
   collapsedEdgeShoulderRadius: 8,
   expandedEdgeShoulderRadius: 32,
+  floatingExpandedLength: 600,
+  edgeExpandedLength: 600,
   floatingCompactLength: 80,
   edgeCompactLength: 80,
   language: "system",
@@ -219,6 +228,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     generic: 10,
   },
   playerOrderIds: [],
+  playerSourceOverrides: {},
   selectedPlayerIds: null,
   idleContentEnabled: true,
   idleRotationSeconds: 5,
@@ -265,6 +275,11 @@ export function normalizeAppSettings(value: Partial<AppSettings>): AppSettings {
   const legacyCompactLength = Number(legacy.compactLength ?? 80);
   const legacyExpandedRadius = Number(legacy.expandedCornerRadius ?? 45);
   const merged = { ...DEFAULT_SETTINGS, ...value } as AppSettings;
+  merged.playerSourceOverrides = Object.fromEntries(Object.entries(value.playerSourceOverrides ?? {}).filter(([id, source]) => id.trim().length > 0 && id.length <= 1024 && source === "netease"));
+  for (const key of ["floatingExpandedLength", "edgeExpandedLength"] as const) {
+    const length = Number(value[key] ?? 600);
+    merged[key] = Math.min(900, Math.max(480, Number.isFinite(length) ? Math.round(length) : 600));
+  }
   merged.floatingCompactLength = Math.min(300, Math.max(80, Number(value.floatingCompactLength ?? legacyCompactLength)));
   merged.edgeCompactLength = Math.min(300, Math.max(80, Number(value.edgeCompactLength ?? legacyCompactLength)));
   merged.floatingExpandedCornerRadius = Math.min(80, Math.max(0, Number(value.floatingExpandedCornerRadius ?? legacyExpandedRadius)));

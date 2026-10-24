@@ -1,6 +1,6 @@
 use crate::models::MediaState;
-use crate::services::netease_cdp::NeteaseProgress;
 use crate::models::NeteaseProgressMode;
+use crate::services::netease_cdp::NeteaseProgress;
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::time::Duration;
 
@@ -11,7 +11,7 @@ pub(crate) const MAX_SAFE_NATIVE_REVISION: u64 = 9_007_199_254_740_991;
 pub(crate) enum MediaActorMessage {
     Refresh,
     Snapshot(SyncSender<Result<MediaState, String>>),
-    PlayPause(SyncSender<Result<(), String>>),
+    TransportChanged,
     VerifiedNeteaseSeek {
         expected_epoch: String,
         expected_title: String,
@@ -33,6 +33,7 @@ pub(crate) enum MediaActorMessage {
         result: Result<NeteaseProgress, String>,
     },
     NeteaseProgressModeChanged,
+    PlayerIdentityChanged,
     #[cfg(feature = "c2-media-probe")]
     Stop,
 }
@@ -172,34 +173,53 @@ fn now_epoch_ms() -> u64 {
 pub(crate) struct NeteaseProgressScheduler {
     last_success: Option<std::time::Instant>,
     retry_after: Option<std::time::Instant>,
+    consecutive_failures: u8,
 }
 
 impl NeteaseProgressScheduler {
     pub(crate) fn due(&self, now: std::time::Instant, selected: bool, playing: bool) -> bool {
-        if !selected || self.retry_after.is_some_and(|retry| now < retry) {
-            return false;
+        self.next_due(now, selected, playing)
+            .is_some_and(|due| now >= due)
+    }
+
+    pub(crate) fn next_due(
+        &self,
+        now: std::time::Instant,
+        selected: bool,
+        playing: bool,
+    ) -> Option<std::time::Instant> {
+        if !selected {
+            return None;
         }
         let ttl = if playing {
-            Duration::from_secs(1)
+            Duration::from_millis(200)
         } else {
-            Duration::from_secs(5)
+            Duration::from_millis(500)
         };
-        self.last_success
-            .is_none_or(|success| now.saturating_duration_since(success) >= ttl)
+        let due = self.last_success.map_or(now, |success| success + ttl);
+        Some(self.retry_after.map_or(due, |retry| due.max(retry)))
+    }
+
+    pub(crate) fn retry_soon(&mut self, now: std::time::Instant) {
+        self.retry_after = Some(now + Duration::from_millis(100));
     }
 
     pub(crate) fn success(&mut self, now: std::time::Instant) {
         self.last_success = Some(now);
         self.retry_after = None;
+        self.consecutive_failures = 0;
     }
 
     pub(crate) fn failure(&mut self, now: std::time::Instant) {
-        self.retry_after = Some(now + Duration::from_secs(30));
+        self.consecutive_failures = self.consecutive_failures.saturating_add(1).min(6);
+        let delay_ms = (250u64 << (self.consecutive_failures - 1)).min(5_000);
+        self.retry_after = Some(now + Duration::from_millis(delay_ms));
     }
 
     pub(crate) fn reset(&mut self) {
         self.last_success = None;
         self.retry_after = None;
+        self.consecutive_failures = 0;
     }
 
     pub(crate) fn mode_enabled(&self, mode: NeteaseProgressMode) -> bool {
@@ -450,13 +470,9 @@ pub(crate) fn queue_snapshot_request(
 pub(crate) fn complete_snapshot_requests(
     snapshot: &MediaState,
     pending_snapshots: &mut Vec<SyncSender<Result<MediaState, String>>>,
-    pending_controls: &mut Vec<SyncSender<Result<(), String>>>,
 ) {
     for reply in pending_snapshots.drain(..) {
         let _ = reply.send(Ok(snapshot.clone()));
-    }
-    for reply in pending_controls.drain(..) {
-        let _ = reply.send(Ok(()));
     }
 }
 
@@ -481,16 +497,22 @@ impl MediaActorHandle {
         await_response(response, "media snapshot").await
     }
 
-    pub(crate) async fn play_pause(&self) -> Result<(), String> {
-        let (reply, response) = mpsc::sync_channel(1);
-        self.try_request(MediaActorMessage::PlayPause(reply))?;
-        await_response(response, "play/pause confirmation").await
+    pub(crate) fn wake_for_transport_change(&self) {
+        let _ = self.sender.try_send(MediaActorMessage::TransportChanged);
     }
 
     pub(crate) fn wake_for_netease_progress_mode_change(&self) {
         // Settings are authoritative shared state. This bounded message only
         // wakes the actor; saturation cannot lose the latest saved mode.
-        let _ = self.sender.try_send(MediaActorMessage::NeteaseProgressModeChanged);
+        let _ = self
+            .sender
+            .try_send(MediaActorMessage::NeteaseProgressModeChanged);
+    }
+
+    pub(crate) fn wake_for_player_identity_change(&self) {
+        let _ = self
+            .sender
+            .try_send(MediaActorMessage::PlayerIdentityChanged);
     }
 
     pub(crate) async fn confirmed_netease_seek(
@@ -592,8 +614,7 @@ mod tests {
                 ..MediaState::default()
             })
             .unwrap();
-        let mut controls = Vec::new();
-        complete_snapshot_requests(&published, &mut pending, &mut controls);
+        complete_snapshot_requests(&published, &mut pending);
         let response = response.try_recv().unwrap().unwrap();
         assert_eq!(response.native_revision, published.native_revision);
         assert_eq!(response.album_art, "full");
@@ -611,18 +632,28 @@ mod tests {
     }
 
     #[test]
-    fn one_actor_control_confirmation_completes_from_one_published_snapshot() {
+    fn transport_completion_requests_refresh_without_waiting_for_metadata_confirmation() {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let actor = MediaActorHandle::new(sender);
+        actor.wake_for_transport_change();
+        assert!(matches!(
+            receiver.try_recv(),
+            Ok(MediaActorMessage::TransportChanged)
+        ));
+    }
+
+    #[test]
+    fn snapshot_confirmation_completes_from_one_published_snapshot() {
         let mut cache = NativeSnapshotCache::new("epoch-1".into());
         let (reply, response) = mpsc::sync_channel(1);
-        let mut pending_controls = vec![reply];
-        let mut pending_snapshots = Vec::new();
+        let mut pending_snapshots = vec![reply];
         let published = cache
             .publish(MediaState {
                 is_playing: true,
                 ..MediaState::default()
             })
             .unwrap();
-        complete_snapshot_requests(&published, &mut pending_snapshots, &mut pending_controls);
+        complete_snapshot_requests(&published, &mut pending_snapshots);
         assert_eq!(cache.current().unwrap().native_revision, 1);
         assert!(response.try_recv().unwrap().is_ok());
     }
@@ -817,15 +848,43 @@ mod tests {
         assert!(!scheduler.due(now, false, true));
         assert!(scheduler.due(now, true, true));
         scheduler.success(now);
-        assert!(!scheduler.due(now + Duration::from_millis(999), true, true));
-        assert!(scheduler.due(now + Duration::from_secs(1), true, true));
-        assert!(!scheduler.due(now + Duration::from_secs(4), true, false));
-        assert!(scheduler.due(now + Duration::from_secs(5), true, false));
+        assert!(!scheduler.due(now + Duration::from_millis(199), true, true));
+        assert!(scheduler.due(now + Duration::from_millis(200), true, true));
+        assert!(!scheduler.due(now + Duration::from_millis(499), true, false));
+        assert!(scheduler.due(now + Duration::from_millis(500), true, false));
 
         scheduler.failure(now + Duration::from_secs(5));
-        assert!(!scheduler.due(now + Duration::from_secs(34), true, true));
-        assert!(scheduler.due(now + Duration::from_secs(35), true, true));
-        assert!(!scheduler.due(now + Duration::from_secs(35), false, true));
+        assert!(!scheduler.due(now + Duration::from_millis(5249), true, true));
+        assert!(scheduler.due(now + Duration::from_millis(5250), true, true));
+        assert!(!scheduler.due(now + Duration::from_millis(5250), false, true));
+    }
+
+    #[test]
+    fn progress_deadline_wakes_before_the_next_smtc_poll_without_busy_retry() {
+        let now = std::time::Instant::now();
+        let mut scheduler = NeteaseProgressScheduler::default();
+        scheduler.success(now);
+        let smtc_poll = now + Duration::from_secs(1);
+        let playing_read = scheduler.next_due(now, true, true).unwrap();
+        assert_eq!(
+            smtc_poll.min(playing_read),
+            now + Duration::from_millis(200)
+        );
+        assert_eq!(
+            scheduler.next_due(now, true, false),
+            Some(now + Duration::from_millis(500))
+        );
+        assert_eq!(scheduler.next_due(now, false, true), None);
+        scheduler.failure(now);
+        assert_eq!(
+            scheduler.next_due(now, true, true),
+            Some(now + Duration::from_millis(250))
+        );
+        scheduler.reset();
+        assert!(scheduler.due(now, true, true));
+        scheduler.retry_soon(now);
+        assert!(!scheduler.due(now + Duration::from_millis(99), true, true));
+        assert!(scheduler.due(now + Duration::from_millis(100), true, true));
     }
 
     #[test]
@@ -842,6 +901,29 @@ mod tests {
     }
 
     #[test]
+    fn transient_progress_failures_retry_quickly_and_persistent_failure_stays_bounded() {
+        let now = std::time::Instant::now();
+        let mut scheduler = NeteaseProgressScheduler::default();
+        for delay in [250, 500, 1000, 2000, 4000, 5000, 5000] {
+            scheduler.failure(now);
+            assert_eq!(
+                scheduler.next_due(now, true, true),
+                Some(now + Duration::from_millis(delay))
+            );
+            assert!(!scheduler.due(now, true, true));
+        }
+        scheduler.success(now);
+        scheduler.failure(now + Duration::from_secs(1));
+        assert_eq!(
+            scheduler.next_due(now + Duration::from_secs(1), true, true),
+            Some(now + Duration::from_millis(1250))
+        );
+        scheduler.reset();
+        assert!(scheduler.due(now, true, true));
+        assert_eq!(scheduler.next_due(now, false, true), None);
+    }
+
+    #[test]
     fn persisted_latest_mode_survives_a_full_wake_queue_and_invalidates_old_read() {
         use crate::state::{AppState, MediaActorHandle};
 
@@ -854,7 +936,10 @@ mod tests {
         // Both wake markers are dropped because the queue is full, but the
         // shared persisted value retains the latest choice.
         app_state.set_netease_progress_mode(NeteaseProgressMode::Estimate);
-        assert_eq!(app_state.netease_progress_mode(), NeteaseProgressMode::Estimate);
+        assert_eq!(
+            app_state.netease_progress_mode(),
+            NeteaseProgressMode::Estimate
+        );
         actor.wake_for_netease_progress_mode_change();
         app_state.set_netease_progress_mode(NeteaseProgressMode::Real);
         actor.wake_for_netease_progress_mode_change();
@@ -875,9 +960,15 @@ mod tests {
         assert_eq!(current, NeteaseProgressMode::Real);
         assert_eq!(generation, 9);
         assert!(scheduler.due(std::time::Instant::now(), true, true));
-        assert!(inflight.begin().is_none(), "mode change must not release the old worker gate");
+        assert!(
+            inflight.begin().is_none(),
+            "mode change must not release the old worker gate"
+        );
         drop(permit);
-        assert!(inflight.begin().is_some(), "the worker releases its own gate on exit");
+        assert!(
+            inflight.begin().is_some(),
+            "the worker releases its own gate on exit"
+        );
         let snapshot = NativeSnapshotCache::new("epoch-mode".into())
             .publish(MediaState {
                 source: "netease".into(),
@@ -896,7 +987,10 @@ mod tests {
             generation,
             snapshot.native_revision,
         ));
-        assert!(matches!(receiver.try_recv(), Ok(MediaActorMessage::Refresh)));
+        assert!(matches!(
+            receiver.try_recv(),
+            Ok(MediaActorMessage::Refresh)
+        ));
     }
 
     #[test]

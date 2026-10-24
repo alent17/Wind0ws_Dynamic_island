@@ -514,6 +514,87 @@ fn source_for_id(raw_id: &str) -> &'static str {
     }
 }
 
+fn source_with_override(raw_id: &str, override_source: Option<&str>) -> &'static str {
+    let detected = source_for_id(raw_id);
+    // An explicit per-session choice may classify an unknown Windows ID.
+    // Keep known player identities and the original SMTC selection ID intact.
+    if detected == "generic" && override_source == Some("netease") {
+        "netease"
+    } else {
+        detected
+    }
+}
+
+fn session_source(app: &AppHandle, raw_id: &str) -> &'static str {
+    let state = app.state::<AppState>();
+    let settings = state.settings.lock().ok();
+    source_with_override(
+        raw_id,
+        settings.as_ref().and_then(|settings| {
+            settings
+                .player_source_overrides
+                .get(raw_id)
+                .map(String::as_str)
+        }),
+    )
+}
+
+fn unique_netease_binding(
+    candidates: &[(String, String, String, String)],
+    title: &str,
+    artist: &str,
+) -> Option<String> {
+    let matches: Vec<_> = candidates
+        .iter()
+        .filter(|(_, source, candidate_title, candidate_artist)| {
+            source == "netease"
+                || (source == "generic"
+                    && !title.is_empty()
+                    && candidate_title == title
+                    && candidate_artist == artist)
+        })
+        .collect();
+    if matches.len() == 1 {
+        Some(matches[0].0.clone())
+    } else {
+        None
+    }
+}
+
+/// Invoked only by explicit connection setup, never in periodic media sampling.
+pub(crate) fn verified_netease_binding() -> Option<String> {
+    let _apartment = super::apartment::Apartment::enter().ok()?;
+    let progress = super::netease_cdp::LocalCdpClient::default()
+        .read_progress_snapshot()
+        .ok()?;
+    let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+        .ok()?
+        .get()
+        .ok()?;
+    let sessions = manager.GetSessions().ok()?;
+    let size = sessions.Size().ok()?;
+    if size > 64 {
+        return None;
+    }
+    let mut candidates = Vec::new();
+    for index in 0..size {
+        let session = sessions.GetAt(index).ok()?;
+        let id = session.SourceAppUserModelId().ok()?.to_string();
+        let source = source_for_id(&id);
+        if !matches!(source, "generic" | "netease") {
+            continue;
+        }
+        let properties = session.TryGetMediaPropertiesAsync().ok()?.get().ok()?;
+        candidates.push((
+            id,
+            source.to_string(),
+            properties.Title().ok()?.to_string(),
+            properties.Artist().ok()?.to_string(),
+        ));
+    }
+    unique_netease_binding(&candidates, &progress.title, &progress.artist)
+}
+
 fn source_display(source: &str, raw_id: &str) -> String {
     match source {
         "netease" => "网易云音乐".to_string(),
@@ -630,7 +711,7 @@ fn selected_session(
                 .filter(|(_, id, _, _)| id == selected_id)
                 .max_by_key(|(_, _, playing, updated)| (*playing, *updated))
             {
-                let source = source_for_id(raw_id).to_string();
+                let source = session_source(app, raw_id).to_string();
                 return Ok(Some((session.clone(), source, raw_id.clone())));
             }
         }
@@ -643,7 +724,7 @@ fn selected_session(
                 .filter(|(_, id, _, _)| id == &ordered_id)
                 .max_by_key(|(_, _, playing, updated)| (*playing, *updated))
             {
-                let source = source_for_id(raw_id).to_string();
+                let source = session_source(app, raw_id).to_string();
                 return Ok(Some((session.clone(), source, raw_id.clone())));
             }
         }
@@ -670,7 +751,7 @@ fn selected_session(
         }
     }
     Ok(selected.map(|(session, raw_id)| {
-        let source = source_for_id(&raw_id).to_string();
+        let source = session_source(app, &raw_id).to_string();
         (session, source, raw_id)
     }))
 }
@@ -786,7 +867,7 @@ fn selected_session_from_current_manager(
     selected_session(app, &manager)
 }
 
-pub fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
+pub fn list_media_sessions(app: &AppHandle) -> AppResult<Vec<MediaSessionInfo>> {
     let _apartment = super::apartment::Apartment::enter().map_err(|error| {
         AppError::media(format!("Media apartment initialization failed: {error}"))
     })?;
@@ -812,7 +893,7 @@ pub fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
                 .and_then(|info| info.PlaybackStatus().ok())
                 .map(|status| status.0 == 4)
                 .unwrap_or(false);
-            let source = source_for_id(&id).to_string();
+            let source = session_source(app, &id).to_string();
             result.push(MediaSessionInfo {
                 display_name: source_display(&source, &id),
                 id,
@@ -1319,49 +1400,148 @@ pub fn toggle_shuffle(app: &AppHandle) -> AppResult<()> {
     let _apartment = super::apartment::Apartment::enter().map_err(|error| {
         AppError::media(format!("Media apartment initialization failed: {error}"))
     })?;
-    if let Some((session, _, _)) = selected_session_from_current_manager(app)? {
-        let current = session
-            .GetPlaybackInfo()
-            .ok()
-            .and_then(|info| info.IsShuffleActive().ok())
-            .and_then(|value| value.Value().ok())
-            .unwrap_or(false);
+    let (session, _, _) = require_control_session(selected_session_from_current_manager(app)?)?;
+    let info = session
+        .GetPlaybackInfo()
+        .map_err(|error| AppError::media(error.to_string()))?;
+    let enabled = info
+        .Controls()
+        .and_then(|controls| controls.IsShuffleEnabled())
+        .map_err(|error| AppError::media(error.to_string()))?;
+    let current = info
+        .IsShuffleActive()
+        .and_then(|value| value.Value())
+        .map_err(|error| AppError::media(format!("无法读取随机播放状态: {error}")))?;
+    request_smtc_mode("shuffle", enabled, || {
         session
             .TryChangeShuffleActiveAsync(!current)
             .and_then(|op| op.get())
-            .map_err(|e| AppError::media(format!("Shuffle failed: {:?}", e)))?;
+    })
+}
+
+fn request_smtc_mode<F>(action: &str, enabled: bool, request: F) -> AppResult<()>
+where
+    F: FnOnce() -> windows052::core::Result<bool>,
+{
+    if !enabled {
+        return Err(AppError::media(format!("播放器不支持切换模式: {action}")));
     }
-    Ok(())
+    finish_media_request(action, request())
 }
 
 pub fn cycle_repeat(app: &AppHandle) -> AppResult<()> {
     let _apartment = super::apartment::Apartment::enter().map_err(|error| {
         AppError::media(format!("Media apartment initialization failed: {error}"))
     })?;
-    if let Some((session, _, _)) = selected_session_from_current_manager(app)? {
-        let current = session
-            .GetPlaybackInfo()
-            .ok()
-            .and_then(|info| info.AutoRepeatMode().ok())
-            .and_then(|value| value.Value().ok())
-            .unwrap_or(MediaPlaybackAutoRepeatMode(0));
-        let next = match current.0 {
-            0 => MediaPlaybackAutoRepeatMode(2),
-            2 => MediaPlaybackAutoRepeatMode(1),
-            _ => MediaPlaybackAutoRepeatMode(0),
-        };
+    let (session, _, _) = require_control_session(selected_session_from_current_manager(app)?)?;
+    let info = session
+        .GetPlaybackInfo()
+        .map_err(|error| AppError::media(error.to_string()))?;
+    let enabled = info
+        .Controls()
+        .and_then(|controls| controls.IsRepeatEnabled())
+        .map_err(|error| AppError::media(error.to_string()))?;
+    let current = info
+        .AutoRepeatMode()
+        .and_then(|value| value.Value())
+        .map_err(|error| AppError::media(format!("无法读取循环播放状态: {error}")))?;
+    let next = match current.0 {
+        0 => MediaPlaybackAutoRepeatMode(2),
+        2 => MediaPlaybackAutoRepeatMode(1),
+        _ => MediaPlaybackAutoRepeatMode(0),
+    };
+    request_smtc_mode("repeat", enabled, || {
         session
             .TryChangeAutoRepeatModeAsync(next)
             .and_then(|op| op.get())
-            .map_err(|e| AppError::media(format!("Repeat failed: {:?}", e)))?;
-    }
-    Ok(())
+    })
 }
 
 #[cfg(test)]
 mod control_tests {
     use super::*;
     use std::cell::Cell;
+
+    #[test]
+    fn smtc_modes_require_declared_support_and_propagate_player_rejection() {
+        for action in ["shuffle", "repeat"] {
+            let calls = Cell::new(0);
+            assert!(request_smtc_mode(action, false, || {
+                calls.set(calls.get() + 1);
+                Ok(true)
+            })
+            .is_err());
+            assert_eq!(calls.get(), 0);
+            assert!(request_smtc_mode(action, true, || {
+                calls.set(calls.get() + 1);
+                Ok(false)
+            })
+            .is_err());
+            assert_eq!(calls.get(), 1);
+            assert!(request_smtc_mode(action, true, || {
+                calls.set(calls.get() + 1);
+                Ok(true)
+            })
+            .is_ok());
+            assert_eq!(calls.get(), 2);
+        }
+    }
+
+    #[test]
+    fn one_click_binding_requires_one_matching_session_and_does_not_guess_from_an_unknown_id() {
+        let session = |id: &str, source: &str, title: &str, artist: &str| {
+            (id.into(), source.into(), title.into(), artist.into())
+        };
+        let generated = session(
+            "Microsoft.AutoGenerated.new-PC",
+            "generic",
+            "Track",
+            "Artist",
+        );
+        assert_eq!(
+            unique_netease_binding(&[generated.clone()], "Track", "Artist"),
+            Some(generated.0.clone())
+        );
+        assert_eq!(
+            unique_netease_binding(&[generated.clone()], "Other track", "Artist"),
+            None
+        );
+        assert_eq!(
+            unique_netease_binding(&[generated.clone()], "Track", "Other artist"),
+            None
+        );
+        let duplicate = session(
+            "Microsoft.AutoGenerated.other",
+            "generic",
+            "Track",
+            "Artist",
+        );
+        assert_eq!(
+            unique_netease_binding(&[generated.clone(), duplicate], "Track", "Artist"),
+            None
+        );
+        let spotify = session("Spotify.exe", "spotify", "Track", "Artist");
+        assert_eq!(unique_netease_binding(&[spotify], "Track", "Artist"), None);
+        assert_eq!(unique_netease_binding(&[], "", ""), None);
+    }
+
+    #[test]
+    fn unknown_session_identity_override_controls_source_without_relabeling_other_players() {
+        let id = "Microsoft.AutoGenerated.{034E9048-FE2F-9805-08CC-310B}";
+        assert_eq!(source_with_override(id, None), "generic");
+        assert_eq!(source_with_override(id, Some("netease")), "netease");
+        assert_eq!(
+            source_display(source_with_override(id, Some("netease")), id),
+            "网易云音乐"
+        );
+        assert_eq!(source_with_override(id, Some("spotify")), "generic");
+        assert_eq!(
+            source_with_override("Spotify.exe", Some("netease")),
+            "spotify"
+        );
+        assert_eq!(source_with_override("cloudmusic.exe", None), "netease");
+        assert!(seek_supported("netease", false));
+    }
 
     #[test]
     fn accepted_request_is_success_but_rejection_is_serialized_error() {

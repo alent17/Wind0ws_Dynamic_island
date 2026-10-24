@@ -475,6 +475,26 @@ mod outcome_tests {
     use super::{EmitOutcome, EventBus, EventPriority, ThrottleConfig, EVENT_MEDIA_UPDATE};
     use crate::error::AppError;
 
+    #[test]
+    fn discrete_transport_update_is_delivered_inside_the_progress_throttle_window() {
+        let bus = EventBus::new();
+        assert_eq!(
+            bus.emit_with_options_using(EVENT_MEDIA_UPDATE, 1u32, Some(throttle()), |_, _| Ok(()))
+                .unwrap(),
+            EmitOutcome::Emitted
+        );
+        assert_eq!(
+            bus.emit_with_options_using(EVENT_MEDIA_UPDATE, 2u32, Some(throttle()), |_, _| Ok(()))
+                .unwrap(),
+            EmitOutcome::Throttled
+        );
+        assert_eq!(
+            bus.emit_with_options_using(EVENT_MEDIA_UPDATE, 3u32, None, |_, _| Ok(()))
+                .unwrap(),
+            EmitOutcome::Emitted
+        );
+    }
+
     fn throttle() -> ThrottleConfig {
         ThrottleConfig {
             interval_ms: 500,
@@ -571,6 +591,13 @@ pub fn emit_media_update_outcome<T: Serialize + Clone>(payload: T) -> AppResult<
             priority: EventPriority::Normal,
         }),
     )
+}
+
+/// Transport changes and fresh verified timeline samples bypass generic throttling.
+pub fn emit_media_immediate_update_outcome<T: Serialize + Clone>(
+    payload: T,
+) -> AppResult<EmitOutcome> {
+    EVENT_BUS.emit_with_options_outcome(EVENT_MEDIA_UPDATE, payload, None)
 }
 
 /// 发送频谱数据事件

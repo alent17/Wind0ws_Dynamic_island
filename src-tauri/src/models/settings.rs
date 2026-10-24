@@ -66,12 +66,16 @@ pub enum NeteaseProgressMode {
 #[serde(default, rename_all = "camelCase")]
 pub struct AppPreferences {
     pub netease_progress_mode: NeteaseProgressMode,
+    pub netease_auto_connect: bool,
+    pub netease_executable_path: Option<String>,
     pub island_style: String,
     pub island_edge: String,
     pub island_edge_position: u8,
     #[serde(alias = "edgeShoulderRadius")]
     pub collapsed_edge_shoulder_radius: u8,
     pub expanded_edge_shoulder_radius: u8,
+    pub floating_expanded_length: u16,
+    pub edge_expanded_length: u16,
     pub floating_compact_length: u16,
     pub edge_compact_length: u16,
     pub language: String,
@@ -93,6 +97,7 @@ pub struct AppPreferences {
     pub monitor_index: u32,
     pub player_weights: HashMap<String, u32>,
     pub player_order_ids: Vec<String>,
+    pub player_source_overrides: HashMap<String, String>,
     pub selected_player_ids: Option<Vec<String>>,
     pub idle_content_enabled: bool,
     pub idle_rotation_seconds: u16,
@@ -141,11 +146,15 @@ impl Default for AppPreferences {
 
         Self {
             netease_progress_mode: NeteaseProgressMode::Real,
+            netease_auto_connect: false,
+            netease_executable_path: None,
             island_style: "floating".to_string(),
             island_edge: "top".to_string(),
             island_edge_position: 50,
             collapsed_edge_shoulder_radius: 8,
             expanded_edge_shoulder_radius: 32,
+            floating_expanded_length: 600,
+            edge_expanded_length: 600,
             floating_compact_length: 80,
             edge_compact_length: 80,
             language: "system".to_string(),
@@ -166,6 +175,7 @@ impl Default for AppPreferences {
             monitor_index: 0,
             player_weights,
             player_order_ids: Vec::new(),
+            player_source_overrides: HashMap::new(),
             selected_player_ids: None,
             idle_content_enabled: true,
             idle_rotation_seconds: 5,
@@ -205,6 +215,19 @@ impl Default for AppPreferences {
 #[cfg(test)]
 mod tests {
     use super::{AppPreferences, NeteaseProgressMode};
+
+    #[test]
+    fn expanded_lengths_default_and_roundtrip_independently() {
+        let defaults: AppPreferences = serde_json::from_str("{}").unwrap();
+        assert_eq!(defaults.floating_expanded_length, 600);
+        assert_eq!(defaults.edge_expanded_length, 600);
+        let loaded: AppPreferences =
+            serde_json::from_str(r#"{"floatingExpandedLength":720,"edgeExpandedLength":520}"#)
+                .unwrap();
+        let encoded = serde_json::to_value(&loaded).unwrap();
+        assert_eq!(encoded["floatingExpandedLength"], 720);
+        assert_eq!(encoded["edgeExpandedLength"], 520);
+    }
 
     #[test]
     fn defaults_and_migrates_edge_shoulder_radius() {

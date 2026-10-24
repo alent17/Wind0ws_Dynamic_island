@@ -1,13 +1,15 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack, tick } from "svelte";
   import { spring, tweened } from "svelte/motion";
-  import { Airplay, ArrowLeft, Clock, CloudSun, EyeOff, GalleryHorizontalEnd, ListMusic, Music2, Play, Settings, Shuffle, SkipBack, SkipForward, Star, Timer, Volume2, VolumeX } from "lucide-svelte";
+  import { Airplay, ArrowLeft, Clock, CloudSun, EyeOff, GalleryHorizontalEnd, Music2, Settings, Shuffle, SkipBack, SkipForward, Timer, Volume2 } from "lucide-svelte";
   import MediaProgress from "$lib/components/media/MediaProgress.svelte";
   import PlayPauseIcon from "$lib/components/media/PlayPauseIcon.svelte";
   import RollingNumber from "$lib/components/time/RollingNumber.svelte";
   import Spectrum from "$lib/components/media/Spectrum.svelte";
   import CoverArt from "$lib/components/media/CoverArt.svelte";
   import NeteaseModeControl from "$lib/components/media/NeteaseModeControl.svelte";
+  import NeteaseLikeControl from "$lib/components/media/NeteaseLikeControl.svelte";
+  import SmtcModeControls from "$lib/components/media/SmtcModeControls.svelte";
   import TimerPanel from "$lib/components/time/TimerPanel.svelte";
   import MarqueeTitle from "$lib/components/media/MarqueeTitle.svelte";
   import InfoPanel from "$lib/components/island/InfoPanel.svelte";
@@ -16,7 +18,6 @@
   import WeatherIcon from "$lib/components/media/WeatherIcon.svelte";
   import type { IslandTool } from "$lib/featureRail";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
-  import { clampSeekPosition } from "$lib/mediaClock";
   import { ISLAND_MOTION, islandSettleEasing, islandShapeMotion, anchoredLayoutOffset } from "$lib/islandMotion";
   import type { AudioDeviceInfo, MediaState, SpectrumMode, SystemAudioState, WeatherForecastDay } from "$lib/api/types";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
@@ -31,12 +32,24 @@
     polygonCss,
     shapePolygonFor,
     scaleIslandGeometry,
-    type IslandGeometry,
     type IslandEdge,
     type IslandMode,
     type IslandRegionChange,
     type IslandStyle,
   } from "$lib/islandGeometry";
+
+  function animateSkip(event: MouseEvent, direction: -1 | 1) {
+    if (!enableAnimations || reduceAnimations || prefersReducedMotion) return;
+    const icon = (event.currentTarget as HTMLButtonElement).querySelector("svg");
+    if (!icon) return;
+    icon.getAnimations().forEach((animation) => animation.cancel());
+    icon.animate([
+      { transform: "translateX(0) scale(1)", opacity: 1, offset: 0 },
+      { transform: `translateX(${direction * 14}px) scale(.86)`, opacity: 0, offset: .45 },
+      { transform: `translateX(${-direction * 14}px) scale(.86)`, opacity: 0, offset: .46 },
+      { transform: "translateX(0) scale(1)", opacity: 1, offset: 1 },
+    ], { duration: 300, easing: "cubic-bezier(.22,.61,.36,1)" });
+  }
 
   type PreviewHighlight="shape"|"edge"|"position"|"compactLength"|"shoulder"|"radius"|"background"|"spectrum"|null;
 
@@ -47,6 +60,7 @@
     edge = "top",
     position = 0,
     expandedRadius = 45,
+    expandedLength = 600,
     collapsedEdgeShoulderRadius = 8,
     expandedEdgeShoulderRadius = 32,
     expandedScale = 1,
@@ -126,6 +140,7 @@
     edge?: IslandEdge;
     position?: number;
     expandedRadius?: number;
+    expandedLength?: number;
     collapsedEdgeShoulderRadius?: number;
     expandedEdgeShoulderRadius?: number;
     expandedScale?: number;
@@ -251,7 +266,7 @@
   const toolLabels: Record<IslandTool, TranslationKey> = { timer: "timer", volume: "volume", floating: "floatingTool", settings: "settingsTool", hide: "hideTool", clock: "clock", weather: "weather" };
   const shortLabels: Record<IslandTool, TranslationKey> = {timer:"timer",volume:"menuVolume",floating:"menuFloating",settings:"menuSettings",hide:"menuHide",clock:"clock",weather:"weather"};
   const menuItems = $derived(toolOrder.filter(tool => enabledTools.includes(tool)).map(tool => ({ id: tool, label: t(toolLabels[tool]), shortLabel: t(shortLabels[tool]), icon: toolIcons[tool] })));
-  const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius));
+  const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius, expandedLength));
   const expandedGeometry = $derived({
     ...scaleIslandGeometry(expandedBaseGeometry, expandedScale),
   });
@@ -609,75 +624,49 @@
         <div class="page-body" class:exiting={pageExiting} class:with-toolbar={panelVisible} inert={pageExiting}>
         {#if renderedPage === "music"}
         <section class="music-pane">
-          {#if !idle}
             <div class="top-row">
-            <button class="cover expanded-cover" class:shared-cover-source={movingCover} type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
-              {#if media.albumArt}<CoverArt src={media.albumArt} />{:else}<Music2 size={30} />{/if}
+            <button class="cover expanded-cover" class:shared-cover-source={movingCover} type="button" aria-label={t("openPlayer")} disabled={idle} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
+              {#if (idle ? lastPlayedMedia?.albumArt : media.albumArt)}<CoverArt src={(idle ? lastPlayedMedia?.albumArt : media.albumArt) || ""} />{:else}<Music2 size={30} />{/if}
             </button>
             <div class="metadata">
-              <MarqueeTitle text={media.title || t("waitingPlayback")} active={musicTitleActive} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} />
-              <span title={media.artist}>{media.artist || t("unknownArtist")}</span>
+              <MarqueeTitle text={(idle ? lastPlayedMedia?.title : media.title) || t("waitingPlayback")} active={musicTitleActive} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} />
+              <span title={idle ? lastPlayedMedia?.artist : media.artist}>{(idle ? lastPlayedMedia?.artist || lastPlayedMedia?.sourceDisplay : media.artist) || t("unknownArtist")}</span>
             </div>
             {#if showSpectrum}
-              <Spectrum active={expandedOpacity > .05} playing={media.isPlaying} mode={spectrumMode} reduceMotion={reduceAnimations} topColor={spectrumTopColor} bottomColor={spectrumBottomColor} scale={2.5} values={previewSpectrum} />
+              <Spectrum active={expandedOpacity > .05} playing={!idle && media.isPlaying} mode={spectrumMode} reduceMotion={reduceAnimations} topColor={spectrumTopColor} bottomColor={spectrumBottomColor} scale={2.5} values={previewSpectrum} />
             {/if}
             </div>
 
             <div class="progress-block">
-              <MediaProgress position={position} duration={media.durationMs} progressKnown={media.progressKnown !== false} seekable={Boolean(media.capabilities?.seek)} {seekBusy} reduceMotion={reduceAnimations || !enableAnimations} {seekError} {onSeek} />
+              <MediaProgress position={idle ? 0 : position} duration={idle ? 0 : media.durationMs} progressKnown={media.progressKnown !== false} seekable={!idle && Boolean(media.capabilities?.seek)} {seekBusy} {seekError} {onSeek} />
             </div>
 
             <div class="control-row">
               <div class="utility-controls leading-controls" aria-label={t("playbackControls")}>
-                <span class="control-mark" aria-hidden="true"><ListMusic size={34} strokeWidth={2} /></span>
-                <span class="control-mark favorite-mark" aria-hidden="true"><Star size={36} strokeWidth={2} /></span>
-              </div>
-              <div class="transport-controls" aria-label={t("playbackControls")}>
-                <button type="button" aria-label={t("previous")} disabled={media.capabilities?.previous === false} onclick={(e) => { e.stopPropagation(); onMediaAction?.("prev"); }}><SkipBack size={48} fill="currentColor" /></button>
-                <button type="button" class="play" aria-label={media.isPlaying ? t("pause") : t("play")} disabled={media.capabilities?.playPause === false} onclick={(e) => { e.stopPropagation(); onMediaAction?.("play_pause"); }}>
-                  <PlayPauseIcon playing={media.isPlaying} size={50} reduceMotion={reduceAnimations || !enableAnimations} />
-                </button>
-                <button type="button" aria-label={t("next")} disabled={media.capabilities?.next === false} onclick={(e) => { e.stopPropagation(); onMediaAction?.("next"); }}><SkipForward size={48} fill="currentColor" /></button>
-              </div>
-              <div class="utility-controls trailing-controls">
-                {#if media.source === "netease" && media.neteasePlaybackMode}
+                {#if !idle && media.source === "netease" && media.neteasePlaybackMode}
                   <NeteaseModeControl mode={media.neteasePlaybackMode} disabled={neteaseModeBusy} error={neteaseModeError} onCycle={() => onMediaAction?.("cycle_netease_mode")} />
+                {:else if media.source !== "netease"}
+                  {#key media.source}<SmtcModeControls {media} live={Boolean(onMediaAction)}/>{/key}
                 {:else}
                   <span class="control-mark" aria-hidden="true"><Shuffle size={34} strokeWidth={2} /></span>
                 {/if}
+                {#if !idle && media.source === "netease"}
+                  {#key `${media.nativeEpoch}:${media.nativeTrackGeneration}:${media.title}:${media.artist}`}
+                    <NeteaseLikeControl title={media.title} artist={media.artist} cacheKey={`${media.nativeEpoch}:${media.nativeTrackGeneration}`} live={Boolean(onMediaAction)} />
+                  {/key}
+                {/if}
+              </div>
+              <div class="transport-controls" aria-label={t("playbackControls")}>
+                <button type="button" aria-label={t("previous")} disabled={idle || media.capabilities?.previous === false} onclick={(e) => { e.stopPropagation(); animateSkip(e, -1); onMediaAction?.("prev"); }}><SkipBack size={36} fill="currentColor" /></button>
+                <button type="button" class="play" aria-label={idle ? (resumingLastTrack ? t("openingPlayer") : t("resumeMusic")) : media.isPlaying ? t("pause") : t("play")} disabled={idle ? !lastPlayedMedia || !canResumeLastTrack || resumingLastTrack : media.capabilities?.playPause === false} onclick={(e) => { e.stopPropagation(); if (idle) onResumeLastTrack?.(); else onMediaAction?.("play_pause"); }}>
+                  <PlayPauseIcon playing={!idle && media.isPlaying} size={50} reduceMotion={reduceAnimations || !enableAnimations} />
+                </button>
+                <button type="button" aria-label={t("next")} disabled={idle || media.capabilities?.next === false} onclick={(e) => { e.stopPropagation(); animateSkip(e, 1); onMediaAction?.("next"); }}><SkipForward size={36} fill="currentColor" /></button>
+              </div>
+              <div class="utility-controls trailing-controls">
                 <button type="button" aria-label={t("toggleFloating")} onclick={(e) => { e.stopPropagation(); onToggleFloating?.(); }}><Airplay size={34} strokeWidth={1.8} /></button>
               </div>
             </div>
-          {:else}
-            <div class="idle-player" role="group" aria-label={t("mediaPlayer")}>
-              <div class="top-row">
-                <div class="cover expanded-cover idle-cover" aria-hidden="true">
-                  {#if lastPlayedMedia?.albumArt}<CoverArt src={lastPlayedMedia.albumArt} />{:else}<Music2 size={27} />{/if}
-                </div>
-                <div class="metadata">
-                  <MarqueeTitle text={lastPlayedMedia?.title || t("mediaPlayer")} active={musicTitleActive} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} />
-                  <span title={lastPlayedMedia?.artist}>{lastPlayedMedia?.artist || lastPlayedMedia?.sourceDisplay || t("waitingPlayback")}</span>
-                </div>
-              </div>
-              <div class="idle-progress" aria-hidden="true"><span></span></div>
-              <div class="control-row idle-controls" class:has-remembered-track={Boolean(lastPlayedMedia)} role="group" aria-label={t("playbackControls")}>
-                <span class="control-spacer"></span>
-                <div class="controls">
-                  <button type="button" class="side" aria-label={t("previous")} disabled><SkipBack size={26} fill="currentColor" /></button>
-                  <button
-                    type="button"
-                    class="play"
-                    aria-label={resumingLastTrack ? t("openingPlayer") : t("resumeMusic")}
-                    title={resumingLastTrack ? t("openingPlayer") : t("resumeMusic")}
-                    disabled={!lastPlayedMedia || !canResumeLastTrack || resumingLastTrack}
-                    onclick={(event) => { event.stopPropagation(); onResumeLastTrack?.(); }}
-                  ><Play size={40} fill="currentColor" /></button>
-                  <button type="button" class="side" aria-label={t("next")} disabled><SkipForward size={26} fill="currentColor" /></button>
-                </div>
-                <span class="control-spacer"></span>
-              </div>
-            </div>
-          {/if}
         </section>
 
         {:else}
@@ -760,25 +749,24 @@
   .island-surface{position:relative;z-index:1;overflow:hidden;flex:none;box-sizing:border-box;color:#fff;font-family:var(--app-font);text-rendering:optimizeLegibility;font-synthesis:none;contain:layout style;transition:transform 140ms cubic-bezier(.23,1,.32,1),box-shadow 180ms cubic-bezier(.23,1,.32,1)}
   .island-surface:focus-visible{outline:none}
   .floating-style .island-surface:active{transform:scale(.97) translateZ(0)}.compact-layer,.expanded-layer{position:absolute;z-index:1;box-sizing:border-box;pointer-events:none}
-  .compact-layer{inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 4px}.compact-layer.edge-inset:not(.vertical){padding-left:calc(4px + var(--shoulder-inset));padding-right:calc(8px + var(--shoulder-inset))}.compact-layer.vertical{flex-direction:column;padding:4px 0 8px}.compact-layer.edge-inset.vertical{padding-top:calc(4px + var(--shoulder-inset));padding-bottom:calc(8px + var(--shoulder-inset))}.compact-layer button,.compact-layer :global(canvas){pointer-events:auto}.time-display{width:100%;text-align:center;color:rgba(255,255,255,.8);font:500 12px/1 var(--app-font);letter-spacing:.05em;font-variant-numeric:tabular-nums;user-select:none}.cover{position:relative;display:grid;place-items:center;flex:none;padding:0;overflow:hidden;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);border:0;cursor:pointer;user-select:none}.compact-cover{width:20px;height:20px;border-radius:50%}.expanded-cover{width:84px;height:84px;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.35);outline:1px solid rgba(255,255,255,.1)}.playing-dot{width:3px;height:3px;border-radius:50%}
+  .compact-layer{inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 4px}.compact-layer.edge-inset:not(.vertical){padding-left:calc(4px + var(--shoulder-inset));padding-right:calc(8px + var(--shoulder-inset))}.compact-layer.vertical{flex-direction:column;padding:4px 0 8px}.compact-layer.edge-inset.vertical{padding-top:calc(4px + var(--shoulder-inset));padding-bottom:calc(8px + var(--shoulder-inset))}.compact-layer button,.compact-layer :global(canvas){pointer-events:auto}.time-display{width:100%;text-align:center;color:rgba(255,255,255,.8);font:500 12px/1 var(--app-font);letter-spacing:.05em;font-variant-numeric:tabular-nums;user-select:none}.cover{position:relative;display:grid;place-items:center;flex:none;padding:0;overflow:hidden;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);border:0;cursor:pointer;user-select:none}.compact-cover{width:20px;height:20px;border-radius:50%;top:-1px}.expanded-cover{width:84px;height:84px;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.35);outline:1px solid rgba(255,255,255,.1)}.playing-dot{width:3px;height:3px;border-radius:50%}
   .compact-disc{position:relative;display:block;width:100%;height:100%;transform-origin:center}
-  .idle-compact-dashboard{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0 7px;color:rgba(255,255,255,.92);user-select:none}.idle-clock{font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums;letter-spacing:.02em}.idle-weather{display:flex;align-items:center;gap:4px;font:500 11px/1 var(--app-font);font-variant-numeric:tabular-nums}.idle-weather :global(svg){flex:none;color:rgba(255,255,255,.82)}.idle-compact-dashboard.vertical{flex-direction:column;padding:7px 0;gap:10px}.idle-compact-dashboard.vertical .idle-weather{flex-direction:column}
+  .idle-compact-dashboard{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0 7px;color:rgba(255,255,255,.92);user-select:none}.idle-clock{display:flex;align-items:center;height:1em;font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums;letter-spacing:.02em}.idle-weather{display:flex;align-items:center;gap:4px;font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums}.idle-weather strong{display:flex;align-items:center;height:1em;font:inherit}.idle-weather :global(svg){flex:none;color:rgba(255,255,255,.82)}.idle-compact-dashboard.vertical{flex-direction:column;padding:7px 0;gap:10px}.idle-compact-dashboard.vertical .idle-weather{flex-direction:column}
   .debug-overlay{position:absolute;z-index:4;top:4px;left:50%;display:flex;gap:5px;max-width:calc(100% - 12px);padding:2px 6px;border-radius:5px;transform:translateX(-50%);overflow:hidden;color:#4ade80;background:rgba(0,0,0,.75);font:500 8px/1.3 var(--app-font);white-space:nowrap;pointer-events:none}.debug-overlay span{overflow:hidden;text-overflow:ellipsis}
   .expanded-layer{inset:0;width:100%;height:100%;padding:0;transform-origin:left top;will-change:transform,opacity}.expanded-layer.vertical{transform-origin:center top}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,600px);height:var(--expanded-content-height,210px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:11px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}
   .progress-block{width:100%;margin-bottom:10px}
-  .control-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;width:100%;height:58px}.control-spacer{width:0}.controls{display:flex;align-items:center;justify-content:center;gap:12px}.controls button{flex:none;display:grid;place-items:center;width:58px;height:58px;padding:0;border:0;border-radius:12px;color:rgba(255,255,255,.9);background:transparent;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}.controls .play{color:#fff}.controls button:active,.cover:active{transform:scale(.94)}.controls button:focus-visible:not(:disabled){background:rgba(255,255,255,.1)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .control-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;width:100%;height:58px}.cover:active{transform:scale(.94)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .compact-timer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:0;color:#f28b31;background:transparent;cursor:pointer;font-family:var(--app-font);user-select:none}.compact-timer span{min-width:42px;font-size:12px;font-weight:600;line-height:1;letter-spacing:.015em;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}.compact-timer.finished span{min-width:0;font-size:11px}.compact-timer.paused{color:rgba(242,139,49,.62)}.timer-pause{width:7px;height:8px;display:flex;align-items:center;justify-content:center;gap:2px}.timer-pause b{display:block;width:2px;height:7px;border-radius:1px;background:currentColor}.compact-timer.urgent{color:#ff765f}
   .compact-timer{position:absolute;inset:0;display:block;overflow:hidden;padding:0;border-radius:inherit;color:#f4f7ff;background:transparent;box-shadow:inset 1px 0 0 rgba(82,151,255,.46),inset -1px 0 0 rgba(82,151,255,.46),inset 0 0 12px rgba(28,91,190,.08)}.compact-timer:hover{background:rgba(40,100,190,.055)}.compact-timer .timer-summary{position:absolute;inset:0 14px 4px;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}.compact-timer .timer-leading{display:flex;align-items:center;gap:7px;min-width:0;color:rgba(245,248,255,.9)}.compact-timer .timer-leading :global(svg){flex:none;color:#70aaff}.compact-timer .timer-time{min-width:0;overflow:hidden;color:#f5f7fb;font-size:13px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em;text-align:right;text-overflow:ellipsis;white-space:nowrap}.compact-timer .timer-progress-track{position:absolute;right:14px;bottom:5px;left:14px;height:2px;overflow:hidden;border-radius:999px;background:rgba(115,143,183,.2)}.compact-timer .timer-progress-fill{display:block;height:100%;max-width:100%;border-radius:inherit;background:linear-gradient(90deg,#2688ff,#60b5ff);box-shadow:0 0 7px rgba(57,145,255,.68);transition:width 350ms linear,background-color 180ms ease}.compact-timer .timer-progress-fill.paused{background:linear-gradient(90deg,#6d8fb9,#a7c5ed);box-shadow:none}.compact-timer .timer-progress-fill.finished{background:linear-gradient(90deg,#42d99a,#8af0c0)}.compact-timer.paused{color:#f4f7ff}.compact-timer.urgent{box-shadow:inset 1px 0 0 rgba(255,111,102,.58),inset -1px 0 0 rgba(255,111,102,.58),inset 0 0 12px rgba(255,74,60,.09)}.compact-timer.urgent .timer-leading :global(svg){color:#ff8c7c}.compact-timer .timer-pause{flex:none;width:7px;height:8px;gap:2px;color:#a8c5e9}.compact-timer .timer-pause b{width:2px;height:7px;border-radius:1px;background:currentColor}
   .compact-layer.vertical .compact-timer .timer-summary{inset:14px 4px;flex-direction:column;justify-content:center;gap:10px}.compact-layer.vertical .compact-timer .timer-leading{flex-direction:column;gap:5px}.compact-layer.vertical .compact-timer .timer-time{max-width:100%;font-size:11px;text-align:center}.compact-layer.vertical .compact-timer .timer-progress-track{top:14px;right:auto;bottom:14px;left:5px;width:2px;height:auto}.compact-layer.vertical .timer-progress-fill{width:100%!important;height:var(--timer-progress-height,0%)}
-  .idle-player{display:flex;flex:1;min-height:0;flex-direction:column}.idle-cover{cursor:default;color:rgba(255,255,255,.58);background:linear-gradient(145deg,rgba(255,255,255,.12),rgba(255,255,255,.035));box-shadow:none}.idle-progress{height:3px;margin:0 0 7px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.13)}.idle-progress span{display:block;width:100%;height:100%;border-radius:inherit;background:linear-gradient(90deg,rgba(255,255,255,.38),rgba(255,255,255,.16))}.idle-controls{opacity:.36!important}.idle-controls.has-remembered-track{opacity:1!important}.idle-controls button:disabled{cursor:default}.idle-controls button:disabled:active{transform:none}
-  .edge-top .music-pane,.edge-bottom .music-pane{padding-left:calc(32px + var(--shoulder-content-inset,0px));padding-right:calc(32px + var(--shoulder-content-inset,0px))}
+  .edge-top .music-pane,.edge-bottom .music-pane{padding-left:calc(40px + var(--shoulder-content-inset,0px));padding-right:calc(40px + var(--shoulder-content-inset,0px))}
   .music-pane{padding-top:14px;padding-bottom:10px}
   .top-row{gap:16px;margin-bottom:8px}
   @media (hover:hover) and (pointer:fine){}
   @media (prefers-reduced-motion:reduce){}
   .studio-preview-highlight{position:absolute;z-index:20;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}.studio-preview-highlight::before,.studio-preview-highlight::after{content:"";position:absolute;pointer-events:none}.highlight-shape::after{inset:2px;border:2px solid rgba(167,139,250,.9);border-radius:inherit;box-shadow:0 0 12px rgba(167,139,250,.42),inset 0 0 7px rgba(167,139,250,.18)}.highlight-edge::before{background:#60a5fa;box-shadow:0 0 9px rgba(96,165,250,.8)}.edge-top .highlight-edge::before,.edge-bottom .highlight-edge::before{left:18px;right:18px;height:2px}.edge-top .highlight-edge::before{top:2px}.edge-bottom .highlight-edge::before{bottom:2px}.edge-left .highlight-edge::before,.edge-right .highlight-edge::before{top:18px;bottom:18px;width:2px}.edge-left .highlight-edge::before{left:2px}.edge-right .highlight-edge::before{right:2px}.highlight-position::after{width:8px;height:8px;border:2px solid #fff;border-radius:50%;background:#60a5fa;box-shadow:0 0 0 3px rgba(96,165,250,.2),0 0 10px rgba(96,165,250,.92)}.edge-top .highlight-position::after,.edge-bottom .highlight-position::after{left:calc(var(--preview-position) * 1% - 6px)}.edge-top .highlight-position::after{top:-3px}.edge-bottom .highlight-position::after{bottom:-3px}.edge-left .highlight-position::after,.edge-right .highlight-position::after{top:calc(var(--preview-position) * 1% - 6px)}.edge-left .highlight-position::after{left:-3px}.edge-right .highlight-position::after{right:-3px}.corner{position:absolute;width:calc(var(--preview-radius-tl) + 9px);height:calc(var(--preview-radius-tl) + 9px);max-width:48px;max-height:48px;opacity:.95}.corner.top-left{top:2px;left:2px;width:calc(var(--preview-radius-tl) + 9px);height:calc(var(--preview-radius-tl) + 9px);border:2px solid;border-color:#a78bfa transparent transparent #a78bfa;border-radius:var(--preview-radius-tl) 0 0 0}.corner.top-right{top:2px;right:2px;width:calc(var(--preview-radius-tr) + 9px);height:calc(var(--preview-radius-tr) + 9px);border:2px solid;border-color:#a78bfa #a78bfa transparent transparent;border-radius:0 var(--preview-radius-tr) 0 0}.corner.bottom-left{bottom:2px;left:2px;width:calc(var(--preview-radius-bl) + 9px);height:calc(var(--preview-radius-bl) + 9px);border:2px solid;border-color:transparent transparent #a78bfa #a78bfa;border-radius:0 0 0 var(--preview-radius-bl)}.corner.bottom-right{right:2px;bottom:2px;width:calc(var(--preview-radius-br) + 9px);height:calc(var(--preview-radius-br) + 9px);border:2px solid;border-color:transparent #a78bfa #a78bfa transparent;border-radius:0 0 var(--preview-radius-br) 0}.length-handle{position:absolute;width:3px;height:22px;border-radius:999px;background:#60a5fa;box-shadow:0 0 9px rgba(96,165,250,.8)}.length-handle.start{left:2px;top:50%;transform:translateY(-50%)}.length-handle.end{right:2px;top:50%;transform:translateY(-50%)}.length-vertical .length-handle{width:22px;height:3px;left:50%;transform:translateX(-50%)}.length-vertical .length-handle.start{top:2px}.length-vertical .length-handle.end{top:auto;right:auto;bottom:2px}.shoulder-handle{position:absolute;width:3px;height:18px;border-radius:999px;background:#a78bfa;box-shadow:0 0 8px rgba(167,139,250,.8)}.edge-top .shoulder-handle.start{top:2px;left:calc(var(--preview-shoulder) + 1px)}.edge-top .shoulder-handle.end{top:2px;right:calc(var(--preview-shoulder) + 1px)}.edge-bottom .shoulder-handle.start{bottom:2px;left:calc(var(--preview-shoulder) + 1px)}.edge-bottom .shoulder-handle.end{right:calc(var(--preview-shoulder) + 1px);bottom:2px}.edge-left .shoulder-handle,.edge-right .shoulder-handle{width:18px;height:3px;top:calc(var(--preview-shoulder) + 1px)}.edge-left .shoulder-handle.start{left:2px}.edge-left .shoulder-handle.end{bottom:calc(var(--preview-shoulder) + 1px);top:auto;left:2px}.edge-right .shoulder-handle.start{right:2px}.edge-right .shoulder-handle.end{right:2px;top:auto;bottom:calc(var(--preview-shoulder) + 1px)}.background-wash{position:absolute;inset:2px;border-radius:inherit;background:rgba(167,139,250,.14);box-shadow:inset 0 0 0 1px rgba(196,181,253,.72),0 0 16px rgba(167,139,250,.22)}.spectrum-focus{position:absolute;z-index:1;top:50%;right:5px;width:23px;height:21px;border:1px solid #60a5fa;border-radius:6px;background:rgba(96,165,250,.1);box-shadow:0 0 10px rgba(96,165,250,.55);transform:translateY(-50%)}.preview-expanded .spectrum-focus{top:14px;right:22px;width:47px;height:31px;border-radius:8px}
-  @media (hover:hover) and (pointer:fine){.controls button:hover:not(:disabled){background:rgba(255,255,255,.1);transform:scale(1.06);color:#fff}.cover:hover{filter:brightness(1.08)}}
-  @media (prefers-reduced-motion:reduce){.surface-anchor{transition:none!important}.island-surface,.expanded-layer,.controls button{transition-duration:120ms!important}.island-surface{transition-property:opacity,box-shadow!important}.expanded-layer{transform:none!important}.studio-preview-highlight .corner,.studio-preview-highlight::after,.studio-preview-highlight .length-handle,.studio-preview-highlight .shoulder-handle,.studio-preview-highlight .background-wash,.studio-preview-highlight .spectrum-focus{animation:none!important;opacity:.78}}
+  @media (hover:hover) and (pointer:fine){.cover:hover{filter:brightness(1.08)}}
+  @media (prefers-reduced-motion:reduce){.surface-anchor{transition:none!important}.island-surface,.expanded-layer,.control-row button{transition-duration:120ms!important}.island-surface{transition-property:opacity,box-shadow!important}.expanded-layer{transform:none!important}.studio-preview-highlight .corner,.studio-preview-highlight::after,.studio-preview-highlight .length-handle,.studio-preview-highlight .shoulder-handle,.studio-preview-highlight .background-wash,.studio-preview-highlight .spectrum-focus{animation:none!important;opacity:.78}}
 
   .expanded-shell{display:block;width:var(--page-width);height:var(--page-height);zoom:var(--content-scale,1);transform-origin:top left}
   .music-pane{width:100%;height:100%}
@@ -813,25 +801,29 @@
   .reduce-page-motion .page-body{transition:none}
   .music-pane :global(.metadata .marquee-title){font-size:18px;line-height:1.2}.music-pane .metadata>span{font-size:15px}.music-pane :global(.progress-block .time){font-size:14px}.music-pane :global(.progress-block.with-times){column-gap:14px}.music-pane :global(.progress-block .track){height:8px}
   .expanded-cover{border-radius:20px}
-  .top-row{gap:24px;margin-bottom:0}
+  .top-row{gap:20px;margin-bottom:0}
   .music-pane :global(.metadata .marquee-title){font-size:24px;line-height:1.12;margin-bottom:5px}
   .music-pane .metadata>span{font-size:18px;line-height:1.15}
-  .music-pane{padding-top:24px}
+  .music-pane{padding:20px 40px 14px}
   .music-pane :global(.progress-block .time){font-size:20px}
-  .music-pane :global(.progress-block.with-times){column-gap:12px}
+  .music-pane :global(.progress-block.with-times){grid-template-columns:max-content minmax(0,1fr) max-content;column-gap:12px}
   .music-pane :global(.progress-block .track){height:10px}
-  .control-row{display:flex;align-items:center;justify-content:space-between;gap:0;width:100%;height:60px;margin-top:0}
+  .music-pane :global(.progress-block .elapsed){justify-content:flex-start}
+  .music-pane :global(.progress-block .remaining){justify-content:flex-end}
+
+  .control-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:0;width:100%;height:60px;margin-top:0;transform:translateY(-5px)}
   .utility-controls,.transport-controls{display:flex;align-items:center;flex:none}
   .utility-controls{gap:22px}
+  .leading-controls{justify-self:start}.trailing-controls{justify-self:end}
   .transport-controls{gap:38px}
-  .control-row button,.control-mark{display:grid;place-items:center;flex:none;width:38px;height:48px;padding:0;border:0;border-radius:9px;color:rgba(255,255,255,.95);background:rgba(255,255,255,.045)}
+  .control-row button,.control-mark{display:grid;place-items:center;flex:none;width:48px;height:48px;padding:0;border:0;border-radius:9px;color:rgba(255,255,255,.95);background:transparent}
   .transport-controls button{width:58px;height:58px;border-radius:12px}
-  .control-row button{cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}
+  .control-row button{position:relative;isolation:isolate;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}
+  .control-row button::before{content:"";position:absolute;inset:-2.5px;z-index:-1;border-radius:inherit;background:rgba(255,255,255,.1);opacity:0;pointer-events:none;transition:opacity 150ms ease}
   .control-row button:active:not(:disabled){transform:scale(.92)}
-  .control-row button:disabled{opacity:.45;cursor:default;background:rgba(255,255,255,.025)}
+  .control-row button:disabled{opacity:.45;cursor:default;background:transparent}
   .control-row .play{color:#fff}
-  .favorite-mark{color:rgba(232,238,248,.82)}
   .trailing-controls button:last-child{color:rgba(225,234,249,.62)}
-  @media (hover:hover) and (pointer:fine){.control-row button:hover:not(:disabled){color:#fff;background:rgba(255,255,255,.1);transform:scale(1.06)}}
+  @media (hover:hover) and (pointer:fine){.control-row button:hover:not(:disabled){color:#fff}.control-row button:hover:not(:disabled)::before{opacity:1}}
 </style>
 

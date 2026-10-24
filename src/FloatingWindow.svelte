@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { loadImage } from "$lib/imageLoad";
+  import { artworkFillFromImage } from "$lib/artworkFill";
   import { appOverlayDecision, artworkValue, mergeProgressAnchorFields, nativeStampDecision, readNativeMediaStamp, snapshotDecision, withoutArtwork, type ArtworkSnapshotToken, type NativeMediaStamp } from "$lib/mediaArtwork";
   import { createCanvasArtworkRenderer, type CanvasArtworkRequest } from "$lib/canvasArtwork";
   import { createArtworkOwner } from "$lib/artworkOwner";
@@ -24,6 +25,8 @@
     type CaptureSnapshot,
   } from "$lib/captureMode";
   import MediaProgress from "$lib/components/media/MediaProgress.svelte";
+  import SmtcModeControls from "$lib/components/media/SmtcModeControls.svelte";
+  import NeteaseLikeControl from "$lib/components/media/NeteaseLikeControl.svelte";
   import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition } from "$lib/mediaClock";
   import { DEFAULT_SETTINGS, type MediaState, type AppSettings } from "$lib/api/types";
   import {
@@ -33,7 +36,6 @@
     SkipForward,
     X,
     Pin,
-    Minimize2,
     Lock,
     LockOpen,
   } from "lucide-svelte";
@@ -44,6 +46,10 @@
   }
 
   type ResizeDirection =
+    | "East"
+    | "North"
+    | "South"
+    | "West"
     | "NorthWest"
     | "NorthEast"
     | "SouthWest"
@@ -79,6 +85,11 @@
   let latestNativeSeekSnapshot: { epoch: string; trackGeneration: number; title: string; artist: string; positionMs: number; durationMs: number } | undefined;
   let displayCover = $state("");
   let previousCover = $state("");
+  let systemCover = "";
+  let resolvedTrackCover = "";
+  let resolvedTrackKey = "";
+  let pendingResolvedCover = "";
+  let albumFill = $state("#000000");
   let isHovered = $state(false);
   let hoverLeaveTimeout: ReturnType<typeof setTimeout> | null = null;
   let captureSnapshot = $state<CaptureSnapshot>({ ...EMPTY_CAPTURE_SNAPSHOT });
@@ -192,7 +203,7 @@
   }
 
   let coverPreload: AbortController | undefined;
-  function cancelCoverPreload() { coverPreload?.abort(); coverPreload = undefined; }
+  function cancelCoverPreload() { coverPreload?.abort(); coverPreload = undefined; pendingResolvedCover = ""; }
   async function preloadCover(url: string): Promise<boolean> {
     cancelCoverPreload();
     if (!url || disposed) return false;
@@ -216,9 +227,21 @@
     coverOwner.cancel(); cancelCoverPreload();
     const requestId = ++coverRequestId;
 
-    // Never leave the previous track's artwork visible while the HD lookup runs.
-    transitionCover(fallbackCover, "left");
-    if (!enableHDCover || !title || alreadyResolved) return;
+    if (alreadyResolved) {
+      if (enableHDCover && fallbackCover) await acceptResolvedCover(trackKey, fallbackCover, requestId);
+      else transitionCover(systemCover, "left");
+      return;
+    }
+    const changedBase = Boolean(systemCover) && systemCover !== fallbackCover;
+    systemCover = fallbackCover;
+    if (changedBase) { resolvedTrackCover = ""; resolvedTrackKey = ""; }
+    // Re-enabling HD reuses the ready image without briefly downgrading it.
+    if (enableHDCover && resolvedTrackKey === trackKey && resolvedTrackCover) {
+      transitionCover(resolvedTrackCover, "left");
+      return;
+    }
+    transitionCover(systemCover, "left");
+    if (!enableHDCover || !title) return;
 
     try {
       const resolved = await coverOwner.request<import("$lib/api/types").ResolvedCover | null>({ title, artist, source: source || "generic" }, fallbackCover);
@@ -234,15 +257,41 @@
       const resolvedUrl = /^[a-z]:[\\/]/i.test(resolved.url)
         ? convertFileSrc(resolved.url)
         : resolved.url;
-      if (await preloadCover(resolvedUrl)) {
-        if (requestId === coverRequestId && trackKey === currentTrackKey) {
-          transitionCover(resolvedUrl, "left");
-        }
-      }
+      await acceptResolvedCover(trackKey, resolvedUrl, requestId);
     } catch (error) {
       if (!disposed && requestId === coverRequestId && trackKey === currentTrackKey) {
         console.warn("[高清封面] 获取失败，继续使用系统封面:", error);
       }
+    }
+  }
+
+  async function acceptResolvedCover(trackKey: string, cover: string, requestId = ++coverRequestId) {
+    if (!enableHDCover || disposed) return;
+    if (cover === displayCover && resolvedTrackKey === trackKey) return;
+    const loading = preloadCover(cover);
+    pendingResolvedCover = cover;
+    try {
+      if (await loading) {
+        if (!disposed && enableHDCover && requestId === coverRequestId && trackKey === currentTrackKey) {
+          resolvedTrackCover = cover;
+          resolvedTrackKey = trackKey;
+          transitionCover(cover, "left");
+        }
+      }
+    } finally {
+      if (requestId === coverRequestId && pendingResolvedCover === cover) pendingResolvedCover = "";
+    }
+  }
+
+  function setHighDefinitionCover(enabled: boolean) {
+    if (enableHDCover === enabled) return;
+    enableHDCover = enabled;
+    coverRequestId++; coverOwner.cancel(); cancelCoverPreload();
+    if (!currentTrackKey) return;
+    if (enabled) {
+      void resolveTrackCover(currentTrackKey, mediaState.title, mediaState.artist, mediaState.source, systemCover);
+    } else {
+      transitionCover(systemCover, "left");
     }
   }
 
@@ -279,6 +328,7 @@
     direction: "left" | "right" = "left",
   ) {
     displayCover = newCover;
+    if (!newCover) albumFill = "#000000";
     previousCover = "";
     slideDirection = "";
     isAnimating = false;
@@ -523,21 +573,7 @@
     const unlistenHDCoverChange = await eventManager.on(
       Events.HD_COVER_CHANGED,
       ({ enableHDCover: enabled }: any) => {
-        enableHDCover = enabled;
-        coverRequestId += 1; coverOwner.cancel();
-        if (!currentTrackKey) return;
-
-        if (enabled) {
-          void resolveTrackCover(
-            currentTrackKey,
-            mediaState.title,
-            mediaState.artist,
-            mediaState.source,
-            mediaState.albumArt,
-          );
-        } else {
-          transitionCover(mediaState.albumArt, "left");
-        }
+        setHighDefinitionCover(Boolean(enabled));
       },
     );
     trackListener(unlistenHDCoverChange);
@@ -563,6 +599,7 @@
       if (value?.fontId) applyAppFont(value.fontId);
       if (value?.language) setLocale(value.language);
       if (value) {
+        if (typeof value.enableHdCover === "boolean") setHighDefinitionCover(value.enableHdCover);
         isMVPlaybackEnabled = value.enableMvPlayback ?? DEFAULT_SETTINGS.enableMvPlayback;
         setCircularAlbum(value.floatingCircularAlbum ?? DEFAULT_SETTINGS.floatingCircularAlbum);
       }
@@ -706,17 +743,19 @@
       const cover = artworkValue(payload);
       if (cover === undefined) return;
       if (payload.artworkResolved && cover) {
+        if (!enableHDCover) return;
+        if (displayCover === cover || pendingResolvedCover === cover) return;
         coverOwner.cancel(); cancelCoverPreload(); coverRequestId++;
-        if (displayCover !== cover) transitionCover(cover);
+        if (displayCover !== cover) void acceptResolvedCover(currentTrackKey, cover, coverRequestId);
         return;
       }
       if (cover && cover === mediaState.albumArt && displayCover) return;
       artworkRevision++;
       mediaState.albumArt = cover;
       if (!cover) {
+        systemCover = ""; resolvedTrackCover = ""; resolvedTrackKey = "";
         coverRequestId++; coverOwner.cancel(); cancelCoverPreload(); pixelOwner.cancel();
-        displayCover = "";
-        previousCover = "";
+        transitionCover("");
       } else {
         void resolveTrackCover(currentTrackKey, mediaState.title, mediaState.artist, mediaState.source, cover);
       }
@@ -850,7 +889,8 @@
           source: "",
           sourceDisplay: "",
         };
-        displayCover = "";
+        systemCover = ""; resolvedTrackCover = ""; resolvedTrackKey = "";
+        transitionCover("");
         isPlayingMV = false;
         mvUrl = "";
         syncMvPlayback();
@@ -859,6 +899,8 @@
         lastReportedPosition = Number(payload.positionMs) || 0;
         pendingSeekUntil = 0;
         currentTrackKey = newTrackKey;
+        systemCover = ""; resolvedTrackCover = ""; resolvedTrackKey = "";
+        transitionCover("");
         seekError = "";
         mediaTrackGeneration++;
 
@@ -870,7 +912,7 @@
         mediaState = {
           ...mediaState,
           ...payload,
-          albumArt: smtcCover,
+          albumArt: payload.artworkResolved ? "" : smtcCover,
           lastUpdatedTimestamp:
             authoritative && Number(payload.lastUpdatedTimestamp) > 0
               ? Number(payload.lastUpdatedTimestamp)
@@ -1050,7 +1092,12 @@
   function coverCanvas(canvas: HTMLCanvasElement, request: CanvasArtworkRequest) {
     const renderer = createCanvasArtworkRenderer(canvas, {
       process: (url, signal) => processImageBackend(url, true, signal),
-      paint: (target, image) => renderCachedImage(target, image, false),
+      paint: (target, image) => {
+        renderCachedImage(target, image, false);
+        if (!disposed && target.classList.contains("album-art-new")) {
+          albumFill = artworkFillFromImage(target) ?? albumFill;
+        }
+      },
       onError: (error) => console.error("[Canvas] 图片加载失败:", error),
     });
     renderer.update(request);
@@ -1485,10 +1532,10 @@
   }
 
   function handleCornerResize(
-    e: MouseEvent,
+    e: PointerEvent,
     direction: ResizeDirection,
   ) {
-    if (isFloatingWindowLocked || e.button !== 0) return;
+    if (isFloatingWindowLocked || e.button !== 0 || e.isPrimary === false) return;
 
     e.preventDefault();
     e.stopPropagation();
@@ -1512,29 +1559,37 @@
   role="region"
   aria-label={t("mediaPlayer")}
 >
-  <div class="bg-solid"></div>
+  <div class="bg-solid" style:background={albumFill}></div>
 
   {#if !isFloatingWindowLocked}
+    <div class="edge-resize edge-resize-n" onpointerdown={(e) => handleCornerResize(e, "North")} aria-hidden="true"></div>
+    <div class="edge-resize edge-resize-e" onpointerdown={(e) => handleCornerResize(e, "East")} aria-hidden="true"></div>
+    <div class="edge-resize edge-resize-s" onpointerdown={(e) => handleCornerResize(e, "South")} aria-hidden="true"></div>
+    <div class="edge-resize edge-resize-w" onpointerdown={(e) => handleCornerResize(e, "West")} aria-hidden="true"></div>
     <div
       class="corner-resize corner-resize-nw"
-      onmousedown={(e) => handleCornerResize(e, "NorthWest")}
+      onpointerdown={(e) => handleCornerResize(e, "NorthWest")}
       aria-hidden="true"
     ></div>
     <div
       class="corner-resize corner-resize-ne"
-      onmousedown={(e) => handleCornerResize(e, "NorthEast")}
+      onpointerdown={(e) => handleCornerResize(e, "NorthEast")}
       aria-hidden="true"
     ></div>
     <div
       class="corner-resize corner-resize-sw"
-      onmousedown={(e) => handleCornerResize(e, "SouthWest")}
+      onpointerdown={(e) => handleCornerResize(e, "SouthWest")}
       aria-hidden="true"
     ></div>
     <div
       class="corner-resize corner-resize-se"
-      onmousedown={(e) => handleCornerResize(e, "SouthEast")}
+      onpointerdown={(e) => handleCornerResize(e, "SouthEast")}
       aria-hidden="true"
-    ></div>
+    >
+      <svg class="resize-grip" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+        <path d="M4 10 10 4M8 10l2-2" />
+      </svg>
+    </div>
   {/if}
 
   {#if isCompactCover && isHovered}
@@ -1696,6 +1751,13 @@
     <div class="track-artist" title={mediaState.artist}>
       {mediaState.artist}
     </div>
+    {#if mediaState.source === "netease"}
+      {#key `${mediaState.nativeEpoch}:${mediaState.nativeTrackGeneration}:${mediaState.title}:${mediaState.artist}`}
+        <div class="floating-like-control">
+          <NeteaseLikeControl title={mediaState.title} artist={mediaState.artist} cacheKey={`${mediaState.nativeEpoch}:${mediaState.nativeTrackGeneration}`} live={Boolean(mediaState.title)} compact />
+        </div>
+      {/key}
+    {/if}
   </div>
 
   <div class="progress-layer">
@@ -1713,6 +1775,9 @@
 
   <!-- 控制按钮遮罩层 -->
   <div class="controls-overlay" class:visible={showControls}>
+    {#if mediaState.source !== "netease" && (mediaState.capabilities?.shuffle || mediaState.capabilities?.repeat)}
+      <div class="floating-modes">{#key mediaState.source}<SmtcModeControls media={mediaState} compact/>{/key}</div>
+    {/if}
     <div class="controls">
       <button
         class="ctrl-btn"
@@ -1775,14 +1840,15 @@
     height: 100vh;
     overflow: hidden;
     border-radius: var(--floating-radius);
-    border: 3px solid #121212;
-    background: #121212;
+    /* Clip composited child layers and shadows to the transparent window edge. */
+    clip-path: inset(0 round var(--floating-radius));
+    border: 3px solid #000000;
+    background: #000000;
     user-select: none;
     -webkit-user-select: none;
     box-sizing: border-box;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.26);
+    box-shadow: none;
     isolation: isolate;
-    transition: box-shadow 220ms cubic-bezier(.2,.8,.2,1);
   }
 
   .bg-solid {
@@ -1819,7 +1885,7 @@
     transition:
       visibility 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    background: #121212;
+    background: #000000;
     border: 0;
     border-radius: var(--floating-radius) var(--floating-radius) 0 0;
     box-shadow: none;
@@ -1830,7 +1896,6 @@
 
   .player.hovered {
     --toolbar-height: 29px;
-    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.46), 0 5px 18px rgba(0, 0, 0, 0.28);
   }
 
   .player.hovered .bg-solid {
@@ -2211,8 +2276,25 @@
     text-align: left;
     pointer-events: auto;
     overflow: hidden;
-    background: #121212;
-    border-radius: 0 0 var(--floating-radius) var(--floating-radius);
+    background: #000000;
+    /* The player owns the outer corners; avoid a second inset curved edge. */
+    border-radius: 0;
+  }
+
+  .floating-like-control {
+    position: absolute;
+    top: 8px;
+    right: 44px;
+    z-index: 2;
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+  }
+
+  .track-info-layer:has(.floating-like-control) .track-title,
+  .track-info-layer:has(.floating-like-control) .track-artist {
+    padding-right: 82px;
   }
 
   .player.circular-album .album-wrapper {
@@ -2306,10 +2388,21 @@
 
   .shared-progress {
     position: absolute;
-    right: 16px;
+    /* Absolute offsets start inside the player's 3px border: 12 + 3 = 15px. */
+    right: 12px;
     bottom: 8px;
-    left: 16px;
+    left: 12px;
     pointer-events: auto;
+  }
+
+  .shared-progress :global(.progress-block.with-times) {
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    column-gap: 6px;
+    align-items: center;
+  }
+
+  .shared-progress :global(.time) {
+    font-variant-numeric: tabular-nums;
   }
 
   /* 控制按钮遮罩层 */
@@ -2338,6 +2431,8 @@
       visibility 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+  .floating-modes{position:absolute;bottom:12px;left:50%;transform:translateX(-50%)}
+
   .controls-overlay.visible {
     opacity: 1;
     visibility: visible;
@@ -2358,6 +2453,37 @@
     height: 14px;
     pointer-events: auto;
   }
+
+  /* Broad edge hit areas make resizing easier on the borderless window. */
+  .edge-resize {
+    position: absolute;
+    z-index: 399;
+    pointer-events: auto;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .edge-resize-n,
+  .edge-resize-s {
+    right: 40px;
+    left: 40px;
+    height: 18px;
+    cursor: ns-resize;
+  }
+
+  .edge-resize-n { top: 0; }
+  .edge-resize-s { bottom: 0; height: 12px; }
+
+  .edge-resize-e,
+  .edge-resize-w {
+    top: 40px;
+    bottom: 40px;
+    width: 18px;
+    cursor: ew-resize;
+  }
+
+  .edge-resize-e { right: 0; }
+  .edge-resize-w { left: 0; }
 
   .corner-resize-nw {
     top: 0;
@@ -2380,7 +2506,28 @@
   .corner-resize-se {
     right: 0;
     bottom: 0;
+    width: 40px;
+    height: 40px;
     cursor: nwse-resize;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .resize-grip {
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    overflow: visible;
+    fill: none;
+    stroke: rgba(255, 255, 255, .66);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    pointer-events: none;
+    transition: stroke 150ms ease;
+  }
+
+  .corner-resize-se:hover .resize-grip {
+    stroke: rgba(255, 255, 255, .95);
   }
 
   .ctrl-btn {

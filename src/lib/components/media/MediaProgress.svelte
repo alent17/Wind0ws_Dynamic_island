@@ -1,9 +1,8 @@
 <script lang="ts">
   import { formatTime } from "$lib/mediaClock";
   import { locale, translate } from "$lib/i18n";
-  import RollingNumber from "$lib/components/time/RollingNumber.svelte";
 
-  let { position = 0, duration = 0, light = false, showTimes = true, seekable = false, seekBusy = false, progressKnown = true, reduceMotion = false, seekError = "", onSeek } = $props<{
+  let { position = 0, duration = 0, light = false, showTimes = true, seekable = false, seekBusy = false, progressKnown = true, seekError = "", onSeek } = $props<{
     position?: number;
     duration?: number;
     light?: boolean;
@@ -11,7 +10,6 @@
     seekable?: boolean;
     seekBusy?: boolean;
     progressKnown?: boolean;
-    reduceMotion?: boolean;
     seekError?: string;
     onSeek?: (positionMs: number) => void | Promise<void>;
   }>();
@@ -38,12 +36,11 @@
 </script>
 
 <div class:light class:with-times={showTimes} class="progress-block" aria-label={translate("playbackProgress",{percent:Math.round(ratio*100)},$locale)}>
-  {#if showTimes}<span class="time elapsed"><RollingNumber value={timelineKnown ? formatTime(displayedPosition) : "--:--"} {reduceMotion} /></span>{/if}
+  {#if showTimes}<span class="time elapsed">{timelineKnown ? formatTime(displayedPosition) : "--:--"}</span>{/if}
   <div class="track-controls">
     <div class="track"><span style={`width:${ratio * 100}%`}></span>{#if seekable && timelineKnown}<input type="range" min="0" max={duration} step="1000" value={displayedPosition} aria-label={translate("seekProgress",{},$locale)} onclick={(event)=>event.stopPropagation()} onpointerdown={(event)=>event.stopPropagation()} onpointercancel={cancel} onblur={cancel} oninput={preview} onchange={commit}/>{/if}</div>
   </div>
   {#if showTimes}<span class="time remaining">{timelineKnown ? `-${formatTime(Math.max(0, duration - displayedPosition))}` : "--:--"}</span>{/if}
-  {#if !progressKnown}<p class="seek-error" role="status">{translate("neteaseProgressPending",{},$locale)}</p>{/if}
   {#if seekError}<p class="seek-error" role="alert">{seekError}</p>{/if}
 </div>
 

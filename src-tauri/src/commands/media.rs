@@ -93,6 +93,28 @@ pub async fn request_artwork(
 
 /// 获取当前播放的媒体信息
 #[tauri::command]
+pub async fn netease_song_like(
+    title: String,
+    artist: String,
+    track_id: Option<String>,
+    play_id: Option<String>,
+    liked: Option<bool>,
+) -> AppResult<serde_json::Value> {
+    super::native_task::run_background(move || {
+        let expected = match (&track_id, &play_id, liked) {
+            (Some(track), Some(play), Some(liked)) => Some((track.as_str(), play.as_str(), liked)),
+            (None, None, None) => None,
+            _ => return Err(AppError::media("无效的歌曲身份")),
+        };
+        crate::services::netease_cdp::LocalCdpClient::default()
+            .song_like(&title, &artist, expected)
+            .map_err(|e| AppError::media(e.to_string()))
+    })
+    .await
+    .map_err(|error| AppError::media(format!("网易云喜欢操作任务失败：{error}")))?
+}
+
+#[tauri::command]
 pub async fn get_media_info_cmd(app: AppHandle) -> AppResult<MediaState> {
     let actor = app
         .state::<AppState>()
@@ -138,8 +160,8 @@ pub async fn get_netease_playback_mode() -> AppResult<Option<String>> {
 }
 
 #[tauri::command]
-pub async fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
-    super::native_task::run_native(crate::services::media::list_media_sessions)
+pub async fn list_media_sessions(app: AppHandle) -> AppResult<Vec<MediaSessionInfo>> {
+    super::native_task::run_native(move || crate::services::media::list_media_sessions(&app))
         .await
         .map_err(|error| AppError::media(format!("读取媒体会话任务失败：{error}")))?
 }
@@ -178,16 +200,19 @@ pub async fn resolve_hd_cover(
 /// 操作完成后会自动更新媒体状态并通知前端
 #[tauri::command]
 pub async fn control_media(app: AppHandle, action: String) -> AppResult<()> {
-    if action == "play_pause" {
-        let actor = app
-            .state::<AppState>()
-            .media_actor()
-            .map_err(AppError::media)?;
-        return actor.play_pause().await.map_err(AppError::media);
+    if !matches!(action.as_str(), "play_pause" | "next" | "prev") {
+        return Err(AppError::media("不支持的媒体操作"));
     }
-    super::native_task::run_native(move || crate::services::media::control_media(&app, &action))
-        .await
-        .map_err(|error| AppError::media(format!("媒体控制后台任务失败：{error}")))?
+    let worker_app = app.clone();
+    super::native_task::run_transport(move || {
+        crate::services::media::control_media(&worker_app, &action)
+    })
+    .await
+    .map_err(|error| AppError::media(format!("媒体控制后台任务失败：{error}")))??;
+    if let Ok(actor) = app.state::<AppState>().media_actor() {
+        actor.wake_for_transport_change();
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -269,16 +294,26 @@ pub async fn seek_media(
 
 #[tauri::command]
 pub async fn toggle_shuffle(app: AppHandle) -> AppResult<()> {
-    super::native_task::run_native(move || crate::services::media::toggle_shuffle(&app))
+    let worker_app = app.clone();
+    super::native_task::run_transport(move || crate::services::media::toggle_shuffle(&worker_app))
         .await
-        .map_err(|error| AppError::media(format!("shuffle 后台任务失败：{error}")))?
+        .map_err(|error| AppError::media(format!("shuffle 后台任务失败：{error}")))??;
+    if let Ok(actor) = app.state::<AppState>().media_actor() {
+        actor.wake_for_transport_change();
+    }
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn cycle_repeat(app: AppHandle) -> AppResult<()> {
-    super::native_task::run_native(move || crate::services::media::cycle_repeat(&app))
+    let worker_app = app.clone();
+    super::native_task::run_transport(move || crate::services::media::cycle_repeat(&worker_app))
         .await
-        .map_err(|error| AppError::media(format!("repeat 后台任务失败：{error}")))?
+        .map_err(|error| AppError::media(format!("repeat 后台任务失败：{error}")))??;
+    if let Ok(actor) = app.state::<AppState>().media_actor() {
+        actor.wake_for_transport_change();
+    }
+    Ok(())
 }
 
 /// 提取图片主色调

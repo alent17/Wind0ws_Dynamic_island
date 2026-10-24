@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type { MediaSessionInfo, MediaState, NeteaseSong, ResolvedCover } from "./types";
 
 export const mediaApi = {
+  neteaseSongLike: (title: string, artist: string, expected?: NeteaseLikeState, liked?: boolean) => invoke<NeteaseLikeState>("netease_song_like", { title, artist, trackId: expected?.trackId, playId: expected?.playId, liked }),
+  setupNeteaseConnection: (restart = false, bind = false) => invoke<{ connected: boolean; configured: boolean; executablePath: string; shortcutPath: string; boundSessionId: string | null; bindingFailed: boolean }>("setup_netease_connection", { restart, bind: restart || bind }),
   async getMediaInfo(): Promise<MediaState> {
     return invoke<MediaState>("get_media_info_cmd");
   },
@@ -44,3 +46,4 @@ export const mediaApi = {
 };
 
 export type NeteasePlaybackMode = "sequential" | "repeat_list" | "repeat_one" | "shuffle";
+export interface NeteaseLikeState { trackId: string; playId: string; title: string; artist: string; liked: boolean }

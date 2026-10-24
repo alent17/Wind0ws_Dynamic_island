@@ -27,3 +27,31 @@ body {
 }
 
 button, input, select, textarea { font: inherit; }
+
+/* Keep every Island action consistent with the floating player's buttons. */
+.island-frame button:not(.cover) {
+  background: transparent !important;
+  border-radius: 12px;
+}
+
+/* These older layers extended the highlight beyond the button bounds. */
+.island-frame .control-row button::before,
+.island-frame .mode-control::before {
+  content: none !important;
+}
+
+.island-frame .function-glyph {
+  background: transparent !important;
+}
+
+.island-frame button:not(.cover):focus-visible:not(:disabled) {
+  background: rgba(255,255,255,.1) !important;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.1) !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .island-frame button:not(.cover):hover:not(:disabled) {
+    background: rgba(255,255,255,.1) !important;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.1) !important;
+  }
+}

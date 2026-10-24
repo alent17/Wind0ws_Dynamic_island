@@ -26,6 +26,7 @@ Desktop.ini
 dist/
 /test-results/
 /playwright-report/
+/release/**/cache/
 
 # Temporary files
 1.txt

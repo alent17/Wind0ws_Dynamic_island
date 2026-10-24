@@ -9,6 +9,7 @@ mod idle;
 mod media;
 mod monitor;
 mod native_task;
+mod netease_setup;
 mod settings;
 mod window;
 
@@ -17,5 +18,6 @@ pub use cache::*;
 pub use idle::*;
 pub use media::*;
 pub use monitor::*;
+pub use netease_setup::*;
 pub use settings::*;
 pub use window::*;

@@ -7,6 +7,7 @@ import { emit } from "@tauri-apps/api/event";
 import { islandState, transitionIsland } from "../src/lib/islandStore";
 import App from "../src/App.svelte";
 import RollingFixture from "./RollingFixture.svelte";
+import NeteaseLikeControl from "../src/lib/components/media/NeteaseLikeControl.svelte";
 import FloatingWindow from "../src/FloatingWindow.svelte";
 import Studio from "../src/Studio.svelte";
 import TimerWindow from "../src/TimerWindow.svelte";
@@ -20,6 +21,15 @@ import { isTransportDiagnosticsEnabled, runTimedTransportCommand } from "../src/
 import { LatestValueWriteQueue } from "../src/lib/latestValueWriteQueue";
 const fixture = window as any;
 fixture.calls = [];
+fixture.likeState = { trackId: "123", playId: "123_play", title: "Like Song", artist: "Artist", liked: false };
+fixture.likeActions = [];
+fixture.likeWriteFail = false;
+fixture.likeReadFailures = 0;
+let likeComponent: ReturnType<typeof mount> | undefined;
+fixture.mountLike = () => { likeComponent = mount(NeteaseLikeControl, { target: document.body, props: { title: "Like Song", artist: "Artist" } }); };
+fixture.unmountLike = async () => { if (likeComponent) await unmount(likeComponent); likeComponent = undefined; };
+fixture.deferCoverArtwork = false;
+fixture.pendingCoverArtwork = [];
 fixture.animations = [];
 fixture.videoCalls = [];
 fixture.settingsOverrides = {};
@@ -161,6 +171,19 @@ mockWindows("main");
 mockConvertFileSrc("windows");
 mockIPC((command, args) => {
   fixture.calls.push(command);
+  if (command === "get_netease_playback_mode") return "repeat_list";
+  if (command === "netease_song_like") {
+    if (typeof args?.liked !== "boolean" && fixture.likeReadFailures > 0) {
+      fixture.likeReadFailures--;
+      return Promise.reject(new Error("player starting"));
+    }
+    if (typeof args?.liked === "boolean") {
+      fixture.likeActions.push(args);
+      if (fixture.likeWriteFail) return Promise.reject(new Error("like failed"));
+      fixture.likeState = { ...fixture.likeState, liked: args.liked };
+    }
+    return { ...fixture.likeState };
+  }
   if (command === "get_settings") {
     const snapshot = {...DEFAULT_SETTINGS,showSpectrum:false,idleContentEnabled:false,...fixture.settingsOverrides};
     if (fixture.deferSettingsReads) {
@@ -191,7 +214,12 @@ mockIPC((command, args) => {
     if (fixture.holdMediaSessions) return new Promise(resolve => fixture.pendingMediaSessions.push(resolve));
     return fixture.mediaSessionsResult;
   }
-  if (command === "request_artwork") return null;
+  if (command === "request_artwork") {
+    if (args?.slot === "cover" && fixture.deferCoverArtwork) {
+      return new Promise(resolve => fixture.pendingCoverArtwork.push({ args, resolve }));
+    }
+    return null;
+  }
   if (command === "get_netease_song_info_cmd") return fixture.disableSongMetadataRecovery ? null : {mvUrl:"https://fixture.invalid/video.mp4",duration:180_000};
   if (command === "get_cached_media") return null;
   if (command === "download_and_cache") return "C:\\fixture\\video.mp4";
@@ -313,6 +341,7 @@ fixture.getSettingsSnapshot = () => get(settingsStore);
 fixture.settingsChanged = (name: string) => emit(Events.SETTINGS_CHANGED,name);
 fixture.settingsUpdated = (snapshot: unknown) => emit(Events.SETTINGS_UPDATED,snapshot);
 fixture.settingsCommitted = (revision: number) => emit("settings-committed",{revision});
+fixture.hdCoverChanged = (enabled: boolean) => emit(Events.HD_COVER_CHANGED,{enableHDCover:enabled});
 fixture.resolveSettingsRead = (index: number, snapshot?: unknown) => fixture.pendingSettingsReads[index]?.(snapshot);
 fixture.useTwoMonitors = () => {
   fixture.monitorList = [

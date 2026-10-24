@@ -1,4 +1,4 @@
-//! Bounded, IPv4-loopback-only CDP access for NetEase playback modes.
+//! Bounded, IPv4-loopback-only CDP access for NetEase playback and favorites.
 //!
 //! Synchronous operations are dispatched away from the UI thread.
 
@@ -27,6 +27,7 @@ const MAX_UNMATCHED_MESSAGES: usize = 8;
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(400);
 const IO_TIMEOUT: Duration = Duration::from_secs(5);
 const OPERATION_TIMEOUT: Duration = Duration::from_secs(5);
+const PROGRESS_READ_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlaybackMode {
@@ -84,7 +85,7 @@ impl std::fmt::Display for CdpError {
             Self::UnsupportedCurrentMode => f.write_str("当前网易云播放模式不支持切换"),
             Self::UnsupportedTrack => f.write_str("网易云当前歌曲不是可控制的普通音频"),
             Self::InvalidPosition => f.write_str("网易云跳转位置超出当前歌曲时长"),
-            Self::TrackChanged => f.write_str("网易云在跳转期间切换了歌曲或播放实例"),
+            Self::TrackChanged => f.write_str("网易云在操作期间切换了歌曲或播放实例"),
             Self::VerificationFailed => f.write_str("网易云操作读回校验失败"),
             Self::InvalidCommand => f.write_str("CDP 命令无效或超出长度限制"),
             Self::TimedOut => f.write_str("本机 CDP 操作超时"),
@@ -166,6 +167,49 @@ impl Default for LocalCdpClient {
 }
 
 impl LocalCdpClient {
+    pub fn song_like(
+        self,
+        title: &str,
+        artist: &str,
+        expected: Option<(&str, &str, bool)>,
+    ) -> Result<Value, CdpError> {
+        if title.is_empty() || title.len() + artist.len() > 4096 {
+            return Err(CdpError::InvalidCommand);
+        }
+        let deadline = Instant::now() + OPERATION_TIMEOUT;
+        let (mut connection, value) =
+            self.initialized_page_using(deadline, CLOUD_MUSIC_LIKE_READ_EXPRESSION, "ready")?;
+        validate_like_identity(&value, title, artist)?;
+        if let Some((track_id, play_id, liked)) = expected {
+            if value.get("trackId").and_then(Value::as_str) != Some(track_id)
+                || value.get("playId").and_then(Value::as_str) != Some(play_id)
+            {
+                return Err(CdpError::TrackChanged);
+            }
+            let expression = CLOUD_MUSIC_LIKE_SET_EXPRESSION
+                .replace("__LIKE_READ__", CLOUD_MUSIC_LIKE_READ_EXPRESSION)
+                .replace(
+                    "__EXPECTED__",
+                    &json!({"trackId":track_id,"playId":play_id,"title":value["title"],"artist":value["artist"]})
+                        .to_string(),
+                )
+                .replace("__LIKED__", if liked { "true" } else { "false" });
+            let mut params = runtime_evaluate_params(&expression);
+            params["awaitPromise"] = json!(true);
+            let response = connection.request("Runtime.evaluate", &params, deadline)?;
+            let result = response
+                .pointer("/result/value")
+                .ok_or(CdpError::InvalidResponse)?;
+            if response.get("exceptionDetails").is_some()
+                || result.get("verified").and_then(Value::as_bool) != Some(true)
+            {
+                return Err(CdpError::VerificationFailed);
+            }
+            return Ok(result.clone());
+        }
+        Ok(value)
+    }
+
     pub fn new(port: u16) -> Result<Self, CdpError> {
         Ok(Self {
             port: NonZeroU16::new(port).ok_or(CdpError::InvalidPort)?,
@@ -294,12 +338,20 @@ impl LocalCdpClient {
         expected_title: &str,
         expected_artist: &str,
     ) -> Result<NeteaseProgress, CdpError> {
-        let deadline = Instant::now() + OPERATION_TIMEOUT;
-        let (_, value) =
-            self.initialized_page_using(deadline, CLOUD_MUSIC_PROGRESS_EXPRESSION, "ready")?;
-        let progress = parse_netease_progress(&value)?;
+        let progress = self.read_progress_before(Instant::now() + PROGRESS_READ_TIMEOUT)?;
         validate_expected_identity(&progress, expected_title, expected_artist)?;
         Ok(progress)
+    }
+
+    /// Read-only identity used by explicit setup to match a Windows session.
+    pub(crate) fn read_progress_snapshot(self) -> Result<NeteaseProgress, CdpError> {
+        self.read_progress_before(Instant::now() + OPERATION_TIMEOUT)
+    }
+
+    fn read_progress_before(self, deadline: Instant) -> Result<NeteaseProgress, CdpError> {
+        let (_, value) =
+            self.initialized_page_using(deadline, CLOUD_MUSIC_PROGRESS_EXPRESSION, "ready")?;
+        parse_netease_progress(&value)
     }
 
     fn initialized_page_using(
@@ -394,7 +446,11 @@ impl LocalCdpClient {
     fn connect_tcp(self, deadline: Instant) -> Result<TcpStream, CdpError> {
         let timeout = remaining_timeout(deadline, CONNECT_TIMEOUT)?;
         let address = SocketAddr::V4(SocketAddrV4::new(LOOPBACK, self.port()));
-        Ok(TcpStream::connect_timeout(&address, timeout)?)
+        let stream = TcpStream::connect_timeout(&address, timeout)?;
+        // CDP uses tiny local HTTP/WebSocket writes. Do not let Nagle's
+        // algorithm delay a request while waiting for an earlier small ACK.
+        stream.set_nodelay(true)?;
+        Ok(stream)
     }
 
     fn connect_path(self, path: &str, deadline: Instant) -> Result<CdpConnection, CdpError> {
@@ -665,6 +721,37 @@ const CLOUD_MUSIC_CAPTURE_TOOL: &str = r#"function captureTool(withProgress = fa
   }
 }"#;
 
+const CLOUD_MUSIC_LIKE_READ_EXPRESSION: &str = r#"(() => {
+  const { tool } = (__CAPTURE_TOOL__)();
+  const s = tool && tool.getStore(), p = s && s.playing, h = s && s['async:hostResource'];
+  if (!p || !h || !s.app || !s.app.isOnline || !h.starPlaylistId || !h.likeTracksMap || !Array.isArray(h.likeTrackIds) || p.resourceType !== 'track' || p.isLoadingFirst || p.restoreResource || p.isPlayingVideo || !p.playId) return {};
+  const track = p.curPlaying && p.curPlaying.track;
+  const id = String(p.onlineResourceId || '');
+  if (!track || !id || String(track.id) !== id) return {};
+  const artists = track.artists || track.ar;
+  return { ready: true, trackId: id, playId: String(p.playId), title: String(p.resourceName || track.name || ''), primaryArtist: String(Array.isArray(artists) && artists[0] && artists[0].name || ''), artist: String(p.resourceArtist || (Array.isArray(artists) ? artists.map(a => a && a.name || '').filter(Boolean).join(', ') : '')), liked: h.likeTracksMap[id] === true };
+})()"#;
+
+const CLOUD_MUSIC_LIKE_SET_EXPRESSION: &str = r#"(async () => {
+  const read = () => __LIKE_READ__;
+  const expected = __EXPECTED__, liked = __LIKED__;
+  const same = value => value.ready && ['trackId','playId','title','artist'].every(k => value[k] === expected[k]);
+  const before = read();
+  if (!same(before)) return { verified: false };
+  if (before.liked === liked) return { ...before, verified: true };
+  const { tool } = (__CAPTURE_TOOL__)();
+  const p = tool.getStore().playing;
+  if (!same(read())) return { verified: false };
+  await tool.getDispatch()({ type: 'async:hostResource/setLikeTrack', payload: { isLike: liked, resource: p.curPlaying.track, resourceType: 'track' } });
+  for (let i = 0; i < 20; i++) {
+    const after = read();
+    if (!same(after)) return { verified: false };
+    if (after.liked === liked) return { ...after, verified: true };
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return { verified: false };
+})()"#;
+
 const CLOUD_MUSIC_READ_EXPRESSION: &str = r#"(() => {
   const { tool } = (__CAPTURE_TOOL__)();
   const playing = tool.getStore().playing;
@@ -781,6 +868,17 @@ fn parse_netease_progress(value: &Value) -> Result<NeteaseProgress, CdpError> {
     })
 }
 
+fn validate_like_identity(value: &Value, title: &str, artist: &str) -> Result<(), CdpError> {
+    // Windows SMTC may expose only the first artist of a collaboration.
+    // Match a complete artist name, never a substring of another artist.
+    let matches_artist = value.get("artist").and_then(Value::as_str) == Some(artist)
+        || (!artist.is_empty() && value.get("primaryArtist").and_then(Value::as_str) == Some(artist));
+    if value.get("title").and_then(Value::as_str) != Some(title) || !matches_artist {
+        return Err(CdpError::TrackChanged);
+    }
+    Ok(())
+}
+
 fn validate_expected_identity(
     progress: &NeteaseProgress,
     expected_title: &str,
@@ -873,6 +971,24 @@ impl CdpConnection {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn favorite_identity_accepts_smtc_primary_artist_but_rejects_other_tracks() {
+        let state = serde_json::json!({"title":"you know 2(Phonk)","artist":"Trispect, Kyrex","primaryArtist":"Trispect"});
+        assert!(super::validate_like_identity(&state, "you know 2(Phonk)", "Trispect").is_ok());
+        assert!(super::validate_like_identity(&state, "you know 2(Phonk)", "Trispect, Kyrex").is_ok());
+        assert!(super::validate_like_identity(&state, "Other", "Trispect").is_err());
+        assert!(super::validate_like_identity(&state, "you know 2(Phonk)", "Tri").is_err());
+        assert!(super::validate_like_identity(&state, "you know 2(Phonk)", "Other artist").is_err());
+    }
+    #[test]
+    fn local_cdp_connection_sends_small_requests_without_nagle_delay() {
+        let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let client = super::LocalCdpClient::new(listener.local_addr().unwrap().port()).unwrap();
+        let stream = client
+            .connect_tcp(std::time::Instant::now() + std::time::Duration::from_secs(1))
+            .unwrap();
+        assert!(stream.nodelay().unwrap());
+    }
     use super::*;
     use std::{net::TcpListener, thread};
 
@@ -1108,5 +1224,4 @@ mod tests {
         }))
         .is_err());
     }
-
 }

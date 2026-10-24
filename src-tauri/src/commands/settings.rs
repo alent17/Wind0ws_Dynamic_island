@@ -51,6 +51,8 @@ pub fn get_preferences(state: State<'_, AppState>) -> AppResult<AppPreferences> 
 }
 
 fn normalize_settings(settings: &mut AppPreferences) {
+    settings.floating_expanded_length = settings.floating_expanded_length.clamp(480, 900);
+    settings.edge_expanded_length = settings.edge_expanded_length.clamp(480, 900);
     settings.floating_compact_length = settings.floating_compact_length.clamp(80, 300);
     settings.edge_compact_length = settings.edge_compact_length.clamp(80, 300);
     settings.island_edge_position = settings.island_edge_position.min(100);
@@ -60,6 +62,9 @@ fn normalize_settings(settings: &mut AppPreferences) {
     settings.edge_expanded_corner_radius = settings.edge_expanded_corner_radius.min(80);
     settings.idle_rotation_seconds = settings.idle_rotation_seconds.clamp(2, 60);
     settings.font_id = "misans".to_string();
+    settings
+        .player_source_overrides
+        .retain(|id, source| !id.trim().is_empty() && id.len() <= 1024 && source == "netease");
     if let Some(ids) = settings.selected_player_ids.as_mut() {
         let mut seen = std::collections::HashSet::new();
         ids.retain(|id| !id.trim().is_empty() && seen.insert(id.clone()));
@@ -182,6 +187,93 @@ where
     .await
 }
 
+pub(crate) async fn bind_netease_player(
+    app: AppHandle,
+    state: &AppState,
+    id: String,
+) -> AppResult<()> {
+    commit_settings(app, state, move |settings| {
+        settings
+            .player_source_overrides
+            .insert(id.clone(), "netease".into());
+        settings.player_order_ids.retain(|saved| saved != &id);
+        settings.player_order_ids.insert(0, id.clone());
+        if let Some(selected) = settings.selected_player_ids.as_mut() {
+            if !selected.contains(&id) {
+                selected.push(id);
+            }
+        }
+        settings.netease_progress_mode = crate::models::NeteaseProgressMode::Real;
+        Ok(())
+    })
+    .await
+}
+
+pub(crate) async fn remember_netease_connection(
+    app: AppHandle,
+    state: &AppState,
+    path: String,
+    enable: bool,
+) -> AppResult<()> {
+    commit_settings(app, state, move |settings| {
+        settings.netease_executable_path = Some(path);
+        if enable {
+            settings.netease_auto_connect = true;
+        }
+        Ok(())
+    })
+    .await
+}
+
+fn restore_netease_identity(settings: &mut AppPreferences, id: &str) {
+    let old_ids: std::collections::HashSet<String> = settings
+        .player_order_ids
+        .iter()
+        .chain(settings.selected_player_ids.iter().flatten())
+        .filter(|old| {
+            old.to_ascii_lowercase().contains("cloudmusic")
+                || settings
+                    .player_source_overrides
+                    .get(*old)
+                    .is_some_and(|source| source == "netease")
+        })
+        .cloned()
+        .collect();
+    settings
+        .player_source_overrides
+        .insert(id.to_string(), "netease".into());
+    // Replace the launch-specific ID at its saved priority, preserving unrelated
+    // player choices and keeping an explicitly deselected NetEase deselected.
+    if !settings.player_order_ids.iter().any(|saved| saved == id) {
+        if let Some(slot) = settings
+            .player_order_ids
+            .iter_mut()
+            .find(|saved| old_ids.contains(*saved))
+        {
+            *slot = id.to_string();
+        }
+    }
+    if let Some(selected) = settings.selected_player_ids.as_mut() {
+        if !selected.iter().any(|saved| saved == id) {
+            for saved in selected.iter_mut().filter(|saved| old_ids.contains(*saved)) {
+                *saved = id.to_string();
+            }
+        }
+    }
+}
+
+pub(crate) async fn restore_netease_player(
+    app: AppHandle,
+    state: &AppState,
+    id: String,
+) -> AppResult<()> {
+    commit_settings(app, state, move |settings| {
+        restore_netease_identity(settings, &id);
+        Ok(())
+    })
+    .await
+}
+
 async fn commit_settings_transaction<F, A, AFut, P, PFut, R, RFut>(
     state: &AppState,
     mutate: F,
@@ -229,6 +321,11 @@ where
     if old.netease_progress_mode != next.netease_progress_mode {
         if let Ok(actor) = state.media_actor() {
             actor.wake_for_netease_progress_mode_change();
+        }
+    }
+    if old.player_source_overrides != next.player_source_overrides {
+        if let Ok(actor) = state.media_actor() {
+            actor.wake_for_player_identity_change();
         }
     }
     let revision = state.settings_revision.fetch_add(1, Ordering::SeqCst) + 1;
@@ -501,6 +598,29 @@ pub fn get_floating_window_position(
 
 #[cfg(test)]
 mod settings_commit_tests {
+    #[test]
+    fn restore_replaces_launcher_id_without_changing_player_preferences_or_progress_mode() {
+        let mut preferences = crate::models::AppPreferences::default();
+        preferences.player_order_ids = vec!["Spotify.exe".into(), "cloudmusic.exe".into()];
+        preferences.selected_player_ids = Some(vec!["Spotify.exe".into(), "cloudmusic.exe".into()]);
+        preferences.netease_progress_mode = crate::models::NeteaseProgressMode::Estimate;
+        super::restore_netease_identity(&mut preferences, "Microsoft.AutoGenerated.new");
+        assert_eq!(
+            preferences.player_order_ids,
+            ["Spotify.exe", "Microsoft.AutoGenerated.new"]
+        );
+        assert_eq!(
+            preferences.selected_player_ids.as_ref().unwrap(),
+            &["Spotify.exe", "Microsoft.AutoGenerated.new"]
+        );
+        assert_eq!(
+            preferences.netease_progress_mode,
+            crate::models::NeteaseProgressMode::Estimate
+        );
+        preferences.selected_player_ids = Some(vec!["Spotify.exe".into()]);
+        super::restore_netease_identity(&mut preferences, "Microsoft.AutoGenerated.later");
+        assert_eq!(preferences.selected_player_ids.unwrap(), ["Spotify.exe"]);
+    }
     use super::commit_settings_transaction;
     use crate::models::AppPreferences;
     use crate::services::settings::{write_atomic_with_backup, write_settings_snapshot};

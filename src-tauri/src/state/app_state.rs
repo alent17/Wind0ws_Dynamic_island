@@ -5,7 +5,10 @@
 
 use super::media_actor::MediaActorHandle;
 use crate::models::{AppPreferences, NeteaseProgressMode};
-use std::sync::{atomic::{AtomicU8, AtomicU64, Ordering}, Mutex};
+use std::sync::{
+    atomic::{AtomicU64, AtomicU8, Ordering},
+    Mutex,
+};
 use tokio::sync::Mutex as AsyncMutex;
 
 /// 媒体缓存状态
@@ -51,7 +54,10 @@ pub struct AppState {
 impl AppState {
     pub(crate) fn set_netease_progress_mode(&self, mode: NeteaseProgressMode) {
         self.netease_progress_mode.store(
-            match mode { NeteaseProgressMode::Real => 0, NeteaseProgressMode::Estimate => 1 },
+            match mode {
+                NeteaseProgressMode::Real => 0,
+                NeteaseProgressMode::Estimate => 1,
+            },
             Ordering::Release,
         );
     }

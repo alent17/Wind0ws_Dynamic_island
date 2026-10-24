@@ -1,5 +1,88 @@
 import { expect, test } from "@playwright/test";
 
+test("NetEase heart reads state, likes, unlikes and keeps failed writes unconfirmed", async ({page}) => {
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(() => (window as any).mountLike());
+  const heart = page.locator('.like-control');
+  await expect(heart).toBeEnabled();
+  await expect(heart).toHaveAttribute('aria-pressed', 'false');
+  await heart.click();
+  await expect(heart).toHaveAttribute('aria-pressed', 'true');
+  await expect(heart).toHaveCSS('color', 'rgb(255, 64, 88)');
+  await expect(heart.locator('svg')).toHaveAttribute('fill', 'currentColor');
+  await heart.click();
+  await expect(heart).toHaveAttribute('aria-pressed', 'false');
+  await expect(heart.locator('svg')).toHaveAttribute('fill', 'none');
+  await page.evaluate(() => { (window as any).likeWriteFail = true; });
+  await heart.click();
+  await expect(heart).toHaveAttribute('title', /like failed/);
+  await expect(page.locator('.like-error')).toHaveCount(0);
+  await expect(heart).toHaveAttribute('aria-pressed', 'false');
+  expect(await page.evaluate(() => (window as any).likeActions.map((a:any) => a.liked))).toEqual([true,false,true]);
+});
+
+test("NetEase heart reopens from cache without polling or another detection", async ({page}) => {
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(() => (window as any).mountLike());
+  await expect(page.locator('.like-control')).toBeEnabled();
+  await page.locator('.like-control').click();
+  await expect(page.locator('.like-control')).toHaveAttribute('aria-pressed','true');
+  await page.evaluate(() => (window as any).unmountLike());
+  await page.evaluate(() => (window as any).mountLike());
+  await expect(page.locator('.like-control')).toHaveAttribute('aria-pressed','true');
+  await page.waitForTimeout(2300);
+  expect(await page.evaluate(() => (window as any).calls.filter((c:string) => c === 'netease_song_like').length)).toBe(3);
+});
+
+test("NetEase playback mode is read once per connection rather than per song", async ({page}) => {
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(() => (window as any).mountApp());
+  const state = {title:'First',artist:'Artist',source:'netease',isPlaying:true,positionMs:0,durationMs:180000,nativeEpoch:'mode-epoch',nativeRevision:1,nativeTrackGeneration:1};
+  await page.evaluate(payload => (window as any).media(payload),state);
+  await expect.poll(() => page.evaluate(() => (window as any).calls.filter((c:string) => c === 'get_netease_playback_mode').length)).toBe(1);
+  await page.evaluate(payload => (window as any).media({...payload,title:'Second',nativeRevision:2,nativeTrackGeneration:2}),state);
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => (window as any).calls.filter((c:string) => c === 'get_netease_playback_mode').length)).toBe(1);
+});
+
+test("NetEase heart in the expanded island recovers from an initial read failure", async ({page}) => {
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(() => { (window as any).likeReadFailures = 1; (window as any).mountApp(); });
+  await page.evaluate(() => (window as any).media({title:'Like Song',artist:'Artist',source:'netease',isPlaying:true,positionMs:0,durationMs:180000,nativeEpoch:'heart-epoch',nativeRevision:1,nativeTrackGeneration:1}));
+  await page.evaluate(() => (window as any).expand());
+  const heart = page.locator('.like-control');
+  await expect(heart).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as any).likeReadFailures)).toBe(0);
+  await expect(heart).toBeEnabled();
+  await heart.click();
+  await expect(heart).toHaveAttribute('aria-pressed','true');
+  expect(await page.evaluate(() => (window as any).likeActions.length)).toBe(1);
+});
+
+test("NetEase heart retries a failed initial read without another opening or click", async ({page}) => {
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(() => { (window as any).likeState.liked = true; (window as any).likeReadFailures = 1; (window as any).mountLike(); });
+  await expect(page.locator('.like-control')).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('.like-error')).toHaveCount(0);
+  await page.waitForTimeout(2200);
+  expect(await page.evaluate(() => (window as any).calls.filter((c:string) => c === 'netease_song_like').length)).toBe(2);
+});
+
+test("NetEase heart reports the actual error after bounded retries", async ({page}) => {
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(() => { (window as any).likeReadFailures = 10; (window as any).mountLike(); });
+  await expect.poll(() => page.evaluate(() => (window as any).calls.filter((c:string) => c === 'netease_song_like').length)).toBe(3);
+  await expect(page.locator('.like-control')).toHaveAttribute('title', /player starting/);
+  await expect(page.locator('.like-error')).toHaveCount(0);
+  await expect(page.locator('.like-control')).toBeEnabled();
+});
+
 test("VolumePanel submits the pointerup coordinate as its final write", async ({page}) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(String(error)));
   await page.goto("/ui-tests/lifecycle-fixture.html");
@@ -366,6 +449,60 @@ test("FloatingWindow pauses circular artwork motion while capture-hidden", async
   await page.evaluate(() => (window as any).destroy());
 });
 
+test("FloatingWindow HD switch preserves the system cover and matches the painted fill", async ({page}) => {
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  const covers = await page.evaluate(() => {
+    const fixture = window as any;
+    fixture.deferCoverArtwork = true;
+    fixture.mountFloating({enableHdCover:true,enableMvPlayback:false});
+    const cover = (color:string, size:number) => {
+      const canvas=document.createElement("canvas");canvas.width=canvas.height=size;
+      const context=canvas.getContext("2d")!;context.fillStyle=color;context.fillRect(0,0,size,size);
+      return canvas.toDataURL();
+    };
+    return {raw:cover("rgb(180, 40, 30)",32),hd:cover("rgb(20, 60, 200)",256)};
+  });
+  await expect.poll(() => page.evaluate(() => (window as any).floatingReadyMessages.length)).toBe(1);
+  const state = {title:"HD cover",artist:"Fixture",source:"fixture-player",isPlaying:false,positionMs:0,durationMs:180000,lastUpdatedTimestamp:Date.now(),albumArt:covers.raw};
+  await page.evaluate(payload => (window as any).media(payload), state);
+  await expect(page.locator(".bg-solid")).toHaveCSS("background-color","rgb(180, 40, 30)");
+  await expect.poll(() => page.evaluate(() => (window as any).pendingCoverArtwork.length)).toBe(1);
+  await page.evaluate(url => (window as any).pendingCoverArtwork[0].resolve({url,provider:"apple"}),covers.hd);
+  await expect(page.locator(".bg-solid")).toHaveCSS("background-color","rgb(20, 60, 200)");
+  await expect(page.locator(".album-art-new")).toHaveAttribute("width","256");
+  await page.evaluate(() => (window as any).hdCoverChanged(false));
+  await expect(page.locator(".bg-solid")).toHaveCSS("background-color","rgb(180, 40, 30)");
+  await expect(page.locator(".album-art-new")).toHaveAttribute("width","32");
+  await page.evaluate(payload => (window as any).media(payload),{...state,albumArt:covers.hd,artworkResolved:true});
+  await expect(page.locator(".album-art-new")).toHaveAttribute("width","32");
+  await page.evaluate(() => (window as any).hdCoverChanged(true));
+  await expect(page.locator(".bg-solid")).toHaveCSS("background-color","rgb(20, 60, 200)");
+  await page.evaluate(payload => (window as any).media(payload),state);
+  await expect(page.locator(".album-art-new")).toHaveAttribute("width","256");
+  expect(await page.evaluate(() => (window as any).pendingCoverArtwork.length)).toBe(1);
+});
+
+test("FloatingWindow ignores late HD lookup after disabling HD or changing tracks", async ({page}) => {
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  const covers = await page.evaluate(() => {
+    const fixture=window as any;fixture.deferCoverArtwork=true;
+    fixture.mountFloating({enableHdCover:true,enableMvPlayback:false});
+    const image=(color:string,size:number)=>{const canvas=document.createElement("canvas");canvas.width=canvas.height=size;const context=canvas.getContext("2d")!;context.fillStyle=color;context.fillRect(0,0,size,size);return canvas.toDataURL()};
+    return {first:image("red",32),next:image("green",48),late:image("blue",256)};
+  });
+  await expect.poll(() => page.evaluate(() => (window as any).floatingReadyMessages.length)).toBe(1);
+  const state={title:"First",artist:"Fixture",source:"fixture-player",isPlaying:false,positionMs:0,durationMs:180000,lastUpdatedTimestamp:Date.now(),albumArt:covers.first};
+  await page.evaluate(payload=>(window as any).media(payload),state);
+  await expect.poll(() => page.evaluate(() => (window as any).pendingCoverArtwork.length)).toBe(1);
+  await page.evaluate(payload=>(window as any).media(payload),{...state,title:"Next",albumArt:covers.next});
+  await expect.poll(() => page.evaluate(() => (window as any).pendingCoverArtwork.length)).toBe(2);
+  await page.evaluate(async url=>{const fixture=window as any;await fixture.hdCoverChanged(false);fixture.pendingCoverArtwork[0].resolve({url});fixture.pendingCoverArtwork[1].resolve({url})},covers.late);
+  await expect(page.locator(".album-art-new")).toHaveAttribute("width","48");
+  await expect(page.locator(".bg-solid")).toHaveCSS("background-color","rgb(0, 128, 0)");
+});
+
 const mediaFixtureState = (patch: Record<string, unknown> = {}) => ({
   title: "Snapshot race",
   artist: "Fixture",
@@ -389,6 +526,25 @@ async function prepareDeferredFloatingSnapshot(page: import("@playwright/test").
   });
   await page.waitForFunction(() => (window as any).pendingMediaInfo.length === 1);
 }
+
+test("FloatingWindow fills the background from artwork and resets it after a clear", async ({page}) => {
+  await prepareDeferredFloatingSnapshot(page);
+  const cover = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 24;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "rgb(210, 40, 60)";
+    ctx.fillRect(0, 0, 24, 24);
+    return canvas.toDataURL();
+  });
+  await page.evaluate(payload => (window as any).mediaSync(payload), mediaFixtureState({albumArt:cover,artworkResolved:true}));
+  await expect(page.locator(".bg-solid")).toHaveCSS("background-image", "none");
+  await expect(page.locator(".bg-solid")).toHaveCSS("background-color", "rgb(210, 40, 60)");
+  await page.evaluate(payload => (window as any).mediaSync(payload), mediaFixtureState({albumArt:"",artworkResolved:true}));
+  await expect(page.locator(".bg-solid")).toHaveCSS("background-image", "none");
+  await expect(page.locator(".bg-solid")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+  await page.evaluate(() => (window as any).destroy());
+});
 
 test("FloatingWindow keeps same-track event fields and only fills a missing cover from its delayed snapshot", async ({page}) => {
   await prepareDeferredFloatingSnapshot(page);
@@ -597,22 +753,26 @@ test("App assigns increasing overlay sequences to optimistic seek and rollback o
 
 test("Floating fences App overlays by session, basis, and increasing sequence without letting duplicate raw art downgrade HD", async ({page}) => {
   await prepareDeferredFloatingSnapshot(page);
-  const native = mediaFixtureState({nativeEpoch:"overlay-epoch",nativeRevision:2,albumArt:"native-cover",positionMs:22_000,isPlaying:false});
+  const covers = await page.evaluate(() => {
+    const image=(color:string,size:number)=>{const canvas=document.createElement("canvas");canvas.width=canvas.height=size;const context=canvas.getContext("2d")!;context.fillStyle=color;context.fillRect(0,0,size,size);return canvas.toDataURL()};
+    return {raw:image("red",32),hd:image("blue",256)};
+  });
+  const native = mediaFixtureState({nativeEpoch:"overlay-epoch",nativeRevision:2,albumArt:covers.raw,positionMs:22_000,isPlaying:false});
   await page.evaluate(payload => (window as any).media(payload), native);
   await page.evaluate(payload => (window as any).resolveMediaInfo(0,payload), {...native,nativeRevision:1,positionMs:1_000,albumArt:"stale-command-cover"});
   await expect.poll(() => page.evaluate(() => (window as any).floatingReadyQueryListenerCount())).toBe(1);
   await page.evaluate(() => (window as any).mediaSessionStart("app-session-a"));
   await expect.poll(() => page.evaluate(() => (window as any).floatingReadyMessages.some((m:any) => m.appSessionId === "app-session-a"))).toBe(true);
 
-  const relay = (session:string, sequence:number, revision=2, albumArt="hd-cover", positionMs=45_000) => ({
+  const relay = (session:string, sequence:number, revision=2, albumArt=covers.hd, positionMs=45_000) => ({
     ...native, nativeRevision:revision, appSessionId:session, overlaySeq:sequence,
     appOverlay:{nativeEpoch:"overlay-epoch",nativeRevision:revision,trackKey:"fixture-player|snapshotrace|fixture",title:"Snapshot race",artist:"Fixture",albumArt,artworkResolved:true,positionMs,lastUpdatedTimestamp:Date.now()},
   });
   await page.evaluate(payload => (window as any).mediaSync(payload), relay("app-session-a",1));
   await expect(page.locator('input[type="range"]')).toHaveValue("45000");
   await expect.poll(() => page.evaluate(() => (window as any).__ISLE_MEDIA_TRACE__.some((row:any) => row.outcome === "applied-app-overlay"))).toBe(true);
-  const acceptedCoverChars = await page.evaluate(() => (window as any).__ISLE_MEDIA_TRACE__.at(-1).displayCoverChars);
-  expect(acceptedCoverChars).toBe("hd-cover".length);
+  await expect(page.locator(".compact-cover-image")).toHaveAttribute("src",covers.hd);
+  const acceptedCoverChars = covers.hd.length;
 
   await page.evaluate(payload => (window as any).media(payload), native);
   await expect.poll(() => page.evaluate(() => (window as any).__ISLE_MEDIA_TRACE__.at(-1).displayCoverChars)).toBe(acceptedCoverChars);

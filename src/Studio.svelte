@@ -26,13 +26,15 @@
 
   type Scenario="playing"|"paused"|"no-art"|"long-title";
   type PreviewTarget="shape"|"compactLength"|"shoulder"|"radius"|"spectrum"|null;
-  type AppearanceDraft=Pick<AppPreferences,"islandStyle"|"islandEdge"|"islandEdgePosition"|"floatingCompactLength"|"edgeCompactLength"|"floatingExpandedCornerRadius"|"edgeExpandedCornerRadius"|"collapsedEdgeShoulderRadius"|"expandedEdgeShoulderRadius"|"showSpectrum"|"spectrumMode">;
+  type AppearanceDraft=Pick<AppPreferences,"islandStyle"|"islandEdge"|"islandEdgePosition"|"floatingExpandedLength"|"edgeExpandedLength"|"floatingCompactLength"|"edgeCompactLength"|"floatingExpandedCornerRadius"|"edgeExpandedCornerRadius"|"collapsedEdgeShoulderRadius"|"expandedEdgeShoulderRadius"|"showSpectrum"|"spectrumMode">;
 
   function createAppearanceDraft(source:AppPreferences):AppearanceDraft{
     return {
       islandStyle:source.islandStyle,
       islandEdge:source.islandEdge,
       islandEdgePosition:source.islandEdgePosition,
+      floatingExpandedLength:source.floatingExpandedLength,
+      edgeExpandedLength:source.edgeExpandedLength,
       floatingCompactLength:source.floatingCompactLength,
       edgeCompactLength:source.edgeCompactLength,
       collapsedEdgeShoulderRadius:source.collapsedEdgeShoulderRadius,
@@ -63,6 +65,8 @@
     return appearanceDraft.islandStyle!==settings.islandStyle||
       appearanceDraft.islandEdge!==settings.islandEdge||
       appearanceDraft.islandEdgePosition!==settings.islandEdgePosition||
+      appearanceDraft.floatingExpandedLength!==settings.floatingExpandedLength||
+      appearanceDraft.edgeExpandedLength!==settings.edgeExpandedLength||
       appearanceDraft.floatingCompactLength!==settings.floatingCompactLength||
       appearanceDraft.edgeCompactLength!==settings.edgeCompactLength||
       appearanceDraft.collapsedEdgeShoulderRadius!==settings.collapsedEdgeShoulderRadius||
@@ -73,6 +77,32 @@
       appearanceDraft.spectrumMode!==settings.spectrumMode;
   });
   let studioDisposed=false;
+  let neteaseSetupBusy=$state(false);
+  let neteaseSetupMessage=$state("");
+  let neteaseShortcut=$state("");
+  async function setupNetease(restart:boolean){
+    if(neteaseSetupBusy||!nativeRuntime)return;
+    neteaseSetupBusy=true;
+    neteaseSetupMessage="";
+    neteaseShortcut="";
+    try{
+      await persist();
+      const result=await mediaApi.setupNeteaseConnection(restart,true);
+      if(studioDisposed)return;
+      neteaseShortcut=result.configured?result.shortcutPath:"";
+      neteaseSetupMessage=t(result.bindingFailed?"neteaseBindFailed":result.boundSessionId?"neteaseBound":result.connected?"neteaseBindPending":result.configured?"neteaseConfigured":"neteaseDisconnected");
+      if(result.boundSessionId){
+        applyExternalSettings(normalizeAppSettings(await settingsApi.getSettings()));
+        await refreshSessions();
+        await mediaApi.getMediaInfo();
+      }
+    }catch(error){
+      if(studioDisposed)return;
+      neteaseSetupMessage=t(String(error).includes("NETEASE_NOT_FOUND")?"neteaseNotFound":"neteaseSetupFailed");
+    }finally{
+      neteaseSetupBusy=false;
+    }
+  }
   const previewBars=[.45,.78,.58,.96,.7,.38];
   let scenarioMedia=$derived.by<MediaState>(()=>{const base={...DEMO_MEDIA,positionMs:244000*progress/100,lastUpdatedTimestamp:Date.now()};if(scenario==="paused")return{...base,isPlaying:false};if(scenario==="no-art")return{...base,albumArt:""};if(scenario==="long-title")return{...base,title:"宇宙尽头的浪漫主义与一场不会结束的午夜公路旅行",artist:"The Extremely Long Artist Name · 特别长的专辑名称"};return base});
   let sample=$derived(nativeRuntime&&followingLive?liveMedia:scenarioMedia);
@@ -113,7 +143,8 @@
   let expandedRadiusKey: "edgeExpandedCornerRadius" | "floatingExpandedCornerRadius" = $derived(appearanceDraft.islandStyle==="edge"?"edgeExpandedCornerRadius":"floatingExpandedCornerRadius");
   let previewCompactLength=$derived(appearanceDraft[compactLengthKey]);
   let previewExpandedRadius=$derived(appearanceDraft[expandedRadiusKey]);
-  let previewHost=$derived(hostFor(appearanceDraft.islandStyle,appearanceDraft.islandEdge,previewCompactLength));
+  let previewExpandedLength=$derived(appearanceDraft.islandStyle==="edge"?appearanceDraft.edgeExpandedLength:appearanceDraft.floatingExpandedLength);
+  let previewHost=$derived(hostFor(appearanceDraft.islandStyle,appearanceDraft.islandEdge,previewCompactLength,1,previewExpandedLength));
   let currentGeometry=$state(geometryFor("expanded"));
   let previewScale=$derived(Math.min(previewScaleFloor, Math.max(0.1, (stageWidth - 24) / previewHost.width)));
   const previewPosition=spring(50,{stiffness:.1,damping:.7,precision:.1});
@@ -330,7 +361,16 @@
     return [...new Set([...existing,...available.map(item=>item.id),...(selected??[])].filter(id=>id.trim().length>0))];
   }
   function currentPlayerOrderIds(){return mergePlayerOrderIds(settings.playerOrderIds,sessions,settings.selectedPlayerIds)}
-  function sessionFor(id:string):MediaSessionInfo{return sessions.find(item=>item.id===id)??{id,displayName:playerNameFromId(id),source:"generic",isPlaying:false}}
+  function sessionFor(id:string):MediaSessionInfo{
+    const session=sessions.find(item=>item.id===id)??{id,displayName:playerNameFromId(id),source:"generic",isPlaying:false};
+    return settings.playerSourceOverrides[id]==="netease"?{...session,displayName:"网易云音乐",source:"netease"}:session;
+  }
+  async function setNeteasePlayer(id:string,enabled:boolean){
+    const overrides={...settings.playerSourceOverrides};
+    if(enabled)overrides[id]="netease";else delete overrides[id];
+    updatePreference({playerSourceOverrides:overrides});
+    try{await persist();await refreshSessions();await mediaApi.getMediaInfo()}catch{}
+  }
   async function refreshSessions(){
     if(!nativeRuntime)return;
     if(sessionInFlight){sessionRefreshQueued=true;return}
@@ -403,7 +443,7 @@
       <div class="stage-topline"><span><i aria-hidden="true"></i>{t("previewLabel")}</span><small>{nativeRuntime&&followingLive?t("currentMusic"):nativeRuntime?t("previewReady"):t("browserDemo")}</small></div>
       <div class="preview-host" style={`width:${previewHost.width}px;height:${previewHost.height}px;${previewPositionStyle}`}>
         {#if previewReady}
-        <IslandSurface weatherCity={nativeRuntime ? settings.weatherLocation?.name ?? "" : "Shanghai"} weatherUpdatedAt={weatherSnapshot?.weatherUpdatedAt ?? null} onRegionChange={({geometry}) => currentGeometry = geometry} onPageChange={(page)=>previewPage=page} media={sample} clockText={previewClock} clockTimeZone={settings.clockTimeZone} idle={nativeRuntime && followingLive && !sample.title} idleTime={previewClock} idleWeatherTemperature={weatherSnapshot?.weatherTemperature ?? null} idleWeatherCode={weatherSnapshot?.weatherCode ?? null} idleWeatherForecast={previewForecast} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedRadius={previewExpandedRadius} collapsedEdgeShoulderRadius={appearanceDraft.collapsedEdgeShoulderRadius} expandedEdgeShoulderRadius={appearanceDraft.expandedEdgeShoulderRadius} compactLength={previewCompactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} spectrumTopColor={previewSpectrumTopColor} spectrumBottomColor={previewSpectrumBottomColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={!nativeRuntime&&appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} showCustomFunctionPanel={settings.showCustomFunctionPanel} systemAudio={{volumePercent:42,muted:false,deviceId:"studio-speakers",deviceName:"Speakers"}} audioDevices={[{id:"studio-speakers",name:"Speakers (Realtek Audio)",isDefault:true},{id:"studio-headphones",name:"Headphones",isDefault:false}]} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.showStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{if(nativeRuntime&&followingLive){if(action==="cycle_netease_mode"){void mediaApi.cycleNeteasePlaybackMode();return}void mediaApi.controlMedia(action);return}if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
+        <IslandSurface weatherCity={nativeRuntime ? settings.weatherLocation?.name ?? "" : "Shanghai"} weatherUpdatedAt={weatherSnapshot?.weatherUpdatedAt ?? null} onRegionChange={({geometry}) => currentGeometry = geometry} onPageChange={(page)=>previewPage=page} media={sample} clockText={previewClock} clockTimeZone={settings.clockTimeZone} idle={nativeRuntime && followingLive && !sample.title} idleTime={previewClock} idleWeatherTemperature={weatherSnapshot?.weatherTemperature ?? null} idleWeatherCode={weatherSnapshot?.weatherCode ?? null} idleWeatherForecast={previewForecast} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedLength={previewExpandedLength} expandedRadius={previewExpandedRadius} collapsedEdgeShoulderRadius={appearanceDraft.collapsedEdgeShoulderRadius} expandedEdgeShoulderRadius={appearanceDraft.expandedEdgeShoulderRadius} compactLength={previewCompactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} spectrumTopColor={previewSpectrumTopColor} spectrumBottomColor={previewSpectrumBottomColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={!nativeRuntime&&appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} showCustomFunctionPanel={settings.showCustomFunctionPanel} systemAudio={{volumePercent:42,muted:false,deviceId:"studio-speakers",deviceName:"Speakers"}} audioDevices={[{id:"studio-speakers",name:"Speakers (Realtek Audio)",isDefault:true},{id:"studio-headphones",name:"Headphones",isDefault:false}]} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.showStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{if(nativeRuntime&&followingLive){if(action==="cycle_netease_mode"){void mediaApi.cycleNeteasePlaybackMode();return}void mediaApi.controlMedia(action);return}if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
         {/if}
       </div>
       <div class="stage-caption" class:editing={previewTarget!==null} aria-live="polite">
@@ -419,10 +459,23 @@
           <div class="field-label"><span>{t("shape")}</span><small>{t("shapeHint")}</small></div>
           <div class="segmented two"><button aria-pressed={appearanceDraft.islandStyle==="floating"} class:active={appearanceDraft.islandStyle==="floating"} onclick={()=>{appearanceDraft.islandStyle="floating";previewTarget="shape"}}>{t("floating")}</button><button aria-pressed={appearanceDraft.islandStyle==="edge"} class:active={appearanceDraft.islandStyle==="edge"} onclick={()=>{appearanceDraft.islandStyle="edge";previewTarget="shape"}}>{t("attached")}</button></div>
         </div>
-        <StudioSlider label={t("compactLength")} hint={t("shapeHint")} min={80} max={300} unit="px" bind:value={appearanceDraft[compactLengthKey]} previewTarget={previewTarget === "compactLength" ? "compactLength" : null} onPreviewStart={()=>previewTarget="compactLength"} onPreviewMove={()=>previewTarget="compactLength"} onPreviewEnd={()=>previewTarget=null}/>
-        <StudioSlider label={t("collapsedShoulder")} min={0} max={16} unit="px" bind:value={appearanceDraft.collapsedEdgeShoulderRadius} previewTarget={previewTarget === "shoulder" ? "shoulder" : null} onPreviewStart={()=>previewTarget="shoulder"} onPreviewMove={()=>previewTarget="shoulder"} onPreviewEnd={()=>previewTarget=null}/>
-        <StudioSlider label={t("expandedShoulder")} min={0} max={64} unit="px" bind:value={appearanceDraft.expandedEdgeShoulderRadius} previewTarget={previewTarget === "shoulder" ? "shoulder" : null} onPreviewStart={()=>previewTarget="shoulder"} onPreviewMove={()=>previewTarget="shoulder"} onPreviewEnd={()=>previewTarget=null}/>
-        <StudioSlider label={t("expandedRadius")} min={0} max={80} unit="px" bind:value={appearanceDraft[expandedRadiusKey]} previewTarget={previewTarget === "radius" ? "radius" : null} onPreviewStart={()=>previewTarget="radius"} onPreviewMove={()=>previewTarget="radius"} onPreviewEnd={()=>previewTarget=null}/>
+        {#if appearanceDraft.islandStyle === "floating"}
+        <fieldset class="shape-settings" data-shape="floating">
+          <legend>{t("floating")}</legend>
+          <StudioSlider label={t("compactLength")} min={80} max={300} unit="px" bind:value={appearanceDraft.floatingCompactLength} previewTarget={previewTarget === "compactLength" ? "compactLength" : null} onPreviewStart={()=>{appearanceDraft.islandStyle="floating";previewTarget="compactLength"}} onPreviewMove={()=>{appearanceDraft.islandStyle="floating";previewTarget="compactLength"}} onPreviewEnd={()=>previewTarget=null}/>
+          <StudioSlider label={t("expandedLength")} min={480} max={900} unit="px" bind:value={appearanceDraft.floatingExpandedLength} onPreviewStart={()=>{mode="expanded"}} onPreviewMove={()=>{mode="expanded"}}/>
+          <StudioSlider label={t("expandedRadius")} min={0} max={80} unit="px" bind:value={appearanceDraft.floatingExpandedCornerRadius} previewTarget={previewTarget === "radius" ? "radius" : null} onPreviewStart={()=>{appearanceDraft.islandStyle="floating";previewTarget="radius"}} onPreviewMove={()=>{appearanceDraft.islandStyle="floating";previewTarget="radius"}} onPreviewEnd={()=>previewTarget=null}/>
+        </fieldset>
+        {:else}
+        <fieldset class="shape-settings" data-shape="edge">
+          <legend>{t("attached")}</legend>
+          <StudioSlider label={t("compactLength")} min={80} max={300} unit="px" bind:value={appearanceDraft.edgeCompactLength} previewTarget={previewTarget === "compactLength" ? "compactLength" : null} onPreviewStart={()=>{appearanceDraft.islandStyle="edge";previewTarget="compactLength"}} onPreviewMove={()=>{appearanceDraft.islandStyle="edge";previewTarget="compactLength"}} onPreviewEnd={()=>previewTarget=null}/>
+          <StudioSlider label={t("collapsedShoulder")} min={0} max={16} unit="px" bind:value={appearanceDraft.collapsedEdgeShoulderRadius} previewTarget={previewTarget === "shoulder" ? "shoulder" : null} onPreviewStart={()=>{appearanceDraft.islandStyle="edge";previewTarget="shoulder"}} onPreviewMove={()=>{appearanceDraft.islandStyle="edge";previewTarget="shoulder"}} onPreviewEnd={()=>previewTarget=null}/>
+          <StudioSlider label={t("expandedShoulder")} min={0} max={64} unit="px" bind:value={appearanceDraft.expandedEdgeShoulderRadius} previewTarget={previewTarget === "shoulder" ? "shoulder" : null} onPreviewStart={()=>{appearanceDraft.islandStyle="edge";previewTarget="shoulder"}} onPreviewMove={()=>{appearanceDraft.islandStyle="edge";previewTarget="shoulder"}} onPreviewEnd={()=>previewTarget=null}/>
+          <StudioSlider label={t("expandedLength")} min={480} max={900} unit="px" bind:value={appearanceDraft.edgeExpandedLength} onPreviewStart={()=>{mode="expanded"}} onPreviewMove={()=>{mode="expanded"}}/>
+          <StudioSlider label={t("expandedRadius")} min={0} max={80} unit="px" bind:value={appearanceDraft.edgeExpandedCornerRadius} previewTarget={previewTarget === "radius" ? "radius" : null} onPreviewStart={()=>{appearanceDraft.islandStyle="edge";previewTarget="radius"}} onPreviewMove={()=>{appearanceDraft.islandStyle="edge";previewTarget="radius"}} onPreviewEnd={()=>previewTarget=null}/>
+        </fieldset>
+        {/if}
         <div class="appearance-apply-bar" class:dirty={appearanceDirty}>
           <div class="apply-state"><i aria-hidden="true"></i><span>{appearanceDirty?t("appearancePreviewing"):t("appearanceApplied")}</span></div>
           <div class="apply-actions"><button type="button" class="reset-button" disabled={!appearanceDirty} onclick={resetAppearanceDraft}>{t("resetAppearance")}</button><button type="button" class="apply-button" disabled={!appearanceDirty||applyingAppearance} onclick={applyAppearance}>{applyingAppearance?t("applyingAppearance"):t("applyAppearance")}</button></div>
@@ -443,9 +496,18 @@
         </div>
       </section>
       <section class="netease-progress-section">
+        <h2>{t("neteaseConnection")}</h2>
+        <p class="hint">{t("neteasePersistentHint")}</p>
+        <div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.neteaseAutoConnect} aria-pressed={settings.neteaseAutoConnect} disabled={!nativeRuntime} onclick={()=>updatePreference({neteaseAutoConnect:!settings.neteaseAutoConnect})}><span class="choice-mark" aria-hidden="true">{settings.neteaseAutoConnect?"✓":""}</span><span class="choice-copy"><strong>{t("neteaseAutoConnect")}</strong><small>{t("neteaseAutoConnectHint")}</small></span></button></div>
+        <div class="tool-list">
+          <button type="button" disabled={!nativeRuntime||neteaseSetupBusy} onclick={()=>setupNetease(true)}><RefreshCw size={17}/>{t(neteaseSetupBusy?"neteaseConnecting":"neteaseBindAction")}</button>
+          <button type="button" disabled={!nativeRuntime||neteaseSetupBusy} onclick={()=>setupNetease(false)}>{t("neteaseCheckBind")}</button>
+        </div>
+        {#if neteaseSetupMessage}<p class="message" role="status">{neteaseSetupMessage}</p>{/if}
+        {#if neteaseShortcut}<p class="hint netease-shortcut">{neteaseShortcut}</p>{/if}
         <h2>{t("neteaseProgress")}</h2>
         <p class="hint">{t("neteaseProgressHint")}</p>
-        <div class="segmented two" role="group" aria-label={t("neteaseProgress")}>
+        <div class="segmented two progress-options" role="group" aria-label={t("neteaseProgress")}>
           <button aria-pressed={settings.neteaseProgressMode==="real"} class:active={settings.neteaseProgressMode==="real"} onclick={()=>updatePreference({neteaseProgressMode:"real"})}><span>{t("neteaseProgressReal")}</span><small>{t("neteaseProgressRealHint")}</small></button>
           <button aria-pressed={settings.neteaseProgressMode==="estimate"} class:active={settings.neteaseProgressMode==="estimate"} onclick={()=>updatePreference({neteaseProgressMode:"estimate"})}><span>{t("neteaseProgressEstimate")}</span><small>{t("neteaseProgressEstimateHint")}</small></button>
         </div>
@@ -472,6 +534,12 @@
         </div>
       </section>
       <section class="players-section"><div class="section-title"><h2>{t("players")}</h2><button class="icon-button" aria-label={t("refreshPlayers")} disabled={!nativeRuntime} onclick={refreshSessions}><RefreshCw size={15}/></button></div><p class="hint">{t("playersHint")}</p>
+        {#each sessions.filter(player=>player.source==="generic"||settings.playerSourceOverrides[player.id]==="netease") as player (player.id)}
+          <div class="player-identity">
+            <p class="hint" title={player.id}>{settings.playerSourceOverrides[player.id]==="netease"?"网易云音乐":player.displayName}</p>
+            <button type="button" disabled={!nativeRuntime} onclick={()=>setNeteasePlayer(player.id,settings.playerSourceOverrides[player.id]!=="netease")}>{t(settings.playerSourceOverrides[player.id]==="netease"?"playerIdentityReset":"playerIdentityNetease")}</button>
+          </div>
+        {/each}
         {#if sessionsLoading}<div class="ordered-list skeleton-list" aria-hidden="true">{#each [0,1,2] as row}<div class="ordered-row skeleton-row"><span><i></i><i></i></span></div>{/each}</div>{:else}<div class="ordered-list">{#each playerRows.selected as player,index (player.id)}<div class="ordered-row" class:offline={!sessions.some(item=>item.id===player.id)}><button type="button" class="player-selection" role="checkbox" aria-checked="true" aria-label={t("select",{name:player.displayName})} onclick={()=>togglePlayer(player.id,false)}><span class="choice-mark" aria-hidden="true">✓</span></button><span><strong>{player.displayName}</strong><small>{player.isPlaying?t("playingNow"):sessions.some(item=>item.id===player.id)?t("detected"):t("offline")}</small></span><button aria-label={t("moveUp")} disabled={index===0} onclick={()=>movePlayer(player.id,-1)}><ChevronUp size={14}/></button><button aria-label={t("moveDown")} disabled={index===playerRows.selected.length-1} onclick={()=>movePlayer(player.id,1)}><ChevronDown size={14}/></button></div>{/each}{#each playerRows.unselected as player (player.id)}<div class="ordered-row" class:offline={!sessions.some(item=>item.id===player.id)}><button type="button" class="player-selection" role="checkbox" aria-checked="false" aria-label={t("select",{name:player.displayName})} onclick={()=>togglePlayer(player.id,true)}><span class="choice-mark" aria-hidden="true"></span></button><span><strong>{player.displayName}</strong><small>{player.isPlaying?t("playingNow"):sessions.some(item=>item.id===player.id)?t("detected"):t("offline")}</small></span></div>{/each}{#if !playerRows.selected.length&&!playerRows.unselected.length}<p class="empty">{t("noSessions")}</p>{/if}</div>{/if}
       </section>
       <section class="idle-section"><div class="section-title"><h2>{t("idleContent")}</h2><span class="section-note">{t("idleFixedLabel")}</span></div>
@@ -500,6 +568,14 @@
 </main>
 
 <style>
+  .player-identity{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .player-identity .hint{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .player-identity button{flex-shrink:0;padding:8px 12px;border:1px solid #ffffff20;border-radius:10px;background:#ffffff08;color:inherit;cursor:pointer}
+  .progress-options button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:0;padding:12px 8px}
+  .progress-options button span{font-weight:600;line-height:1.3}
+  .progress-options button small{font-size:11px;line-height:1.5;opacity:.72}
+  .netease-progress-section .tool-list + h2{margin-top:20px}
+  .netease-shortcut{overflow-wrap:anywhere;user-select:text}
   :global(html),:global(body),:global(#app){min-width:780px;min-height:600px;background:#fff;color:#111113}
   :global(body){overflow:auto}
   main{--studio-ink:#15161a;--studio-muted:#747680;--studio-line:#e3e4e8;--studio-panel:#f5f5f7;--studio-surface:#fff;--studio-accent:#3158c8;min-height:100vh;padding:0 32px 54px;box-sizing:border-box;background:#f7f7f9}
@@ -522,6 +598,9 @@
   aside>section{min-width:0;padding:17px;border:1px solid var(--studio-line);border-radius:16px;background:var(--studio-panel)}
   aside>.appearance-section,aside>.preferences-section,aside>.players-section,aside>.idle-section{grid-column:1/-1}
   h2{margin:0 0 13px;color:var(--studio-ink);font-size:14px;letter-spacing:.01em;line-height:1.2}
+  .shape-settings{display:flex;flex-direction:column;gap:18px;min-width:0;margin:20px 0 0;padding:16px;border:1px solid #e5e5e9;border-radius:14px}
+  .appearance-section .shape-settings :global(.studio-slider){margin-top:0}
+  .shape-settings legend{padding:0 8px;font-size:13px;font-weight:650}
   .section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
   .section-heading h2{margin:0;font-size:16px;letter-spacing:-.01em}
   .live-indicator{display:flex;align-items:center;gap:6px;color:#777780;font-size:11px;white-space:nowrap}.live-indicator i{width:6px;height:6px;border-radius:50%;background:var(--studio-accent);box-shadow:0 0 0 4px rgba(49,88,200,.11)}

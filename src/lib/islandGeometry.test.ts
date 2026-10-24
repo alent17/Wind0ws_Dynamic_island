@@ -19,6 +19,14 @@ import {
 } from "./islandGeometry";
 
 describe("island geometry", () => {
+  it("uses expanded length for page geometry and reserves enough host width", () => {
+    expect(navigationGeometry("music", 5, 45, "floating", "top", 32, 780).width).toBe(780);
+    expect(navigationGeometry("music", 5, 45, "edge", "top", 32, 480).width).toBe(480);
+    expect(navigationHostFor("floating", "top", 80, 1, 900).width).toBeGreaterThanOrEqual(900);
+    expect(navigationHostFor("edge", "right", 80, .625, 900).width).toBeGreaterThanOrEqual(900 * .625);
+    expect(navigationGeometry("timer", 5, 45, "floating", "top", 32, 480).width).toBeGreaterThanOrEqual(300);
+  });
+
   it("keeps the restored compact, hover and expanded dimensions", () => {
     expect(geometryFor("compact")).toEqual({ width: 80, height: 28, radius: 14 });
     expect(geometryFor("hover")).toEqual({ width: 90, height: 30, radius: 15 });

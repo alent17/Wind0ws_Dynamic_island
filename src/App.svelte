@@ -40,7 +40,6 @@ import { createMediaSyncSender, type MediaSyncSnapshot } from "$lib/mediaSyncSen
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
   import IslandSurface from "$lib/components/island/IslandSurface.svelte";
-  import Spectrum from "$lib/components/media/Spectrum.svelte";
   import { extractSpectrumColorsFromImage } from "$lib/spectrumColors";
   import {
 
@@ -109,6 +108,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   let neteaseModeBusy = $state(false);
   let neteaseModeError = $state("");
   let lastNeteaseModeProbeKey: string | null = null;
+  let neteaseModeRevision = 0;
   let lastSongKey: string | null = null;
   let metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
 
@@ -197,6 +197,8 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   let currentSource = $state<string>("generic");
   let hasMediaSession = $state(false);
   let mediaCapabilities = $state<MediaState["capabilities"]>();
+  let shuffleActive = $state<MediaState["shuffleActive"]>();
+  let repeatMode = $state<MediaState["repeatMode"]>();
   // Remembered/default/demo state is not authoritative enough to replay to a
   // newly ready Floating consumer. This resets with each App mount.
   let appNativeMediaReady = false;
@@ -223,6 +225,8 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     source: currentSource,
     sourceDisplay: playerNames[currentSource as keyof typeof playerNames] || "多媒体",
     capabilities: mediaCapabilities,
+    shuffleActive,
+    repeatMode,
     progressKnown,
     neteaseProgressAvailable,
     nativeTrackGeneration: appNativeTrackGeneration,
@@ -295,6 +299,8 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     return {
       ...DEFAULT_SETTINGS,
       ...value,
+      floatingExpandedLength: normalizeExpandedLength(value.floatingExpandedLength),
+      edgeExpandedLength: normalizeExpandedLength(value.edgeExpandedLength),
       islandStyle: normalizedStyle(value.islandStyle ?? DEFAULT_SETTINGS.islandStyle),
       islandEdge: normalizedEdge(value.islandEdge ?? DEFAULT_SETTINGS.islandEdge),
       spectrumMode: value.spectrumMode === "random" ? "random" : "realtime",
@@ -312,6 +318,14 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
         ? value.clockTimeZone.trim()
         : DEFAULT_SETTINGS.clockTimeZone,
     };
+  }
+
+  function normalizeExpandedLength(value: number | undefined) {
+    return Math.min(900, Math.max(480, Number.isFinite(value) ? Math.round(value!) : 600));
+  }
+
+  function expandedLengthFor(style: IslandStyle, settings: AppSettings) {
+    return style === "edge" ? settings.edgeExpandedLength : settings.floatingExpandedLength;
   }
 
   function compactLengthFor(style: IslandStyle, settings: AppSettings) {
@@ -334,7 +348,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   onDestroy(() => interactionRegionSender.dispose());
 
   function applyIslandRegion({ geometry, radii, polygon, extraRects, anchorGap }: IslandRegionChange) {
-    const host = hostFor(renderedIslandStyle, renderedIslandEdge, compactLengthFor(renderedIslandStyle, $appSettings), expandedScale);
+    const host = hostFor(renderedIslandStyle, renderedIslandEdge, compactLengthFor(renderedIslandStyle, $appSettings), expandedScale, expandedLengthFor(renderedIslandStyle, $appSettings));
     const offset = interactionSurfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge, expandedScale, anchorGap);
     const translatedExtraRects = (extraRects ?? []).map((rect) => ({
       ...rect,
@@ -820,6 +834,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     renderedIslandEdge,
     compactLengthFor(renderedIslandStyle, $appSettings),
     expandedScale,
+    expandedLengthFor(renderedIslandStyle, $appSettings),
   ));
 
   let captureSnapshot = $state<CaptureSnapshot>({ ...EMPTY_CAPTURE_SNAPSHOT });
@@ -881,6 +896,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
       hidden,
       compactLength: compactLengthFor(style, $appSettings),
       expandedRadius: expandedRadiusFor(style, $appSettings),
+      expandedLength: expandedLengthFor(style, $appSettings),
     });
     if (
       placementInput === lastPlacementInput
@@ -906,7 +922,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     // Monitor work area and native window bounds are physical pixels. The
     // IslandSurface, host and interaction region remain CSS-logical pixels.
     const compactLength = compactLengthFor(style, $appSettings);
-    const host = hostFor(style, edge, compactLength, expandedScale);
+    const host = hostFor(style, edge, compactLength, expandedScale, expandedLengthFor(style, $appSettings));
     const physicalHost = physicalHostSizeFor(host, dpr);
     const baseShown = placementFor(
       { x: monitor.workX, y: monitor.workY, width: monitor.workWidth, height: monitor.workHeight },
@@ -1138,6 +1154,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
 
     if (action === "cycle_netease_mode") {
       if (currentSource !== "netease" || neteaseModeBusy) return;
+      neteaseModeRevision++;
       const requestedOnTrack = lastSongKey;
       neteaseModeError = "";
       neteaseModeBusy = true;
@@ -1735,6 +1752,8 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
           durationMs = 0;
           mediaSnapshotAt = receivedAt;
           mediaCapabilities = data.capabilities;
+          shuffleActive = undefined;
+          repeatMode = undefined;
           progressKnown = true;
           neteaseProgressAvailable = undefined;
           neteasePlaybackMode = undefined;
@@ -1769,6 +1788,8 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
           lastNeteaseModeProbeKey = null;
         }
         mediaCapabilities = data.capabilities;
+        shuffleActive = data.shuffleActive;
+        repeatMode = data.repeatMode;
 
         const currentSongKey = `${data.source || ""}|${mediaTrackKey(data.title || "", data.artist || "")}`;
         const songChanged = lastSongKey !== currentSongKey;
@@ -1794,17 +1815,18 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
           seekRequestGate.invalidate();
           seekErrorMessage = "";
           neteaseModeError = "";
-          if (currentSource === "netease") neteasePlaybackMode = undefined;
           pendingSeekUntil = 0;
           lastSongKey = currentSongKey;
           metadataImage?.abort(); metadataImage = undefined;
           metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
         }
 
-        if (currentSource === "netease" && lastNeteaseModeProbeKey !== currentSongKey) {
-          lastNeteaseModeProbeKey = currentSongKey;
+        const neteaseConnectionKey = data.nativeEpoch || "netease-session";
+        if (currentSource === "netease" && lastNeteaseModeProbeKey !== neteaseConnectionKey) {
+          lastNeteaseModeProbeKey = neteaseConnectionKey;
+          const probeRevision = ++neteaseModeRevision;
           void mediaApi.getNeteasePlaybackMode().then((mode) => {
-            if (!lifetime.disposed && lastSongKey === currentSongKey && currentSource === "netease") {
+            if (!lifetime.disposed && neteaseModeRevision === probeRevision && lastNeteaseModeProbeKey === neteaseConnectionKey && currentSource === "netease") {
               neteasePlaybackMode = mode ?? undefined;
             }
           }).catch((error) => logger.debug("网易云播放模式当前不可读取", error));
@@ -2012,6 +2034,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     islandStyle={renderedIslandStyle}
     edge={renderedIslandEdge}
     position={displayedPosition}
+    expandedLength={expandedLengthFor(renderedIslandStyle, $appSettings)}
     expandedRadius={expandedRadiusFor(renderedIslandStyle, $appSettings)}
     collapsedEdgeShoulderRadius={$appSettings.collapsedEdgeShoulderRadius ?? 8}
     expandedEdgeShoulderRadius={$appSettings.expandedEdgeShoulderRadius ?? 32}

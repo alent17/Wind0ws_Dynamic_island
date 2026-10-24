@@ -124,7 +124,9 @@ fn is_zero_revision(revision: &u64) -> bool {
     *revision == 0
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 /// 默认媒体状态实现
 impl Default for MediaState {

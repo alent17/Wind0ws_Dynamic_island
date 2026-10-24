@@ -34,6 +34,20 @@ fn read_settings_from_path(config_path: &Path) -> Option<AppPreferences> {
 fn parse_settings(content: &str) -> Option<AppPreferences> {
     let mut value: serde_json::Value = serde_json::from_str(content).ok()?;
     if let Some(settings) = value.as_object_mut() {
+        if !settings.contains_key("neteaseAutoConnect") {
+            let previously_bound = settings
+                .get("playerSourceOverrides")
+                .and_then(serde_json::Value::as_object)
+                .is_some_and(|overrides| {
+                    overrides
+                        .values()
+                        .any(|source| source.as_str() == Some("netease"))
+                });
+            settings.insert(
+                "neteaseAutoConnect".into(),
+                serde_json::Value::Bool(previously_bound),
+            );
+        }
         // Older releases allowed several families; keep the setting key but use MiSans everywhere.
         settings.insert(
             "fontId".to_string(),
@@ -291,6 +305,18 @@ fn normalize_windows_path(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn old_netease_bindings_enable_restore_but_explicit_opt_out_is_preserved() {
+        let old = super::parse_settings(r#"{"playerSourceOverrides":{"old-session":"netease"}}"#)
+            .unwrap();
+        assert!(old.netease_auto_connect);
+        let opted_out = super::parse_settings(
+            r#"{"neteaseAutoConnect":false,"playerSourceOverrides":{"old-session":"netease"}}"#,
+        )
+        .unwrap();
+        assert!(!opted_out.netease_auto_connect);
+        assert!(!super::parse_settings("{}").unwrap().netease_auto_connect);
+    }
     use super::{
         backup_path, command_executable, normalize_windows_path, read_settings_from_path,
         startup_command, write_atomic_with_backup, write_settings_snapshot,

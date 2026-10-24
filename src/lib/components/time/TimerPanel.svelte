@@ -283,7 +283,7 @@
     gap: 5px;
     height: 28px;
     border: 0;
-    border-radius: 17px;
+    border-radius: 12px;
     color: #91caff;
     background: rgba(65, 145, 235, .14);
     font: 700 11px/1 var(--app-font);

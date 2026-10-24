@@ -192,9 +192,39 @@ struct MediaEmitBaseline {
     artwork_track: String,
     artwork: String,
     empty_state_emitted: bool,
+    transport: Option<(String, String, String, bool, Option<bool>, Option<String>)>,
 }
 
 impl MediaEmitBaseline {
+    fn transport_changed(&self, info: &models::MediaState) -> bool {
+        self.transport
+            .as_ref()
+            .is_none_or(|(source, title, artist, playing, shuffle, repeat)| {
+                source != &info.source
+                    || title != &info.title
+                    || artist != &info.artist
+                    || *playing != info.is_playing
+                    || shuffle != &info.shuffle_active
+                    || repeat != &info.repeat_mode
+            })
+    }
+
+    fn acknowledge_transport(
+        &mut self,
+        info: &models::MediaState,
+        outcome: Option<event_bus::EmitOutcome>,
+    ) {
+        if outcome == Some(event_bus::EmitOutcome::Emitted) {
+            self.transport = Some((
+                info.source.clone(),
+                info.title.clone(),
+                info.artist.clone(),
+                info.is_playing,
+                info.shuffle_active,
+                info.repeat_mode.clone(),
+            ));
+        }
+    }
     fn artwork_unchanged(&self, track: &str, artwork: &str) -> bool {
         track == self.artwork_track && artwork == self.artwork
     }
@@ -816,16 +846,13 @@ fn spawn_media_listener(
         let mut netease_seek_anchor: Option<state::NeteaseSeekAnchor> = None;
         let mut netease_timeline_sample: Option<state::NeteaseTimelineSample> = None;
         let mut netease_progress_scheduler = state::NeteaseProgressScheduler::default();
-        let mut netease_progress_mode = handle
-            .state::<state::AppState>()
-            .netease_progress_mode();
+        let mut netease_progress_mode = handle.state::<state::AppState>().netease_progress_mode();
         let netease_progress_inflight = state::NeteaseProgressInFlight::default();
         let mut netease_progress_pending = false;
         let mut netease_seek_generation = 0u64;
         let mut pending_snapshots: Vec<
             std::sync::mpsc::SyncSender<Result<models::MediaState, String>>,
         > = Vec::new();
-        let mut pending_controls: Vec<std::sync::mpsc::SyncSender<Result<(), String>>> = Vec::new();
         let mut missing_session_polls = 0u8;
         let mut next_refresh_reason = MediaRefreshReason::Fallback;
         #[cfg(feature = "c2-media-probe")]
@@ -836,9 +863,7 @@ fn spawn_media_listener(
         // SMTC events trigger prompt snapshots; a bounded poll remains as a
         // fallback for providers that omit events and for manager recovery.
         loop {
-            let desired_progress_mode = handle
-                .state::<state::AppState>()
-                .netease_progress_mode();
+            let desired_progress_mode = handle.state::<state::AppState>().netease_progress_mode();
             if state::reconcile_netease_progress_mode(
                 &mut netease_progress_mode,
                 desired_progress_mode,
@@ -1067,6 +1092,27 @@ fn spawn_media_listener(
                         // A single missed SMTC selection is provisional. Keep the
                         // last real CDP timeline until removal is actually emitted.
                     } else {
+                        if info.source == "netease"
+                            && snapshot_cache.current().is_none_or(|current| {
+                                current.source != "netease"
+                                    || current.source_display != info.source_display
+                            })
+                        {
+                            // Also restore when the player starts after Isle. This is
+                            // session-driven, not another periodic process scan.
+                            commands::start_netease_auto_restore(handle.clone());
+                        }
+                        if info.source == "netease"
+                            && snapshot_cache.current().is_none_or(|current| {
+                                current.source != info.source
+                                    || current.title != info.title
+                                    || current.artist != info.artist
+                                    || current.is_playing != info.is_playing
+                            })
+                        {
+                            netease_progress_scheduler.reset();
+                            netease_seek_generation = netease_seek_generation.saturating_add(1);
+                        }
                         if let Some(current) = snapshot_cache.current().filter(|current| {
                             current.source == info.source
                                 && current.title == info.title
@@ -1192,9 +1238,6 @@ fn spawn_media_listener(
                                 for reply in pending_snapshots.drain(..) {
                                     let _ = reply.send(Err(error.clone()));
                                 }
-                                for reply in pending_controls.drain(..) {
-                                    let _ = reply.send(Err(error.clone()));
-                                }
                                 break;
                             }
                         }
@@ -1219,7 +1262,13 @@ fn spawn_media_listener(
                                         probe.update(|counts| counts.empty_emit_calls += 1);
                                     }
                                 }
-                                let result = event_bus::emit_media_update_outcome(payload);
+                                let result = if emit_baseline.transport_changed(&info) {
+                                    event_bus::emit_media_immediate_update_outcome(payload)
+                                } else {
+                                    event_bus::emit_media_update_outcome(payload)
+                                };
+                                emit_baseline
+                                    .acknowledge_transport(&info, result.as_ref().ok().copied());
                                 emit_baseline.acknowledge(
                                     result.as_ref().ok().copied(),
                                     emit_empty_state,
@@ -1255,57 +1304,7 @@ fn spawn_media_listener(
                         }
                     }
                     if let Some(snapshot) = published_snapshot {
-                        state::complete_snapshot_requests(
-                            &snapshot,
-                            &mut pending_snapshots,
-                            &mut pending_controls,
-                        );
-                    }
-                    if let Some(snapshot) = snapshot_cache.current() {
-                        let now = std::time::Instant::now();
-                        let netease_selected = has_session && snapshot.source == "netease";
-                        let progress_mode_enabled =
-                            netease_progress_scheduler.mode_enabled(netease_progress_mode);
-                        let progress_due = netease_progress_scheduler.due(
-                            now,
-                            netease_selected && progress_mode_enabled,
-                            snapshot.is_playing,
-                        );
-                        #[cfg(feature = "c2-media-probe")]
-                        if let Some(probe) = &probe {
-                            probe.update(|counts| {
-                                if netease_selected {
-                                    counts.netease_snapshots += 1;
-                                    counts.progress_real_mode_snapshots +=
-                                        u64::from(progress_mode_enabled);
-                                    counts.progress_due += u64::from(
-                                        progress_due && !netease_progress_pending,
-                                    );
-                                }
-                            });
-                        }
-                        if !netease_progress_pending && progress_due {
-                            netease_progress_pending = spawn_netease_progress_read(
-                                events_tx.clone(),
-                                netease_progress_inflight.clone(),
-                                snapshot.native_epoch.clone(),
-                                snapshot.title.clone(),
-                                snapshot.artist.clone(),
-                                snapshot.native_track_generation,
-                                netease_seek_generation,
-                                snapshot.native_revision,
-                                probe.clone(),
-                            );
-                            #[cfg(feature = "c2-media-probe")]
-                            if let Some(probe) = &probe {
-                                probe.update(|counts| {
-                                    counts.progress_started +=
-                                        u64::from(netease_progress_pending);
-                                    counts.progress_inflight_busy +=
-                                        u64::from(!netease_progress_pending);
-                                });
-                            }
-                        }
+                        state::complete_snapshot_requests(&snapshot, &mut pending_snapshots);
                     }
                 } else if query_available {
                     #[cfg(feature = "c2-media-probe")]
@@ -1322,9 +1321,6 @@ fn spawn_media_listener(
                         consecutive_manager_query_failures.saturating_add(1);
                     for reply in pending_snapshots.drain(..) {
                         let _ = reply.send(Err("native media snapshot failed".to_string()));
-                    }
-                    for reply in pending_controls.drain(..) {
-                        let _ = reply.send(Err("native media confirmation failed".to_string()));
                     }
                     if consecutive_manager_query_failures >= 2 {
                         // A manager can remain alive after its WinRT service
@@ -1348,9 +1344,6 @@ fn spawn_media_listener(
                     for reply in pending_snapshots.drain(..) {
                         let _ = reply.send(Err("media actor is unavailable".to_string()));
                     }
-                    for reply in pending_controls.drain(..) {
-                        let _ = reply.send(Err("media actor is unavailable".to_string()));
-                    }
                 }
                 if query_available {
                     if let Some(probe) = &probe {
@@ -1372,7 +1365,66 @@ fn spawn_media_listener(
             }
 
             let now = std::time::Instant::now();
+            if let Some(snapshot) = snapshot_cache.current() {
+                let now = std::time::Instant::now();
+                let netease_selected = has_session && snapshot.source == "netease";
+                let progress_mode_enabled =
+                    netease_progress_scheduler.mode_enabled(netease_progress_mode);
+                let progress_due = netease_progress_scheduler.due(
+                    now,
+                    netease_selected && progress_mode_enabled,
+                    snapshot.is_playing,
+                );
+                #[cfg(feature = "c2-media-probe")]
+                if let Some(probe) = &probe {
+                    probe.update(|counts| {
+                        if netease_selected {
+                            counts.netease_snapshots += 1;
+                            counts.progress_real_mode_snapshots += u64::from(progress_mode_enabled);
+                            counts.progress_due +=
+                                u64::from(progress_due && !netease_progress_pending);
+                        }
+                    });
+                }
+                if !netease_progress_pending && progress_due {
+                    netease_progress_pending = spawn_netease_progress_read(
+                        events_tx.clone(),
+                        netease_progress_inflight.clone(),
+                        snapshot.native_epoch.clone(),
+                        snapshot.title.clone(),
+                        snapshot.artist.clone(),
+                        snapshot.native_track_generation,
+                        netease_seek_generation,
+                        snapshot.native_revision,
+                        probe.clone(),
+                    );
+                    if !netease_progress_pending {
+                        netease_progress_scheduler.retry_soon(now);
+                    }
+                    #[cfg(feature = "c2-media-probe")]
+                    if let Some(probe) = &probe {
+                        probe.update(|counts| {
+                            counts.progress_started += u64::from(netease_progress_pending);
+                            counts.progress_inflight_busy += u64::from(!netease_progress_pending);
+                        });
+                    }
+                }
+            }
+
             let mut wait = next_refresh.saturating_duration_since(now);
+            if !netease_progress_pending {
+                if let Some(snapshot) = snapshot_cache.current() {
+                    let selected = has_session
+                        && manager_subscriptions.is_some()
+                        && snapshot.source == "netease"
+                        && netease_progress_scheduler.mode_enabled(netease_progress_mode);
+                    if let Some(due) =
+                        netease_progress_scheduler.next_due(now, selected, snapshot.is_playing)
+                    {
+                        wait = wait.min(due.saturating_duration_since(now));
+                    }
+                }
+            }
             if manager_subscriptions.is_none() {
                 wait = wait.min(next_manager_retry.saturating_duration_since(now));
             }
@@ -1393,9 +1445,7 @@ fn spawn_media_listener(
                             reply
                                 .send(Err("media actor is not ready: SMTC manager unavailable"
                                     .to_string()));
-                    } else if pending_snapshots.len() + pending_controls.len()
-                        >= state::MEDIA_ACTOR_QUEUE_CAPACITY
-                    {
+                    } else if pending_snapshots.len() >= state::MEDIA_ACTOR_QUEUE_CAPACITY {
                         let _ = reply.send(Err(
                             "media actor pending request capacity reached".to_string()
                         ));
@@ -1411,36 +1461,11 @@ fn spawn_media_listener(
                         }
                     }
                 }
-                Ok(MediaActorMessage::PlayPause(reply)) => {
-                    if pending_snapshots.len() + pending_controls.len()
-                        >= state::MEDIA_ACTOR_QUEUE_CAPACITY
-                    {
-                        let _ = reply.send(Err(
-                            "media actor pending request capacity reached".to_string()
-                        ));
-                        continue;
-                    }
-                    let Some(subscriptions) = manager_subscriptions.as_ref() else {
-                        let _ =
-                            reply
-                                .send(Err("media actor is not ready: SMTC manager unavailable"
-                                    .to_string()));
-                        continue;
-                    };
-                    match services::media::control_media_with_manager(
-                        &handle,
-                        &subscriptions.manager,
-                        "play_pause",
-                    ) {
-                        Ok(()) => {
-                            pending_controls.push(reply);
-                            next_refresh = std::time::Instant::now();
-                            next_refresh_reason = MediaRefreshReason::Event;
-                        }
-                        Err(error) => {
-                            let _ = reply.send(Err(error.to_string()));
-                        }
-                    }
+                Ok(MediaActorMessage::TransportChanged) => {
+                    netease_progress_scheduler.reset();
+                    netease_seek_generation = netease_seek_generation.saturating_add(1);
+                    next_refresh = std::time::Instant::now();
+                    next_refresh_reason = MediaRefreshReason::Event;
                 }
                 Ok(MediaActorMessage::NeteaseProgressReadCompleted {
                     expected_epoch,
@@ -1510,7 +1535,9 @@ fn spawn_media_listener(
                                     match media_event_payload(event_snapshot, artwork_omitted) {
                                         Ok(payload) => {
                                             let result =
-                                                event_bus::emit_media_update_outcome(payload);
+                                                event_bus::emit_media_immediate_update_outcome(
+                                                    payload,
+                                                );
                                             emit_baseline.acknowledge(
                                                 result.as_ref().ok().copied(),
                                                 false,
@@ -1528,9 +1555,8 @@ fn spawn_media_listener(
                                 Err(error) => {
                                     #[cfg(feature = "c2-media-probe")]
                                     if let Some(probe) = &probe {
-                                        probe.update(|counts| {
-                                            counts.progress_publish_rejected += 1
-                                        });
+                                        probe
+                                            .update(|counts| counts.progress_publish_rejected += 1);
                                     }
                                     tracing::debug!("[Media] Discarding invalid NetEase progress sample: {error}");
                                     netease_progress_scheduler.failure(now);
@@ -1568,8 +1594,12 @@ fn spawn_media_listener(
                                     if unchanged {
                                         event_snapshot.album_art.clear();
                                     }
-                                    if let Ok(payload) = media_event_payload(event_snapshot, unchanged) {
-                                        if let Ok(outcome) = event_bus::emit_media_update_outcome(payload) {
+                                    if let Ok(payload) =
+                                        media_event_payload(event_snapshot, unchanged)
+                                    {
+                                        if let Ok(outcome) =
+                                            event_bus::emit_media_update_outcome(payload)
+                                        {
                                             emit_baseline.acknowledge(
                                                 Some(outcome),
                                                 false,
@@ -1583,6 +1613,12 @@ fn spawn_media_listener(
                     }
                 }
                 Ok(MediaActorMessage::NeteaseProgressModeChanged) => {}
+                Ok(MediaActorMessage::PlayerIdentityChanged) => {
+                    netease_progress_scheduler.reset();
+                    netease_seek_generation = netease_seek_generation.saturating_add(1);
+                    next_refresh = std::time::Instant::now();
+                    next_refresh_reason = MediaRefreshReason::Event;
+                }
                 Ok(MediaActorMessage::VerifiedNeteaseSeek {
                     expected_epoch,
                     expected_title,
@@ -1594,9 +1630,7 @@ fn spawn_media_listener(
                     play_id,
                     reply,
                 }) => {
-                    if pending_snapshots.len() + pending_controls.len()
-                        >= state::MEDIA_ACTOR_QUEUE_CAPACITY
-                    {
+                    if pending_snapshots.len() >= state::MEDIA_ACTOR_QUEUE_CAPACITY {
                         let _ = reply.send(Err(
                             "media actor pending request capacity reached".to_string()
                         ));
@@ -1635,7 +1669,7 @@ fn spawn_media_listener(
                             match media_event_payload(snapshot.clone(), false) {
                                 Ok(payload) => {
                                     if let Err(error) =
-                                        event_bus::emit_media_update_outcome(payload)
+                                        event_bus::emit_media_immediate_update_outcome(payload)
                                     {
                                         tracing::warn!("[Media] Could not broadcast verified NetEase seek: {error}");
                                     }
@@ -1654,9 +1688,6 @@ fn spawn_media_listener(
                 #[cfg(feature = "c2-media-probe")]
                 Ok(MediaActorMessage::Stop) => {
                     for reply in pending_snapshots.drain(..) {
-                        let _ = reply.send(Err("media actor stopped".to_string()));
-                    }
-                    for reply in pending_controls.drain(..) {
                         let _ = reply.send(Err("media actor stopped".to_string()));
                     }
                     break;
@@ -1696,10 +1727,9 @@ fn spawn_netease_progress_read(
             .read_progress(&expected_title, &expected_artist);
         #[cfg(feature = "c2-media-probe")]
         if let Some(probe) = &probe {
-            let kind = result.as_ref().map_or_else(
-                |error| error.diagnostic_kind(),
-                |_| "ok",
-            );
+            let kind = result
+                .as_ref()
+                .map_or_else(|error| error.diagnostic_kind(), |_| "ok");
             probe.record_progress_read_result(kind);
         }
         let result = result.map_err(|error| error.to_string());
@@ -2106,6 +2136,8 @@ pub fn run() {
             commands::search_weather_locations,
             commands::get_netease_song_info_cmd,
             commands::get_netease_playback_mode,
+            commands::netease_song_like,
+            commands::setup_netease_connection,
             commands::get_netease_mv_url_cmd,
             commands::resolve_hd_cover,
             commands::request_artwork,
@@ -2229,6 +2261,7 @@ pub fn run() {
                 tracing::error!("[Media] Failed to register media actor handle: {error}");
             }
             start_capture_monitor(app.handle().clone());
+            commands::start_netease_auto_restore(app.handle().clone());
 
             // 创建托盘菜单
             let menu = Menu::with_items(
@@ -2297,6 +2330,41 @@ pub fn run() {
 
 #[cfg(test)]
 mod media_delta_tests {
+    #[test]
+    fn transport_changes_bypass_progress_throttle_until_successfully_delivered() {
+        use crate::event_bus::EmitOutcome;
+        let mut baseline = super::MediaEmitBaseline::default();
+        let mut info = crate::models::MediaState {
+            source: "netease".into(),
+            title: "Track".into(),
+            is_playing: true,
+            ..Default::default()
+        };
+        assert!(baseline.transport_changed(&info));
+        baseline.acknowledge_transport(&info, Some(EmitOutcome::Emitted));
+        info.position_ms = 1000;
+        assert!(!baseline.transport_changed(&info));
+        info.is_playing = false;
+        assert!(baseline.transport_changed(&info));
+        for outcome in [
+            None,
+            Some(EmitOutcome::Throttled),
+            Some(EmitOutcome::Disabled),
+        ] {
+            baseline.acknowledge_transport(&info, outcome);
+            assert!(baseline.transport_changed(&info));
+        }
+        baseline.acknowledge_transport(&info, Some(EmitOutcome::Emitted));
+        assert!(!baseline.transport_changed(&info));
+        info.title = "Next track".into();
+        assert!(baseline.transport_changed(&info));
+        baseline.acknowledge_transport(&info, Some(EmitOutcome::Emitted));
+        info.shuffle_active = Some(true);
+        assert!(baseline.transport_changed(&info));
+        baseline.acknowledge_transport(&info, Some(EmitOutcome::Emitted));
+        info.repeat_mode = Some("track".into());
+        assert!(baseline.transport_changed(&info));
+    }
     use crate::event_bus::EmitOutcome;
 
     #[test]

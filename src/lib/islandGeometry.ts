@@ -59,6 +59,10 @@ export function clampShoulderRadius(radius: number) {
   return Math.min(64, Math.max(0, Number.isFinite(radius) ? radius : 8));
 }
 
+export function clampExpandedLength(length: number) {
+  return Math.min(900, Math.max(480, Number.isFinite(length) ? Math.round(length) : 600));
+}
+
 export function clampCompactLength(length: number) {
   return Math.min(300, Math.max(80, Number.isFinite(length) ? Math.round(length) : 80));
 }
@@ -315,12 +319,13 @@ export function hiddenPlacementFor(
 export type IslandPage = "music" | "timer" | "volume" | "clock" | "weather";
 
 export function navigationGeometry(page: IslandPage, toolCount: number, radius = 45,
-  style: IslandStyle = "floating", edge: IslandEdge = "top", shoulder = 32): IslandGeometry {
+  style: IslandStyle = "floating", edge: IslandEdge = "top", shoulder = 32, expandedLength = 600): IslandGeometry {
   const inset = style === "edge" ? clampShoulderRadius(shoulder) : 0;
   const vertical = isVerticalEdge(edge);
   const toolbar = toolCount > 0 ? 40 : 0;
   const height = page === "music" ? 249.1 : page === "weather" ? 240 : 188;
-  const width = page === "music" ? 600 : 300 + (vertical ? 0 : inset * 2);
+  const length = clampExpandedLength(expandedLength);
+  const width = page === "music" ? length : Math.max(300, length / 2) + (vertical ? 0 : inset * 2);
   return { width, height: height + toolbar + (vertical ? inset * 2 : 0), radius: clampExpandedRadius(radius) };
 }
 
@@ -342,8 +347,8 @@ export function islandContentScaleForWorkArea(workWidth: number, workHeight: num
 }
 
 // Reserve the largest page once; only the visible silhouette and hit region morph.
-export function navigationHostFor(style: IslandStyle, edge: IslandEdge, compactLength = 80, scale = 1): HostGeometry {
-  const base = hostFor(style, edge, compactLength);
+export function navigationHostFor(style: IslandStyle, edge: IslandEdge, compactLength = 80, scale = 1, expandedLength = 600): HostGeometry {
+  const base = hostFor(style, edge, compactLength, clampExpandedLength(expandedLength) - 600);
   // Keep the existing .62 minimum native envelope. It stabilizes the largest
   // page's host bounds; it must not be reused as the visual/content scale.
   const safeScale = Math.min(1, Math.max(0.62, scale));
