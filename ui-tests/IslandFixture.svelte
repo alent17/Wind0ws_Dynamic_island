@@ -5,6 +5,9 @@
   let media = $state({ ...DEMO_MEDIA });
   let animate = $state(false);
   let mode = $state<IslandMode>("compact");
+  let idle = $state(false);
+  let visible = $state(true);
+  let rememberedTitle = $state("");
   let edge = $state<IslandEdge>("top");
   let style = $state<IslandStyle>("floating");
   let length = $state(80);
@@ -15,6 +18,10 @@
   let settled = $state(false);
   (window as any).configureIsland = (config: any) => {
     if (config.playing !== undefined) media.isPlaying = config.playing;
+    if (config.title !== undefined) media.title = config.title;
+    if (config.idle !== undefined) idle = config.idle;
+    if (config.visible !== undefined) visible = config.visible;
+    if (config.rememberedTitle !== undefined) rememberedTitle = config.rememberedTitle;
     if (config.animate !== undefined) animate = config.animate;
     if (config.mode) mode = config.mode;
     if (config.edge) edge = config.edge;
@@ -27,6 +34,6 @@
   };
 </script>
 <div class="stage" style:transform={`translateX(${offset}px) scale(${hostScale})`} data-settled={settled}>
-  <IslandSurface {media} {mode} {edge} islandStyle={style} compactLength={length} expandedScale={scale} showCustomFunctionPanel={toolbar} showSpectrum={animate} spectrumMode={animate ? "random" : "realtime"} collapsedEdgeShoulderRadius={12} expandedEdgeShoulderRadius={32} onToggle={() => mode = mode === "expanded" ? "compact" : "expanded"} onRegionChange={(change) => settled = change.settled} />
+  <IslandSurface {media} {mode} {edge} {idle} {visible} lastPlayedMedia={rememberedTitle ? {title:rememberedTitle,artist:"Fixture",albumArt:"",sourceDisplay:"Fixture"} : null} islandStyle={style} compactLength={length} expandedScale={scale} showCustomFunctionPanel={toolbar} showSpectrum={animate} spectrumMode={animate ? "random" : "realtime"} collapsedEdgeShoulderRadius={12} expandedEdgeShoulderRadius={32} onToggle={() => mode = mode === "expanded" ? "compact" : "expanded"} onHoverChange={(hovering) => { if (mode !== "expanded") mode = hovering ? "hover" : "compact"; }} onRegionChange={(change) => settled = change.settled} />
 </div>
 <style>.stage{position:absolute;left:150px;top:50px;width:850px;height:600px}</style>

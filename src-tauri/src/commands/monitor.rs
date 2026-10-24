@@ -17,8 +17,8 @@ pub async fn get_monitors(app: AppHandle) -> AppResult<Vec<MonitorInfo>> {
 }
 
 fn get_monitors_blocking(app: AppHandle) -> AppResult<Vec<MonitorInfo>> {
-    use windows::Win32::Foundation::POINT;
-    use windows::Win32::Graphics::Gdi::{
+    use windows052::Win32::Foundation::POINT;
+    use windows052::Win32::Graphics::Gdi::{
         GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST,
     };
     let window = app
@@ -58,7 +58,7 @@ fn get_monitors_blocking(app: AppHandle) -> AppResult<Vec<MonitorInfo>> {
             let work = if has_work_area {
                 native.rcWork
             } else {
-                windows::Win32::Foundation::RECT {
+                windows052::Win32::Foundation::RECT {
                     left: position.x,
                     top: position.y,
                     right: position.x + size.width as i32,

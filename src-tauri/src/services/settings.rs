@@ -52,6 +52,29 @@ fn parse_settings(content: &str) -> Option<AppPreferences> {
                 serde_json::Value::Bool(was_always_on_top),
             );
         }
+        // The old appearance controls were shared across floating and edge
+        // modes. Seed each new mode-specific value from that shared value,
+        // unless a newer backup already contains its own value.
+        let compact_length = settings
+            .get("compactLength")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(80)
+            .clamp(80, 300);
+        for key in ["floatingCompactLength", "edgeCompactLength"] {
+            settings
+                .entry(key.to_string())
+                .or_insert(serde_json::Value::from(compact_length));
+        }
+        let expanded_radius = settings
+            .get("expandedCornerRadius")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(45)
+            .min(80);
+        for key in ["floatingExpandedCornerRadius", "edgeExpandedCornerRadius"] {
+            settings
+                .entry(key.to_string())
+                .or_insert(serde_json::Value::from(expanded_radius));
+        }
     }
     serde_json::from_value(value).ok()
 }
@@ -359,5 +382,22 @@ mod tests {
         );
         assert_eq!(read_settings_from_path(&path), Some(recovered));
         fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn migrates_legacy_shared_appearance_values_into_each_mode() {
+        let migrated = super::parse_settings(
+            r#"{"compactLength":164,"expandedCornerRadius":62,"floatingCompactLength":220,"floatingExpandedCornerRadius":70}"#,
+        )
+        .expect("legacy settings should migrate");
+
+        assert_eq!(migrated.floating_compact_length, 220);
+        assert_eq!(migrated.edge_compact_length, 164);
+        assert_eq!(migrated.floating_expanded_corner_radius, 70);
+        assert_eq!(migrated.edge_expanded_corner_radius, 62);
+
+        let stored = serde_json::to_value(migrated).expect("serialize migrated settings");
+        assert!(stored.get("compactLength").is_none());
+        assert!(stored.get("expandedCornerRadius").is_none());
     }
 }

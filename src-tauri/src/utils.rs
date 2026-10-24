@@ -100,7 +100,14 @@ mod tests {
     #[test]
     fn rejects_oversize_files_before_reading_their_content() {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let path = std::env::temp_dir().join(format!("isle-input-{}-{}.png", std::process::id(), SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()));
+        let path = std::env::temp_dir().join(format!(
+            "isle-input-{}-{}.png",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         let file = std::fs::File::create(&path).unwrap();
         file.set_len(super::MAX_IMAGE_BYTES as u64 + 1).unwrap();
         drop(file);

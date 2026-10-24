@@ -1,14 +1,17 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { loadImage } from "$lib/imageLoad";
-  import { artworkValue, snapshotDecision, withoutArtwork, type ArtworkSnapshotToken } from "$lib/mediaArtwork";
+  import { appOverlayDecision, artworkValue, mergeProgressAnchorFields, nativeStampDecision, readNativeMediaStamp, snapshotDecision, withoutArtwork, type ArtworkSnapshotToken, type NativeMediaStamp } from "$lib/mediaArtwork";
   import { createCanvasArtworkRenderer, type CanvasArtworkRequest } from "$lib/canvasArtwork";
   import { createArtworkOwner } from "$lib/artworkOwner";
   import { ArtworkResultCache, artworkCacheKey, artworkCanvasSize, boundedArtworkCanvasSize } from "$lib/artworkBudget";
+  import { createSeekHandler, createSeekRequestGate, formatSeekError, seekSnapshotAllowsRollback } from "$lib/seekRequest";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+  import { emit } from "@tauri-apps/api/event";
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
   import { Events } from "./utils/eventConstants";
+  import { isTransportDiagnosticsEnabled, recordTransportCounter } from "$lib/transportDiagnostics";
   import { mediaApi } from "$lib/api/media";
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
@@ -46,8 +49,6 @@
     | "SouthWest"
     | "SouthEast";
 
-  type RGB = { r: number; g: number; b: number };
-  type HSL = { h: number; s: number; l: number };
 
   const INFO_HEIGHT = 64;
   const ART_MAX_SIZE = 640;
@@ -72,6 +73,10 @@
   let currentTrackKey = $state("");
   let lastReportedPosition: number | undefined;
   let pendingSeekUntil = 0;
+  const seekRequestGate = createSeekRequestGate();
+  let nativeSeekSnapshotRevision = 0;
+  let seekError = $state("");
+  let latestNativeSeekSnapshot: { epoch: string; trackGeneration: number; title: string; artist: string; positionMs: number; durationMs: number } | undefined;
   let displayCover = $state("");
   let previousCover = $state("");
   let isHovered = $state(false);
@@ -81,17 +86,11 @@
   let isCaptureHidden = $derived(
     activeCaptureReasons(captureSnapshot, $capturePreferences).length > 0,
   );
+  let disposed = $state(false);
+  const mediaInstanceToken = crypto.randomUUID();
+  let mediaReady = false;
   let slideDirection = $state<"left" | "right" | "">("");
   let isAnimating = $state(false); // 动画进行中标志
-  // Artwork drives the album fill when enabled. The configured color remains
-  // an independent fallback and is never mutated by extraction.
-  let configuredFillColor = $state(DEFAULT_SETTINGS.floatingFillColor);
-  let albumAccentColor = $state("rgb(40, 50, 60)");
-  let albumAccentGradient = $state(createAlbumFill(40, 50, 60));
-  let useAlbumColor = $state(DEFAULT_SETTINGS.floatingUseAlbumColor);
-  let effectiveBackground = $derived(
-    useAlbumColor ? albumAccentGradient : configuredFillColor,
-  );
   let windowSize = $state<WindowSize>({ width: 0, height: 0 });
   let albumArtSize = $derived(
     Math.max(
@@ -108,9 +107,13 @@
   );
   let clockNow = $state(Date.now());
   let pageVisible = $state(true);
+  let visualWorkVisible = $derived(pageVisible && !isCaptureHidden);
   let displayedPosition = $derived(projectedPosition(mediaState, clockNow));
   function handleVisibilityChange() {
     pageVisible = document.visibilityState === "visible";
+    if (!mediaReady || disposed) return;
+    if (pageVisible) announceMediaReady();
+    else announceMediaNotReady("hidden");
   }
 
   // MV 播放相关
@@ -130,14 +133,29 @@
   // 专辑封面设置
   let enableHDCover = $state(true); // 高清封面获取
   let floatingCircularAlbum = $state(DEFAULT_SETTINGS.floatingCircularAlbum);
+  let shouldPlayMv = $derived(
+    !disposed && visualWorkVisible && isMVPlaybackEnabled && isPlayingMV && Boolean(mvUrl)
+      && !floatingCircularAlbum && mediaState.isPlaying,
+  );
+  let mvVideo = $state<HTMLVideoElement>();
+  let mvPlaybackRevision = 0;
+  let mvPendingPlayRevision: number | undefined;
   let circularAlbumArtSize = $derived(Math.max(50, Math.round(albumArtSize * 0.86)));
   let enablePixelArt = $state(false); // 像素化封面
 
   let unlisten: () => void;
   let unlistenIslandMediaSync: () => void;
-  let lastIslandMediaSyncAt = 0;
+  let currentNativeStamp: NativeMediaStamp | undefined;
+  let nativeStampedMode = false;
+  const retiredNativeEpochs = new Set<string>();
+  let currentAppSessionId: string | undefined;
+  let appSessionMode = false;
+  const retiredAppSessions = new Set<string>();
+  let lastAppOverlaySequence = 0;
+  let appliedOverlayBasis: string | undefined;
   let mediaEventRevision = 0;
   let artworkRevision = 0;
+  let mediaTrackGeneration = 0;
   let unlistenResize: () => void;
   let savePositionTimeout: ReturnType<typeof setTimeout> | null = null;
   let coverRequestId = 0;
@@ -154,6 +172,7 @@
     } else if (wasCircular && isMVPlaybackEnabled && currentTrackKey) {
       requestMVForCurrentTrack(currentTrackKey, mediaState.title, mediaState.artist);
     }
+    syncMvPlayback();
   }
 
   function handlePointerEnter() {
@@ -251,118 +270,15 @@
     }
   }
 
-  function clamp01(value: number) {
-    return Math.max(0, Math.min(1, value));
-  }
-
-  function rgbToHsl(r: number, g: number, b: number): HSL {
-    r /= 255;
-    g /= 255;
-    b /= 255;
-
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const l = (max + min) / 2;
-    const delta = max - min;
-    let h = 0;
-    let s = 0;
-
-    if (delta !== 0) {
-      s = delta / (1 - Math.abs(2 * l - 1));
-
-      switch (max) {
-        case r:
-          h = ((g - b) / delta) % 6;
-          break;
-        case g:
-          h = (b - r) / delta + 2;
-          break;
-        default:
-          h = (r - g) / delta + 4;
-          break;
-      }
-
-      h *= 60;
-      if (h < 0) h += 360;
-    }
-
-    return { h, s, l };
-  }
-
-  function hslToRgb(h: number, s: number, l: number): RGB {
-    const chroma = (1 - Math.abs(2 * l - 1)) * s;
-    const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
-    const m = l - chroma / 2;
-    let red = 0;
-    let green = 0;
-    let blue = 0;
-
-    if (h < 60) {
-      red = chroma;
-      green = x;
-    } else if (h < 120) {
-      red = x;
-      green = chroma;
-    } else if (h < 180) {
-      green = chroma;
-      blue = x;
-    } else if (h < 240) {
-      green = x;
-      blue = chroma;
-    } else if (h < 300) {
-      red = x;
-      blue = chroma;
-    } else {
-      red = chroma;
-      blue = x;
-    }
-
-    return {
-      r: Math.round((red + m) * 255),
-      g: Math.round((green + m) * 255),
-      b: Math.round((blue + m) * 255),
-    };
-  }
-
-  function createAlbumFill(r: number, g: number, b: number): string {
-    const { h, s, l } = rgbToHsl(r, g, b);
-    const strength = 0.07 * s;
-    const top = hslToRgb(h, s, clamp01(l + strength));
-    const bottom = hslToRgb(h, s, clamp01(l - strength));
-
-    return `linear-gradient(180deg, rgb(${top.r}, ${top.g}, ${top.b}) 0%, rgb(${r}, ${g}, ${b}) 50%, rgb(${bottom.r}, ${bottom.g}, ${bottom.b}) 100%)`;
-  }
-
   const coverOwner = createArtworkOwner("cover");
-  const colorOwner = createArtworkOwner("color");
   const pixelOwner = createArtworkOwner("pixel");
-  async function extractColors(imgSrc: string) {
-    if (!useAlbumColor || !imgSrc) return;
-
-    try {
-      const [r, g, b] = await colorOwner.request<[number, number, number]>({ imagePath: imgSrc });
-
-      // Ignore an in-flight result if the user disabled album coloring while
-      // the native color extraction was running.
-      if (disposed || !useAlbumColor || displayCover !== imgSrc) return;
-
-      albumAccentColor = `rgb(${r}, ${g}, ${b})`;
-      albumAccentGradient = createAlbumFill(r, g, b);
-    } catch (error) {
-      if (!disposed && useAlbumColor && displayCover === imgSrc) {
-        console.error("[颜色提取] 失败:", error);
-      }
-    }
-  }
 
   // 封面切换函数（无动画）
   function transitionCover(
     newCover: string,
     direction: "left" | "right" = "left",
   ) {
-    colorOwner.cancel();
     displayCover = newCover;
-    if (newCover && useAlbumColor) void extractColors(newCover);
     previousCover = "";
     slideDirection = "";
     isAnimating = false;
@@ -480,13 +396,45 @@
   }
 
   function keepMVInPreview(video: HTMLVideoElement) {
+    if (video !== mvVideo) return;
     if (video.currentTime >= 30 || video.ended) {
       video.currentTime = 0;
-      if (mediaState.isPlaying) void video.play().catch(() => undefined);
+      syncMvPlayback(video);
     }
   }
 
-  let disposed = false;
+  function syncMvPlayback(video = mvVideo) {
+    if (disposed || !shouldPlayMv) {
+      mvPlaybackRevision += 1;
+      mvPendingPlayRevision = undefined;
+      video?.pause();
+      return;
+    }
+    if (!video) {
+      mvPlaybackRevision += 1;
+      mvPendingPlayRevision = undefined;
+      return;
+    }
+    if (mvPendingPlayRevision !== undefined || !video.paused) return;
+
+    const revision = ++mvPlaybackRevision;
+    mvPendingPlayRevision = revision;
+    void video.play().then(() => {
+      // A play request can settle after capture mode, document visibility, or
+      // the selected track has changed. Recheck the current owner before it
+      // is allowed to keep decoding in the hidden window.
+      if (mvPendingPlayRevision === revision) mvPendingPlayRevision = undefined;
+      if (disposed || video !== mvVideo || !shouldPlayMv) {
+        video.pause();
+      }
+    }).catch((error) => {
+      if (mvPendingPlayRevision === revision) mvPendingPlayRevision = undefined;
+      if (!disposed && revision === mvPlaybackRevision && shouldPlayMv) {
+        console.error("[MV] 恢复播放失败:", error);
+      }
+    });
+  }
+
   const pageRequests = new AbortController();
   function trackListener(dispose: () => void) {
     if (disposed) { dispose(); throw new DOMException("Page disposed", "AbortError"); }
@@ -496,6 +444,7 @@
     void initialize().catch(error => { if (!disposed) console.error(error); });
   });
   async function initialize() {
+    pageVisible = document.visibilityState === "visible";
     document.addEventListener("visibilitychange", handleVisibilityChange);
     eventListeners = [];
 
@@ -507,8 +456,6 @@
       }));
       trackListener(settingsConnection.disconnect);
       const settings = settingsConnection.settings;
-      configuredFillColor = settings.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
-      useAlbumColor = settings.floatingUseAlbumColor ?? DEFAULT_SETTINGS.floatingUseAlbumColor;
       applyAppFont(settings.fontId);
       setLocale(settings.language);
       PLACEHOLDER_TITLE = t("waitingPlayback");
@@ -551,6 +498,7 @@
         } else if (currentTrackKey) {
           requestMVForCurrentTrack(currentTrackKey, mediaState.title, mediaState.artist);
         }
+        syncMvPlayback();
       },
     );
     trackListener(unlistenMVChange);
@@ -615,14 +563,8 @@
       if (value?.fontId) applyAppFont(value.fontId);
       if (value?.language) setLocale(value.language);
       if (value) {
-        const nextUseAlbumColor = value.floatingUseAlbumColor ?? DEFAULT_SETTINGS.floatingUseAlbumColor;
-        const shouldRefreshAlbumColor = nextUseAlbumColor && !useAlbumColor;
         isMVPlaybackEnabled = value.enableMvPlayback ?? DEFAULT_SETTINGS.enableMvPlayback;
         setCircularAlbum(value.floatingCircularAlbum ?? DEFAULT_SETTINGS.floatingCircularAlbum);
-        configuredFillColor = value.floatingFillColor ?? DEFAULT_SETTINGS.floatingFillColor;
-        useAlbumColor = nextUseAlbumColor;
-        if (!nextUseAlbumColor) colorOwner.cancel();
-        if (shouldRefreshAlbumColor && displayCover) void extractColors(displayCover);
       }
     });
     trackListener(unlistenSettingsChange);
@@ -637,6 +579,7 @@
       Events.CAPTURE_MODE_CHANGED,
       (snapshot: CaptureSnapshot) => {
         captureSnapshot = { ...EMPTY_CAPTURE_SNAPSHOT, ...snapshot };
+        syncMvPlayback();
       },
     );
     trackListener(unlistenCaptureMode);
@@ -710,6 +653,55 @@
         currentTrack: currentTrackKey.slice(0, 512), displayCoverChars: displayCover.length });
       if (trace.length > 128) trace.splice(0, trace.length - 128);
     };
+    const beginAppSession = (sessionId: unknown) => {
+      if (typeof sessionId !== "string" || !sessionId || retiredAppSessions.has(sessionId)) return false;
+      if (sessionId !== currentAppSessionId) {
+        if (currentAppSessionId) retiredAppSessions.add(currentAppSessionId);
+        currentAppSessionId = sessionId;
+        appSessionMode = true;
+        lastAppOverlaySequence = 0;
+      }
+      return true;
+    };
+    const nativeBasisKey = (stamp: NativeMediaStamp | undefined) => stamp
+      ? `${stamp.nativeEpoch}\u0000${stamp.nativeRevision}`
+      : undefined;
+    const applyAppOverlay = (payload: any, expectedTrackKey: string) => {
+      const overlay = payload.appOverlay;
+      const sequence = payload.overlaySeq;
+      const decision = appOverlayDecision({
+        incomingSession: payload.appSessionId,
+        currentSession: appSessionMode ? currentAppSessionId : undefined,
+        retiredSessions: retiredAppSessions,
+        incomingSequence: sequence,
+        currentSequence: lastAppOverlaySequence,
+        basisMatches: Boolean(currentNativeStamp && overlay &&
+          overlay.nativeEpoch === currentNativeStamp.nativeEpoch &&
+          overlay.nativeRevision === currentNativeStamp.nativeRevision),
+        trackMatches: Boolean(overlay && overlay.trackKey === expectedTrackKey && expectedTrackKey === currentTrackKey),
+      });
+      if (decision !== "accept") {
+        traceMedia("island-sync", `rejected-app-overlay-${decision}`, payload);
+        return false;
+      }
+      lastAppOverlaySequence = Number(sequence);
+      mediaState = {
+        ...mediaState,
+        title: typeof overlay.title === "string" ? overlay.title : mediaState.title,
+        artist: typeof overlay.artist === "string" ? overlay.artist : mediaState.artist,
+        positionMs: Date.now() < pendingSeekUntil
+          ? projectedPosition(mediaState, Date.now())
+          : Number(overlay.positionMs) || 0,
+        lastUpdatedTimestamp: Number(overlay.lastUpdatedTimestamp) || Date.now(),
+      };
+      receiveSameTrackArtwork({
+        albumArt: typeof overlay.albumArt === "string" ? overlay.albumArt : "",
+        artworkResolved: Boolean(overlay.artworkResolved),
+      });
+      appliedOverlayBasis = nativeBasisKey(currentNativeStamp);
+      traceMedia("island-sync", "applied-app-overlay", payload);
+      return true;
+    };
     const receiveSameTrackArtwork = (payload: any) => {
       const cover = artworkValue(payload);
       if (cover === undefined) return;
@@ -722,7 +714,7 @@
       artworkRevision++;
       mediaState.albumArt = cover;
       if (!cover) {
-        coverRequestId++; coverOwner.cancel(); cancelCoverPreload(); colorOwner.cancel(); pixelOwner.cancel();
+        coverRequestId++; coverOwner.cancel(); cancelCoverPreload(); pixelOwner.cancel();
         displayCover = "";
         previousCover = "";
       } else {
@@ -732,22 +724,97 @@
     const handleMediaUpdate = (payload: any, authoritative = false, origin = "native-event", snapshot?: ArtworkSnapshotToken) => {
       if (disposed) return;
       traceMedia(origin, "received", payload);
+      if (origin === "island-sync") {
+        if (appSessionMode) {
+          if (payload.appSessionId !== currentAppSessionId) {
+            traceMedia(origin, "dropped-retired-app-session", payload);
+            return;
+          }
+        } else if (payload.appSessionId || nativeStampedMode) {
+          // A relay cannot declare its own session. It must follow the explicit
+          // ready-query handshake from the current App mount.
+          traceMedia(origin, "dropped-unannounced-app-session", payload);
+          return;
+        }
+        // Preserve the pre-stamp compatibility path; stamped relays must use
+        // the session/basis-scoped artwork in appOverlay, never top-level art.
+        if (appSessionMode && readNativeMediaStamp(payload)) payload = withoutArtwork(payload);
+      }
       const receivedAt = Date.now();
       const newTrackKey = `${payload.source || ""}|${mediaTrackKey(payload.title || "", payload.artist || "")}`;
+      const incomingStamp = readNativeMediaStamp(payload);
+      const stampDecision = nativeStampDecision(
+        currentNativeStamp,
+        nativeStampedMode,
+        retiredNativeEpochs,
+        incomingStamp,
+        origin === "native-event" || origin === "initial-snapshot",
+      );
+      if (["older", "retired", "invalid"].includes(stampDecision)) {
+        traceMedia(origin, `dropped-${stampDecision}-native-stamp`, payload);
+        return;
+      }
       if (snapshot) {
-        const decision = snapshotDecision(snapshot, {events:mediaEventRevision,artwork:artworkRevision}, newTrackKey === currentTrackKey);
+        const decision = snapshotDecision(snapshot, {events:mediaEventRevision,artwork:artworkRevision,trackGeneration:mediaTrackGeneration,trackKey:currentTrackKey}, newTrackKey === currentTrackKey);
         if (decision === "discard") { traceMedia(origin, "dropped-stale-snapshot", payload); return; }
-        if (decision === "ignore-artwork") {
-          traceMedia(origin, "ignored-stale-snapshot-artwork", payload);
-          payload = withoutArtwork(payload);
+        if (decision === "artwork-only") {
+          const cover = artworkValue(payload);
+          if (cover && !mediaState.albumArt && !displayCover) {
+            receiveSameTrackArtwork({ ...withoutArtwork(payload), albumArt: cover });
+            traceMedia(origin, "filled-missing-snapshot-artwork", payload);
+          } else {
+            traceMedia(origin, "ignored-stale-snapshot", payload);
+          }
+          return;
         }
       } else { mediaEventRevision++; }
-      if (authoritative) {
-        lastIslandMediaSyncAt = receivedAt;
-      } else if (receivedAt - lastIslandMediaSyncAt < 2_500) {
-        // Clock authority must not suppress independently supplied artwork.
-        if (newTrackKey === currentTrackKey) receiveSameTrackArtwork(payload);
-        traceMedia(origin, "clock-skipped-artwork-reconciled", payload);
+      if ((stampDecision === "initial" || stampDecision === "newer" || stampDecision === "switch") && incomingStamp && payload.source) {
+        if (Number.isSafeInteger(payload.nativeTrackGeneration) && payload.nativeTrackGeneration >= 0) {
+          nativeSeekSnapshotRevision++;
+          latestNativeSeekSnapshot = {
+            epoch: incomingStamp.nativeEpoch,
+            trackGeneration: payload.nativeTrackGeneration,
+            title: String(payload.title || ""),
+            artist: String(payload.artist || ""),
+            positionMs: Number(payload.positionMs) || 0,
+            durationMs: Number(payload.durationMs) || 0,
+          };
+          if (pendingSeekUntil) {
+            // Position snapshots do not cancel a still-pending user seek.
+            pendingSeekUntil = 0;
+          }
+        }
+      } else if (!payload.source) {
+        latestNativeSeekSnapshot = undefined;
+      }
+      const previousBasis = nativeBasisKey(currentNativeStamp);
+      if (stampDecision === "switch") {
+        if (currentNativeStamp) retiredNativeEpochs.add(currentNativeStamp.nativeEpoch);
+        currentNativeStamp = incomingStamp;
+        nativeStampedMode = true;
+      } else if (stampDecision === "initial" || stampDecision === "newer") {
+        if (incomingStamp) {
+          currentNativeStamp = incomingStamp;
+          nativeStampedMode = true;
+        }
+      }
+      if (nativeBasisKey(currentNativeStamp) !== previousBasis) appliedOverlayBasis = undefined;
+      if (stampDecision === "same") {
+        if (newTrackKey !== currentTrackKey) {
+          traceMedia(origin, "ignored-same-stamp-track-mismatch", payload);
+          return;
+        }
+        if (origin === "island-sync") {
+          applyAppOverlay(payload, newTrackKey);
+        } else if (origin === "initial-snapshot") {
+          const cover = artworkValue(payload);
+          if (cover && !mediaState.albumArt && !displayCover) receiveSameTrackArtwork({albumArt:cover});
+        } else if (appliedOverlayBasis !== nativeBasisKey(currentNativeStamp)) {
+          // A duplicate native event must not replace HD art accepted for this
+          // exact basis; native artwork can still fill/refresh before overlay.
+          receiveSameTrackArtwork(payload);
+        }
+        traceMedia(origin, "same-native-stamp-enrichment", payload);
         return;
       }
 
@@ -762,12 +829,15 @@
         // Keep the current track instead of resetting its progress to zero.
         if (currentTrackKey && payload.source) return;
         // 播放器退出，重置为等待状态
+        if (currentTrackKey) mediaTrackGeneration++;
+        seekRequestGate.invalidate();
         currentTrackKey = "";
+        seekError = "";
         artworkRevision++;
         lastReportedPosition = undefined;
         pendingSeekUntil = 0;
         mvRequestId += 1;
-        coverRequestId += 1; coverOwner.cancel(); cancelCoverPreload(); colorOwner.cancel(); pixelOwner.cancel();
+        coverRequestId += 1; coverOwner.cancel(); cancelCoverPreload(); pixelOwner.cancel();
         durationRequestId += 1;
         mediaState = {
           title: PLACEHOLDER_TITLE,
@@ -783,10 +853,14 @@
         displayCover = "";
         isPlayingMV = false;
         mvUrl = "";
+        syncMvPlayback();
       } else if (newTrackKey !== currentTrackKey) {
+        seekRequestGate.invalidate();
         lastReportedPosition = Number(payload.positionMs) || 0;
         pendingSeekUntil = 0;
         currentTrackKey = newTrackKey;
+        seekError = "";
+        mediaTrackGeneration++;
 
         // 使用 SMTC 提供的图片作为基础
         const incomingCover = artworkValue(payload);
@@ -809,6 +883,7 @@
         isPlayingMV = false;
         mvRequestId += 1;
         mvUrl = "";
+        syncMvPlayback();
         void resolveTrackCover(
           newTrackKey,
           payload.title || "",
@@ -835,6 +910,8 @@
         mediaState = {
           ...mediaState,
           isPlaying,
+          nativeTrackGeneration: Number.isSafeInteger(payload.nativeTrackGeneration) ? payload.nativeTrackGeneration : mediaState.nativeTrackGeneration,
+          ...mergeProgressAnchorFields(mediaState, payload),
           positionMs: receivedAt < pendingSeekUntil ? previousPosition : authoritative
             ? Math.max(0, Number(payload.positionMs) || 0)
             : reconcileReportedPosition(
@@ -855,35 +932,31 @@
         lastReportedPosition = Number(payload.positionMs) || 0;
 
         // 根据播放状态控制 MV
-        if (isPlayingMV && mvUrl) {
-          const videoElement = document.querySelector(
-            ".mv-player",
-          ) as HTMLVideoElement;
-          if (videoElement) {
-            if (!isPlaying && wasPlaying) {
-              // 歌曲暂停，MV 也暂停
-              videoElement.pause();
-            } else if (isPlaying && !wasPlaying) {
-              // 歌曲从暂停恢复播放，MV 也恢复播放
-              videoElement.play().catch((err) => {
-                console.error("[MV] 恢复播放失败:", err);
-              });
-            }
-          } else {
-          }
-        }
+        if (isPlaying !== wasPlaying) syncMvPlayback();
+      }
+      if (origin === "island-sync" && appSessionMode && incomingStamp) {
+        applyAppOverlay(payload, newTrackKey);
       }
       traceMedia(origin, "applied", payload);
     };
     unlistenIslandMediaSync = await eventManager.on(
       Events.ISLAND_MEDIA_SYNC,
-      (payload) => handleMediaUpdate(payload, true, "island-sync"),
+      (payload) => {
+        if (isTransportDiagnosticsEnabled()) recordTransportCounter("mediaSync", "received");
+        handleMediaUpdate(payload, true, "island-sync");
+      },
     );
     trackListener(unlistenIslandMediaSync);
     unlisten = await onMediaUpdate(handleMediaUpdate);
     trackListener(unlisten);
+    const unlistenReadyQuery = await eventManager.on(Events.FLOATING_MEDIA_READY_QUERY, ({ appSessionId }: { appSessionId?: string } = {}) => {
+      if (disposed || !beginAppSession(appSessionId)) return;
+      if (mediaReady && pageVisible) announceMediaReady();
+      else if (mediaReady) announceMediaNotReady("hidden");
+    });
+    trackListener(unlistenReadyQuery);
     try {
-      const snapshotToken = {events:mediaEventRevision,artwork:artworkRevision};
+      const snapshotToken = {events:mediaEventRevision,artwork:artworkRevision,trackGeneration:mediaTrackGeneration,trackKey:currentTrackKey};
       const snapshot = await mediaApi.getMediaInfo();
       const diagnosticDelay = (window as any).__ISLE_MEDIA_SNAPSHOT_DELAY_MS__;
       if (typeof diagnosticDelay === "number" && diagnosticDelay > 0) {
@@ -893,21 +966,56 @@
     } catch (error) {
       console.warn("[悬浮窗] 初始媒体状态读取失败:", error);
     }
+    if (!disposed) {
+      mediaReady = true;
+      if (pageVisible) announceMediaReady();
+      else announceMediaNotReady("hidden");
+    }
+  }
+
+  function announceMediaReady() {
+    if (disposed) return;
+    void emit(Events.FLOATING_MEDIA_READY, { instanceToken: mediaInstanceToken, appSessionId: currentAppSessionId }).catch((error) => {
+      if (!disposed) console.warn("[悬浮窗] 通知主岛媒体监听就绪失败:", error);
+    });
+  }
+
+  function announceMediaNotReady(reason: "hidden" | "unmounted") {
+    void emit(Events.FLOATING_MEDIA_NOT_READY, {
+      instanceToken: mediaInstanceToken,
+      appSessionId: currentAppSessionId,
+      reason,
+    }).catch((error) => {
+      if (!disposed) console.warn("[悬浮窗] 通知主岛媒体监听暂停失败:", error);
+    });
   }
 
   $effect(() => {
-    const intervalMs = !pageVisible
-      ? 2_000
-      : mediaState.isPlaying && !isCompactCover
-        ? 250
-        : 1_000;
-    const interval = setInterval(() => clockNow = Date.now(), intervalMs);
+    const shouldTickProgress = visualWorkVisible && mediaState.isPlaying && !isCompactCover;
+    if (!shouldTickProgress) {
+      clockNow = Date.now();
+      return;
+    }
+
+    const tick = () => { clockNow = Date.now(); };
+    tick();
+    const interval = setInterval(tick, 250);
     return () => clearInterval(interval);
   });
 
+  $effect(() => {
+    shouldPlayMv;
+    syncMvPlayback();
+  });
+
   onDestroy(() => {
+    announceMediaNotReady("unmounted");
     disposed = true;
-    coverOwner.cancel(); cancelCoverPreload(); colorOwner.cancel(); pixelOwner.cancel();
+    seekRequestGate.invalidate();
+    mvPlaybackRevision += 1;
+    mvPendingPlayRevision = undefined;
+    mvVideo?.pause();
+    coverOwner.cancel(); cancelCoverPreload(); pixelOwner.cancel();
     pageRequests.abort();
     coverRequestId++; mvRequestId++; durationRequestId++;
 
@@ -1256,21 +1364,74 @@
     // 不手动更新状态，等待后端的 media-update 事件同步
   }
 
-  async function seekTo(positionMs: number) {
-    const next = clampSeekPosition(positionMs, mediaState.durationMs);
-    const previous = projectedPosition(mediaState);
-    const seekTrack = currentTrackKey;
-    pendingSeekUntil = Date.now() + 2000;
-    mediaState.positionMs = next;
-    mediaState.lastUpdatedTimestamp = Date.now();
-    await mediaApi.seekMedia(next).catch((error) => {
-      if (seekTrack === currentTrackKey) {
-        pendingSeekUntil = 0;
-        mediaState.positionMs = previous;
-        mediaState.lastUpdatedTimestamp = Date.now();
+  const floatingSeekHandler = createSeekHandler({
+    gate: seekRequestGate,
+    createContext: (positionMs: number, requestId: number) => ({
+      next: clampSeekPosition(positionMs, mediaState.durationMs),
+      track: currentTrackKey,
+      requestId,
+      snapshotRevision: nativeSeekSnapshotRevision,
+      epoch: mediaState.nativeEpoch ?? "",
+      trackGeneration: mediaState.nativeTrackGeneration ?? 0,
+      title: mediaState.title,
+      artist: mediaState.artist,
+    }),
+    isCurrentTrack: (context) => context.track === currentTrackKey,
+    isDisposed: () => disposed,
+    request: (context) => mediaApi.seekMedia(context.next, {
+      nativeEpoch: context.epoch,
+      nativeTrackGeneration: context.trackGeneration,
+      title: context.title,
+      artist: context.artist,
+    }),
+    onBegin: (context) => {
+      seekError = "";
+      pendingSeekUntil = Date.now() + 2000;
+      mediaState.positionMs = context.next;
+      mediaState.lastUpdatedTimestamp = Date.now();
+    },
+    onConfirmed: (verified) => {
+      pendingSeekUntil = 0;
+      seekError = "";
+      if (!verified) return;
+      mediaState.positionMs = verified.positionMs;
+      mediaState.durationMs = verified.durationMs;
+      mediaState.lastUpdatedTimestamp = Date.now();
+    },
+    onFailed: async (_error, context) => {
+      pendingSeekUntil = 0;
+      // A newer native sample already reconciled the window while CDP was pending.
+      // Keep it, while allowing this current request to show its failure.
+      if (!seekSnapshotAllowsRollback(context.snapshotRevision, nativeSeekSnapshotRevision)) return;
+      const latest = latestNativeSeekSnapshot;
+      if (latest && latest.epoch === context.epoch && latest.trackGeneration === context.trackGeneration
+        && latest.title === context.title && latest.artist === context.artist) {
+        mediaState.positionMs = latest.positionMs;
+        mediaState.durationMs = latest.durationMs || mediaState.durationMs;
+      } else {
+        try {
+          const snapshot = await mediaApi.getMediaInfo();
+          if (!seekRequestGate.isCurrent(context.requestId) || disposed || context.track !== currentTrackKey
+            || !seekSnapshotAllowsRollback(context.snapshotRevision, nativeSeekSnapshotRevision)) return;
+          if (snapshot.nativeEpoch === context.epoch && snapshot.nativeTrackGeneration === context.trackGeneration
+            && snapshot.title === context.title && snapshot.artist === context.artist) {
+            mediaState.positionMs = Number(snapshot.positionMs) || 0;
+            mediaState.durationMs = Number(snapshot.durationMs) || mediaState.durationMs;
+          }
+        } catch (refreshError) {
+          console.warn("[进度] seek 失败后刷新媒体位置失败，等待下一次原生快照", refreshError);
+        }
       }
+      mediaState.lastUpdatedTimestamp = Date.now();
+    },
+    onError: (error) => {
       console.error("[进度] 调整失败:", error);
-    });
+      seekError = formatSeekError(error);
+    },
+  });
+
+  async function seekTo(positionMs: number) {
+    await floatingSeekHandler(positionMs);
   }
 
   async function toggleAlwaysOnTop(e: MouseEvent) {
@@ -1299,7 +1460,7 @@
   async function closeWindow(e: MouseEvent) {
     e.stopPropagation();
     try {
-      await windowApi.closeFloatingWindow();
+      await windowApi.closeFloatingWindow(mediaInstanceToken);
     } catch (error) {
       console.error("[悬浮窗] 关闭失败:", error);
     }
@@ -1343,14 +1504,13 @@
   class:locked={isFloatingWindowLocked}
   class:pixelated={enablePixelArt}
   class:circular-album={floatingCircularAlbum}
-  class:playing={mediaState.isPlaying}
+  class:playing={mediaState.isPlaying && visualWorkVisible}
   class:compact-cover={isCompactCover}
   class:capture-hidden={isCaptureHidden}
   onpointerenter={handlePointerEnter}
   onpointerleave={handlePointerLeave}
   role="region"
   aria-label={t("mediaPlayer")}
-  style={`--floating-background:${effectiveBackground}`}
 >
   <div class="bg-solid"></div>
 
@@ -1460,7 +1620,8 @@
           <video
             class="mv-player"
             src={mvUrl}
-            autoplay={mediaState.isPlaying}
+            bind:this={mvVideo}
+            autoplay={shouldPlayMv}
             muted
             loop
             playsinline
@@ -1469,8 +1630,9 @@
             poster=""
             onloadeddata={(e) => {
               const video = e.target as HTMLVideoElement;
+              if (video !== mvVideo) return;
               video.currentTime = 0;
-              if (mediaState.isPlaying) video.play().catch(console.error);
+              syncMvPlayback(video);
             }}
             onloadedmetadata={() => {
               console.log("[MV] metadata loaded", mvUrl);
@@ -1541,7 +1703,9 @@
       <MediaProgress
         position={displayedPosition}
         duration={mediaState.durationMs}
+        progressKnown={mediaState.progressKnown !== false}
         seekable={Boolean(mediaState.capabilities?.seek)}
+        {seekError}
         onSeek={seekTo}
       />
     </div>
@@ -1595,7 +1759,7 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: #121212;
+    background: transparent;
     font-family: var(--app-font);
     text-rendering: optimizeLegibility;
     font-synthesis: none;
@@ -1628,11 +1792,10 @@
     bottom: 64px;
     left: 0;
     z-index: 1;
-    background: var(--floating-background);
+    background: #000000;
     transition:
       top 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       border-radius 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-      background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       opacity 0.3s ease;
 
     border-radius: var(--floating-radius);
@@ -2067,8 +2230,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .player.circular-album.playing .album-wrapper {
-      animation-duration: 60s;
+    .player.circular-album .album-wrapper {
+      animation: none;
     }
   }
 

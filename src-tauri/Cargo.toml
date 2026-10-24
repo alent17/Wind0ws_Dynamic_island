@@ -17,6 +17,19 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[features]
+default = []
+# Manual production builds must enable this feature so Tauri embeds `frontendDist`
+# instead of resolving the development `devUrl` from `tauri.conf.json`.
+custom-protocol = ["tauri/custom-protocol"]
+compact-native-probe = ["experimental-native-region"]
+experimental-native-region = ["windows052/Win32_System_Threading", "windows052/Win32_UI_Shell"]
+c2-media-probe = []
+[[example]]
+name = "c2-media-probe"
+path = "examples/c2_media_probe.rs"
+required-features = ["c2-media-probe"]
+
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png", "protocol-asset"] }
 tauri-plugin-global-shortcut = "2"
@@ -30,7 +43,7 @@ tracing-subscriber = "0.3"
 image = "0.25"
 
 # Windows API 绑定 - 用于访问 Windows 原生功能
-windows = { version = "0.52", features = [
+windows052 = { package = "windows", version = "0.52", features = [
     "Media_Control",        # 全局系统媒体控制（GSMTC）- 获取音乐播放信息
     "Media_Capture",        # Windows AppCapture - 查询系统视频捕获状态
     "Storage_Streams",      # 存储流 - 读取专辑封面图片数据
@@ -46,6 +59,7 @@ windows = { version = "0.52", features = [
     "Win32_System_Com_StructuredStorage",
     "Win32_System_Variant",
     "Win32_UI_Shell_PropertiesSystem",
+    "Win32_UI_Shell",
     "Win32_Graphics_Gdi",    # Win32 GDI（获取屏幕分辨率）
     "Win32_Globalization",   # 系统界面语言
     "Win32_System",          # Win32 系统服务

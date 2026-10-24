@@ -55,6 +55,15 @@ Windows APIs (GSMTC, Core Audio, registry, Win32)
 - `src-tauri/src/state/app_state.rs` owns state shared across Rust commands.
 - `src-tauri/src/event_bus.rs` centralizes event names and broadcasts backend
   updates to webview windows.
+- The media actor samples NetEase's real playback timeline through the existing
+  loopback CDP client when NetEase is selected. It allows one read at a time,
+  targets roughly one-second freshness while playing and five seconds while
+  paused, and backs off for at least 30 seconds after a failed read. This has a
+  real CDP connection/read cost while NetEase remains selected, even when no
+  island window is visible; there is no shared consumer-demand signal to gate
+  that work yet. The actor keeps the last verified sample over SMTC's empty
+  timeline and publishes it with the sample timestamp; the frontend interpolates
+  from that timestamp. Device timing and long-run cost still need acceptance.
 
 The backend owns operating-system operations and persistence. Svelte owns
 layout, presentation, and animation. Window geometry that must stay aligned

@@ -39,4 +39,3 @@ pub async fn get_cached_media(url: String) -> AppResult<Option<String>> {
 pub async fn download_and_cache(url: String, content_type: String) -> AppResult<String> {
     crate::services::cache::download_and_cache(&url, &content_type).await
 }
-

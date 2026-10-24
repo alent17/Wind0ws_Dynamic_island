@@ -3,6 +3,9 @@ export const Events = {
   // 媒体相关
   MEDIA_UPDATE: "media-update",
   ISLAND_MEDIA_SYNC: "island-media-sync",
+  FLOATING_MEDIA_READY: "floating-media-ready",
+  FLOATING_MEDIA_READY_QUERY: "floating-media-ready-query",
+  FLOATING_MEDIA_NOT_READY: "floating-media-not-ready",
   AUDIO_SPECTRUM: "audio-spectrum",
   CAPTURE_MODE_CHANGED: "capture-mode-changed",
   TIMER_STATE_CHANGED: "timer-state-changed",
@@ -12,7 +15,6 @@ export const Events = {
   // 设置相关
   SETTINGS_UPDATED: "settings-updated",
   SETTINGS_CHANGED: "settings-changed",
-  CORNER_RADIUS_CHANGED: "corner-radius-changed",
 
   // 悬浮窗相关
   FLOATING_WINDOW_CLOSED: "floating-window-closed",
@@ -39,5 +41,4 @@ export const EventPriority = {
 // 需要节流的事件配置
 export const ThrottledEvents = {
   [Events.AUDIO_SPECTRUM]: { interval: 50, priority: EventPriority.LOW },
-  [Events.MEDIA_UPDATE]: { interval: 500, priority: EventPriority.NORMAL },
 } as const;

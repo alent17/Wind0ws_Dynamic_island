@@ -1,5 +1,40 @@
 # Isle Optimization Plan
 
+> **2026-10-16 用户验收决定：** C1、A5按“实现完成”口径关闭并勾选。C1当前Release性能收益仍为未知，A5完整原生体验矩阵仍未补测；这些证据缺口保留为非阻塞记录，不再阻止两项关闭。H1继续作为独立首击问题，当前执行转入C2。
+
+> **2026-10-16 下一步进展：** 默认关闭的compact-native-probe已接真实IslandSurface与共享几何，限独立宿主稳定Compact，未替换主岛。窗口离线41/41、独立前端构建、Svelte零错误/警告和默认feature后端检查通过。现场启动被执行策略整体拒绝（仅返回blocked by policy，拒绝来源未进一步披露），未绕过，宿主启动/测试点击均0；不能记成产品首击通过。见[候选报告](performance/compact-native-2026-10-16/REPORT.md)及第32节。
+
+> **2026-10-16 当前执行口径调整（用户要求换办法并“开始”）：** C1-I阻塞迁移/契约与C1-P当前Release性能分开；A5-I动画实现与A5-F主观手感分开；H1原生首击作为独立发布阻塞项。长期资源另列R1，不再把首击/lab恢复/长期资源串成C1的完成条件。冻结旧静态lab工具扩建，改用不运行产品setup的最小原生→WebView实验。历史完整验收未补齐，不伪勾总项；本轮实际状态与后续停止线见第31节。
+
+> 2026-10-15/16 第11批：单次静态lab前置10秒持续Enqueued，实际测试move/down/up均0，未重开或补点击。恢复失败保留，16日两配置原字节及Run原值恢复回读一致；原工具已退出但历史前台/光标完整恢复未证实。C1/A5 `[ ]`，见第29节和[报告](performance/a5-static-lab-2026-10-15/REPORT.md)。
+
+> 2026-10-15 第10批：静态lab协调器、对称收件/no-activate底板与恢复工具已完成纯离线准备；28项JS、9项owner、5项日志/释放故障测试及C# CompileOnly通过。第9批代码/构建已独立验收；本批工具待审、最多4次静态点击的具体现场单待人类允许，未启动GUI/输入/采集或重建业务。C1/A5 `[ ]`，见第28节和[报告](performance/a5-static-tools-2026-10-15/REPORT.md)。
+
+> 2026-10-15 第9批：默认关闭experimental-native-region真实适配器仅限独立静态lab；非产品接入。主岛仍旧monitor，实验label拒绝旧接管，实际UI/HRGN移交、宿主生命周期和故障策略已编译/离线验证；OS路由、视觉及资源仍未知。C1/A5 `[ ]`，见第27节和[报告](performance/a5-region-adapter-2026-10-15/REPORT.md)。
+
+> 2026-10-15 第8批：首击机制审查完成，持久窗口形状方案仅交付纯离线隔离原型，候选待审/待现场验证；默认生产路径未接入修复。原型复用共享几何，覆盖过期版本/生命周期失效和失败状态；标准Release构建不证明首击。C1/A5 `[ ]`，Tween420/360/240及媒体修复保留，见第26节和[报告](performance/a5-first-hit-2026-10-15/REPORT.md)。
+
+> 2026-10-15 第7批交付（14日晚执行）：用户“继续”后完成固定8次副屏停留对照并停止。页面click4、底板MouseDown3、无观测1；0预算实际3.8–8.8ms，等待结果不覆盖立即首击失败。按下前bit20与收件相关，支持时序候选但未确定单一根因，accepted-region/完整down-up路由仍缺。实际8%音量和原正在播放状态、设置/前台已恢复，cursor恢复请求未即时回读。C1/A5 `[ ]`；见第25节和[报告](performance/a5-dwell-2026-10-14/REPORT.md)。
+
+> 2026-10-14 第6批工具返修：按下成功后的EOF/stop/错误清理及双收件冲突判定已修订，PS fake-backend 9/9、JS 9/9离线通过，待独立验收。原包保留，全程无GUI/输入；首击原因仍未知，C1/A5 `[ ]`。见第24节返修记录和[报告](performance/a5-offline-revision-2026-10-14/REPORT.md)。
+
+> 2026-10-14 第6批：仅离线复核首击失败与准备工具，根因未确认。旧helper合并move/立即click，五条底板回调至后查45.8–54.6ms，成功floating先移入但并非同点精确停留。轮询ignore迟到、hover/坐标变化与区域不匹配均是候选，缺pre-down状态/已接受region不能确证。拟议move/press分离、0/50/250ms单点方案与DIV焦点工具仅dry-run，7/7通过；没有GUI/输入/采集。C1/A5 `[ ]`；见第24节。
+
+> 2026-10-14 第5批：使用第2批保存标准Tauri Release完成有界原生交互取证，完整矩阵未通过。四edge首次DOM候选点击和切回floating首次点击实际落底板、页面无click；未重试凑通过或改业务。浮动状态部分操作、已就绪真实封面终态、独立原生透明穿透、手动隐藏恢复及原生页面低动效模拟有有效证据；焦点可见性、真实跨DPI/主观手感未验收，loaded运行时版本未记录。完整恢复16%音量/设置/播放态/前台，保留网易云。C1/A5 `[ ]`；见第23节和[报告](performance/a5-native-2026-10-14/REPORT.md)。
+
+> 2026-10-14 当前状态：第4批旧C1原始复核完成。95.0015/54.9938ms源行存在，但旧分类把100ms稳定确认当精确终点、漏MsUntilDisplayed且16小时映射未证实；撤回实际动画内停顿结论，归属无法确认。第2批Apple能力/错误与第3批资源链路已独立验收，仅有效seek为N/A，新Release性能未验收。C1/A5 `[ ]`；最小剩余项见第22节和[复核报告](performance/c1-review-2026-10-14/REPORT.md)。
+
+> 2026-10-14：第2批媒体能力/错误返回修复完成可审阅交付。toggle/skip的WinRT false现在传播拒绝；非网易云seek=false在派发前返回不支持，网易云兼容尝试保留；主页面播放态只按实际快照更新。新Release上Apple Music播放/暂停、时间线、不支持seek、只读入口、无会话错误及单独UI拒绝故障注入通过。真实声明支持seek的会话当前不可用，有效seek验收仍N/A；C1/A5 `[ ]`，未提交推送，详见第20节和[报告](performance/c1-media-2026-10-13/REPORT.md)。
+
+> 2026-10-13：本批次无IPC代理配对与独立IPC诊断配对均完成16/16转换媒体AND音量覆盖，同页性能时钟门禁和四侧原始独立复算通过。Apple Music真实SMTC播放/暂停、时间线和错误负例已记录；seek返回成功但未观察到目标，仍未通过。候选region请求/参数字节约增61%，资源采样存在覆盖缺口，不宣称收益。C1、A5保持 `[ ]`，参数420/360/240ms不变、Spring延期；见第19节和[本日报告](performance/a5-2026-10-13/REPORT.md)。下列10月12日记录保留为历史。
+
+> 2026-10-12 统计复核：分析器把“最后样式变化后稳定100 ms”的确认快照用作动画终点，旧7/5计数不能证明动画内卡顿；候选区间位于近似确认尾段或跨越不确定尾段。现有数据缺最后样式变化时间，需小范围配对补采后再判断。C1、A5保持 `[ ]`，Spring迁移延期至计划阶段完成后单独评估。分析文件及脚本已上传，详见第16节。
+
+> 2026-10-12 13:30（北京时间）同步：C1 的 M6/候选匹配诊断矩阵已完成；此前 615–630 ms 间隔不能再直接称为动画内停顿，旧矩阵约95/55ms历史复核已完成、实际活动归属无法确认（第22节），C1 保持 `[ ]`。本轮按用户要求单独准备 A5 展开/收起与 Hover 手感微调候选；U4–U11 保留待办。当前验收状态及证据边界见第15节。
+
+> 2026-10-12 UI 追加：用户新增8项明确要求，已登记为 Phase 5 的 U4–U11，全部待办；需求映射与截图/执行顺序见第14节。M6按用户最终报告同步为正确性验收通过，保存延迟+12.5 ms继续记录。本次仅更新计划。
+
+
 > 2026-10-12 更新：M4 封面请求合并及过期任务取消已通过最终候选三轮 Release C 对照、100 首连续切换/四次浮窗重开，以及 owner 共享、取消、显式清空、同曲目换封面和失败重试测试。解码、下载输入、CPU 与封面延迟改善；进程树峰值基本持平、Renderer 峰值略增 3.72%，恢复读数下降。M4 勾选并独立提交；不宣称整体内存峰值收益。见 [M4 验收报告](performance/m4-2026-10-11/REPORT.md)。
 > 2026-10-12 M5 更新：迟到 listener、图片超时/销毁、动画及等待任务回归通过；匹配 Release 的 100 次副窗开关对照显示，DOM/监听器保持稳定，句柄增长从基线 +612 降至 +69（增长主要集中在前 10 次测量开关，随后基本平台）。进程树私有提交仍增长约 25–30 MiB，前后相近，故不将其解读为内存回稳；第 6 首图片超时仍未定位。M5 勾选并独立提交。见 [M5 验收报告](performance/m5-2026-10-12/REPORT.md)。
 
@@ -70,6 +105,8 @@
 此外：设置的跨窗口并发更新/非原子写入（M6）、自动化配置失效（B1）也必须进入计划。EventManager 迟到注册缺口已纳入并通过 M5 验收。
 
 ## 3. 动画逐项审查
+
+以下为原始审查基线的发现；当前GitHub动画已采用tweened，最新实际参数、Hover布局问题及A5候选见第15节，不将历史spring描述当作当前源码结论。
 
 | 转换 | 当前行为与问题 | 建议方向 |
 |---|---|---|
@@ -408,25 +445,24 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Verification:** mock延迟listen返回，在destroy之后unlisten调用一次且getListenerCount为0；动画中卸载后无额外frame写入；图像超时后pending集合归零；匹配 Release 各进行10次预热与100次副窗开关，DOM/监听器无净增长；句柄净增由基线+612降至+69，增长集中在前10次测量开关后平台。进程树私有提交在10秒恢复后仍各增约30.36 MiB/25.32 MiB，前后差异不足以证明长期内存回稳；保持该限制，不归因为泄漏。没有活动媒体会话，Release image request计数为0；图片错误/超时/Abort由单元测试覆盖。M5 已勾选，详见 [M5 验收报告](performance/m5-2026-10-12/REPORT.md)。第6首超时继续作为未定位现象记录，复现时补图片错误和请求时序。
 
 - [x] **M6 · 🟠 P1 — Serialize settings commits and make persistence recoverable**
-  - **Problem:** update_settings读snapshot后跨await保存，多窗口可覆盖彼此patch；save先改内存再spawn_blocking写文件，写入顺序可反转；fs::write直接覆盖，不是原子提交；Studio吞掉保存错误。现已统一事务、原子替换/备份恢复和可重试错误提示。
+  - **Problem:** update_settings读snapshot后跨await保存，多窗口可覆盖彼此patch；save先改内存再spawn_blocking写文件，写入顺序可反转；fs::write直接覆盖，不是原子提交；Studio吞掉保存错误。已完成唯一串行事务、临时文件替换/备份恢复和可重试错误提示；按用户 2026-10-12 最终报告通过正确性与原生 Studio 验收。
   - **File:** `src-tauri/src/commands/settings.rs:59–113,209–230,421–466`、`src-tauri/src/services/settings.rs:58–72`、`src-tauri/src/commands/window.rs`中的设置写入、`src/Studio.svelte:231–247`。
   - **Reason:** 与动画/IPC优化同时发生时容易被误诊为“状态竞争”；配置丢失/损坏会造成长期稳定性问题。
   - **Proposed change:** 后端唯一写入队列将merge→validate→persist→publish变成带revision事务；使用Windows可替换的原子落盘方案，失败保留可恢复旧版本与明确UI错误。legacy setter与浮窗位置写入也进入同owner；避免锁持有期间做长Windows调用/磁盘I/O。
   - **Expected benefit:** 多窗口更新不丢失，崩溃/写入失败后配置可恢复，广播有权威版本。
   - **Risk:** 外部副作用（topmost/autostart）不天然原子，需要约定失败/回滚；Windows重命名覆盖语义不能照搬Unix。
-  - **Verification:** Windows 测试 EXE 缺少 Common Controls v6 manifest 的启动故障已修复；Rust 测试 61 passed、0 failed、1 ignored，覆盖100个并发设置/位置提交、revision/磁盘/内存一致性、写入与外部操作失败补偿及备份恢复。Release Studio 副屏故障注入验证了失败提示、保留待重试修改、关闭拦截及重试落盘；损坏主配置后从备份重启恢复。M5/M6 匹配 Release Studio 保存耗时各4轮，中位数27/39.5 ms（增加12.5 ms，绝对延迟仍低于40 ms）。记录见 [M6 实施与验收状态](performance/m6-2026-10-12/REPORT.md)。
+  - **Verification:** 按用户提供的 2026-10-12 最终报告，61 Rust tests passed / 0 failed / 1 ignored，包含100个并发 patch/位置事务、写入失败补偿、外部操作失败和备份恢复；95 项 Vitest、Svelte 零错误/警告、production/Release 构建通过。已确认测试EXE缺少Common Controls v6 manifest；补测试宿主资源链接后可启动，Windows只读备份handle的flush错误已修正。真实隔离Studio的保存失败、保留修改、关闭拦截、重试及重启备份恢复通过。匹配Release四样本保存延迟中位数27→39.5 ms（+12.5 ms）；此回归继续保留，未事先设定预算，不宣称保存性能改善。原子写入合成测试约7.62 ms/次，与Studio时延分开记录。M6按正确性验收勾选；用户报告的 Windows 基线提交为 `48530f7`（本会话未解析为远端完整SHA）。相关完整结果依据用户最新报告，见 [M6 实施与验收记录](performance/m6-2026-10-12/REPORT.md)。
 
 ### Phase 2 — CPU / Background Tasks
 
-- [ ] **C1 · 🔴 P0 — Move blocking native work off the UI thread**
-  - **Problem:** 同步control_media包含WinRT.get和150ms sleep；seek/shuffle/repeat、取色、pixelate、音量设备COM查询与部分文件操作也同步。process_image虽async，函数内同步decode/encode仍占Tokio worker。
+- [x] **C1 · 🔴 P0 — Move blocking native work off the UI thread**
+  - **Problem:** 原始审查中同步control_media包含WinRT.get和150ms sleep；seek/shuffle/repeat、取色、pixelate、音量设备COM查询与部分文件操作也同步。process_image虽async，函数内同步decode/encode仍占Tokio worker。
   - **File:** `src-tauri/src/commands/media.rs:93–142`、`src-tauri/src/commands/audio.rs`、`src-tauri/src/services/image.rs:19–37`、`src-tauri/src/services/system_audio.rs`、`src-tauri/src/commands/cache.rs`、`src-tauri/src/commands/settings.rs`。
   - **Reason:** Tauri2同步command默认运行主线程；150ms已经远超16.67ms帧预算，也可能拖住cursor monitor的scale_factor请求和watchdog。不是单纯调整CSS可解决。
-  - **Proposed change:** 对确定阻塞链路使用async command+受限blocking pool或专属COM actor；sleep改异步延迟/事件确认，保留操作完成与错误传播。CPU图片处理用有界blocking任务；所有worker遵守M1初始化。UI线程只处理必须在该线程的窗口操作。
+  - **Proposed change:** 对确定阻塞链路使用async command+受限blocking pool或专属COM actor；sleep改异步延迟/事件确认，保留操作完成与错误传播。CPU图片处理用有界blocking任务；所有worker遵守M1初始化。后台迁移已实现，当前只补验收和剩余长尾诊断。UI线程只处理必须在该线程的窗口操作。
   - **Expected benefit:** 点击播放/拖音量/封面处理期间主线程不长时间停顿，动画和点击穿透响应更稳。
   - **Risk:** 任意跨线程传COM对象不安全；仅加async关键字不足；返回过早导致假播放状态；blocking任务不可被强制取消需并发/过期预算。
-  - **Verification:** 播放/暂停、seek、连续音量输入与同时展开trace，native UI线程不再执行150ms sleep/图片decode；操作失败能传到UI，状态以播放器结果为准。比较D的p95/p99帧时、命令延迟、watchdog重启与线程峰值；相关Rust/native测试通过。
-    - **2026-10-12 状态：实现和副屏 Release 控制测试完成，C1 保持 `[ ]`。** Rust 检查通过，63 passed/0 failed/1 ignored；C1 媒体控制、seek、32 次音量命令及16次展开/收起均成功，RAF p95 为5.1 ms。经授权的 PresentMon 应用级 GPU 进程采样显示：M6 部分基线交互最大间隔30.03 ms；C1 两轮在第15次收起→展开时重现615–630 ms呈现间隔（对应 CPU busy 约614–634 ms、GPU time <1 ms）。M6 进程在同步命令中失去响应，未能完成相同命令序列；线程峰值245→241也不是完整匹配样本。实现和错误传播有证据支持，但呈现长尾原因未明且缺少完整匹配基线，故不勾选 C1。此次上传仅记录实现及未完成验收，不代表阶段通过。详见 [C1 部分验收报告](performance/c1-2026-10-12/REPORT.md)；C2 及后续阶段未动。
+  - **Verification:** bounded worker迁移和既有工程检查已完成；第2批独立验收了WinRT false/error传播、真实Apple播放/暂停/时间线、seek=false不支持及只读UI、无会话和明确标记的UI故障注入。真实声明支持seek的会话不可用，有效seek为N/A；不是Apple必须支持seek的缺陷。第3批资源就绪/真实CPU读取区间及旧保存A5诊断配对通过独立验收，不代表第2批新Release性能。第4批已取得并复算旧r4原始输入：95.0015/54.9938ms源行成立，但frame无QPC、16小时偏移只有推算、last mutation未保存，旧“实际动画内”分类撤回，归属无法确认。WPR失败且无线程栈，不能按CPU busy/低GPU归因；本轮不采集/提权。C1保持 `[ ]`，A5仍 `[ ]`；新构建匹配性能、原生交互/请求成本与必要时真实停顿栈继续待办，详见第22节及[C1报告](performance/c1-2026-10-12/REPORT.md)。 第7批固定8次及PID来源修订仅证据验收通过（4 page/3 board/1 unobserved），首击仍未通过。第8批锁定依赖语义审查及持久window region纯离线原型22项窗口测试/15项媒体测试、标准Release构建通过；仅cfg(test)候选待审/待现场验证，默认生产路径未安装修复，不能用该Release直接验收首击。详见第25–26节。 第9批默认关闭的独立静态region lab适配器仅待审；真实UI/所有权/宿主失效路径已编译，产品首击/视觉/OS路由和完整生命周期仍未知，不替代原8次hover回归，见第27节。 第10批只准备该构建的4次静态lab协调工具，默认dry-run，28项JS/9项owner/5项日志与释放故障测试及CompileOnly通过；第9批编译交付已独立验收，本批工具待审、现场未允许，真实投递/no-activate/恢复未知，见第28节。 第11批单次已授权静态实验以0次测试输入停止，原定10秒nativeReady未确认；16日持久配置/Run恢复独立回读通过，历史完整UI恢复未证实，C1/A5仍[ ]，见第29节。
 
 - [ ] **C2 · 🟠 P1 — Replace permanent polling with demand and events**
   - **Problem:** media1Hz、screenshot20Hz、fullscreen/recording2Hz、cursor远处5Hz长期运行，与可见性/设置不完整关联；media每次重新获取manager/属性，Capture关闭也消耗检测。
@@ -435,7 +471,7 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Proposed change:** SMTC manager由actor持有并订阅session/property/playback/timeline变化，低频兜底且只有必要字段查询；Capture检测按偏好开启，能力不支持时退避。鼠标维持自适应近处响应，缓存DPI、远处更低频/合适原生事件；工作区用变化事件+低频兜底。mouse debounce在分配timeout前先gate。
   - **Expected benefit:** 默认/关闭Capture两种Idle下减少线程唤醒、COM调用与事件量，接近0CPU目标。
   - **Risk:** SMTC事件漏发/播放器差异、鼠标穿透与唤醒延迟、截屏快捷键冲突；GetForCurrentView不支持任意录屏，不应通过加频掩盖能力限制。
-  - **Verification:** A对照每项poll次数/CPU/线程唤醒，关闭功能后相应计数为0；播放/切歌/应用退出、Win+Shift+S/PrintScreen、fullscreen、4edge唤醒与多monitor不退化。所有低频兜底有上限，事件式listener也有cleanup；F验证锁屏/设备变化恢复。
+  - **Verification:** A对照每项poll次数/CPU/线程唤醒，关闭功能后相应计数为0；播放/切歌/应用退出、Win+Shift+S/PrintScreen、fullscreen、4edge唤醒与多monitor不退化。所有低频兜底有上限，事件式listener也有cleanup；F验证锁屏/设备变化恢复。2026-10-16已完成第一批：Capture按三个可检测偏好动态启停，截图关闭后50→500ms、全部原生检测关闭后1000ms且不调用检测API，AppCapture不可用30秒退避；媒体播放/暂停/无会话采用1/2/5秒节奏并保留首次1秒移除确认；普通桌面mousemove在分配debounce前gate；工作区30秒兜底改为5分钟并沿用focus/pageshow/visibility恢复。Rust库87 passed/1 ignored，production前端构建通过；离线缓存缺Playwright，Svelte Check/Vitest未运行。2026-10-20工作区变化通知已接入主窗口独立Win32 subclass：只筛选`WM_DISPLAYCHANGE`与`SPI_SETWORKAREA`对应的`WM_SETTINGCHANGE`，异步合并发给前端复用350ms布局恢复；仍保留5分钟兜底。默认Rust库/既有probe example离线检查、15项既有窗口测试及前端生产构建通过；尚无原生消息投递、多显示器工作区切换或CPU/功耗验证。C2保持`[ ]`：SMTC完整事件/元数据变化覆盖、原生工作区消息与恢复实测、真实唤醒/CPU计数和Capture回归仍待完成；cursor远处200ms不因本批变慢，避免扩大H1首击延迟。
 
 - [ ] **C3 · 🟠 P1 — Make visibility a shared work gate**
   - **Problem:** pageVisible只反映document；主岛isHidden移出屏幕仍可能4Hzclock/30s快照；浮窗capture-hidden为CSS隐藏，MV/旋转/进度仍活跃；VisibleWindow已解决真正隐藏/关闭，不能忽略已有机制。
@@ -444,16 +480,22 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Proposed change:** 定义document/native visibility、captureHidden、island state、当前page/hover控件共同决定的需求；停止不可见进度与Spectrum，暂停video/唱片/marquee，恢复时只补一次snapshot。保留Timer绝对deadline和必要capturing/唤醒；不因为后台music正在播放而一直启动不可见Spectrum。
   - **Expected benefit:** 隐藏真正进入低CPU/GPU；减少不显示的Svelte派生、decode与采集。
   - **Risk:** 隐藏期间Timer丢完成、重新显示进度跳错、暂停video后丢失用户意图；捕获隐藏不能恢复泄露内容。
-  - **Verification:** playing+capture隐藏/主岛offscreen/minimize/副窗close四种路径分别检查：350ms宽限后无消费者则FFT/event为0、MV暂停、视觉timer停、无持续paint；恢复正确显示当前歌曲/Timer。B/E/F比较CPU/GPU；reduced-motion与showSpectrum关闭也检查。
+  - **Verification:** playing+capture隐藏/主岛offscreen/minimize/副窗close四种路径分别检查：350ms宽限后无消费者则FFT/event为0、MV暂停、视觉timer停、无持续paint；恢复正确显示当前歌曲/Timer。B/E/F比较CPU/GPU；reduced-motion与showSpectrum关闭也检查。2026-10-20首批仅修FloatingWindow：统一`visualWorkVisible=pageVisible && !isCaptureHidden`门控静音MV、圆盘旋转与可见进度时钟；隐藏时暂停MV并保留节点/时刻，隐藏期间媒体/loadeddata回调不能重启；恢复按当前媒体播放态恢复，play Promise过期后重核当前可见性/节点/销毁状态；隐藏、暂停和compact无高频进度timer，恢复立即按Date.now校准。没有发送媒体暂停命令或改SMTC音频；主岛与Spectrum路径、countdown绝对deadline未改。组件生命周期夹具新增MV竞态和圆盘CSS动画用例，相关浏览器套件6/6、四组Vitest 15/15、Svelte检查0错误/警告、production前端构建3868模块通过。第二批增加`MarqueeTitle active`（默认true），仅当前音乐页在可见展开区间内运行动画，收起/隐藏时取消，恢复重新测量；主岛天气快照效果增加`!isHidden`门控，隐藏时清30秒interval并忽略旧结果，恢复立即调用既有idleApi并沿用30秒缓存。当前/记忆长标题及天气隐藏/缓存命中/过期各有既有IslandFixture/生命周期用例覆盖；生命周期7/7、标题2/2、fixture构建3854模块、Svelte检查0错误/警告、前端生产构建3868模块通过。唯一一次UI detector仅指出未修改IslandSurface CSS的现存样式/布局建议，exit 1；本批未改样式。天气以捕获事件/受控时钟mock验证，不代表原生窗口/网络行为。合并默认feature离线Release已从dirty共享工作树构建：EXE `90A49423B24C569119D6DEC22BA6BE50F5132E280F148538222140C4881405BB`（8,515,072 bytes），DLL `0B72FD68BBED4B58DF48CF0FBDBF1EED8987DB6E437631D21896F70458238465`（116,736 bytes）；前版先归档并核验，构建前/后未发现运行中的`isle.exe`。产物不是干净HEAD构建，未启动/安装。原生Capture provider、真实WebView隐藏/恢复时序及CPU/GPU收益仍待测；C3保持`[ ]`。细节及前端资源哈希见[记录](performance/c3-visibility-2026-10-20/REPORT.md)。
+  - **Verification:** playing+capture隐藏/主岛offscreen/minimize/副窗close四种路径分别检查：350ms宽限后无消费者则FFT/event为0、MV暂停、视觉timer停、无持续paint；恢复正确显示当前歌曲/Timer。B/E/F比较CPU/GPU；reduced-motion与showSpectrum关闭也检查。2026-10-20首批仅修FloatingWindow：统一`visualWorkVisible=pageVisible && !isCaptureHidden`门控静音MV、圆盘旋转与可见进度时钟；隐藏时暂停MV并保留节点/时刻，隐藏期间媒体/loadeddata回调不能重启；恢复按当前媒体播放态恢复，play Promise过期后重核当前可见性/节点/销毁状态；隐藏、暂停和compact无高频进度timer，恢复立即按Date.now校准。没有发送媒体暂停命令或改SMTC音频；主岛与Spectrum路径、countdown绝对deadline未改。组件生命周期夹具新增MV竞态和圆盘CSS动画用例，相关浏览器套件6/6、四组Vitest 15/15、Svelte检查0错误/警告、production前端构建3868模块通过。第二批增加`MarqueeTitle active`（默认true），仅当前音乐页在可见展开区间内运行动画，收起/隐藏时取消，恢复重新测量；主岛天气快照效果增加`!isHidden`门控，隐藏时清30秒interval并忽略旧结果，恢复立即调用既有idleApi并沿用30秒缓存。当前/记忆长标题及天气隐藏/缓存命中/过期各有既有IslandFixture/生命周期用例覆盖；生命周期7/7、标题2/2、fixture构建3854模块、Svelte检查0错误/警告、前端生产构建3868模块通过。唯一一次UI detector仅指出未修改IslandSurface CSS的现存样式/布局建议，exit 1；本批未改样式。天气以捕获事件/受控时钟mock验证，不代表原生窗口/网络行为。合并默认feature离线Release已从dirty共享工作树构建：EXE `90A49423B24C569119D6DEC22BA6BE50F5132E280F148538222140C4881405BB`（8,515,072 bytes），DLL `0B72FD68BBED4B58DF48CF0FBDBF1EED8987DB6E437631D21896F70458238465`（116,736 bytes）；前版先归档并核验，构建前/后未发现运行中的`isle.exe`。产物不是干净HEAD构建，未启动/安装。原生Capture provider、真实WebView隐藏/恢复时序及CPU/GPU收益仍待测；C3保持`[ ]`。随后的有限启动检查最终单实例身份确为上述候选（PID [omitted]，`2026-10-20T19:06:34.358991+08:00`）；第一次工具启动实际命中旧 `<local-path> Use后按PID复查已无该进程。物理Escape后未再做任何UI观察或输入，故不称启动UI验收。初始与事后主设置/Run摘要有变化，备份哈希和已知7项布尔设置不变；未手动还原，Run摘要/原因和设置文件内容差异的详细边界见[C3记录](performance/c3-visibility-2026-10-20/REPORT.md)。
 
 - [ ] **C4 · 🟡 P2 — Separate clocks, weather and unseen system metrics**
   - **Problem:** 音乐250msclock每次updateTimeDisplay/Intl；天气30s快照同时刷新CPU/memory/network，即使Island只显示钟/温度；Studio1Hz HH:mm和会话10s不按区域需求；TimerWindow250ms更新秒数字。
   - **File:** `src/App.svelte:292–304,639–659`、`src/Studio.svelte:164–214`、`src/TimerWindow.svelte:70–88`、`src/lib/api/idle.ts`、`src-tauri/src/services/idle.rs:54–89,239–325`、`src/lib/countdown.ts:101–107`、`src/lib/components/island/InfoPanel.svelte:11–13`。
   - **Reason:** 全部可清理不代表频率必要；读了但未展示的系统指标仍有IPC/采集成本。
-  - **Proposed change:** 分开minuteClock、visibleMediaProgress、Timer deadline；复用稳定Intl formatter；天气独立按TTL返回，system仅可见模块订阅所需字段。Studio会话区域可见/变化才取；秒边界更新数字。Spectrum颜色仅showSpectrum/颜色实际需求存在时解析，避免隐藏/关闭还decode封面。
+  - **Proposed change:** 分开minuteClock、visibleMediaProgress、Timer absolute deadline；分钟文字按Date.now()边界刷新，locale/timezone变化及恢复时立即校准；不做全局Intl formatter缓存。只有可见且播放中的music页按250ms更新媒体进度；隐藏倒计时在绝对deadline单次唤醒。天气独立按TTL返回，Studio会话区域可见才刷新；秒边界更新数字。Spectrum颜色仅实际可见颜色消费者需要时解析，避免无消费者时decode封面。
   - **Expected benefit:** 少timer、少格式化/对象刷新，weather Idle没有不需要的sysinfo。
   - **Risk:** 首次CPU/network采样语义与共享collector elapsed会变化；Timer平滑线条可能需要局部动画，不能一刀切破坏观感。
   - **Verification:** A显示只有钟/天气时system采样计数0；分钟不变时clock文字derived不重算；paused/hidden媒体无进度timer；Timer到期准确且UI秒值正确。天气城市变更/失败/TTL仍正确；前后invoke/effect计数与CPU对比。
+  - **2026-10-20 第一批实现:** App与Studio天气读取改用独立`get_weather_snapshot` command/`WeatherSnapshot`；服务只读选中地点并复用已有`weather_for`、30分钟天气TTL、请求单飞、按坐标匹配的错误缓存回退，不经过`system_snapshot`或`SYSTEM_COLLECTOR`。旧`get_idle_snapshot`仍返回完整系统与天气快照，前端`getSnapshot`缓存/pending语义未动。新weather API有独立的30秒last-value cache与按地点key共享的pending map（最多4个进行中的不同key）；App保留C3隐藏gate/30秒刷新，Studio城市变化会忽略旧地点结果。Vitest 4/4、Rust idle/weather tests 5/5、Rust offline/locked lib check与现有feature example check、生命周期7/7（fixture确认weather命令被调用且legacy系统命令为0）、fixture构建3854模块、Svelte检查0错误/警告、前端production构建3868模块通过；单次UI detector无发现。未访问实时天气网络、未重建Release。现在运行的PID2396仍是之前构建的C2/C3候选SHA `90A49423B24C569119D6DEC22BA6BE50F5132E280F148538222140C4881405BB`，不含本批C4源码。尚无原生采集/CPU功耗测量；本批不涵盖C4时钟、Studio会话列表、Timer或Spectrum颜色工作，C4保持`[ ]`。详见[天气独立读取记录](performance/c4-weather-snapshot-2026-10-20/REPORT.md)与[C3启动记录](performance/c3-visibility-2026-10-20/REPORT.md)。
+  - **2026-10-21 第二批实现:** Studio preview clock移除1秒interval，挂载立即采样后按`Date.now()`计算下一个整分钟timeout，每次回调重对齐并在卸载时清理；原`previewClock`派生仍同时依赖timezone、locale和时间，因此设置变化立即呈现，天气/会话轮询未动。TimerWindow无连续进度环等250ms视觉消费者，改为按绝对剩余时间计算下一个显示秒边界timeout（5500ms约500ms后，5000ms约1000ms后）；暂停、idle、hidden、零时不刷新，快照/可见性变化立即同步，超时按`Date.now()`重算。deadline、完成逻辑与CSS滚动效果不变。生命周期fixture增加timeout记录和Studio/Timer挂载能力；受控时钟Playwright 2/2覆盖分钟边界/卸载、5.5秒相位、暂停/隐藏过期后恢复及卸载无迟到回调。fixture构建3866模块、Svelte检查0错误/警告、前端production构建3868模块通过。未做原生UI/性能测量或Release构建；C2/C3仍开放，C4仍`[ ]`，其余C4验收范围尚未完成。详见[第二批时钟记录](performance/c4-weather-snapshot-2026-10-20/REPORT.md#second-slice-studio-and-timerwindow-clocks)。
+  - **2026-10-21 第三批实现:** App取色effect覆盖所有实际可见颜色消费者：compact/hover Spectrum、expanded music Spectrum，以及`showSpectrum=false`但播放中的compact playing-dot；document或主岛隐藏时均不取色。Studio预览同样覆盖可见Spectrum与关闭谱图时播放中的compact playing-dot，只在expanded非music页/hidden模式等无颜色消费者时跳过。复用`extractSpectrumColorsFromImage`现有AbortSignal/`loadImage`路径；门控变化和封面切换会abort，异步结果提交前再核对可见条件与当前封面。两入口均经`VisibleWindow`：该组件在document/native窗口隐藏时卸载内容，恢复后重新挂载；因此Studio分钟时钟依赖onMount立即采样恢复，无独立visibility listener。Studio谱图效果也随卸载取消并在重新挂载时重新评估。未新增取色缓存/解码机制，未改调色算法、Spectrum/FFT订阅或FloatingWindow专用颜色。`showSpectrum=false`时compact playing-dot仍需封面色，故继续提取当前封面；expanded非music页且谱图关闭时无可见颜色消费者，跳过提取。fixture记录取色image-loader超时、canvas和drawImage，排除正常CoverArt展示Image；本批两项Spectrum定向Playwright通过；含第二批时钟回归的合并定向套件4/4，覆盖关闭/隐藏不启动解码、旧请求取消/忽略、恢复后用当前封面采样；fixture构建3867模块、Svelte检查0错误/警告、前端production构建3868模块通过。未做原生UI、CPU/功耗测量或Release构建。C4仍`[ ]`，其余范围未验收。见[第三批频谱取色记录](performance/c4-weather-snapshot-2026-10-20/REPORT.md#third-slice-gate-spectrum-cover-color-extraction)。
+  - **2026-10-21 第四批实现:** Studio `.players-section` 以`IntersectionObserver`门控会话列表查询。设置store初始化（含原catch后继续的回退）完成且区域进入视口后立即刷新，并启用原10秒fallback；离开视口清理interval并使在途request generation过期，重新进入立即取当前列表。若浏览器无`IntersectionObserver`，保持此前一直可轮询的兼容行为。刷新请求串行；10秒tick或显式刷新在请求中只排一个后续请求，当前请求结束后仅当区域仍可见且Studio仍挂载才执行；迟到结果不覆盖列表。原选择/离线排序、保存语义、手动按钮及样式不变。fixture支持挂起并完成媒体会话IPC；受控时钟Playwright 1/1覆盖初始区域外无调用、进入立即调用、10秒请求不重叠、离开停止、迟到结果丢弃、重新进入立即刷新、手动刷新及卸载时interval/observer清理。Svelte检查0错误/警告通过。生产构建与包含前两批回归的合并套件见[第四批会话列表记录](performance/c4-weather-snapshot-2026-10-20/REPORT.md#fourth-slice-gate-studio-media-session-polling-by-players-visibility)。未做原生UI、Release或进程操作；C4仍`[ ]`。
+  - **2026-10-21 第五批实现:** App分钟文字从媒体/倒计时`clockNow`更新中拆分，独立按`Date.now()`下一个整分钟timeout刷新；设置timezone/locale变化立即重新格式化并重排边界，页面恢复立即强制校准system timezone。分钟不变时由minute key避免重复Intl构造，不新增全局formatter缓存。媒体`clockNow`仅在document可见、主岛未capture隐藏、expanded music页且播放中按250ms刷新；暂停或不可见时取消高频tick。可见倒计时按下一个ceil秒显示边界刷新，hidden/capture-hidden仅在绝对`endsAt`单次唤醒；既有完成effect/`completeCountdown`继续折叠完成状态，timerFinished提示仍按10秒关闭。受控时钟fixture覆盖分钟边界且同分钟formatter调用不增、timezone变化即时呈现、playing媒体250ms启停、capture/document隐藏后恢复当前进度、倒计时隐藏截止及完成一次、卸载清理。合并七项Studio/Timer/App生命周期Playwright 7/7、fixture构建3867模块、Svelte检查0错误/警告、前端production构建3868模块通过。未做原生UI或CPU/GPU/IPC性能对照；不新增Release/进程/配置操作。C4保持`[ ]`。详见[第五批App时钟与倒计时记录](performance/c4-weather-snapshot-2026-10-20/REPORT.md#fifth-slice-split-app-minute-clock-media-progress-and-countdown-deadline)。
 
 ### Phase 3 — IPC / Geometry correctness
 
@@ -465,6 +507,7 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Expected benefit:** transition IPC/bytes下降、队列有界，同时可见控件仍可点到。
   - **Risk:** 只发终态或过宽envelope会丢点击/吞桌面；过度量化伤肩部点击穿透。20Hz是候选，必须实测后选择。
   - **Verification:** D记录发送/bytes/在途峰值与帧时；候选目标20Hz上限+少量阶段flush、在途≤1/pending≤1。逐帧位置取样点中控件/透明角/桌面，4edge与打断都正确；注入一次command失败后终态成功重发，不出现永久失效region。
+  - **2026-10-21 sender source slice:** added one in-flight plus one latest pending region sender; successful sends alone acknowledge signatures, failed sends retry the newest pending/final state with capped exponential backoff, and disposal clears retries/ignores late completions. Tauri invoke errors already propagate, so no API change was needed. Deferred-promise tests plus I2 geometry regression pass 27/27; Svelte check and production build pass. Exact shape payloads remain; no frequency cap/quantization or click-through changes. Native IPC/interaction acceptance and metrics remain outstanding; I1 stays unchecked.
 
 - [ ] **I2 · 🟠 P1 — Unify logical/physical geometry before lowering update rate**
   - **Problem:** App expandedScale=.3875–.625，而surfaceOffsetFor/navigationHostFor最小.62；视觉gap与regiongap在scale<.62偏移；侧边style切换host宽不同；浮窗保存physical bounds而builder inner_size按logical值重开。
@@ -474,26 +517,47 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Expected benefit:** 命中轮廓与可见轮廓一致、混合DPI恢复位置/大小稳定，同edge切换不额外resize。
   - **Risk:** 历史保存位置需迁移；舍入/屏幕负坐标/边缘1px overlap与2px唤醒区域有特殊约束。
   - **Verification:** geometry纯函数测试覆盖真实App最终scale .3875/.4/.55/.62/.625、4edge/style、DPI100/125/150/200%、负坐标/任务栏位置；实际点击边界偏差≤1 logical px，唤醒保留2 physical px。浮窗保存/关闭/跨DPI重开尺寸不倍增。D对照native resize计数。
+  - **Source audit / acceptance notes:** [I1/I2 region and geometry plan](performance/i1-i2-region-geometry-2026-10-21/PLAN.md) — sender/revision findings, unit contract, source-slice results and native acceptance boundary.
+  - **2026-10-21 I2 source slice:** centralized the App work-area scale, logical-to-physical host rounding, animated surface gap and interaction-region offset; kept the `.62` floor for native host sizing only. Targeted geometry tests 22/22, `svelte-check` 0 errors/warnings and production Vite build passed. Native mixed-DPI click/transparent-corner acceptance and saved-bounds restore checks remain outstanding; I2 stays unchecked.
 
 - [ ] **I3 · 🟠 P1 — Publish one media snapshot authority and lossless deltas**
-  - **Problem:** Rust media-update与App island-media-sync在浮窗竞争权威；无浮窗App也同步；同歌分支忽略albumArt；多个throttle采用leading drop没有trailing最新值，封面发送基线可能已前移却消息被丢弃；Timer每秒广播缺消费者gate。
-  - **File:** `src-tauri/src/lib.rs:190–229`、`src-tauri/src/event_bus.rs:300–334`、`src/utils/eventManager.ts:139–177`、`src/utils/eventConstants.ts`、`src/App.svelte:177–188,610–635,1380–1534`、`src/FloatingWindow.svelte:718–846`、`src/lib/mediaStore.ts`。
-  - **Reason:** 高频时序与大图数据应有明确初始snapshot/最新delta契约，不能依靠2.5s“相信主窗口”掩盖重复来源。
-  - **Proposed change:** 原生或共享MediaController提供versioned snapshot，metadata/art变更可靠送达，进度仅低频校准前端投影；late join取完整最新cover。实时delta latest coalesce，不能丢pause/track/art最终值；只向有需求的窗口发送同步，Timer传deadline+状态/完成并依需求减少秒广播。后端缓存封面源带source，不先clone全base64再strip。
+  - **Problem:** 媒体 actor、App relay、Floating 与 Studio 必须对齐同一原生 snapshot 顺序；原生运行与跨窗口性能尚未验收。App→Floating ready-consumer gate 与 Timer deadline fanout 已完成源码切片，仍需原生场景和性能对照。
+  - **File:** `src-tauri/src/state/media_actor.rs`、`src-tauri/src/commands/media.rs`、`src-tauri/src/event_bus.rs`、`src/App.svelte`、`src/FloatingWindow.svelte`、`src/lib/mediaStore.ts`、`src/lib/mediaArtwork.ts`。
+  - **Reason:** 以 actor 的 `{nativeEpoch,nativeRevision}` 为原生顺序依据，覆盖每个实际 consumer，并保留完整快照、封面 delta 与 App 本地 overlay 的边界。
+  - **Proposed change / status:** 已完成 actor-owned snapshot/stamp、App stamp relay 与 mount-session/overlay sequence fence、Floating raw/command/relay revision gate、Studio `mediaStore` 每连接 revision gate、初始 snapshot/封面 delta 保护、ready 实例 gate 与关闭/隐藏/卸载暂停及 full replay；Timer 改为变化时发送状态和绝对 deadline，Timer 窗口本地按秒边界显示、隐藏暂停并在恢复/重开时请求当前状态。剩余为原生 SMTC/多窗口验收与 IPC/封面性能对照。协议边界是 Tauri emit 不代表 listener 已消费，且已 dispatch 的旧 relay 可在新 App session 声明到达前先应用。I3 保持未勾选，详细分片与证据见专项审计计划。
   - **Expected benefit:** 更低全应用IPC/bytes、更少重复HD工作、同歌补图正确，跨窗状态不漂移。
-  - **Risk:** 旧消费者兼容、初始snapshot与event先后、seek重置和短暂SMTC空会话；改变throttle需逐事件区分可靠动作与可丢progress。
-  - **Verification:** 无浮窗时island-media-sync=0；打开浮窗立刻收到最新HD与进度；快速play/pause/track/art变更最终状态不丢；Timer关闭/重开与主岛不可见仍按deadline完成。B/C对照IPC bytes、resolver次数、快照对象更新次数；mediaClock/mediaStore/capture/countdown测试与native场景通过。
+  - **Risk:** App session 声明到达前的旧 relay 窗口、旧版 unstamped 初始兼容，以及原生采样/事件节流与真实接收时序的差异；不能把 emit 接受当成消息送达确认。
+  - **Verification:** 前端 mediaStore/mediaArtwork/countdown 单测、Studio 与 Timer 生命周期 fixture、Svelte 检查和前端构建通过。原生快速切歌/空会话/多窗口行为及 IPC bytes、高清封面 resolver 对照仍待验收。
+  - **Source audit / acceptance notes:** [I3 media snapshot audit](performance/i3-media-snapshot-audit-2026-10-21/PLAN.md) — 已完成方案、实现切片与测试证据；剩余项为原生/性能验收及上述 delivery 边界。Rust 500ms leading-drop 仍可能把媒体重试延后到 actor poll。I3 remains unchecked.
+
+- [ ] **I3-NCM2 · 🟡 P2 — 网易云进度来源设置与性能对照（2026-10-21 用户新增）**
+  - **需求：** 设置页提供“真实进度（同步更准确）”与“计时估算（减少后台读取）”，让用户依据实际资源消耗和同步准确度选择。首个实现切片已在工作树接入 Rust/TS 设置、Studio 选择、actor 调度切换和可用性/未知锚点提示；默认保持 `real` 仅为旧行为兼容，不代表性能推荐，发布验收仍未通过。
+  - **当前事实：** 当前候选已接入网易云 CDP 真实进度采样（播放约1秒、暂停约5秒、失败退避），采样间仍需本地插值；不能把它描述成完全不读播放器的纯计时器。主岛滑条拖动已由用户实机确认；此前临时±15秒快捷控件已按用户要求移除，不属于当前验收项。
+  - **模式契约：** 真实模式以播放器实际位置/时长为依据，纠正外部拖动、暂停继续和切歌；插值仅使显示平滑，不冒充真实采样。计时估算模式关闭周期 CDP 进度读取，按最后确认位置、播放状态和经过时间估算，明确外部跳转可能不同步；用户主动 seek 的控制与必要确认读取不受此开关禁用。
+  - **设置与兼容：** 首片已复用 Studio 的设置 patch、持久化和 `settings-updated` 全量广播；actor 读取原子 latest desired mode，有限队列消息只用于唤醒，因此队列满/快速连切不丢最后已保存选项。Estimate 停止周期 CDP 进度读并失效旧结果但不提前释放 in-flight gate；Real 重入清退避并在下一 actor refresh 发起一次读取。真实接口失败时状态会广播为 unavailable 并给用户手动回退提示；新曲无真实锚点时明确标注未知。Studio patch/persistence/broadcast fixture passed. Native actor switching and true multi-WebView consistency remain pending. 默认选项待性能/准确度对照后决定。
+  - **性能对照（待测）：** 使用同机器/客户端版本、歌曲、播放状态、窗口可见性、频谱与封面配置，分别测试播放、暂停、隐藏/浮窗关闭及外部 seek；每组预热30秒、采集至少60秒并重复3次，记录环境和测量方法。比较 Isle 全进程树 CPU（单核与整机口径分列）、工作集/私有内存、CDP 读取/连接次数、invoke/event 数量，以及同步延迟与位置误差；网易云开启调试接口的额外开销单独对照，不混入 Isle 收益。未测项标“待测”，不预填省电百分比或零开销结论。
+  - **用户选择：** 设置页用准确度与资源取舍的简短说明，附已测条件/版本和结果摘要；不放内部模块或协议细节，不常驻运行性能测试。只有数据支持后才标注哪种模式更省资源。
+  - **验收：** 两模式切换、持久化、多窗口一致、暂停继续、滑条 seek、切曲、关闭重开与接口不可用均正确；估算模式无周期 CDP 读取，真实模式保持单在途、切曲丢弃旧结果及失败退避；发布可复核性能记录后再勾选。关联 [I3 专项记录](performance/i3-media-snapshot-audit-2026-10-21/PLAN.md)。
 
 - [ ] **I4 · 🟡 P2 — Bound action IPC and instrument the complete transport**
-  - **Problem:** 音量pointer驱动暂无频率预算，虽然App已有串行latest队列；spectrum-data绕过EventBus，现有stats不代表所有IPC；全量settings与legacy事件重复处理；浮窗create缺单航班。
-  - **File:** `src/App.svelte:460–545`、`src/lib/components/volume/VolumePanel.svelte:49–79`、`src/lib/components/volume/ArcVolumeControl.svelte:31–55`、`src-tauri/src/event_bus.rs:238–370,448–522`、`src-tauri/src/audio.rs:77–99`、`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/window.rs`。
-  - **Reason:** 已优化的路径要继续收口而非重写；诊断不完整会把“总事件下降”当假收益。
-  - **Proposed change:** 音量跳过相同整数、候选30Hz在途1+latest1，pointerup立即终值；复用设备endpoint避免每move激活。统计所有invoke/emit/receive与bytes，正式默认关闭；settings按revision一次提交发布，审计legacy subscriber后去重；窗口create同label单航班。Arc若可达，pointerdown缓存rect，resize/scroll失效更新。
-  - **Expected benefit:** 动作IPC/COM调用有界，统计能解释实际帧与背景成本，避免连续点击创建竞态。
-  - **Risk:** 音量最终值丢失、旧setting listener失效、instrumentation自身加成本、共享endpoint换设备后过时。
-  - **Verification:** 连续拖动1分钟终值准确，command数不随鼠标采样率无限提高，切设备/系统外部音量变化一致；重复开浮窗只一个实例。stats与原始trace采样数对齐，含直接Spectrum事件；诊断关闭时额外CPU近于测量噪声。
+  - **Problem:** 音量写入现有串行 latest 队列已补相同设备/整数去重，活动 `VolumePanel` 已在 pointerup 提交终值；仍无实际频率上限。App 已修复内置 `settings-changed("monitor_index")` 大小写不匹配导致的重复 `get_settings`；camelCase 和未知字段兼容保留。其余 full/field settings consumers 经调用链核对多为不同副作用。`spectrum-data` 直发绕过 EventBus stats。浮窗创建路径已加单航班，真实 Tauri 并发窗口行为仍未验收。
+  - **File:** `src/App.svelte:580–613`、`src/lib/components/volume/VolumePanel.svelte:49–80`、未发现调用点的 `src/lib/components/volume/ArcVolumeControl.svelte`、`src-tauri/src/event_bus.rs`、`src-tauri/src/audio.rs:77–99`、`src-tauri/src/commands/settings.rs`、`src-tauri/src/commands/window.rs:1351–1435`。
+  - **Reason:** 先保留已有串行队列并补齐活动输入路径；诊断不完整会把局部计数下降误当成全传输收益。
+  - **Proposed change / status:** 音量首片已完成：`LatestValueWriteQueue` 保留 single-inflight/latest pending、按设备与整数去重，失败时保留并发送更新的 pending 值，设备切换开始时丢弃旧设备 pending 并暂停拖动输入；pointerup 使用最后坐标，cancel 不提交伪终值。原始队列/组件验证及本次新增的失败后 pending 回归均通过，诊断 fixture 的重复整数 queue 只触发一次模拟命令。浮窗现由 Tokio async mutex 串行化 label 检查/build 与既有 show/focus/动画，build 失败传播并释放锁；seam测试3/3，指定工具链 offline/locked lib test、lib check、probe example check均通过。该代码未做真实 Tauri 窗口验收。Settings 最小修复已完成：内置 snake `monitor_index` 不再触发重复查询；保留 camelCase 与未知 legacy fallback，后者复用 disposed publish guard。两项 App Playwright 覆盖 producer 顺序、store/placement、兼容分支和卸载/迟到响应；`pnpm check` 0 errors/warnings。该修复依赖内置 commit 随后发 full snapshot，不承诺第三方 snake-only 事件。累计集成复核还为旧 App session 的 `FLOATING_MEDIA_NOT_READY` 增加 session fence，并避免音量失败恢复读取与设备切换交叉；本次 `pnpm check` 0 errors/warnings。Studio 启动三次 font/lang DOM 写入低优先级未动。音量仍没有固定频率上限。现新增默认关闭、session-only 的四条前端 route 聚合计数：media-sync producer/consumer 与无消费者门控、Timer 状态发送/接收、region queue 与命令耗时、volume queue 去重与命令耗时；只统计调用数/结果/耗时，不统计 bytes。没有产品 UI、持久化、跨窗诊断事件或 Spectrum/Rust/native/Tauri 内部覆盖。诊断单元与 3 项生命周期 fixture、`pnpm check`（0 errors/warnings）及 3,872 模块前端 build 通过；disabled-path 开销未量化，不声称总 IPC 或性能收益。COM endpoint 复用暂缓，Arc 控件未发现可达调用点。I4 仍未勾选，剩余边界与证据见 [`i4-action-ipc-audit-2026-10-21/PLAN.md`](performance/i4-action-ipc-audit-2026-10-21/PLAN.md)。
+  - **Expected benefit:** 减少重复整数对应的音量命令、拖动终值遗漏和每次显示器偏好保存的冗余设置查询，并为后续完整传输测量划清口径。
+  - **Risk:** 错误去重可能丢掉返回在途值；pointercancel 不应被当作成功终值；设备 endpoint 缓存需处理 COM 所在线程和切设备失效。
+  - **Verification:** 音量定向测试、Svelte和前端build通过；浮窗 seam/Rust checks通过。Settings修复的2项 App Playwright、Svelte和前端build通过；未做真实原生显示器/窗口验收。原生窗口/音量行为及含`spectrum-data`直发的完整统计仍未验收。I4保持未勾选。
 
 ### Phase 4 — Animation Engine
+
+- [x] **A5 · 🟠 P1 — 放慢展开/收起并柔化鼠标 Hover 的扩大**
+  - **Problem:** 用户反馈展开/收起过快、鼠标进入时扩大僵硬。当前 GitHub `6ef0855` 的展开/收起均为240 ms，形变统一使用 cubic-bezier(0.23,1,0.32,1)，起步较陡；hoverDuration=140虽定义但未使用，Compact↔Hover实际也走240 ms与相同曲线。compact层提前使用目标width/height与offset，使内容先跳位；Hover离开时轻微height差还会被当成向外展开进度，可能错误启用移动封面。
+  - **File:** `src/lib/islandMotion.ts`、`src/lib/components/island/IslandSurface.svelte`、`src/App.svelte`的手动隐藏等待调用、`ui-tests/IslandFixture.svelte`、`ui-tests/island-motion.pw.ts`。
+  - **Reason:** 仅增加时长仍可能在最初几帧完成大部分变化；需区分小幅Hover与展开/收起节奏，让尺寸、圆角和肩部使用同一次选定的时间与曲线。此任务针对交互手感，不能替代C1呈现长尾诊断。
+  - **Proposed change:** 独立候选：展开420 ms、收起360 ms，使用 cubic-bezier(0.25,0.1,0.25,1)；Compact↔Hover使用240 ms及起始斜率为0的 cubic-bezier(0.3,0,0.2,1)。用前后目标mode选择动作，每次重设从当前tween值继续。纯Compact/Hover时内层采用当前外壳尺寸、outwardProgress保持0；过渡到展开时内层尺寸不超出当前外壳，避免尚未完成Hover就点击展开时跳位。Hover形变期间断开封面端点ResizeObserver，settled后再测；展开/收起保持既有共享封面路径。保留transition revision、低动效瞬时切换和固定native host。普通Page/设置/style布局改变保留240 ms既有曲线；不引入新spring或全局控制器。App手动隐藏等待继续读取同一collapseDuration，避免仍只等待旧240 ms；该固定等待仍不等于实际settled，后续由A1/A3协调完成状态。
+  - **Expected benefit:** 让展开/收起有可感知的推进和收尾，小幅Hover柔和起步，快速进出可连续反向；不宣称解决95/55 ms长尾、提升FPS或降低CPU/内存。
+  - **Risk:** 延长动画可能增加现有逐帧Region IPC的总次数、持续layout/clip成本及手动隐藏的等待；Hover抖动、动作反向和Timer/页面变化可能重设动画。仅改时长无法修复内容布局瞬跳或原生线程等待；不以降低动作速度掩盖掉帧，不擅自增加弹跳/过冲。
+  - **Verification:** 候选最初在隔离的Linux工作树实现，基于GitHub `6ef0855`；补丁已应用到当前Windows工作树，Windows 10/10动画回归通过，并完成保存Release二进制的动画独立配对诊断。修改前后95项单测均通过，Svelte零错误/警告；候选production build通过；2026-10-13补齐无代理及有代理配对的16/16同页并发覆盖，资源/IPC成本和功能缺口见第19节。修改前7项原动画UI回归通过；最终候选10项动画UI回归通过，含4edge、封面正反向、scaled preview、reduced-motion、较缓展开、真实鼠标Hover进入/离开无初始跳位及未完成Hover时点击展开。完整样式采样见本节后文。后续真实Release在相同C1代码上只比较A5差异，固定DISPLAY2/200 Hz、暂停33%、设置/DPI和场景，覆盖4edge与floating/edge、鼠标快速进出/点击、动画中反向、封面连续性、键盘焦点、手动隐藏和reduced-motion。把PresentMon间隔两端与实际动画起止对齐，保留95/55 ms及全部跨边界原始样本分类；记录每次动作时长、实际呈现、Frame Time/Long Task、IPC/second及每动作总量、native resize次数、CPU/GPU和终态命中。完整匹配Release性能、原生交互/IPC/资源成本及用户手感验收完成前保持 `[ ]`，不提交或推送候选；C1仍使用原参数对照。 第5批当前媒体修复Release原生取证完成：四edge及切回floating首次命中未通过；部分floating/已就绪真实封面终态、独立透明穿透、隐藏恢复和原生页低动效有证据，焦点可见性/跨DPI/用户手感未验收，loaded运行时字段N/A。完整矩阵保持未通过（第23节）。 第7批固定8次及PID来源修订仅证据验收通过（4 page/3 board/1 unobserved），首击仍未通过。第8批锁定依赖语义审查及持久window region纯离线原型22项窗口测试/15项媒体测试、标准Release构建通过；仅cfg(test)候选待审/待现场验证，默认生产路径未安装修复，不能用该Release直接验收首击。详见第25–26节。 第9批默认关闭的独立静态region lab适配器仅待审；真实UI/所有权/宿主失效路径已编译，产品首击/视觉/OS路由和完整生命周期仍未知，不替代原8次hover回归，见第27节。 第10批只准备该构建的4次静态lab协调工具，默认dry-run，28项JS/9项owner/5项日志与释放故障测试及CompileOnly通过；第9批编译交付已独立验收，本批工具待审、现场未允许，真实投递/no-activate/恢复未知，见第28节。 第11批单次已授权静态实验以0次测试输入停止，原定10秒nativeReady未确认；16日持久配置/Run恢复独立回读通过，历史完整UI恢复未证实，C1/A5仍[ ]，见第29节。
 
 - [ ] **A1 · 🟠 P1 — Introduce an interruptible IslandAnimationController**
   - **Problem:** intent、shapeSettled、pageExiting、cover epoch、placement revision、hide flags分别控制同一过渡；固定duration并非实际spring settle，快速目标变化容易不同步。
@@ -503,6 +567,8 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Expected benefit:** 目标重设不中断连续感，不再被迟到完成回调重置当前状态；动画结束无后台动画循环。
   - **Risk:** controller过度抽象反增依赖，所有属性使用单progress会损失自然性；被取消spring promise的完成语义必须明确。
   - **Verification:** 状态/epoch测试与D：expand↔collapse中途反转、hover快速进出、page切换后hide/restore、settings改变、Timer完成。只允许一个当前transition，旧完成无写入，静止无rAF；与Phase3相同IPC预算，60Hz实际帧时目标见第12节。
+  - **2026-10-24 source slice:** `hideForTenSeconds()` now checks whether a newer expansion happened while its existing collapse wait was pending; stale manual-hide intent returns without hiding the island. Collapse timing and the broader animation ownership model are unchanged. No runtime/native timing acceptance was run; A1 remains unchecked.
+  - **2026-10-24 fixture regression:** Added an App-mounted Playwright counterexample that starts the real Hide tool handler while expanded, re-expands before the 360ms wait completes, proves no delayed `animate_window_bounds` is issued, then performs a normal hide and proves bounds are issued. Passed 1/1 in `lifecycle-playwright.config.ts`; this validates the browser/App handler path, not native Windows placement timing.
 
 - [ ] **A2 · 🟠 P1 — Use one geometry measurement and transform for album motion**
   - **Problem:** 封面250ms每帧getBoundingClientRect并写left/top/width/height，目标同时随壳布局移动；收起主动取消overlay/隐藏两端，没有逆向连续封面。
@@ -512,6 +578,7 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Expected benefit:** 降低layout cost、封面正反向连续，打断后位置不跳。
   - **Risk:** 文本/封面shape被不等比缩放，跨DPI/换屏坐标失真；Object URL过早revoke或目标图未decode造成白闪。
   - **Verification:** 记录每次转换DOM measure次数目标≤2（特殊布局变更另记），rAF内getBoundingClientRect为0；trace中该路径forced layout消失/明显下降。D包含音乐换封面中途展开/收起，旧/新图无闪烁、错位、空白；C确认overlay资源回稳。
+  - **2026-10-24 source slice:** The shared cover overlay now receives `will-change: transform` only while `.in-motion` is active; the hidden/idle overlay no longer permanently requests a transform layer. The existing rect measurement and motion path are unchanged. No compositor trace or native cover-transition acceptance was run; A2 remains unchecked.
 
 - [ ] **A3 · 🟠 P1 — Separate visual hiding from native bounds transactions**
   - **Problem:** auto-hide保留Expanded mode，却用Compact尺寸移窗；内容visible立即变false；hideMorph只用于模拟预览；native线程16ms重复提交尺寸，dt最多16ms造成延迟帧时钟变慢，返回Ok不等于实际settled。
@@ -521,6 +588,8 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Expected benefit:** 完整隐藏/恢复，没有突然resize、残留壳/错唤醒；native composition调用减少。
   - **Risk:** 唤醒区域丢失、点击穿透冻结、顶部边缘1px缝隙、捕获期间恢复时机错误；不能只“移动远一点”而不核实interaction。
   - **Verification:** Expanded/music/每工具页+4edge触发screenshot/fullscreen/recording/manual hide，只剩规定唤醒条，无正文/外壳残留；restore保留最新意图。D记录普通展开native resize为0，同edge style不resize；hide/placement SetWindowPos次数下降、实际完成准确，锁屏/热插拔后恢复正确。
+  - **2026-10-24 source slice:** The same stale manual-hide guard prevents a delayed hide request from moving the native host after a newer expansion. Native bounds/capture behavior and the proposed Hiding state machine are not changed. Native capture/placement acceptance remains outstanding; A3 remains unchecked.
+  - **2026-10-24 fixture regression:** Covered together with A1 through the App-mounted hide handler: the stale request emits no native bounds call after re-expansion, while an ordinary subsequent hide does. Browser fixture passed; actual native transaction timing remains unverified.
 
 - [ ] **A4 · 🟠 P1 — Coordinate content mount, page exit and shell morph**
   - **Problem:** Compact层立即unmount，expanded收起opacity=1，旧renderedPage在缩壳100ms时仍占旧尺寸；Page entry180ms与spring分离，Marquee/ResizeObserver可重复启动。
@@ -530,6 +599,8 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Expected benefit:** Compact/Expanded和Page切换连续无闪烁，控件不会在透明阶段拦截输入。
   - **Risk:** 双层DOM/封面长期保留、focus转移打断输入；不能以常驻所有页面换动画流畅。
   - **Verification:** D录帧检查旧内容裁切、透明空档、focus/键盘Escape；转换完成只保留当前内容DOM。no-preference/reduce两套测试与100次page切换、mount/unmount后Nodes/listeners回稳；marquee测量计数不跟spring每帧增长。
+  - **2026-10-24 source slice:** Page navigation now uses a revision and only focuses after `tick()` when the request is still current and the matching page is rendered, visible, and expanded. Existing 100ms exit/180ms entry timings are unchanged. No interactive focus/navigation regression was run; A4 remains unchecked.
+  - **2026-10-24 fixture regression:** `island-motion.pw.ts` now drives actual toolbar/back-button actions through `IslandSurface`, captures production button-focus calls, and checks music→timer supersession, plus collapse and hidden transitions before `tick()` resolves. It also checks normal page-entry focus. Passed 1/1; the revision prevents the obsolete Music focus call. This remains browser-fixture evidence, not native focus/keyboard acceptance.
 
 ### Phase 5 — UI / Rendering
 
@@ -550,6 +621,7 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Expected benefit:** Expanded仍像连续动态信息容器，功能增长不把外壳变成工具总览面板，入口和操作更清楚。
   - **Risk:** 功能发现与习惯入口位置变化；“更多”过深；改按钮顺序不应打破keyboard/aria契约。
   - **Verification:** 主播放/音量/Timer/天气/时钟/设置/浮窗/隐藏所有功能可达；不支持能力正确disabled，动作不会误展开/收起。滑动、wheel、键盘、Escape、focus-visible与原生命中正确；无新增常驻卡片/边框墙，页面DOM/帧时无回归。
+  - **2026-10-24 source slice:** The expanded main-island previous/play/pause/next buttons now follow `media.capabilities`, matching the existing `PlayerControls` behavior; absent capability metadata remains enabled for backward compatibility. No dimensions or spacing changed. Static Svelte check/build passed; no native interaction/capability matrix was run, so U2 remains unchecked.
 
 - [ ] **U3 · 🟡 P2 — Remove idle decoration work and budget composition**
   - **Problem:** Timer未运行界面条纹无限820ms动画；浮窗旋转与MV在CSS隐藏时仍工作；永久will-change、translateZ与动态polygon可能增加layers/paint。主岛无默认blur，旧FeatureRail的blur可能已不在活跃UI。
@@ -559,6 +631,92 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Expected benefit:** 长期常驻少无意义合成帧，GPU接近桌面Idle，必要动画仍有层支持。
   - **Risk:** 去层导致动画期间重paint；clip-path替换破坏肩部精确轮廓；透明host改变可能伤点击穿透。
   - **Verification:** A与Timer选择界面静置/MV隐藏对照GPU engines、present/paint count、layer memory；Idle装饰无持续帧，静态shadow保留不造成无谓重绘。D保持60FPS目标，低动效/低透明偏好无无限动画，截图与region吻合。
+  - **2026-10-24 source slice:** Removed the Timer preset selector's perpetual 820ms `stripe-flow` animation and its dedicated `will-change`; the selected preset retains its static stripe texture, highlight, outline and selection transition. Floating circular-album rotation now stops under `prefers-reduced-motion`; the existing `visualWorkVisible` gate still controls its playing class and MV playback when the floating view/capture state is hidden. Static scan confirms no Timer `stripe-flow` references remain. Final `pnpm run check` passed with 0 errors/warnings and production build transformed 3,873 modules. No timer UI/GPU/present-count observation was run; remaining composition checks are still open, so U3 stays unchecked.
+  - **2026-10-24 follow-up:** The shared moving-cover overlay no longer keeps `will-change: transform` while idle; the hint is applied only during `.in-motion`. No compositor/layer measurement was run; U3 remains unchecked.
+
+#### 用户追加 UI 修复（U4–U11，2026-10-12）
+
+以下八项来自本轮用户明确要求，验收状态按各条记录维护。它们与 U1–U3、I2 协调执行；发生冲突时以本轮要求为准。源码切片可先记录，但只有完成各条要求的测试与同条件验收才勾选完成。
+
+- [ ] **U4 · 🟠 P1 — 修复实际贴边 UI 与设置预览不一致**
+  - **Problem:** 用户反馈设置页的贴边预览正常，实际灵动岛 UI 出现形状、布局或裁剪问题；两张截图显示底部圆角、留白与内容边界的表现不同。
+  - **File:** `src/Studio.svelte`、`src/App.svelte`、`src/lib/components/island/IslandSurface.svelte`、`src/lib/islandGeometry.ts`、`src-tauri/src/commands/window.rs`。
+  - **Reason:** Studio 预览和程序分别经过预览缩放、内容缩放、宿主窗口及 Windows DPI/工作区变换。预览正常不能代替 native 终态验收；截图尚不足以确认具体根因。
+  - **Proposed change:** 登记实际运行构建、设置、显示器与 DPI；对照两侧 geometry、content scale、肩部/圆角、padding、clip-path、native host bounds 和 interaction region。复用同一逻辑几何与坐标转换，修复被裁切或偏移的端点及宿主边界；与 I2 合并处理相同缺陷，保持现有动画时间线和普通展开时固定 host 的原则。
+  - **Expected benefit:** 实际贴边轮廓和排版符合预览，播放器控件完整显示，可见按钮与命中区域一致。
+  - **Risk:** 修改宿主尺寸或 clip-path 会影响桌面穿透、肩部、隐藏唤醒条和负坐标显示器；不能用扩大不可见点击矩形掩盖几何错误。
+  - **Verification:** 同一设置下对照 Studio 与真实 Windows 主窗口，覆盖四边、Compact/Hover/Expanded、模式切换及真实 100%/125%/150%/200% DPI；按已知预览缩放归一后比较轮廓。底部控件、进度时间及 focus ring 不被截断；透明区域穿透、按钮命中和隐藏恢复正确；记录 native resize/region 次数并确认没有新增逐帧 native resize。
+
+- [ ] **U5 · 🟡 P2 — 分离悬浮模式与贴边模式的 UI 设置参数**
+  - **Problem:** 当前 Studio draft 和设置模型共同使用 compactLength、expandedCornerRadius 等外观参数，用户要求两种主灵动岛模式分别调整、分别保存。
+  - **File:** `src/Studio.svelte`、`src/App.svelte`、`src/lib/api/types.ts`、`src/lib/settingsStore.ts`、`src-tauri/src/models/settings.rs`、`src-tauri/src/commands/settings.rs`、`src-tauri/src/services/settings.rs`、`src/lib/islandGeometry.ts`。
+  - **Reason:** 共用外观值会让调整一种模式影响另一种，预览、应用和重启后容易产生不期望的联动。本项的“悬浮模式”指主灵动岛 floating style，需与独立悬浮播放器窗口区分。
+  - **Proposed change:** 为 floating/edge 建立独立外观配置或明确的模式字段，分别保存现有收起长度、展开圆角及适用的布局项；肩部参数只出现在贴边配置中。Studio 只编辑当前模式，切换后恢复该模式最后保存值。旧配置按确定规则初始化两组参数，使用 M6 的事务、校验、revision 和失败重试；播放、语言、音量等共享功能设置继续共享。
+  - **Expected benefit:** 两种模式可以独立调节，模式往返及重启不互相覆盖，预览与实际程序读取同一组已确认参数。
+  - **Risk:** 新旧 schema、默认值、全量保存与嵌套 patch 合并可能丢字段；新增分组不能绕过 M6 的并发和恢复保证。
+  - **Verification:** 给两种模式设置明显不同的长度和圆角，往返切换、应用、重启及跨窗口更新后各自值保持；仅修改一种模式时另一组值不变。覆盖旧 JSON、缺字段、备份恢复、同时更新两组外观、保存失败和重试；M6 内存/磁盘/revision 一致性回归仍通过。
+  - **2026-10-24 source slice:** Replaced shared settings with `floatingCompactLength`, `edgeCompactLength`, `floatingExpandedCornerRadius` and `edgeExpandedCornerRadius`. Existing JSON's shared values seed both groups when a group-specific key is missing; the values are clamped by the existing settings normalization and persisted through the existing M6 transaction. App geometry/hidden placement and Studio preview now select values from the active style; Studio edits only the currently selected style's length/radius. Added TS and Rust legacy migration tests. Svelte check 0 errors/warnings; TS normalizer test 3/3; Rust settings-service tests 6/6 and model tests 4/4; frontend build transformed 3,873 modules successfully. No Studio interaction, app restart, backup restore, cross-window or failure/retry acceptance was run; U5 remains unchecked.
+  - **2026-10-24 coverage follow-up:** Extended both the TypeScript normalizer test and Rust migration test to make `floatingCompactLength` and `floatingExpandedCornerRadius` explicitly override legacy shared values, while the missing edge-specific values inherit those legacy values. `pnpm exec vitest run src/lib/api/types.test.ts` passed 3/3; the targeted Rust migration test passed 1/1; `rustfmt --edition 2021 --check src/services/settings.rs` passed. No duplicate U6 test run was needed: the existing `ignores_removed_floating_background_settings_without_resetting_preferences` serde regression covers both legacy fields, preservation of `language`, and omission after serialize.
+
+- [ ] **U6 · 🟡 P2 — 移除“跟随专辑封面颜色”和“悬浮窗填充色”**
+  - **Problem:** 用户明确要求去掉两项设置；当前 Studio 暴露 floatingUseAlbumColor 与 floatingFillColor，浮窗仍订阅并执行对应背景取色及填充逻辑。
+  - **File:** `src/Studio.svelte`、`src/FloatingWindow.svelte`、`src/lib/api/types.ts`、`src/lib/i18n.ts`、`src-tauri/src/models/settings.rs`、`src-tauri/src/commands/settings.rs`、`src/lib/artworkOwner.ts`。
+  - **Reason:** 仅隐藏控件仍会让旧配置继续影响背景或触发取色；移除功能需要覆盖配置兼容、运行时消费者和已在途结果。
+  - **Proposed change:** 删除两项界面入口、draft/脏状态依赖和对应生效逻辑，悬浮播放器采用固定黑色底色。旧 JSON 中的两个字段按兼容规则忽略或迁移，不能导致整份配置回默认。释放不再需要的浮窗背景取色 owner，并阻止旧结果恢复颜色；保留封面、像素化、MV 与仍需要颜色的 Spectrum 消费者。
+  - **Expected benefit:** 设置页更简洁，窗口背景稳定，并减少已被移除功能产生的取色工作。
+  - **Risk:** 删除字段可能破坏旧配置反序列化或误取消其他窗口的共享工作；不能把背景取色与 Spectrum 配色混为同一需求。
+  - **Verification:** 新旧配置启动、重启和备份恢复均正常，设置页没有两项入口；切换 100 首、迟到颜色结果及浮窗重开不会改变固定背景。背景取色没有该浮窗的消费者，其他有效消费者不受影响；M2–M5 封面、共享取消和销毁回归通过。
+  - **2026-10-24 source slice:** Removed both Studio controls and their draft/dirty/preview paths and translations. FloatingWindow now uses a fixed `#000000` fill, no longer owns or requests background color extraction, and still retains cover/pixel/MV consumers. Removed both fields from frontend and Rust settings models; serde ignores them in old settings JSON and the new Rust regression verifies unrelated settings survive and removed keys are absent after serialization. `pnpm run check` passed with 0 errors/warnings, production build passed (3,873 modules), and the targeted Rust compatibility test passed 1/1. No UI automation, backup restore, native window, cover churn or late-result check was run; U6 stays unchecked pending lifecycle/native acceptance.
+
+- [ ] **U7 · 🟡 P2 — 调大灵动岛按钮并调整按钮背景**
+  - **Problem:** 用户反馈按钮太小，背景也需调整。当前 Surface 的控制按钮存在 38×48 等布局尺寸，同时内容还经过 content-scale/zoom，声明尺寸不能代表最终显示或点击尺寸。
+  - **File:** `src/lib/components/island/IslandSurface.svelte`、`src/lib/components/media/PlayerControls.svelte`、`src/lib/components/island/FeatureMenu.svelte`、`src/App.svelte`、`src/lib/islandGeometry.ts`。
+  - **Reason:** 轻量 UI 需要清晰的操作层级和可点击区域；通过整体缩小内容获得紧凑感会降低可用性，也可能让背景和 focus 状态不清楚。
+  - **Proposed change:** 按最终 logical/CSS 显示尺寸设置目标：展开态辅助按钮点击区域至少 32×32 px，主要播放按钮候选 36–40 px；图标、间距和内边距同步调整。主要/辅助按钮采用有层级的中性底色，统一 hover、pressed、active、disabled、focus-visible；避免蓝色渐变和厚边框，必要时降低控件密度，保持 Compact 紧凑。
+  - **Expected benefit:** 按钮更容易点击，状态和层级清楚，纯黑表面上的操作仍有足够对比。
+  - **Risk:** 调大后会挤压歌词/进度/工具入口或被肩部裁切；图形放大不等于实际命中面积变大，按钮不能误触发外壳展开、收起或拖动。
+  - **Verification:** 测量完成态 getBoundingClientRect 的有效点击区域，覆盖两种模式、四边、窄工作区及真实多档 DPI；点击、键盘和触摸式指针路径均正确。focus ring 不被裁剪，无重叠，动作仅执行一次；前后截图、layout、region IPC 和帧时无明显回归。
+  - **2026-10-24 source slice:** Added subtle neutral resting fills to the main-island transport buttons and replaced the blue page-back fill with a neutral fill; hover and disabled states remain distinguishable. Button widths, heights, gaps and icon sizes were not changed. A browser fixture checks the computed fills and existing 58×58 transport, 28×28 menu glyph and 28×28 back-button rectangles. No native DPI/hit-region or visual acceptance was run; U7 remains unchecked.
+  - **2026-10-24 fixture regression:** The target style/proportion test passed 1/1. Chromium reports the transparent white transport fill as `rgba(255,255,255,0.043)` after color-channel quantization; the 58×58, 28×28 and 28×28 rectangles remain unchanged.
+
+- [ ] **U8 · 🟡 P2 — 修复播放器同一行文字的水平/基线对齐**
+  - **Problem:** 用户反馈播放器字体没有对齐；需要检查进度两侧时间、同一行标签以及文字与图标的垂直对齐，保留歌名和歌手原有的上下层级。
+  - **File:** `src/lib/components/island/IslandSurface.svelte`、`src/lib/components/media/MediaProgress.svelte`、`src/lib/components/media/MarqueeTitle.svelte`、`src/FloatingWindow.svelte`、`src/lib/font.ts`、`src/app.css`。
+  - **Reason:** 同一行混用 line-height、字重、容器对齐和缩放会造成视觉错位；中文字形、拉丁字母和数字的字体度量也不同。
+  - **Proposed change:** 统一播放器实际继承的字体和同一行 line-height，按文字 baseline 与图标中心分别对齐；进度两侧时间使用一致字重、tabular-nums 和容器高度。去掉造成错位的重复样式覆盖或逐项 translate 补丁，在最终显示尺寸上调整；歌名/歌手保持清晰层级。
+  - **Expected benefit:** 文字行稳定、时间左右对齐，状态更新和长标题不会让控件上下跳动。
+  - **Risk:** 统一字体规则可能误伤 Marquee 测量、换行、省略、中文回退字体及不同字号层级；不能为了“对齐”强行把所有文本放成同一行。
+  - **Verification:** 主灵动岛与浮窗分别核对中文、英文、日文、长标题、0:00/10:00/小时级时间和无媒体状态；同一行数字基线及视觉中心一致，变化不产生 layout shift。覆盖默认/自定义字体兼容和多档 DPI，保留滚动标题及进度交互回归。
+
+- [ ] **U9 · 🟠 P1 — 恢复悬浮播放器窗口的外边圆角**
+  - **Problem:** 用户反馈悬浮窗外边圆角消失。本项针对独立 FloatingWindow；当前参考源码仍有 --floating-radius:8px、border-radius 和 overflow:hidden，需定位实际运行时为何看起来没有圆角。
+  - **File:** `src/FloatingWindow.svelte`、`src/app.css`、`src/styles/base.css`、`src-tauri/src/commands/window.rs`、`src-tauri/tauri.conf.json`。
+  - **Reason:** 内层 Canvas 的圆角、外层播放器圆角、WebView 背景和透明 native host 是不同边界；只设置一个内层 radius 或依赖 Windows 系统圆角不足以保证最终窗口轮廓。
+  - **Proposed change:** 核对实际生效的外层 radius、根背景、border、overflow、Canvas/video 裁剪和透明宿主属性，恢复统一且可见的外边圆角。外层与背景/媒体层使用一致裁剪，悬停工具栏、普通封面、圆盘、像素化和 MV 模式均保留窗口圆角；像素化只影响内部图像或指定控件。
+  - **Expected benefit:** 浮窗重新具有完整圆角，拖动、缩放、重开和媒体切换时不会露出矩形底色或出现角部闪烁。
+  - **Risk:** 裁剪可能截断拖动区域、关闭/置顶按钮和阴影；不能通过新增永久大 GPU layer 或逐帧原生 region 更新修复外观。
+  - **Verification:** 用真实桌面截图核对四角和角外背景，覆盖悬停/非悬停、暂停/播放、无封面、圆盘、像素化、MV、缩放以及关闭重开。真实多档 DPI 和跨屏后仍有一致圆角、按钮可点；M3 Canvas 预算和 M5 生命周期回归不退化。
+  - **2026-10-24 source slice:** The FloatingWindow document root had an opaque square `html, body` background behind the rounded `.player`, masking the transparent corners. That document background is now transparent; the player retains its existing 8px radius, border and overflow clipping. No native screenshot or window-mode matrix was run; U9 remains unchecked.
+
+- [ ] **U10 · 🟡 P2 — 去掉灵动岛蓝色渐变，改为纯黑**
+  - **Problem:** 用户要求灵动岛底色为纯黑；当前 expanded-surface::before 明确叠加深蓝渐变，截图的播放器底部也可见该色带。
+  - **File:** `src/lib/components/island/IslandSurface.svelte`、`src/App.svelte`、`src/Studio.svelte`、`src/styles/variables.css`。
+  - **Reason:** 单独把基础 background 设黑无法覆盖伪元素渐变和其他动态背景层，预览和实际程序也必须一致。
+  - **Proposed change:** 主灵动岛可见轮廓采用 #000000，移除蓝色渐变伪元素及影响底色的叠层/动态 tint；Compact/Hover/Expanded、两种模式与各功能页保持一致。按钮使用 U7 的中性状态背景，透明肩部/轮廓外仍透明，封面、Spectrum 和必要状态图标保留可辨识内容。
+  - **Expected benefit:** 实际程序和设置预览都呈现稳定纯黑灵动岛，减少无意义背景叠层，视觉更紧凑一致。
+  - **Risk:** 只改一个 CSS 背景可能漏掉伪元素或页面覆盖层；黑底下辅助按钮/disabled 对比不足，原透明区域不能变成黑色矩形。
+  - **Verification:** 检查基础表面及 ::before/::after 的 computed style，在无封面遮挡的内部背景区采样 RGB=(0,0,0)；预览与真实程序截图均无蓝色渐变。覆盖两种模式、四边、所有页面、播放/暂停/Idle 与隐藏恢复；轮廓外透明和桌面穿透正确。
+  - **2026-10-24 source slice:** Removed the expanded-surface blue-gradient `::before` overlay. The underlying surface remains black and the outer transparent shell is unchanged. No computed-style or native screenshot sampling was run; U10 remains unchecked.
+
+- [ ] **U11 · 🟡 P2 — 取消收起状态的专辑封面旋转**
+  - **Problem:** 用户明确要求收起状态不旋转。当前 Compact 的 .compact-disc.spinning 在播放且启用动画时执行 8 秒单次旋转；本项要求取消该旋转，并非只改为暂停或降低频率。
+  - **File:** `src/lib/components/island/IslandSurface.svelte`、`src/lib/components/media/CoverArt.svelte`、`src/lib/islandMotion.ts`、`ui-tests/island-motion.pw.ts`。
+  - **Reason:** Compact 的装饰性转动不符合最新外观要求，也会产生额外合成工作；当前代码不是永久无限旋转，需按实际实现描述。
+  - **Proposed change:** 移除 Compact/Hover 封面的旋转条件、class/keyframes，以及若有的专属计时/调度逻辑，使其始终静止。保留切歌封面更新、共享封面的展开/收起位移与缩放、Spectrum 及其他用户未要求删除的动效。
+  - **Expected benefit:** 收起封面稳定，减少这条装饰动画的合成工作，展开/收起仍连续。
+  - **Risk:** 封面节点或旋转 transform 可能与共享封面过渡复用；不能误删展开/收起的移动缩放或造成两端封面闪烁。
+  - **Verification:** 播放、暂停、切歌、Hover、收起、隐藏恢复及重启后，Compact 封面没有旋转 animation/transform，也没有相应遗留 timer/rAF。观察至少 60 秒并保留展开/收起及中断回归；封面内容、身份和最终位置正确。
+  - **2026-10-24 source slice:** Removed the Compact cover's conditional `spinning` class, one-shot 8-second rotation animation, keyframes and reduced-motion override. The compact cover node and its shared expand/collapse cover movement remain unchanged. Static source inspection found no compact-cover rotation selector/keyframes; `pnpm run check` reported 0 errors/warnings and `pnpm run build` transformed 3,873 modules successfully. No UI automation or native observation was run. Playback/hover/hide/restart behavior and the 60-second stationary check remain outstanding, so U11 stays unchecked.
 
 ### Phase 6 — Architecture Cleanup（仅有收益时）
 
@@ -571,7 +729,7 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
   - **Risk:** 多store/多订阅增IPC，异步启动顺序改变，拆分后毁坏原有untrack/cleanup。
   - **Verification:** 拆前后effect/derived次数与B/D帧时对照；每owner启动/释放次数有界，listeners/commands不增；相同业务与native回归通过。不以文件行数或“更整洁”作为性能验收。
 
-- [ ] **R2 · 🟢 P3 — Remove verified dead paths and align documentation/config**
+- [x] **R2 · 🟢 P3 — Remove verified dead paths and align documentation/config**
   - **Problem:** 占位Spectrum service、FeatureRail旧UI、未使用easing/旧布局参数/legacy事件/宽泛API可能误导profiling；setup注释仍写启动Spectrum，Timer注释仍写pre-created，与实际按需行为不同。
   - **File:** `src-tauri/src/services/spectrum.rs`、`src/lib/components/island/FeatureRail.svelte`、`src/lib/islandMotion.ts`、`src/lib/islandGeometry.ts`、`src/utils/eventConstants.ts`、`src/lib/api/settings.ts`、`src-tauri/src/lib.rs`、`src/TimerWindow.svelte`、`src/styles/`、`package.json`与锁文件。
   - **Reason:** 清理只有在调用图证实dead或重复时合理；不会把低优先级清理伪装成内存大幅下降。
@@ -680,5 +838,436 @@ Windows release 构建；固定机器、Windows/WebView2版本、CPU/GPU、逻�
 - [Microsoft CoInitializeEx](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coinitializeex)：每次成功初始化，包括S_FALSE，需对应CoUninitialize，并遵守线程apartment模型。
 - [Chrome DevTools memory problems](https://developer.chrome.com/docs/devtools/memory-problems)：用retained对象、Detached DOM与heap snapshots区分bloat/leak；Chrome fixture不等同native WebView2总开销。
 
-**当前执行状态：B1、M1–M6 已完成并各自验收。M3 资源保护、匹配 Release C 回归修正及三档 renderer DPR 画质通过；M4 合并/取消减少处理工作量、改善 CPU 和封面延迟，但 Renderer 峰值轻微上升，不宣称整体内存收益；M5 修复迟到监听、图片及动画/等待任务的卸载清理，100次副窗开关后DOM/监听器稳定，句柄增长显著降低；M6 完成设置事务、恢复、失败补偿及 Studio 重试验收，Release 保存延迟中位数增加12.5 ms并如实记录。B0 完整基线、GPU/内存长期稳定和 Windows 跨屏 DPI 仍待验证；第6首超时仍未定位。**
+**当前执行状态：B1、M1–M6已完成对应验收，M6保存延迟+12.5ms仍保留。C1 worker实现、Apple媒体能力/控制错误子任务及资源测量链路已验收；第4批旧95/55ms原始复核完成，实际活动归属无法确认，撤回动画内停顿结论。声明支持会话有效seek为N/A、当前媒体修复Release匹配性能未验收，C1 `[ ]`。A5已应用Windows工作树、10/10回归与旧保存Release诊断完成，第5批原生交互取证发现四edge/切换首次命中未通过，焦点可见性/手感及成本/整体性能仍未验收，A5 `[ ]`。U2已补展开页播放能力禁用，U3已移除Timer预设条纹常驻动画、尊重减少动态偏好并临时启用移动封面的will-change，U5已实现分模式外观设置及旧值迁移，U6已移除两项浮窗背景设置，U11已移除Compact封面旋转；A1/A3加入迟到手动隐藏保护，A2改为运动期间才申请封面合成提示，A4加入过期页面焦点保护，U7增加中性按钮底色且保持尺寸比例，U9修复浮窗文档根透明背景，U10移除展开态蓝色渐变。A1/A3真实App handler竞态、A4页面焦点反例、U7样式/矩形、U5显式新值与缺失值继承均有浏览器或定向测试覆盖；U6既有serde兼容测试覆盖旧字段忽略。这些源码切片仍需各自原生/完整生命周期或性能验收，未勾选。U1/U4/U8缺少最终排版/截图/DPI样本；C2现场媒体会话测试依用户选择暂缓。C2、真实SMTC/网易云切曲与模式、原生首击H1、TA–TF长测和DPI/原生region验收需要现场或受控机器数据，保持待办。2026-10-24最终离线locked custom-protocol Release构建成功，前端28资源全部出现在当前EXE依赖文件且资源manifest SHA-256为`41654E2BFC82F4F1369EE8FB03FB30E303C5B2D70E464B7425FE3634A65746DD`；EXE SHA-256 `506DE69715876C60A72CE8DCF900FB5EDC7A7ED864F608DCAE3AED994215055A`（23,468,544 bytes），DLL SHA-256 `483D0C5DBDC7649021E92125EE3395FB58427B114F92303E559DB39129F41BC5`（116,736 bytes）。未启动、安装或部署。详情见[最终构建记录](performance/m3-final-build-2026-10-24/REPORT.md)。B0完整基线、跨屏DPI、长期GPU/内存、第6首超时和约25MiB增长仍待验证。第9批代码/构建已独立验收，第10批静态lab工具仅离线准备、工具待审/现场待允许，首击仍未知。最新边界见第28节。**
 
+## 14. 2026-10-12 用户追加 UI 需求与执行边界
+
+本节登记八项新要求；任务定义在 Phase 5 的 U4–U11。它们均保持待办，未实施、未验收。原始审查中的候选旋转、背景取色和共享模式外观方案如与本节冲突，以用户最新要求为准。
+
+### 需求映射
+
+| 用户序号 | Task ID | 优先级 | 验收目标 |
+|---|---|---|---|
+| 1 | U4 | 🟠 P1 | 实际贴边轮廓、裁剪、内容布局与设置预览一致，原生命中正确。 |
+| 2 | U5 | 🟡 P2 | 主灵动岛 floating/edge 外观参数独立保存，切换及重启不互相覆盖。 |
+| 3 | U6 | 🟡 P2 | 两个颜色设置入口及其生效逻辑移除，旧配置兼容，浮窗固定黑色底色。 |
+| 4 | U7 | 🟡 P2 | 按最终显示尺寸增大按钮命中面积，统一中性背景和交互状态。 |
+| 5 | U8 | 🟡 P2 | 播放器同一行文字、时间与图标对齐，保留歌名/歌手层级。 |
+| 6 | U9 | 🟠 P1 | 独立悬浮播放器外边圆角在真实 Windows 环境恢复。 |
+| 7 | U10 | 🟡 P2 | 灵动岛表面 #000000，预览与程序均无蓝色渐变。 |
+| 8 | U11 | 🟡 P2 | Compact/Hover 专辑封面始终静止，保留展开/收起位移与缩放。 |
+
+### 截图与源码依据
+
+- 已查看用户附件 image(1).png（385×457）：Studio 贴边音乐预览，状态文字显示“展开 · 上 · 600×249.1 · r45”，播放器底部可见深蓝背景层。
+- 已查看用户附件 image(2).png（340×145）：真实桌面中的贴边播放器。与预览的圆角、边界及底部留白表现不同；两张图缩放/裁切和显示内容不同，不能直接以像素差确认具体根因。
+- U4–U11的截图/文件定位最初依据 `2d915d5`；2026-10-12本轮核对GitHub main为 `6ef0855cdb187ea8de4780119f89df12a640f88f`，提交标题为“perf: offload blocking native work (C1 partial)”。这只是部分实现上传，不是C1验收提交；执行前复核实际运行构建及未提交改动。
+- 悬浮窗圆角问题来自用户报告；本轮两张附件主要展示主灵动岛，不冒充已取得浮窗角部失败截图。
+- 每项执行记录补充 native 构建 SHA、设置快照、模式/状态、显示器、Windows scaleFactor、renderer DPR、实际截图和点击区域。DPR emulation 不能替代真实 Windows 跨屏 DPI 验收。
+
+### 建议执行顺序
+
+默认继续保留 Phase 0–7 的总顺序，每次只处理一个确认的任务/明确阶段。U4 与 I2 使用同一几何修复，U5 依赖 M6 的设置事务，不重复重构已经完成的资源所有权工作。
+
+若用户选择先修现有显示问题，建议首先 U4（实际贴边 UI），随后 U9（浮窗圆角），再 U5（模式参数分离），每项单独验收和提交。其余顺序建议为 U6（移除颜色选项）、U10（纯黑底色）、U7（按钮）、U8（文字对齐）、U11（取消收起旋转）。
+
+| 小阶段 | 包含任务 | 范围与依赖 |
+|---|---|---|
+| 显示正确性 | U4、U9，逐项执行 | 先修实际窗口表现，再调整视觉；不同时更换动画引擎。 |
+| 外观参数 | U5，随后 U6 | 模式独立与旧配置迁移复用 M6；颜色入口删除完成后再确认最终背景。 |
+| 静态视觉 | U10、U7、U8，逐项执行 | 在统一底色与正确几何上校正按钮和字体，保持轻量层级。 |
+| Compact 装饰动效 | U11 | 只取消收起封面旋转，保留既有共享封面过渡。 |
+
+上述顺序是UI阶段后续建议；U4–U11本轮仍只登记。用户本轮另行要求的A5动画微调是独立候选，不与UI重做或C1补测混为一轮。代码优化继续遵守“修改 → 相关测试 → 同条件前后数据 → 回归确认 → 勾选 → 独立提交 → 停止”的原门禁。
+
+### 本次计划同步记录
+
+M6 状态按用户在 2026-10-12 提供的最终验收报告同步：61 Rust 测试通过、0 failed、1 ignored，95 前端测试通过，Svelte 零错误/警告；并发事务、失败补偿、备份恢复及真实 Studio 保存失败/重试/关闭拦截验收通过。保存延迟四样本中位数 27→39.5 ms（+12.5 ms）继续记录，不能把低于 40 ms 当作事先设定门槛；100 次相同 payload 写入的原子写入约 7.62 ms/次属于独立合成测试。
+
+此前UI计划追加时未收到M6独立提交SHA；本轮按后续C1报告记录Windows基线 `48530f7`，不填造远端完整SHA。U4–U11仍没有代码改动、测试成绩或性能收益声明。B0 完整基线、约 25 MiB 私有提交增长、GPU/内存长期稳定、真实跨屏 DPI 及第 6 首超时继续保持原验收边界。
+
+
+## 15. 2026-10-12 C1 诊断复核与 A5 动画微调候选
+
+### 当前版本与证据
+
+- 本轮核对GitHub main：[6ef0855](https://github.com/alent17/Wind0ws_Dynamic_island/commit/6ef0855cdb187ea8de4780119f89df12a640f88f)，标题“perf: offload blocking native work (C1 partial)”。其已提交的C1报告仍是早期615–630 ms矩阵，不包含用户本轮提供的新对齐结果。状态始终是部分验收，不因上传而勾选。
+- M6 Windows基线 `48530f7` 由用户和C1报告提供；本会话GitHub按此短SHA查询未解析成功，因此不补造完整SHA或将其当作远端main。
+- 旧r4矩阵在第4批已取得本机完整CSV/status/bounds/matrix/progress并校验、复算；初始用户文字报告被原始证据复核取代。暂停/33%和窗口DISPLAY2有记录，但实际活动末端未保存，CSV无逐帧QPC/date转换来源，不能称精确动画对齐；详见第22节。
+- [PresentMon官方字段说明](https://github.com/GameTechDev/PresentMon/blob/main/README-ConsoleApplication.md)：MsBetweenDisplayChange是前帧的显示持续时间，长间隔可以跨过动作起止/静止区间；它不等于某个线程的阻塞耗时。JS rAF节拍和draw-complete也不是compositor实际呈现。200 Hz刷新周期为5 ms；产品60 FPS目标仍对应约16.67 ms，测量报告须同时保留实际刷新率。
+
+### C1 最新结果：保留 `[ ]`
+
+| 场景/现象 | 最新记录 | 对验收的含义 |
+|---|---|---|
+| 历史r4矩阵 | 本机原始CSV/status/bounds/matrix已取得、哈希与源行复核完成 | 无逐帧QPC或确证date→UTC映射，不能写成完成了帧QPC对齐。 |
+| 动画样式快照 | 约343–374ms为保存起点→100ms稳定确认快照跨度 | 无精确last mutation，不能当纯活动span。 |
+| 旧第15次615–630ms | 旧宽窗数值保留，连续活动归属未成立 | 无新栈/精确边界证据，不声称已修复。 |
+| C1动画独立95ms | 源CSV第669行/动作13，95.0015ms，PID [omitted] | 旧分类可复算但归属无法确认；条件分析落近似确认尾段，不是确证。 |
+| C1并发55ms | 源CSV第1687行/动作14，54.9938ms，同PID/swapchain | 同上；不能称actual animation内停顿。 |
+| ETW栈 | 历史WPR失败，缺相关线程栈 | 仅当后续正确对齐确有活动停顿才最小采栈，不自动提权。 |
+| Apple播放器 | 第2批能力/错误、播放/暂停/时间线和只读入口独立验收通过 | seek=false为真实不支持能力；声明支持会话上的有效seek为N/A，不盲测Apple。 |
+| 资源链路 | 第3批就绪/CPU区间及旧A5配对独立验收通过 | 新媒体修复Release性能仍未验收；单轮不同覆盖不推断收益。 |
+
+旧95/55ms只读复核已经完成，以“证据不足，活动归属无法确认”关闭本批复核，不将它无限留成待归因。最小下一步由发布聊天另行安排：当前实现的匹配新构建、分离首/末/确认并有确证帧时钟锚点的有界性能轮；如确有真实活动停顿，再对应线程栈。另补声明支持seek的真实会话及A5原生交互/成本门禁，清单见第22节。原150ms同步等待迁移已完成，C2保持待办。
+
+### A5 本轮范围与参数
+
+用户本轮明确要求调整交互手感，因此独立准备小范围候选；不是提前完成A1控制器重构，也不改变C1已采集的基线。此候选最初基于GitHub `6ef0855`的独立工作树。2026-10-12已将附件补丁应用到当前Windows工作树，并完成同C1实现、仅A5不同的Release配对。业务差异仅在 `islandMotion.ts` 和 `IslandSurface.svelte`；两个UI夹具/回归文件用于鼠标路径与连续性验证；补上Hover内容随壳布局、避免误开移动封面以及Hover期间暂停端点测量。Rust/native、图片预算及颜色/字体设置不在此候选范围。
+
+| 动作 | GitHub原实现 | A5候选 | 曲线/说明 |
+|---|---:|---:|---|
+| Compact/Hover → Expanded | 240 ms | 420 ms | cubic-bezier(0.25,0.1,0.25,1)，较缓起步和较长推进。 |
+| Expanded → Compact/Hover | 240 ms | 360 ms | 同上，收起略快于展开，但仍慢于原实现。 |
+| Compact ↔ Hover | 实际240 ms；定义140未使用 | 240 ms | 独立cubic-bezier(0.3,0,0.2,1)，起始斜率0，避免借用陡峭settle曲线。 |
+| Page/设置/style布局变化 | 240 ms | 240 ms | 保留原settle曲线，避免顺带放慢所有动作。 |
+| 动画关闭/reduced-motion | 直接终态 | 直接终态 | 不强制用户等待新的420/360 ms。 |
+
+以上是源码目标duration，不保证实际端到端时长或物理呈现节奏。App手动隐藏本来从collapseDuration读取等待，候选同步延长该等待；固定等待不等于实际settled，此限制由A1/A3后续处理。捕获紧急隐藏仍按原路径处理。
+
+### A5 工程验证与验收边界
+
+隔离候选环境中修改前后均为95项Vitest通过、Svelte零错误/警告；候选production build通过。原实现7项动画UI回归通过；最终候选10项通过，包含原7项及较缓展开、真实指针Hover和Hover未结束时展开的3项新增回归。补丁应用到当前Windows工作树后，production build通过；使用包入口及工作树临时目录复跑，Vitest 95项通过、Svelte Check 0错误/警告。Windows Playwright 本地服务已 ready、Chrome 可独立启动，但受限执行环境连接本机端口时报 `EACCES`；在开始菜单打开的普通非管理员 PowerShell 中运行同一测试命令后10/10通过。此结果确认当前 Windows 工程回归可运行，但没有确定执行环境拒绝本地 socket 的具体策略。浏览器夹具验证布局/连续性/动作时长，不含Windows/WebView2/native interaction region，也不作为60 FPS或CPU/GPU验收。
+
+
+### A5 匹配浏览器样式采样（非原生性能验收）
+
+Linux / Chromium Headless Shell 134.0.6998.35 / 相同锁文件和Vite开发夹具，viewport 1280×760、no-preference、edge/top、length240、scale0.8、toolbar开启、播放暂停、Spectrum关闭。两侧各5个连续循环，先原实现后最终候选，每循环 Hover进入→离开→展开→收起；不是正式三轮Release性能比较。采样只读inline style和settled属性，不在帧循环调用getBoundingClientRect。`约60 ms进度`取第一个不早于60 ms的样本，常落在约66 ms；不是严格同一毫秒的呈现测量。
+
+| 动作 | 原实现command→settled中位数/ms | 最终候选/ms | 原实现约60 ms归一化进度 | 候选约60 ms归一化进度 |
+|---|---:|---:|---:|---:|
+| Hover进入 | 266.7 | 266.6 | 69.5% | 23.8% |
+| Hover离开 | 266.5 | 266.7 | 69.5% | 24.0% |
+| 展开 | 266.6 | 449.9 | 69.6% | 12.5% |
+| 收起 | 266.7 | 383.3 | 69.6% | 16.1% |
+
+该数据确认候选动作变慢、Hover早期进度更缓；不证明更高FPS、更低CPU/GPU或原生呈现长尾已解决。command→settled含首次调度和完成回写，不能与420/360/240配置值或Windows343–374 ms新探针直接混比。原始样式样本在隔离工作树的 `dist/animation-ui/before.json`、`after-final.json`；早期仅曲线候选的 `after.json` 不作为最终候选数据。
+
+首次测试工具准备中，默认浏览器下载不完整；另行取得的Chromium155在加载页面前崩溃，两侧都无法启动。正式工程回归和上述 Linux 样式采样统一使用可正常运行的Chromium134，前端锁文件与项目依赖未改变；上述环境启动失败不计作产品回归通过，也不隐去。随后 Windows 普通用户终端的 Playwright 回归 10/10 通过，具体本机端口访问限制原因仍未知。
+
+A5仍保持 `[ ]`，当前改动未提交、未推送。Windows 普通非管理员终端的10项Playwright回归通过；同C1实现、仅A5不同的三轮Release配对已完成。先前报告的7/5条 >50 ms“完全落在样式动画内”未经正确边界确认：结束时间实际是100 ms稳定等待后的确认快照，现有分类不能证明这些属于动画卡顿。复核将旧区间拆为确认前、近似确认尾段与跨越该尾段后，候选动画独立7条全部跨越不确定尾段；候选并发5条中1条落在近似确认尾段、4条跨越该尾段，没有一条能据此确认发生在实际动画过程中。旧轮未采集完整最后样式变化时刻；分离时间戳的有界补采及并发复核见第17–18节。PresentMon窗口P95相近，但不能据此排除长尾；缺少ETW等待栈和逐次交互区域IPC计数，也未完成完整原生视觉/交互矩阵。详见 [A5 Windows Release验收报告](performance/a5-2026-10-12/REPORT.md)、[汇总 analysis.json](performance/a5-2026-10-12/analysis.json) 与 [analyze.mjs](performance/a5-2026-10-12/analyze.mjs)。更长动画可能增加现有逐帧region发送总量，需补IPC和CPU数据；4edge、floating/edge、快速进出与反向、手动隐藏、封面/焦点及低动效仍待原生验证。C1继续保持 `[ ]`；95/55ms旧间隔已复核为归属无法确认；Apple能力/错误路径已通过，支持会话的有效seek为N/A（第20–22节）。
+
+本轮未实现U4–U11、C2或其他阶段；~25 MiB增长、GPU长期回稳、实际跨屏DPI和第6首图片超时均未解决。
+
+
+## 16. 2026-10-12 A5 统计边界复核与后续
+
+本轮检查了 A5 分析器、joined JSON、每轮矩阵记录及本机保留的 PresentMon CSV。没有修改动画业务代码或勾选任务；C1、A5仍为 `[ ]`。已将 `analysis.json` 与 `analyze.mjs` 纳入 GitHub 文档目录，以便审阅当时的输出和统计实现。完整输入 CSV 暂未上传。
+
+### 统计口径核查
+
+矩阵记录器先以第一次 inline-style mutation 作为起点，然后每10 ms左右轮询页面；只有在目标 expanded 状态成立且 `now - lastChange >= 100 ms` 时，才把当时 snapshot 记为 `animationEnd`。因此 `animationEnd.at` 是“稳定100 ms后的确认时刻”，不是最后一次样式变化，也不是实际动画终点。旧分析器使用 `animationStart.at` 到 `animationEnd.at` 建立动画区间，包含至少100 ms的确认等待与轮询延迟；旧的7/5统计不能解释为已确认的动画卡顿。
+
+以下为对旧“完全在区间内”的 >50 ms PresentMon 项目按 `confirmation time - 100 ms` 做的保守边界拆分。该拆分是快照近似，只确定记录相对于确认尾段的大致位置，不证明尾段之前仍在物理动画中；最后样式变化及通过条件时刻没有保存。
+
+| 场景 | 构建 | 确认尾段前 | 完全落入100 ms确认尾段* | 与该尾段重叠 |
+|---|---|---:|---:|---:|
+| Animation only | A5-off | 0 | 0 | 0 |
+| Animation only | Candidate | 0 | 0 | 7 |
+| Combined | A5-off | 0 | 3 | 1 |
+| Combined | Candidate | 0 | 1 | 4 |
+
+`*` 确认尾段按快照时间减100 ms近似；记录器没有保留精确的 lastChange 与通过条件时刻。故候选 animation-only 的7项均跨越边界不确定尾段；combined 的5项中1项完全落在近似确认尾段，4项跨越该尾段。它们都不能计为已证实的动画内卡顿。之前的区间总数也不是失败动作数。P95相近不能替代端点核验。
+
+原始旧轮 PresentMon CSV、状态文件、窗口采样和每轮 Playwright JSON 仍在本机 `dist/performance/c1-2026-10-12/`。旧 joined `analysis.json` 未保留全部逐帧行或 last mutation，故该旧轮只能按上表作历史近似拆分；不能从中重建精确动画端点。文件与新补采细节见 [A5 Windows Release验收报告](performance/a5-2026-10-12/REPORT.md)。
+
+### 下一步（已完成有界补采）
+
+已用同一保存的 baseline/candidate Release 二进制各完成一轮、每轮16次 animation-only 转换；没有重建或修改动画业务代码。首轮发现 PresentMon `TimeInDateTime` 与同轮UTC戳表面相差16小时，按记录的UTC+8换算后仍相差8小时，原因未定，故该轮作废并改用 `--qpc_time`。PresentMon QPC 以窗口探针请求8ms间隔采集的 Stopwatch-QPC/UTC 锚点对齐；时间区间将 `MsUntilDisplayed` 加到 Present 起点，再由 `MsBetweenDisplayChange` 回推区间起点，并按区间相交筛选边界帧。脚本、完整原始 CSV、状态、窗口采样及逐次 first/last mutation 和确认时刻均保留在 `dist/performance/a5-boundary-2026-10-12/`。
+
+两版均唯一映射到主岛 HWND 对应的 temporal swapchain：baseline `0x2764A1A3230`，candidate `0x24B251BB1F0`，每版16/16个转换均有present；HWND在 `\\.\DISPLAY2`。在first→last style-mutation活动区间，baseline/candidate没有完全落入区间的 `>50 ms` 显示间隔；两版分别有16和17条 `>50 ms` 间隔跨越动画/确认边界，baseline另有1条落在确认尾段。这个单轮采集使旧7/5条不再能被表述为确认的动画内卡顿，但样本不足以排除偶发停顿或比较性能收益。PresentMon缺少显示时刻/区间的行分别为39/2和25/2，不能纳入区间分类。PresentMon不提供HWND，此swapchain归属是依据采集窗口时间内的唯一呈现相关性，不能写成直接字段映射。
+
+C1旧95/55ms历史复核结论见第22节；Apple能力/错误验收已通过，支持会话有效seek及必要时真实活动停顿栈继续待验证；不得单凭MsCPUBusy/GPU time归因。C1、A5均保持 `[ ]`，本轮不勾选、不提交、不推送。
+
+### Spring迁移延期
+
+按用户本轮提供的计划，展开/收起/Hover的Spring迁移暂缓，待现有计划阶段完成后再独立评估。A1如需工作，只统一现有动画所有权、状态和完成契约，不借此提前迁移Spring；其余隐藏或原生窗口spring只按已确认的具体缺陷处理。所有既有勾选状态保持不变。
+
+## 17. 2026-10-12 A5 PresentMon 显示时刻修正与配对复采
+
+本节更新并取代第16节“下一步待补采”的状态。C1、A5仍保持 `[ ]`；本轮只改测量脚本/验收文档，没有改动画业务代码、重建或提交二进制。所用保存构建哈希仍为 baseline `00AE8D28…` / DLL `A2451332…`，candidate `0F1D5746…` / DLL `754349D1…`。
+
+修正后的脚本用 PresentMon `--qpc_time` 记录 Present 起点，并将每个 `TimeInQPC` 依据窗口探针同步采集的 QPC/UTC 锚点（请求8ms间隔，实际锚点间隔另记）映射到基准时钟。显示时刻按 `PresentStartUtc + MsUntilDisplayed` 推导，显示区间起点按 `displayedAtUtc - MsBetweenDisplayChange` 推导；样本选择使用区间与[first mutation,last mutation/confirmation]窗口相交，因此包含显示终点落在窗口之外的跨界间隔。首轮使用 `TimeInDateTime` 的尝试与脚本/浏览器UTC戳表面相差16小时，按UTC+8换算后仍相差8小时，原因未定，已作废；正式统计不用它。依据PresentMon源码，`TimeInDateTime`来自Present起点且必须加`MsUntilDisplayed`才是显示时刻；本机时间换算异常后，QPC加同源采样锚点更适合本轮对齐。完整 PresentMon CSV及SHA、状态、QPC/HWND/显示器采样、动作逐次 JSON均保留于本地 `dist/performance/a5-boundary-2026-10-12/`，分析器输出 `paired-analysis.json`。
+
+| 一轮匹配采集 | 主岛 swapchain | 区间样本 | `>50 ms` | 完全在样式变化区间 | 完全在确认尾段 | 跨动画/确认边界 |
+|---|---|---:|---:|---:|---:|---:|
+| baseline | `0x2764A1A3230` | 780 | 17 | 0 | 1 | 16 |
+| candidate | `0x24B251BB1F0` | 1,272 | 17 | 0 | 0 | 17 |
+
+两侧各记录16次转换；每个所选swapchain都在16/16个样式变化区间中唯一匹配主岛窗口，`VidPnSourceId=0`、`LayerIndex=0`，窗口在 `\\.\DISPLAY2`。PresentMon不提供HWND，故归属是唯一时间相关性，不是直接窗口字段。完全落入 first→last style-mutation区间的最大 `MsBetweenDisplayChange` 为baseline 10.05 ms、candidate 15.02 ms；两侧均无完全落入该区间的>50 ms记录。确认尾段有1条baseline 75.02 ms；其余>50 ms样本跨过动画/确认边界。每轮另有39/25条缺`MsUntilDisplayed`及2/2条缺显示间隔的PresentMon行，无法按显示间隔分类。结果不证明没有偶发长间隔或候选收益，仍需更多轮次和C1单独复核。
+
+三轮中的`528.0 ms`仍是candidate第一样式变化至100ms稳定确认的跨度，`522.4 ms`是第二轮单值；两者都不是动画时长。旧7/5条不再表述为确认的动画内卡顿。95/55 ms旧C1区间仍待在修正口径下复核；另一播放器、ETW等待栈、长期性能与A5完整原生视觉/交互验收仍未完成。详见 [A5验收报告](performance/a5-2026-10-12/REPORT.md)。
+
+## 18. 测量脚本审阅、并发补采与计划正文同步
+
+已复核两份新脚本与`paired-analysis.json`，在不导入分析器的独立复算路径中核对两场景四侧原始CSV、分类计数、活动重叠长度及点击派发差值。旧动画独立轮复算的分类计数保持一致；新脚本记录逐条活动重叠与各次动作ID、输入文件哈希和二进制核验状态，遇到主岛swapchain不唯一时拒绝发布所选链汇总。可移植审阅包包含脚本、两份分析JSON及完整原始输入；包内回放显式注明二进制仅来自采集元数据，本机另外核验了保存EXE/DLL实际字节。
+
+原`clickAt`在准备阶段记录，不能用于真实点击响应跨度；新并发轮在页面内`element.click()`前记录派发时间，以页面`performance.now()`计算到首次mutation的延迟。确认也使用页面时间，消除Node/page时间配对混用；该程序点击测量不代表鼠标物理输入延迟，旧轮没有派发戳因而该字段保留为空。
+
+同一保存Release二进制、DISPLAY2、暂停/33%初态各补一轮combined，16次转换。baseline/candidate完全在样式变化区间的>50ms仍为0；确认尾段为1/0条，跨边界14/17条。跨界长间隔与活动区间最大重叠37.6/38.2ms，累计重叠151.1/192.8ms；最大重叠两侧都在第1次转换，是跨动画起点的约130ms显示间隔。不能因跨界就整条剔为静止，也不能把重叠毫秒当成线程阻塞耗时或已定位原因。点击派发至首mutation P50为0.4/0.4ms，最大1.2/1.1ms。
+
+沿用一次控制突发与动画序列同时开始的脚本，每版5条媒体/查询、6条音量调用返回成功，结束暂停/33%；命令时间范围实际与baseline第1–4次、candidate第1–3次样式区间重叠，后续转换没有持续命令压力。因此本轮是有界诊断，不是所有16次转换均承受相同并发负载的压力验收。网易云返回进度/时长为0，seek成功返回不能替代真实进度变化及其他播放器功能检查。
+
+A5 Verification正文已同步“已应用Windows工作树、10/10回归及匹配Release诊断”，该轮当时把旧95/55ms写为“待修正口径复核”；现已在第22节完成原始复核、归属无法确认。动画参数不变，Spring迁移延期；C1、A5仍为`[ ]`。原生交互、逐动作IPC/native resize、CPU/GPU/资源成本与长期验收待后续完成，不由本轮样式测量勾选。详情见 [报告](performance/a5-2026-10-12/REPORT.md)。
+
+## 19. 2026-10-13 全转换并发覆盖与 Apple Music 批次
+
+按用户转交TASK.md，在既有工作树仅修测量脚本、采有界配对数据和更新报告。原保存baseline/candidate的EXE/DLL哈希重新校验，未重建/改业务源文件或提交/推送。每次转换等待首mutation后在页面内派发1个媒体toggle和1个音量写入，记录所属转换及页面实际派发/返回performance.now/UTC。每对请求完成后才准入下一转换，控制峰值在途2；超时停止准入并写失败/恢复状态。门禁严格要求1–16各有成功media AND volume与first→last span正长度相交，排除旧Node/CDP外包络。
+
+无IPC代理full-r1两侧及有代理diag-r3两侧均16/16；helper单测5/5，独立原始复算4/4。主岛swapchain唯一时间相关且每个活动span都有呈现，完整PM/窗口采样覆盖最后confirmation；QPC/UTC、Present起点加MsUntilDisplayed、区间交集和first/last/confirmation分离保持。DISPLAY2、DPR1、同设置、同Apple Music曲目；开始/测量结束暂停33%，清理恢复原暂停20%。本日WebView2均155，不和昨日154跨日比较。PM自身ExitCode=N/A，未冒充0；脚本/矩阵退出码及start/stop/尾段证据保存。
+
+full-r1活动span完全包含的>50ms两侧0，但确认尾段2/1条、跨界4/10条；活动最大重叠31.69/35.51ms，累计61.74/94.66ms。程序点击→首mutation P50均0.4ms，不是物理输入延迟；不能由0个完全包含长间隔宣称无卡顿或优化收益。该轮当时待复核的旧C1 95/55ms现已在第22节复核为归属无法确认，未归因。
+
+草案直接替换只读invoke未生效；失败diag-r1、diag-r2保留并排除IPC验收。最终在传输/回调路径做代理，JSON参数UTF-8字节、请求时序/结束及峰值在途都有原始记录；diag-r3无丢失、无未支持payload、结束无残留。在逐转换点击→确认窗，region请求784→1261，参数字节2,574,929→4,143,985（约+61%），主页面invoke861→1334；完整代理在途峰值14/15。代理有开销，与性能轮分开；不是全协议字节、其他窗口/事件IPC或native worker数，也未得到SetWindowPos调用次数。更长动画的请求总量成本如实保留，不开展C2优化。
+
+full-r1有CPU/GPU committed/Private Bytes/线程/句柄原始采样，但资源探针启动晚：baseline活动段0样本、candidate仅5，匹配活动CPU成本N/A。私有提交、GPU峰值是采样窗值，不是真峰值/长期回稳证明。GPU计数器可读，实际display名称查询失败保留原错误；不强行将VidPnSourceId直连DISPLAY2。跨屏DPI、长期内存/GPU、第6首超时与约25MiB增长继续待验收。
+
+Apple Music真实SMTC会话完成play/pause、时间线推进/暂停稳定及结构化错误负例；有效seek未通过。暂停和播放两次60秒seek均成功返回，但时间线停在156秒或继续157→161秒，未到目标；不把成功返回当作功能通过，也不据此指定根因。最终恢复暂停/音量20%，关闭本任务启动的Apple Music；无法可靠seek恢复进度的缺口保留。播放器不需要用户登录/购曲或模拟会话。
+
+本日报告含16次覆盖表、逐转换IPC、资源可用范围、命令/退出码、失败及恢复、原始哈希和离线回放包。全转换并发覆盖已交付；完整原生交互、有效seek、资源成本和长期验收未关闭，C1、A5仍 `[ ]`，Spring延期；停在可审阅交付，后续批次另安排。见[执行报告](performance/a5-2026-10-13/REPORT.md)。
+
+## 20. 第2批：媒体能力与控制错误返回（10月13日启动、14日交付）
+
+仅改`services/media.rs`及`App.svelte`的媒体错误/快照连接，保留既有C1/A5未提交修改及保存Release对照。control_media原来等待WinRT但丢bool，现true=受理、false=结构化拒绝、WinRT error=失败。seek_media原来已经检查false，本批没有错误归因：增加实际选中会话能力门禁，非网易云seek=false直接不支持、避免TryChange派发；与显示层共享判定。网易云未声明/未发布能力的既有兼容尝试保持，API false/error仍报错。没有增加主线程同步等待。
+
+主页面取消播放状态的乐观翻转和失败后反向翻转，以真实媒体快照为准，避免拒绝覆盖请求期间的新快照。已有150ms后台异步刷新不变，按钮等待实际快照；UI布局/动画未改。seek只读入口原本已隐藏范围输入，现与命令拒绝一致。网易云成功seek未真实重测，仅保留并测试兼容准入及结果处理。
+
+Rust相关15/15（新增5项：true/false/error、不支持seek不派发、兼容/声明支持派发一次、无会话）、前端媒体store/clock 17/17、Svelte零错误/警告、前端production及标准Tauri Release通过。初次直接cargo产物错误页及空SMTC会话/仅fetch注入未命中的失败记录保留，未计通过；正式使用标准Tauri构建单独保存的EXE/DLL，旧baseline/candidate实际字节哈希未变。
+
+新构建实际Apple Music raw ID为AppleInc.AppleMusicWin_nzyj5cx40ttqa!App，曲目“飛ぶ時”/252秒/seek=false。暂停21秒请求60秒，立即reject code2001“不支持调整播放进度”，随后仍21秒；播放时22→23秒，暂停24秒稳定。主页面已展开且真实进度区存在，seek范围输入为0。播放器启动前及关闭后，control/seek无会话均reject code2001。
+
+UI拒绝另以明确标记的诊断故障注入测试：阻断一次control传输、延迟错误并投递实际SMTC暂停快照，前后按钮都“播放”，实际状态未变、错误记录可见。不是模拟SMTC会话，也不是宣称真实WinRT false已由播放器重现。当前仅有Apple seek=false会话，声明支持的有效seek真实验收N/A；不能将不支持路径正确当成有效seek通过。
+
+本批恢复本次实际设备AB13X USB Audio及音量13%/暂停，关闭任务启动的播放器和应用；不能可靠恢复原进度的限制保留。第1批region增长/参数字节约61%、CPU配对不足，旧95/55ms修正复核、A5原生交互、资源成本及长期稳定性继续待后续；C1/A5仍 `[ ]`，Spring延期、不做C2/UI/region架构、不提交推送，停在可审阅状态。详见[报告及本批diff/证据](performance/c1-media-2026-10-13/REPORT.md)。
+
+
+## 21. 第3批：资源探针就绪与匹配采集（2026-10-14）
+
+仅改测量/门禁/文档。probe完成进程树初始基准和有效CPU增量后发布本轮run ID/PID/UTC ready，协调器校验后才准入序列；CPU按逐PID实际读取区间分类，跨界增量单列。自动拒绝陈旧ready、0样本、基准点冒充和尾段截断，14/14测试通过。失败r1播放器选择不符、r2时间字符串格式误拒绝、r3仅2样本全部保留排除。
+
+原保存A5配对resources-r4（两侧固定250ms转换间隙、无IPC代理）门禁/独立复算通过：16/16并发媒体AND音量覆盖，序列9.721/12.143秒，完整窗内CPU样本6/8；窗内所采增量CPU3.875/5.484375秒，跨界0.90625/1.03125秒独立保留，不按整序列分母冒充纯动画成本/收益。内存/GPU/线程/句柄为全采样窗范围，非真实峰值或长期证明。完全活动内>50ms均0，但确认尾段3/1、跨界13/13，固定间隙造成的静止跨度不能称动画卡顿。
+
+DISPLAY2/DPR1、同WebView2/设置/真实Apple歌曲/暂停33%测量初态；真实进度2/5秒不同，不seek伪造匹配。本轮原用户16% REDMI音箱和播放器选择/顺序/屏幕均恢复，测试Apple/isle关闭、网易云保留。此轮旧构建不代表第2批新Release性能验收。C1/A5保持 `[ ]`，旧95/55ms、原生交互、region成本增长、有效seek及长期内存/GPU继续待办；无业务/动画/C2/I1/UI/Spring修改，无提交推送。见[第3批报告](performance/c1-resources-2026-10-14/REPORT.md)。
+
+
+## 22. 第4批：旧C1 95/55ms只读证据复核（2026-10-14）
+
+只读核验27份输入哈希并复算：C1 CSV第669行95.0015ms/动画独立动作13，第1687行54.9938ms/并发动作14，PID [omitted]、swapchain0x21E4A377F30。旧分析器直接用TimeInDateTime、漏MsUntilDisplayed、按结束点筛行并把animationEnd稳定确认快照当纯活动终点；16小时偏移由first CPUStart与启动UTC按整小时推算，不是成对帧时钟锚点。帧无TimeInQPC，窗口QPC不能完成这些旧帧的QPC对齐；没有精确last mutation。源间隔真实、旧snapshot-envelope分类可重建，但实际活动相交/完整包含与线程阻塞根因无法确认，撤回旧C1报告genuine/fully-inside actual animation结论。
+
+条件分析明确假设exact16h及>=100ms稳定契约：加MsUntilDisplayed后，95ms区间05:18:57.261037600–57.356039100Z，55ms区间05:19:05.355903500–05.410897300Z，均落近似确认尾段；距确认减100ms仅2.0376/1.9035ms，几毫秒映射残差即可改变类别。不是精确last-change复原，不用条件结果确认根因。C1正文/摘要/状态表已直接改正，不仅追加脚注。
+
+| 剩余项 | 类型/现状 | 最小下一步（本批不执行） |
+|---|---|---|
+| 旧95/55ms实际活动归属 | 未知证据，历史复核已完成、无法确认 | 新轮保存逐帧QPC或成对时钟锚点与精确首/末/确认；不硬减偏移凑确证。 |
+| 当前媒体修复构建的C1性能 | 后续测试，旧保存A5不能替代 | 匹配当前媒体修复/工具/语料条件的有界前后Release并发、延迟/资源/帧时。 |
+| WinRT拒绝与UI快照正确性 | 原确认缺陷已在第2批修复并独立验收 | 无需对同一不支持Apple会话重复测试。 |
+| Apple seek=false | 真实不支持能力，拒绝/只读通过 | 不要求修成支持；使用声明支持的真实会话单独验有效seek，当前N/A。 |
+| 线程阻塞根因 | 未知，无相关栈 | 仅确认真实连续活动停顿后另安排最小ETW/WPA栈；不自动提权。 |
+| A5原生交互 | 后续测试，Windows夹具10/10不是原生验收 | 有界覆盖4edge/style、反向/hover/隐藏/封面/焦点/低动效，核对视觉与命中。 |
+| region/IPC成本 | 确认测得原候选请求/参数约+61%，优化归因未定 | 匹配当前构建记录请求/字节/在途及native更新成本；不在此批实施C2/I1。 |
+| 长期内存/GPU | 未知，短探针不证回稳 | 后续独立长期轮；不扩大本批。 |
+
+C1/A5 `[ ]`不变，Spring延期。本轮无新采集/重建/业务/动画/C2/I1/UI修改、无提交推送。脚本/原行/原输入/hash/diff/离线包及详细报告见[第4批交付](performance/c1-review-2026-10-14/REPORT.md)。
+
+
+## 23. 第5批：当前媒体修复Release A5原生交互取证（2026-10-14）
+
+标准Tauri保存新Release EXE EA80838E…/DLL33B43C71…实际hash验证，无重建，参数420/360/240源hash一致。测试工具以OS注入实际鼠标/键盘和副屏专用底板，记录trusted页面事件与底板收件，不以DOM点击/WM_NCHITTEST代替native命中。完整原生矩阵未通过：四edge首次候选坐标及edge→floating首次点击落底板、主页面无click，各项停止；展开/收起/反向因此未完整验完，根因未确定，不在此批改I1/C2/动画。
+
+floating Hover中展开、收起中反向和快速进出状态终态有证据；已有音量按钮native进入页面、trusted Tab至DIV滑块有证据，但旧按钮-only断言遗漏滑块，焦点可见性仍未知。首轮透明项因compact前置失败未到目标；仅补独立透明点(-1143,180)，底板+1/主页面click不增确认穿透。首段封面未ready，补真实网易云图ready后的65份几何样本（7份moving-cover图已加载）及native终态截图，不自动签署全程无跳位/主观手感。已有隐藏按钮10秒恢复后命中通过；本原生页面CDP低动效模拟及终态通过，不是Windows全局设置验证。
+
+两屏DPR1，真跨DPI N/A；12秒15fps桌面短片仅视觉证据，不是性能。测试当时未记录loaded WebView2版本/实际image查询字段；补启动元数据命令被自动审批拒绝（blocked by policy），未重试，字段N/A。工具setup delegate失败、按钮-only焦点/前置失败原始记录均保留，不包装全通过。
+
+设置、播放器选择/顺序/monitor、16% REDMI音箱/静音false、暂停状态与前台HWND均恢复；仅关闭任务isle/底板，保留网易云。C1/A5 `[ ]`，U4–U11待办边界保持，业务/动画/C2/I1/UI/Spring未改，无性能轮/提交推送。完整原生命中/视觉、焦点、当前构建匹配成本/性能、支持seek会话与长期稳定继续单独验收。详见[场景、原始证据和恢复报告](performance/a5-native-2026-10-14/REPORT.md)。
+
+
+## 24. 第6批：首击失败离线定位与工具准备（2026-10-14）
+
+五条失败各一次底板收件、page无click，后查与回调差45.8281/50.4479/54.6019/54.3352/53.4941ms；后pointPID不代表按下收件。旧helper移动后立即合并SendInput，成功floating先有move/等待但不同点，不能称严格停留对照。当前cursor monitor检查后按33/50/200ms休眠，再依存储region更新ignore；App host/offset/anchorGap、签名去重/异步revision路径及后端revision拒旧已只读追踪。缺按下前状态/独立执行戳/accepted-region，根因仍未知。
+
+预定8次单点方案：top内侧和floating内侧各0/50/250ms，原top边界0/250参考；方案未执行，点无效则记前置失败，不换点凑通过。新helper默认在GUI/PInvoke前dry-run返回，move/state/down/up/pump分开，press不移动/隐含等待，UTC/QPC、前后cursor/styles/lookup与实际收件分开；后端接受regionN/A。支持DIV滑块active/focus-visible/outline/值及合法箭头、恢复设计。7/7离线测试与默认无GUI dry-run通过；未运行live路径/新采集/重建/业务/动画/UI/C2/I1/Spring修改或提交推送，未重试被拒元数据动作。C1/A5 `[ ]`，原生矩阵不通过/首击原因未确认，方案不等于复现或修复。详见[离线报告](performance/a5-offline-2026-10-14/REPORT.md)。
+
+
+### 第24节同批工具返修（2026-10-14）
+
+独立审阅认可原离线证据，工具准备退回两项；本返修只改测试工具与文档。成功注入down才取得所有权，正常up清除；EOF/stop/异常finally只释放本工具仍持有的按下，正常up后不重复释放、未持有不释放。释放失败保持held并记录错误、跳过显式cursor/foreground恢复。实际helper共享策略模块，9项fake-backend故障路径离线验证通过。双侧收件保留两个计数、标ambiguous/conflict且uniqueRecipient=false，单侧/无侧分开，late PID不定收件；JS9项通过。原包/首轮版本保留，修订工具仍待独立验收。无GUI/原生输入/现场方案/采集/构建/业务修改、无提交推送，未重试被拒动作；C1/A5 `[ ]`，根因未知。
+
+
+## 25. 第7批：固定8次首击停留对照（10月14日执行、15日交付）
+
+用户在等待明确现场允许后“继续”，按原8点/停留方案执行，前置点检有效，無换点重试。top内侧0ms无两侧收件、50ms底板、250ms页面；floating内侧0ms底板、50/250ms页面；原top边界0ms底板、250ms页面。8次down/up各返回1，最终无持有输入。操作QPC间隔0预算实际3.8–8.8ms、50约58–60ms、250约261–263ms，含查询/往返，不等效原合并立即click。
+
+页面4次trusted click都在pre-down bit20=false，其余4次pre-down true；只支持异步穿透/时序候选，不确定region/几何/完整投递根因。first top0未保存完整pointerdown/up，明确unobserved，不能靠后pointPID当通过。正常同次会话CDP得Edg155.0.4283.45，没有另启被拒元数据命令；actual image getter/accepted-region仍N/A。
+
+协调器fake4+计划9共13/13、所有权fake9/9、默认无GUI与离线证据核验通过。用户实际8% REDMI音箱/静音false和原网易云正在播放、settings/monitor/player选择及前台恢复；cursor仅请求恢复未即时回读。测试进程关闭、用户网易云保留。当前首击仍未通过，C1/A5 `[ ]`，无业务/动画/C2/I1/UI/Spring修改，无重建/性能轮/提交推送，8次即停；另由发布方独立验收。详见[报告](performance/a5-dwell-2026-10-14/REPORT.md)。
+
+### 第7批PID来源表述修订（2026-10-15）
+
+原始appPid=25612仅为Node spawn PID，helperReady.boardPid=26164为底板PID，WindowFromPoint记录9440仅为点下窗口owner PID。缺少进程映像/父子关系记录，不把9440称为测试isle进程。仅离线修订文档并重新出包，原始证据与旧ZIP不改；4 page / 3 board / 1 unobserved及bit关联结论不变，根因未知，C1/A5 [ ]。
+
+## 26. 第8批：原生首击机制设计与隔离原型（2026-10-15）
+
+后台monitor读取光标后经Tauri UI派发/tao样式切换，33/50/200ms检查本身形成等待窗口；上层成功只代表派发，last_ignored不是原生确认。HTTRANSPARENT只保证同线程下层搜索，不能直接保证其他应用收到；windowed WebView另有子窗口。持久window region会改变绘制裁剪/阴影与动画、DPI、拖拽生命周期，任务单允许先交付设计和隔离原型，因此本批不强接生产。
+
+window_region_prototype.rs仅cfg(test)，无GUI/输入/窗口调用，复用point_in_rounded_rect形成有预算的物理行span；generation/epoch/revision与fake后端验证迟到拒绝、失败不伪报成功。另以无窗口GDI构造/RAII与PtInRegion检查掩码；尚无SetWindowRgn适配器/HRGN向系统移交/宿主回调接线，ready只是模型状态。当前Release保留旧monitor，不能作为已安装候选验收。首击未通过，根因未知，C1/A5 [ ]；本批候选待审/待现场验证。
+
+无应用/浏览器/底板启动、输入、播放器控制、现场采集、提交推送；不重试被拒动作，不覆盖旧证据或二进制。详细API依据、接入事务和后续同点拟议清单见第8批报告；交付后停止。
+
+## 27. 第9批：默认关闭的原生region静态实验适配器
+
+显式Cargo feature experimental-native-region、default=[]；仅复制已接受几何到独立a5-region-static-lab，不运行产品hover/封面/动画，不替换main旧monitor；实验label拒绝旧机制接管。enqueue/desired/native-applied分离，同UI线程SetWindowRgn成功才移交HRGN，失败释放并报错；本地subclass及窗口事件接线。主岛须先隐藏，输入/捕获/非本应用foreground/非零client offset/RTL/live mutation/restore等不支持状态实际拒绝或失效，释放不重放。
+
+共享raster有像素/段/顶点/extra rect预算，实验按整数hotspot采样避免中心采样的分数边缘扩张，三档DPI逐点对照通过；只供机制实验，可能阻塞UI；nativeReady不代表Canvas已呈现。产品外阴影、移动封面和装饰不能用扩大region保留，本实验的轮廓画面不证明产品视觉兼容。默认窗口测试24、实验37、媒体15通过；标准默认/实验Release结果及hash见第9批报告与审阅包，均未启动。旧立即首击失败保留，不以本lab替代旧8次hover验收。
+
+实验适配器待审，未批准默认接入、未获现场采集权限；OS输入/视觉/生命周期/资源未知，C1/A5 [ ]，Tween420/360/240与媒体修复保持，C2/I1和Spring不推进。无GUI启动、输入、播放器操作、现场、提交推送；交付后停止。
+
+## 28. 第10批：四次静态lab协调工具，纯离线交付
+
+复用第9批保存experimental-final-release，EXE 4919DD50… / DLL 1C455A8E…，未重建/启动。新增默认dry-run的实际协调I/O与共享fake策略：新Studio正常前台、主岛副屏且隐藏、no-activate独立STA底板、已接受revision/请求与实际frame/DPI/Canvas及桌面两块像素确认。实际坐标N/A；先固定5×5不透明最近中心/透明y-x首点及right+32,bottom+32起点规则，未来任何输入前一次冻结，inside/outside各2次，不换点/不重试。
+
+两侧down/up/click对称判定，原始事件/不同钟/身份来源保留，浏览器宿主native身份为预检查询、不是OS投递HWND；双侧/缺失/拆分/错侧/坏tag/坐标/双击或激活异常立即停止。status只在安全foreground/无按下门后查询，其主动失效单列，不冒充唯一OS路由根因；0预算仍含协议/检查成本，不等价旧合并立即click。真实no-activate、呈现、投递、恢复和资源未验证。
+
+共享实际策略JS 28/28、原字节owner 9/9、日志/释放锁存故障5/5，默认/未批准live拒绝路径与C# CompileOnly通过；没有GUI/PInvoke输入/现场采集。正常up失败后锁存，catch/EOF/finally不再原生发送；stdout/日志失败不跳过保留。安全释放后按lab关闭→Studio晚persist结束→设置/可见性恢复→本轮应用正常退出→原始文件/Run值回读→底板关闭及前台/光标即时回读；不确认即pending，不硬杀。
+
+本轮只新增工具/测试/文档及本计划增量，237项第9批源配置资源、4个选定二进制和原owner字节保持；旧证据保留。具体最多4次现场单与审批样例保持未批准，由发布聊天独立审阅工具后再请求人类允许。本批无应用/浏览器/底板启动、播放器操作、业务/动画/C2/I1/Spring推进、提交或推送。C1/A5 [ ]，完整首击/性能/长期验收仍待办；发回报告后停止。详见[报告](performance/a5-static-tools-2026-10-15/REPORT.md)和[待批准现场单](performance/a5-static-tools-2026-10-15/LIVE_PLAN.md)。
+## 29. 第11批：单次静态lab前置失败及遗留恢复（10月15–16日）
+
+按直接人类允许使用第9批指定实验构建，仅一个正常会话，未重建。162次status含1次absent、161次Enqueued/nativeApplied=false/nativeReady=false，原定10秒预算到期停止；测试move/down/up均0，没有冻结坐标、Canvas/截图或两侧收件阶段，N/A。底板创建前后foreground一致只证明创建时未激活，真实路由/点击no-activate/视觉/性能仍未知。explicit close的Invalid不是此前路由失败证据，持续Enqueued根因未定；没有重开/改点/补输入。
+
+lab/Studio正常关闭。恢复前唯一语义差异为playerOrderIds新增Chrome.UserData.Profile2，与Studio自动发现路径相符但caller未记录。时间解析、File.Replace空参数及数字PID门失败原样保留，各新方法经独立审阅；v2已恢复source可见性并正常退出Isle，v4未执行。16日原工具已不在、无Isle writer且文件/Run仍frozen，已审仅持久恢复一次完成两配置原字节/Run原值即时回读并独立核验；一个已确认失败temp精确清理。私有备份不进分发包。
+
+历史foreground/cursor及原工具最终退出清理无法回溯确认，不把配置恢复当完整环境恢复。原evidence/journal字节保留，checkbox不改；无业务/动画/C2/I1/Spring更改、无提交推送，C1/A5[ ]。发回[报告](performance/a5-static-lab-2026-10-15/REPORT.md)和包后停止，首击/完整性能和长期验收仍待办。
+
+## 30. 第12批：初始化就绪门与恢复工具离线返修候选（2026-10-16）
+
+仅修 feature-only 静态 lab 初始化及其协调/恢复工具。锁定 wry 实际先 attach_handlers（约466）后 Navigate（约531）；642–665是函数定义位置，此前“注册晚于导航”候选撤回。第11批持续 Enqueued 根因仍未知。本代次显式完整文档导航，文档 load 后带唯一身份的标题回执与 HWND/代次/URL共同校验，普通Finished只记录；loaded/configured/queued、有限阶段与错误公开，10秒期限不增加，缺事件也显式失效。离线协议测试及构建不证明真实 WebView事件、呈现或OS输入。
+
+实际 helper 共享 NullString 原子替换，真实临时文件测成功消费/读回及分享锁失败保留；JSON保留7位tick字符串，实例门拒绝PID复用。不可变启动前备份、实际Studio IPC请求/响应审计、严格受控发现顺序及工具monitor补丁、当前状态分开；未知键/顺序/写入与传输回退拒绝。恢复有同会话cleanup-only入口，只继续未完成步骤，不重开实验/重置4次预算/重发已失败释放；新idle、实例及设置门通过才续清理。EOF/断管/旧实例明确仅允许另审持久恢复边界，不操作跨日旧前台/光标。正常helper/父协调器退出由实际子进程close确认代码接线，真实GUI恢复仍未现场验证。
+
+默认及feature Release分别另存，默认仍保留产品旧monitor、未安装首击修复；Tween420/360/240、媒体、C2/I1/UI/Spring保持。分发分析器改读raw而非run-01，离线复算仍为161次Enqueued/0测试输入。旧证据/失败/私有备份/原恢复脚本和二进制保持；无GUI/浏览器/底板启动、输入、播放器操作、新采集、提交推送。结果以[本批报告](performance/a5-static-repair-2026-10-16/REPORT.md)与manifest为准，候选待独立审阅，C1/A5[ ]，不授权第二次现场；发回发布聊天后停止。
+
+
+### 第12批同批返修 R1：独立审阅三项退回（2026-10-16）
+
+仅修三项实际接线：配置策略在无gate/OWNER锁时获取HWND，再持锁提交纯状态，真实provider回归检查可取锁；Run分开不可变原快照和经选定EXE/DLL hash、实际实例/映像、首次autoStart及锁定实现hash证明的受控启动期望，逐值读回ack后才完成，部分恢复续做拒绝已ack项回退到实验路径；清理服务分开5秒读请求、60秒执行和70秒客户端预算，合法请求不再被5秒断开，超执行预算明确pending且不取消/并发重跑，断管标outcome unknown而非空JSON。
+
+共享实际配置/恢复/传输离线回归及标准两版构建另存，真实5300ms与断管互斥回归通过；fake注册表不碰用户Run。旧候选和审阅失败保留。新候选仍待独立审阅，旧Enqueued根因不归因为本次修复，无新现场/GUI/输入/播放器/提交推送。C1/A5[ ]，默认旧monitor、Tween/媒体/C2/I1/UI/Spring不改。详见[返修报告](performance/a5-static-repair-r1-2026-10-16/REPORT.md)，发回后停止。
+
+## 31. 换路线执行：拆分收尾与最小机制验证（2026-10-16）
+
+本节为用户当前“开始”后的执行口径；第1–30节保持历史证据。2026-10-16用户随后确认按实现完成口径关闭C1/A5；未补齐的性能和体验数据继续如实保留，但不再作为总项关闭门槛。
+
+- [x] **C1-I：阻塞迁移与返回契约。** 当前媒体/音量设备/图像/缓存与设置相关调用链核对完成；后台容量/线程2项、媒体控制错误契约5项本轮通过。实现结论独立成立，不依赖A5或旧95/55ms归因。未声称实际性能收益。
+- [x] **C1-P：当前Release性能关闭决定。** 用户确认不再等待新一轮Release性能采集；当前收益保持未知，不以旧样本/最小工具补写结论。若未来确证实际活动停顿，再独立采栈。
+- [x] **A5-I：动画候选实现。** 保留展开420/收起360/Hover240ms；沿用既有实现回归，本轮参数单测3/3。不给新候选叠加Spring。
+- [x] **A5-F：短人工体验决定。** 用户确认保留当前420/360/240ms候选并关闭A5；首击失败仍不归因于调参，完整产品交互矩阵未补测的事实保留。
+- [ ] **H1：原生首击，独立发布阻塞项。** 最小原生两进程的中心与透明圆角两次收件通过；最小WebView也已通过中心trusted三事件和跨进程透明角收件；产品接入、无激活立即点击/四edge/动画阴影与DPI仍分阶段验证。工具激活目标的结果不冒充零停留首击通过。
+- [ ] **R1：长期资源。** 内存/GPU长期行为单独验证，不再阻塞C1-I。
+
+最小实验源码为 scripts/first-hit-minimal.cs 和 src-tauri/examples/first_hit_webview.rs；不调用产品run/setup，不启动Studio/播放器，不读写用户设置或Run注册表。旧实验、故障证据、恢复工具冻结保留。只增加独立example，不接入默认产品路径、不改现有动画或媒体业务。
+
+原始数据、构建/运行限制、失败保留及当前结果见[本轮报告](performance/first-hit-minimal-2026-10-16/REPORT.md)。机制实验预算到期没有明确结果就停止该路线，不继续扩建协调器；后续产品接入不能仅凭静态胶囊成功放行。
+
+## 32. H1 下一阶段：真实Compact组件隔离接入（2026-10-16）
+
+用户“下一步”后，先核对真实产品接入风险：Hover立即启动tween，固定Compact掩码会裁剪动画，旧monitor/watchdog又会异步修改穿透状态。因此先把真实IslandSurface与共享raster/GDI接到独立宿主，而非直接改main。
+
+compact-native-probe feature默认关闭，独立example仅注册apply_compact；原生拒绝main、非Compact、未settled和重复claim。实际SetWindowRgn成功才显示；位置/尺寸/DPI变化请求隐藏。前端固定style/edge/Compact，使用演示暂停媒体，无Spectrum/真实封面，不运行产品setup/配置/媒体服务。未修改产品动画和事件代码。
+
+41项窗口相关离线测试、独立前端构建、Svelte零错误/警告、默认feature后端check通过，完整候选构建通过。原定floating/top与edge/left各内部/外部共最多4次，启动命令被执行策略整体拒绝，只返回blocked by policy，未提供可确认的审批来源；未重试或绕过，测试宿主启动0、点击0，Vite服务已关闭。上轮手写胶囊通过结果不算本轮真实组件通过。
+
+状态：H1仍[ ]，真实组件呈现/路由/生命周期待现场；随后才做动画前清除掩码的确认屏障及与旧线程互斥。不新增现场恢复平台，不迁移Spring/I1/C2，不把静态实验冒充产品首击修复。详见[候选报告](performance/compact-native-2026-10-16/REPORT.md)。
+
+## 33. C2 媒体监听事件驱动候选（2026-10-17）
+
+媒体监听线程复用一个SMTC manager，订阅CurrentSessionChanged、SessionsChanged，以及各会话的TimelinePropertiesChanged、PlaybackInfoChanged和MediaPropertiesChanged；容量为1的同步事件队列合并重复通知后立即读取当前快照。会话订阅以 `windows-core 0.52.0` 的 COM 身份比较（canonical `IUnknown`）匹配具体对象，不以应用ID代替对象身份；对象移除、manager重新获取和线程退出时注销对应token。播放/暂停/无会话仍有1/2/5秒低频兜底，首次空快照后直接以1秒间隔确认；第二次连续空快照只发送一次空状态事件。媒体快照连续两次查询失败时丢弃旧manager及会话订阅，并立即尝试重新获取，RequestAsync失败则每5秒重试。单次查询失败不会清空当前媒体状态，且会打断连续空快照计数；普通媒体命令仍按调用方独立获取manager。
+
+本批按协调窗口审阅，修正了重复SourceAppUserModelId下的会话重建/多对象订阅身份问题，以及确认空会话后每个低频轮询周期重复广播的问题。身份比较语义来自锁定crate源码：`IUnknown::PartialEq` 会 QueryInterface 双方到 canonical `IUnknown` 再比较指针。以上仅为静态实现和编译验证；不代表WinRT服务断线可在所有Windows版本及播放器上可靠触发查询错误。无会话属于有效空快照，不应触发manager重获。Windows运行时仍需确认：管理器首次可用/不可用、选中会话切换、切歌、播放暂停与进度事件、会话退出、短暂SMTC空快照，以及查询失败后的重新订阅恢复；每项记录事件时间、快照更新时间、恢复时延、token数量和应用日志，测试播放器需为专用会话，不操作用户正在使用的播放器或设置。
+
+### 离线Release与后续采样步骤
+
+1. 先记录工作树/提交、`src-tauri/Cargo.lock`和最终Release二进制SHA-256；使用Rustup真实工具链和已缓存依赖，不联网、不安装或升级工具。2026-10-17使用 `<local-user-path>`（cargo 1.94.1）并仅在构建进程设置 `RUSTC=<local-user-path>`（rustc 1.94.1）；从 `src-tauri` 执行 `cargo check --offline --lib` 和 `cargo build --offline --release`。输出使用独立 `CARGO_TARGET_DIR=src-tauri/target/c2-offline-2026-10-17`，避免覆盖已保存的 `src-tauri/target/release`。如缓存缺失即停止并记具体依赖，不改用在线解析。Cargo build输出留在新的带日期目录并计算SHA-256；不要覆盖发布包或用户安装。
+2. 离线功能验证在专用Windows测试配置中运行新构建，先记录监听线程/manager订阅初值，再逐项触发上列SMTC事件和可控断线/恢复，检查更新及时性、重复事件合并、订阅清理、单次空快照保护及恢复后事件仍可用。保留ETW/应用日志和过程步骤；不可控断线应标N/A，不以模拟数据替代。
+3. Release资源对照须使用同一台机器、同一电源模式/电量、显示器与WebView状态、播放器/会话和应用设置，按baseline/candidate交替顺序各至少3轮；每轮启动后预热5分钟，记录10分钟idle、5分钟暂停会话、5分钟播放会话。保存每秒的Isle及子进程CPU时间、工作集/私有字节、线程数和系统电源状态，计算CPU毫秒/分钟及每轮分布；应用退出恢复5分钟后记录。系统级功耗用Windows Performance Recorder可用的Power/CPU ETW profile与WPA能量视图；先用 `wpr -profiles` 确认profile存在，无法取得受控能量计量时明确记为“功耗未测”，不拿电池百分比短时变化作功耗结论。保存原始ETL/CSV、profile、命令、构建hash和环境清单，不只报均值。
+
+2026-10-17真实离线构建（上一候选，不对应本次修订源码）：PATH中的 `<local-user-path>` shim确为0字节，但Rustup真实工具链有效；此前“本机无法重新编译”的判断已纠正。工作树HEAD `48530f7343e84129aef34113dbef4dd18f7431ef`，工作区含既有未提交改动。首轮 `cargo check --offline --lib` exit 0（3分13秒）；首轮 `cargo build --offline --release` exit 0（10分42秒），边界审阅修复前EXE已保留，SHA-256 `4EE631AA7C8E4D4E028DA7A4F6F93CD4310DE1E1B76CA0357806B429C8DEA07C`。最终源码再次 `cargo check --offline --lib` exit 0（12.06秒），`cargo build --offline --release` exit 0（7分22秒）。其EXE曾为 `src-tauri/target/c2-offline-2026-10-17/release/isle.exe`，SHA-256 `384E96E5C8581D263E61BEA012F08EAF9338FD639D2E8286A8A6233599B90689`；同版 DLL SHA-256 `745FF8FE25D3F10577EC58E93360DCC7E7A1924DB9F63704910E74C869AB2483`。本次返修前已将这对文件分别保留为 `isle-c2-previous-candidate-384E96E5-2026-10-19.exe` 和 `isle-lib-previous-candidate-2026-10-19.dll`，哈希保持不变。原有 `src-tauri/target/release/isle.exe` 未改写，SHA-256仍为 `38102A0F66B93A4370155CCFD6F420BC8A3831646216B7076C67DB493F506E7A`。根目录 `build/` 在构建前已存在且被 `tauri.conf.json` 指定为frontendDist；直接Cargo构建未调用 `beforeBuildCommand`、未运行前端构建或Tauri bundler，因此结果是本地Release EXE/DLL，不是NSIS/标准Tauri安装包。
+
+2026-10-19 C2 idle cadence 返修：审阅发现首次缺失后虽按1秒确认，空状态已确认后的第三次及以后空快照仍被无条件重置为1秒。现改为把 `empty_state_emitted` 传入 `media_poll_interval(false, false, ...)`；逐步核对四次连续空快照为1/5/5/5秒，第二次确认只发送一次空状态；查询错误将未确认缺失计数清零，活动会话恢复后首次缺失仍为1秒。最终源码 `cargo check --offline --lib` exit 0（29.61秒）；同一隔离 `CARGO_TARGET_DIR=src-tauri/target/c2-offline-2026-10-17` 下 `cargo build --offline --release` exit 0（4分30秒）。当前EXE `src-tauri/target/c2-offline-2026-10-17/release/isle.exe` 为8,490,496 bytes，SHA-256 `6FF00C4C1D2304EDA70551F85A0C356FB98E3812A8FD3862505F69F8CF0B3036`；DLL `isle_lib.dll` 为116,736 bytes，SHA-256 `2A5D20778EEBC7AC5F3A2F34C2B39F705200913B51F17626945CD8D4C2F51345`。之前的384E候选保持在独立归档名，未将其哈希冒充本次源码产物。`git diff --check`通过。未运行EXE、测试、GUI或播放器，未改用户设置，仍无Windows运行时/CPU/功耗证据；C2保持 `[ ]`。
+
+2026-10-20 Windows运行时隔离审查：未启动候选（运行0分钟），因此本轮没有实际观察监听初始化、manager/当前会话读取、SMTC事件触发更新、空会话确认/idle或进程退出后的订阅清理；这些仍全部待测。具体阻塞是产品启动没有隔离开机启动副作用：`src-tauri/src/lib.rs` setup 在读取设置后无条件调用 `set_auto_start(initial_settings.auto_start)`（约920行），`src-tauri/src/services/settings.rs` 会按设置写入或删除 HKCU `Software\\Microsoft\\Windows\\CurrentVersion\\Run` 的 `Isle`/旧版值（约151–193行）；只读检查确认当前HKCU Run下已有`Isle`值。配置使用固定Tauri identifier `com.isle-app.isle`（`src-tauri/tauri.conf.json`），设置读写走同一 `app_data_dir()/settings.json`（`settings.rs` 24–25、64–74行），没有候选实例的数据目录覆盖；因此启动可能改写当前启动项并共用真实设置，未运行以避免影响用户配置。缓存也可能共用：初始化先写EXE旁 `cache/media`，失败后回退同一 `app_cache_dir()`（`services/cache.rs` 143–154行）。
+
+额外观测边界：`lib.rs` 约905行用默认 fmt subscriber、INFO级别初始化日志，但成功获取manager/快照和发送`media-update`均无日志；`event_bus.rs`虽维护计数，未暴露本应用诊断接口。最短下一步是在测试构建中加入明确的隔离数据/缓存目录并跳过Run同步的实例开关，同时提供不含媒体隐私的监听阶段/快照时间/订阅数诊断输出，再于专用Windows配置中启动候选；本轮没有新增诊断实现。候选/现有Isle及播放器进程均未启动或操作，设置和Run未改写，未做测试/性能采样，无CPU/功耗结论；C2保持`[ ]`。
+
+2026-10-20 C2独立媒体宿主候选（未运行）：新增默认关闭的 `c2-media-probe` feature 与 `c2-media-probe` example。入口为 `src-tauri/examples/c2_media_probe.rs`；只在内存中注册 `AppState::default()`，将生成 `Context` 的 identifier 改为 `com.isle-app.c2-media-probe` 并在 `Builder::build` 前清空 `app.windows`，之后调用 `isle_lib::start_c2_media_probe_listener(AppHandle)`。未调用产品 `run()` / setup、未注册插件/命令、未建窗口/WebView/托盘，也未初始化Spectrum、捕获监控、设置或缓存。
+
+复用生产路径：共享 `start_media_listener` 工作循环及COM apartment、SMTC manager与会话订阅、`services::media::get_media_info_from_manager` 快照读取、`EVENT_BUS.initialize` 和 `emit_media_update`。feature-only停止句柄通过同一容量为1的消息队列送入Stop；工作线程退出循环后走既有manager/session Remove* token注销，然后join。example在60秒观察截止后请求停止、join，再调用 `App::cleanup_before_exit`。同步WinRT `RequestAsync().get()` /媒体属性读取本身不可取消，因此若系统WinRT调用卡住，正常join及进程墙钟时长理论上可能越过60秒；这不是硬杀式上限，真实Stop响应/注销结果仍待运行观察，异常退出或永久挂起下清理不作保证。
+
+仅probe路径输出一条汇总行：manager获取成功/失败、首次manager就绪/事件/兜底刷新数、非空/空/错误快照数、成功注册/成功注销token数与注销错误数，以及运行相对时长和快照均值/最大耗时。无曲名、艺术家、封面、会话AppID、媒体路径或事件payload。没有WebView，所以只能确认真实listener快照和EventBus发送调用路径被执行；不能观察前端收件/渲染、具体媒体内容或用户可见更新。无自然SMTC事件时事件刷新为0；没有会话时空快照可见。短运行不提供CPU/功耗证据。
+
+落盘/注册表调用图审阅：example与复用的listener/get_media_info_from_manager/EventBus路径不调用 `app_data_dir/app_cache_dir`、设置读写、`init_cache_system`、`download_and_cache`、`current_exe`或Winreg/`set_auto_start`；封面仅从SMTC stream读入内存，处理后放入AppState内存缓存。因而产品的`settings.json`、HKCU Run `Isle`、exe旁`cache/media`及`app_cache_dir()/media_cache`都不在此入口的可达路径；Tauri identifier独立且无WebView user-data目录。example仅向stdout写一条汇总，不写日志文件。此为静态调用图审阅，宿主本批未运行。
+
+离线检查使用Rustup cargo/rustc 1.94.1与既有隔离target `src-tauri/target/c2-offline-2026-10-17`：默认 `cargo check --offline --lib` 通过；`cargo check --offline --example c2-media-probe --features c2-media-probe` 通过；没有重建Release或改写6FF00C候选。本候选的预期运行命令（仅供协调窗口代码审阅后另行安排，本批未执行）：从`src-tauri`运行`$env:RUSTC='<local-user-path>'; $env:CARGO_TARGET_DIR='.\src-tauri\target\c2-offline-2026-10-17'; cargo run --offline --example c2-media-probe --features c2-media-probe`。本机后续运行只能被动观察现存SMTC会话，不操作播放器或Isle实例。C2状态为“宿主候选，未运行”，尚未验收实际manager、事件更新、idle/空状态和退出token注销；不宣称运行时通过或优化收益。
+
+2026-10-20 实际独立宿主烟测：在同一隔离target下 `cargo build --offline --example c2-media-probe --features c2-media-probe` exit 0；debug宿主SHA-256为`6F5752C0AD298509817B8B9A44D2F44B4D46E819F3A7C9E2119480BE0C8ABBA0`。被动运行一次，60.25秒后exit 0，无强制终止。汇总：manager 1/0成功/失败，manager-ready/event/fallback刷新1/0/29，snapshot非空/空/error为30/0/0，订阅新增/成功注销/注销错误5/5/0，观察elapsed 60001ms，快照均值/最大耗时3235/19042µs。由于event刷新为0，不称观察到事件驱动；空会话、精确1/5秒节奏、单次空广播、断线恢复及WebView收件/呈现均未测。运行前后`settings.json`及`.bak`哈希不变，HKCU Run相关值仅内存比较且不变；PID [omitted]正常退出后无残留Isle/probe进程。原release EXE/DLL SHA-256保持6FF00C…/2A5D20…。stdout原始汇总与空stderr及命令、哈希、未测边界见[烟测报告](performance/c2-media-probe-2026-10-20/REPORT.md)。这是一次功能烟测，无CPU/功耗结论；C2仍`[ ]`。
+
+2026-10-20 第二轮真实事件覆盖尝试：复用既有debug宿主，hash `6F5752C0AD298509817B8B9A44D2F44B4D46E819F3A7C9E2119480BE0C8ABBA0`，未改源码/重建；PID [omitted] 于08:55:56.6936731Z启动，观察60.13秒、exit 0、无强制终止。实际汇总 manager成功/失败1/0，manager-ready/event/fallback刷新1/0/59，snapshot非空/空/error为60/0/0，token新增/成功注销/错误8/8/0，elapsed 60002ms，快照均值/最大7220/29021µs。event仍为0，故本轮仍未观察到事件驱动刷新；不推断用户操作是否触发或具体类型通过。stop/join正常返回；设置/备份hash与Run值内存比较均未变；产品Release hash不变。原始日志、启动命令与未测边界见[第二轮观察记录](performance/c2-media-probe-2026-10-20/REPORT.md)。无空会话/精确cadence/断线恢复/WebView/CPU/功耗证据，C2保持`[ ]`。
+
+2026-10-20 event=0诊断源码批：旧回调忽略`sync_channel(1)`的`try_send`结果，`refresh_event`只计worker消费数，因此旧运行无法区分回调未进入、队列满/断开或事件未消费。默认关闭的`c2-media-probe`诊断现在聚合统计5类回调进入次数、入队成功/队列满/断开、成功快照中的播放状态变化与选中会话变化次数；选中会话只保留内存hash用于比较，不记录媒体/AppID/fingerprint。会话登记完成后打印一次相对时间和成功token数的`media_probe_ready`，最终仅打印一行汇总；无逐事件日志。production未创建probe observer。另修复媒体属性token注销计数将失败也算成功的问题。
+
+宿主事件循环审阅：锁定本地Tauri 2.10.3源码显示`Builder::build`构造runtime/App，`App::run_return`进入`runtime.run_return`，`Builder::run`才调用`build(...).run(...)`；probe只build后休眠。监听worker通过`RoInitialize(RO_INIT_MULTITHREADED)`进入MTA，本地apartment测试断言MTA；Microsoft说明MTA用于无需消息循环的后台工作（[官方文档](https://learn.microsoft.com/en-us/windows/win32/com/processes--threads--and-apartments)）。这不能证明具体SMTC provider/WinRT事件路径不依赖Tauri宿主loop，但也没有找到依赖它的源码证据；未改宿主，事件循环仍是未决假设，event=0不归因于产品实现故障。
+
+最终源码通过`cargo check --offline --lib`及`cargo check --offline --example c2-media-probe --features c2-media-probe`（Rust 1.94.1、既有隔离target），`git diff --check`通过；没有重建或运行probe，没有改旧日志、Release产物或用户状态。后续观察需等ready标记后再提示用户操作。新计数可以区分回调沉默与入队结果，但零回调仍无法区分宿主/provider派发限制与操作没有触发已订阅事件；也不证明前端收件/呈现、idle/空会话、恢复、CPU或功耗。完整审阅与边界见[诊断报告](performance/c2-media-probe-2026-10-20/REPORT.md#source-audit-and-bounded-diagnostic-update-not-run)。C2保持`[ ]`。
+
+2026-10-20 诊断版构建（未运行）：旧debug宿主原路径及归档副本hash均为`6F5752C0AD298509817B8B9A44D2F44B4D46E819F3A7C9E2119480BE0C8ABBA0`，副本保存在`performance/c2-media-probe-2026-10-20/archive/c2-media-probe-pre-diagnostics-6F5752C0AD298509.exe`。Rust/Cargo 1.94.1、既有隔离target下执行`cargo build --offline --example c2-media-probe --features c2-media-probe` exit 0；诊断debug EXE `src-tauri/target/c2-offline-2026-10-17/debug/examples/c2-media-probe.exe`，28,863,488 bytes，SHA-256 `6BBD9B28888B1C4FAE59CD79E5B7D76C9E3BACD1C5DC7CEF323189790AD99CB5`。构建输入Cargo.toml/Cargo.lock/src/lib.rs/example哈希及完整命令见[诊断报告](performance/c2-media-probe-2026-10-20/REPORT.md#diagnostic-host-build-built-not-run)；未重建产品Release，未运行诊断EXE，未改两轮旧日志。
+
+术语限定：`selected_session_changes`比较快照`source_display`（AppID/来源标识）的内存指纹，只能说明该来源标识变化，不能识别同一AppID下不同COM会话对象的切换。`media_probe_ready`只说明成功枚举后本轮manager/session注册尝试已经结束，并打印成功token数量；若total_tokens为0，不称订阅就绪，也不应据此提示用户操作。格式为`media_probe_ready elapsed_ms=<ms> manager_tokens=<n> session_tokens=<n> total_tokens=<n>`。后续观察命令与限制见上述报告：计时从listener task启动后开始；同步WinRT `.get()`不可取消，实际墙钟可能超过60秒；无WebView，不能验收前端投递/呈现。第三轮必须等待用户新的开始时机，本批无播放器/设置操作，C2保持`[ ]`。
+
+2026-10-20 第三轮诊断宿主被动观察：使用已构建EXE `6BBD9B28888B1C4FAE59CD79E5B7D76C9E3BACD1C5DC7CEF323189790AD99CB5`，PID [omitted]于09:14:53.3234109Z启动。ready为`media_probe_ready elapsed_ms=30 manager_tokens=2 session_tokens=6 total_tokens=8`，在09:15:16Z回传协调窗口，约剩37秒；用户随后回复“已操作”，未提供动作类型/精确时刻，不作推断。摘要：callback current/sessions/timeline/playback/media=0/0/0/2/6；入队success/full/disconnected=8/0/0；manager-ready/event/fallback刷新=1/8/55；playback/source标识变化=2/0；snapshot非空/空/error=64/0/0；订阅add/remove/remove-error=8/8/0；elapsed=60002ms，快照均值/最大=7610/29682µs。观察到本宿主回调→入队→消费与正常token注销路径；本轮没有验证未出现的3类回调、UI前端交付、idle/空会话、恢复、CPU/功耗。
+
+stdout/stderr分别为新文件`host-diagnostic-2026-10-20.stdout.txt`与`host-diagnostic-2026-10-20.stderr.txt`，stderr 0 bytes。首次PowerShell监控读取被Start-Process锁住的stdout文件时异常退出；probe仍运行，随后独立监督器核验同一PID的路径/启动时间并观察其约60秒后自然结束，无强制终止。该监督器未保留子进程句柄的退出码，故exit code未知，不从summary或PID消失推断。监控异常也使本轮捕获的设置/Run前态未能持久化；结束后设置/备份hash与前两轮记录相同，Run名称存在状态也匹配先前记录，但这不是本轮同进程内存前后比较，不能据此证明本轮期间值不变。原始Run值未输出。完整stdout和测量限制见[第三轮诊断报告](performance/c2-media-probe-2026-10-20/REPORT.md#diagnostic-event-observation-third-passive-run)。C2保持`[ ]`。
+
+2026-10-20 无选中会话/空allowlist idle验证：新增example参数`--no-selected-player`只在宿主内存的`AppState`设置`selected_player_ids=Some(Vec::new())`，生产`selected_session`真实路径因此返回None；不代表Windows全局无SMTC会话/真实断线。旧`6BBD9B...` EXE已归档核验。默认library与feature example离线检查通过，之后一次debug构建exit 0，新EXE SHA-256 `04B91E53325727039C5F16BFBD7C557358415C605027D6E5A07655D39DCE3A56`；产品Release未重建。PID [omitted]仅运行此模式一次，60.37s自然结束，持有同一Start-Process句柄实际读取exit code 0，无强制终止。记录manager-ready t=26ms、empty、next=1000ms；fallback t=1028ms再次empty、next=5000ms；后续fallback快照t=6029至56040ms，均empty且next=5000ms，相邻实际观察间隔约5000–5003ms。共13次empty/0 error，空状态EventBus调用1、成功返回1、错误/序列化失败0；不代表前端收到（无WebView）。manager/event/fallback刷新1/0/12，五类回调均0，队列结果0/0/0，订阅8/8移除成功/0错误。保存的原始日志和源/EXE哈希见[空allowlist报告](performance/c2-media-probe-2026-10-20/REPORT.md#empty-allowlist-idle-cadence-run)。同一PowerShell进程内settings主/备份hash前后相同、整份HKCU Run名称/kind/data快照在内存比较相同；原始Run值未输出。验证仅覆盖空allowlist空选择：真实系统无session、服务断线/恢复、事件打断idle、WebView交付、CPU/功耗及产品集成仍未测，C2保持`[ ]`。
+
+2026-10-20 有界监听器元数据复用（实现与离线验证）：生产媒体监听器actor现在只缓存单个当前选中COM session的title/artist/artwork；每次snapshot仍刷新timeline、playback、capabilities。具体`IUnknown`身份变化、首个选中、MediaPropertiesChanged、manager当前/会话变更以及5秒TTL阈值任一触发时重读属性和封面流。5秒是缓存过期阈值而非严格墙钟刷新上界：只在后续snapshot检查；播放时fallback为1秒，暂停时为2秒，因此暂停时通常约6秒重读，另加同步WinRT查询耗时。该TTL不延迟timeline/playback snapshot。dirty generation在容量1队列`try_send`之前递增，故Full合并不丢失失效；WinRT接口/缓存局限于MTA监听器线程。空选择和manager重建清缓存；两次连续SMTC查询错误后的既有manager重建保护保留。直接`get_media_info`命令继续每次完整读取。Probe仅新增metadata_reads/metadata_reuses两项。默认library和既有feature example离线check均通过，TTL/session/dirty策略两条targeted unit test通过，`git diff --check`通过；具体结果见[报告](performance/c2-media-probe-2026-10-20/REPORT.md#bounded-listener-metadata-cache-implemented-not-run)。之后probe运行与实际计数见本节后续记录；不推断CPU/功耗，C2保持`[ ]`。
+
+2026-10-20 metadata复用被动观察：重建前将旧debug probe `04B91E53325727039C5F16BFBD7C557358415C605027D6E5A07655D39DCE3A56`归档并逐字节hash核对；feature example使用已有隔离target离线构建成功，新EXE SHA-256 `5D44DA0BBC34CA9F22D04CFC75DA197A98C17DAAFE92B459991E26135016C68B`。默认选择模式仅运行一次：PID [omitted]，启动09:44:32.9297825Z，60.32秒自然结束，实际进程句柄ExitCode=0，无超时终止。63次selected snapshot全成功、0空/错误；metadata_reads/reuses=14/49，显示该会话本轮49次复用而非进入属性/封面读取路径。manager/event/fallback=1/5/57；callback current/sessions/timeline/playback/media=1/0/2/3/0；refresh入队/full/disconnected=5/1/0；订阅新增/移除/移除错误=8/8/0。该观察未收到MediaPropertiesChanged，不能验收媒体事件切封面正确；不证明CPU/功耗、前端或产品集成。settings主/备份hash同轮前后相同，整份HKCU Run名称/kind/data仅内存比较相同；完整限界见[报告](performance/c2-media-probe-2026-10-20/REPORT.md#metadata-reuse-passive-observation-one-default-mode-run)及原始stdout/stderr。C2保持`[ ]`。
+
+2026-10-20 Capture静态审查与错误退避修复：截图/全屏/录制按独立偏好门控；各自检测周期为50/500/500ms，三项关闭后worker每1秒只检查revision并在状态变化时发一次快照，不调用`GetAsyncKeyState`、全屏检查或AppCapture检测方法（worker仍在启动时初始化一次MTA）。审查发现`IsCapturingVideo`失败时原对象会被保留并每500ms重调；现在释放该对象并与创建失败共用30秒退避。关闭录制偏好也释放对象，false→true会立刻清除旧退避并查询；截图快捷键/全屏互不依赖。前端收到状态变化后按当前偏好恢复窗口，独立手动隐藏仍保留。AppCapture查询错误仍按既有fail-open行为把录制状态设false；若真实捕获仍在持续，退避期间可能恢复显示，隐私策略取舍记录为待审边界。锁定`windows 0.52`的AppCapture API只表示当前view且不是通用第三方录屏检测；UI提示已有此边界。离线`cargo check --offline --lib`和既有Capture间隔测试3/3通过，feature example check与`git diff --check`通过。未验证live检测调用数/WinRT成功、录屏覆盖、产品隐藏恢复、锁屏/恢复或优雅退出；审查记录见[Capture审查](performance/c2-media-probe-2026-10-20/CAPTURE_REVIEW.md)。C2仍开放，无Release重建/用户设置更改/提交推送。
+
+2026-10-20 包含媒体metadata缓存与Capture退避修复的产品Release构建：旧隔离target Release `isle.exe` (`6FF00C4C1D2304EDA70551F85A0C356FB98E3812A8FD3862505F69F8CF0B3036`, 8,490,496 bytes)和`isle_lib.dll` (`2A5D20778EEBC7AC5F3A2F34C2B39F705200913B51F17626945CD8D4C2F51345`, 116,736 bytes)先分别归档到`performance/c2-media-probe-2026-10-20/archive/`，副本SHA逐一匹配；此前探针EXE和日志保留。前端使用现有node_modules运行项目脚本`npm run build`（npm 11.9.0/Vite 6.4.1，exit 0，3868 modules，35.66s），本次生成build目录28个文件、合计24,126,810 bytes；`package-lock.json`/`pnpm-lock.yaml` SHA保持`F775FE6985E01B3892AB9A265C1C4DA732E97AED3E042FD592069375D026F208`/`1D46CF1E46B93D6B36A32BB74F8BE4F9B181E24AA00790E6784685732AE00439`。然后使用rustc/cargo 1.94.1、现有隔离`CARGO_TARGET_DIR=src-tauri/target/c2-offline-2026-10-17`执行`cargo build --offline --locked --release`（默认features，exit 0，5m03s）。这不是`cargo tauri build`：未执行完整Tauri bundler、安装器或setup。
+
+最终`src-tauri/target/c2-offline-2026-10-17/release/isle.exe`为8,500,224 bytes，SHA-256 `542851A3757B406C611DCE1C52DDECD88FD8D91D5F50D06F8DA06CD6D5E16FAB`；`isle_lib.dll`为116,736 bytes，SHA-256 `187C4B3AA9AD7026C370ECA41DD6B665A1D5EB4499E2078E68E883DC928CE03C`。HEAD为`48530f7343e84129aef34113dbef4dd18f7431ef`且未移动；该worktree在构建前已包含C1/A5/C2相关dirty改动，故产物来自当前dirty working tree，不代表干净HEAD构建。Cargo与前端lock哈希构建前后未变。没有启动产品或probe、没有改设置/Run、没有重建/删除旧日志/探针/命名候选、无提交推送；新产物仅是前端资源和默认Cargo Release。当前构建不提供Windows运行时、功能交互、性能/CPU/功耗证据，C2仍保持`[ ]`。
+
+2026-10-20 有界新版Release进程树采样（一次）：启动前重新核对PID 29324路径、启动时间`2026-10-20T10:04:53.5926771Z`及映像SHA-256 `542851A3757B406C611DCE1C52DDECD88FD8D91D5F50D06F8DA06CD6D5E16FAB`；启动后该PID仍存活。同机另有PID 39872运行同一SHA的Release，未启动第三份、未停止/控制任何进程。只对29324执行`measure-native.ps1 -RootPid 29324 -WarmupSeconds 30 -Seconds 60`一次；60个采样记录、采样循环实际60.687秒，端点CPU计数窗口约60.94秒。目标树在所有样本中均为7个稳定进程：Isle根进程与6个WebView2子进程；未见子PID加入/退出/重启。按各进程原始`TotalProcessorTime`累计端点差复算，根进程从1.468750s到1.671875s，增加0.203125 CPU秒；6个子进程端点差均为0，合计目标树同为0.203125 CPU秒，约0.3333%单逻辑核或12逻辑核机器容量的0.0278%。子进程的0差值表示本次端点计数未增加，不代表任何更细粒度CPU活动必为零。根进程线程47–50（均值48.33）；整树线程211–215（中位数212）。脚本另写了系统汇总CPU字段（60样本中位数13%、范围2–61%），它受第二个Isle实例及主机其他活动影响，不作为产品归因或比较结果；没有同条件旧版基线，不声称性能提升。配置、播放状态、窗口/显示器/DPI状态均未可靠观测，故本样本不称“idle”或受控场景；Label中的`idle`只是文件标识。进程树由PID父子关系动态枚举，跨采样间短命子进程可能未被观察；目标树包括WebView2，但不含其外部broker/系统服务。采样期间未设置profile、未发送输入、未读写设置/Run；仅在新证据目录写JSON/JSONL。脚本会枚举全机进程以判定子树，并记录一项系统总CPU计数，但不记录其他应用的逐进程CPU/内存/线程数据。原始记录与复算边界见[有界Release运行记录](performance/c2-media-probe-2026-10-20/runtime-idle-PID [omitted]/REPORT.md)；JSON SHA-256 `F4E6407EDF8AE73F5D457BAC51AA188F2BAF61A8C54AA06C572B9840AE7C4709`，JSONL SHA-256 `03EAD9EB04D13EB05F714231D0A5AEEA3E52CB0E4CAD574CA9DA21DD863082BE`。C2仍开放；未改源码/用户配置、未启动或关闭产品、未提交推送。
+
+2026-10-20 工作区变化通知实现与离线验证：主窗口使用独立Win32 `SetWindowSubclass` 观察 `WM_DISPLAYCHANGE` 及仅在 `wParam == SPI_SETWORKAREA` 时接受的 `WM_SETTINGCHANGE`；WndProc不枚举显示器、不直接操作窗口，只以原子pending合并后异步发送 `isle-work-area-changed`。前端复用既有350ms恢复/布局重算路径，原5分钟低频兜底保留。安装在主WebView加载完成后经主线程投递，按HWND幂等；销毁代次阻止迟到安装，`WM_NCDESTROY`采用一次性清理保护，在`DefSubclassProc`返回后释放回调状态。默认Rust库与既有`c2-media-probe` feature example的offline/locked检查、既有窗口测试15/15及`npm run build`（Vite 6.4.1，3868模块）通过；未构建/运行新的Release或探针。Release文件未修改，其预期SHA仍为EXE `542851A3757B406C611DCE1C52DDECD88FD8D91D5F50D06F8DA06CD6D5E16FAB`、DLL `187C4B3AA9AD7026C370ECA41DD6B665A1D5EB4499E2078E68E883DC928CE03C`。原生工作区/显示器消息投递、多显示器布局恢复、应用销毁/重建现场路径和CPU/功耗仍未测；`RemoveWindowSubclass`失败仅记录错误，清理由Windows销毁回调及默认处理返回后的终止窗口生命周期兜底。完整范围见[工作区通知记录](performance/c2-media-probe-2026-10-20/WORK_AREA_NOTIFIER.md)。C2保持`[ ]`。
+
+2026-10-20 cursor DPI查询优化（实现与离线验证）：锁定依赖源码确认`WebviewWindow::scale_factor()`经Tauri dispatcher调用Wry `window_getter!`，同步发送`WindowMessage::ScaleFactor`并等待事件循环回复；tao Windows后端读`WindowState.scale_factor`互斥状态。旧cursor worker每轮同步查询，频率随原33/50/200ms监视节奏变化。现在由现有全局`.on_window_event`一次性接收每窗口`ScaleFactorChanged`并更新label专属缓存；worker启动时查询一次，平稳期每1秒查询兜底，事件可即时生效，cursor采样及原33/50/200ms自适应间隔、坐标换算和ignore输入策略保持。事件revision使并发事件优先于在途初始化/兜底查询；scale必须为有限正数；无效事件或查询错误使缓存失效并沿现有fail-open路径重试，避免永久沿用旧DPI。Destroyed移除该label缓存并使活跃监视generation失效；重启初次查询刷新缓存，并校验传入窗口HWND仍与当前同label窗口一致，因此同label新窗口不继承旧值。重启未注册额外listener。纯逻辑测试覆盖事件/初始化竞争、非法值、查询失败不覆盖新事件、同label销毁重建/窗口缓存隔离。默认lib check、既有`c2-media-probe` feature example check通过；窗口测试模块13/13通过，`git diff --check`通过。未运行产品、未重建Release；没有本机混合DPI行为实测或CPU归因，仍需跨不同缩放显示器移动/系统缩放变化下验证ScaleFactorChanged到达、透明交互区坐标/穿透一致、同label重建及原间隔。实现和验证记录见[cursor DPI记录](performance/c2-media-probe-2026-10-20/CURSOR_DPI_CACHE.md)。C2保持`[ ]`。
+
+## 35. 网易云模式按钮与进度跳转接入（2026-10-21）
+
+- [ ] **M-Netease：模式按钮与切曲读回验收。** 主岛四态模式按钮及 `cycle_netease_playback_mode` → `LocalCdpClient` 已接入；后端仅在读回确认 requested/observed 一致且 `verified=true` 后返回新模式。CLI 模式循环和完整 App fixture 的 query/cycle/readback/error/busy/切曲路径已通过；真实网易云中的模式按钮结果及切歌后状态恢复仍待实机验收。用户已确认进度滑条拖动能控制网易云，±15 秒快捷控件按用户要求移除，不属于当前验收范围；另确认截图显示问题已解决，但该反馈未验证模式或性能。详见[本轮证据记录](performance/netease-mode-seek-2026-10-21/REPORT.md)。
+
+## 36. 网易云进度来源设置与性能对照（2026-10-21）
+
+本需求统一跟踪于 Phase 3 的 **I3-NCM2**，原 NPS1 为同一需求的别名，不另设重复任务。范围、设置行为、性能对照和验收均以 I3-NCM2 为准。首个设置/actor实现切片已进入工作树，legacy 默认仍为 `real` 以兼容旧行为；该值不代表性能推荐，原生/多 WebView 验收与性能准确度对照仍待完成。
+
+网易云接口与 seek 实测证据见[本轮记录](performance/netease-mode-seek-2026-10-21/REPORT.md)。
+
+2026-10-22 C4被动运行时采样收口：使用既有`measure-native.ps1`对已运行候选做一次只读动态进程树采样，10秒warmup+60秒采样，共42条/60.971秒；7个进程身份全程稳定。树CPU中位数1.2527%机器容量（12逻辑核；15.0325%单核等效），范围0–5.2715%；GPU 3D引擎中位数0%、最大1%（不代表全GPU利用率）。实际App可见/页面/捕获/播放状态未可靠记录，不能称Idle或clock/weather-only；无collector/IPC/effect计数、无匹配前测。采样脚本的外层`$LASTEXITCODE`判断错误，漏掉原计划的即时后置核验；2026-10-22复核时PID10580已不存在，settings与Run摘要当前匹配前置值，但跨日检查不能证明采样结束时状态。详见[C4采样报告](performance/c4-weather-snapshot-2026-10-20/REPORT.md#passive-dynamic-process-tree-sample-2026-10-21-uncontrolled-state)及原始JSON/JSONL。C4保持`[ ]`，无性能收益结论。
+
+## 37. R2 verified dead-path cleanup slice (2026-10-22)
+
+静态调用图确认 `src-tauri/src/services/spectrum.rs` 的占位函数 `process_spectrum_data` 无调用者，`services` 模块也不对 crate 外暴露；删除该 service 文件及模块声明，并同步移除只为它服务、未在 crate 顶层导出的 `SpectrumData` 模型。全仓搜索确认 `FeatureRail.svelte` 没有导入者或动态引用，删除该旧 UI 组件。修正 `lib.rs` setup 清单中“启动音频可视化器”为“创建频谱捕获状态（按可见消费者按需启停）”，与当前按需消费者生命周期一致。`pnpm run check`（0 errors/warnings）、离线 locked Rust `cargo check`及`git diff --check`通过；唯一 Rust warning 为已有 `NeteaseTimelineSample.track_id/play_id`未读字段。未做Release构建/进程切换、未运行播放器或UI自动化。该切片只清理两条已证实死路径与一条陈旧注释，不完成整个R2；其余dead-path审计以及bundle/Release验证仍待进行。源码、锁文件和既有dirty均保留在m3 worktree，没有提交或推送。
+
+后续排除审计：`featureRail.ts` 仍被 App、Studio、IslandSurface 和 `islandGeometry.ts` 使用；`islandShapeMotion`/motion easings 有生产调用或单测用途；legacy `autoHide`、`edgeShoulderRadius`、Timer unversioned response、settings snapshot 与运行时事件均有兼容读取/派发路径，未删除。仓库范围搜索未发现 `AGENTS.md`。当前没有足够证据支持再删一个候选；R2其余清理应在逐项调用图与旧配置迁移验证后进行，不因“看起来未使用”扩大删除范围。
+
+2026-10-23 command/event/config 调用图补审：按实际 `generate_handler!` 块与前端静态 `invoke` 字符串比对，找到 5 个无调用的旧包装（`get_netease_duration_cmd`、`set_hide_settings_button`、`set_hide_monitor_selector`、`set_hide_floating_window`、`set_expanded_corner_radius`）：均未注册为 Tauri command、Rust 端无对应公开函数，且前端全仓没有使用点；已移除这些本地 API 包装。其余 58 个不同的前端字面量调用均与注册命令匹配。10 个注册但无同名字面量调用的命令中，频谱启停通过队列动态传入命令名；其余保留，因为该静态审计不能排除间接/兼容调用，不以字面量搜索单独删除。事件链交叉核对确认 `media-update` 由 Rust event bus 到 `onMediaUpdate`；`spectrum-data` 由音频发布器到 `spectrumStore`；`settings-updated` 由设置快照写入方到各 WebView settings store；`isle-work-area-changed` 及 `isle-window-visible` 分别有窗口事件监听。`audio-spectrum` 旧常量当前无生产调用，实际频谱通道是 `spectrum-data`；`settings-committed` 在仓库内只有 Rust 发射点、未发现前端监听。本轮保留这两个旧事件入口，静态仓库搜索无法排除外部/兼容订阅。旧配置保留 `autoHide` 与 `edgeShoulderRadius` 的归一/serde alias；Timer 窗口保留未版本响应兼容，并以版本化响应阻止旧载荷回退；设置 store 仍先订阅再获取快照且以事件 revision 防止旧快照覆盖新事件。静态调用图核对和包装清理完成；最终有界dead-path/config审计及验证见2026-10-23 closeout。
+
+2026-10-23 bundle/Release验证：`pnpm run check`（0 errors/warnings）和 `pnpm run build` 通过；Vite 产物28个文件、24,155,403 bytes。使用Rust/Cargo 1.94.1执行 `--offline --locked --release --features custom-protocol` 成功，Tauri build output确认 `cargo:dev=false` 与 `cargo:rustc-cfg=custom_protocol`。生成的 `src-tauri/target/release/isle.exe` 为23,470,592 bytes，SHA-256 `724C5F6B287F497FF1D1FB94D9DC1A993299B7561FF57CB9CCD325711214E2EA`；配套 `isle_lib.dll` 为116,736 bytes，SHA-256 `7F019FFB41EA178E05976C9A68050DB75C7290882610568D7227DB0048C908BF`。release dep-info包含当前前端全部16个JS及7个CSS资源；本轮未启动/替换应用，未做网易云或UI操作。
+
+2026-10-23 bounded dead-path/config closeout: `stableEnvelope`、`expansionForWidth`、`expansionForGeometry` were referenced only by obsolete geometry tests, not production callsites; removed those helpers and tests plus unreferenced `FEATURE_RAIL_RESERVE` and `ISLAND_SPRING`. Removed the three files under `src/styles/` after confirming no app/import-graph references (their imports only linked the orphan stylesheets to one another). Corrected the Timer local-storage comment: that window is created on demand. Preserved old event names and legacy settings/Timer response paths where repository search cannot prove external/indirect compatibility use.
+
+Lock/toolchain decision: `pnpm-lock.yaml` is authoritative for project/release work because the project has pnpm-only `onlyBuiltDependencies` and verified scripts use pnpm 10.33.2. The tracked `package-lock.json` remains a secondary compatibility lock; release commands use the pnpm lock. Native release toolchain is Rust/Cargo 1.94.1. Extended the legacy settings migration test to assert both `autoHide` and `edgeShoulderRadius` aliases.
+
+Current-source validation: `pnpm run check` passed (0 errors/warnings); `pnpm exec vitest run src/lib/islandGeometry.test.ts` passed (20/20); Vite build passed (28 files, 24,155,204 bytes). `cargo test --offline --locked --lib migrates_legacy_auto_hide_to_fullscreen_capture_setting` passed (1/1). `cargo build --offline --locked --release --features custom-protocol` passed with Rust/Cargo 1.94.1; existing warning remains limited to unused `NeteaseTimelineSample.track_id/play_id`. Current `isle.exe` is 23,467,520 bytes (SHA-256 `8F6F8D509DC6B6BE02BE172556D3CAA32D753B81F9578C662D6147C9A433A0DE`), paired `isle_lib.dll` 116,736 bytes (SHA-256 `DADAE48FB95C605976FBE133682389F4841F4BA4647E289952490387E07B6762`). `git diff --check` passes; no Isle process was running, and no app/UI/player operation was performed. R2's bounded repository audit is complete. Remaining plan items stay under their existing runtime, real-player, native-interaction, and controlled-measurement acceptance; this pass found no further offline R2 cleanup to extend as a general scan.

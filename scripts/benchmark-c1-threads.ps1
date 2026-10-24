@@ -37,4 +37,3 @@ if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
 $samples | Export-Csv -LiteralPath $OutputPath -NoTypeInformation
 $peak = $samples | Measure-Object -Property threadCount -Maximum
 "samples=$($samples.Count) peakThreads=$($peak.Maximum) rootPid=$RootPid output=$OutputPath"
-

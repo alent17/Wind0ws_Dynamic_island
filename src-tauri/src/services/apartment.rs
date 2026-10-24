@@ -1,6 +1,6 @@
 //! Thread-bound Windows Runtime ownership. Declare before any COM interfaces.
 use std::{marker::PhantomData, rc::Rc};
-use windows::Win32::{
+use windows052::Win32::{
     Foundation::RPC_E_CHANGED_MODE,
     System::WinRT::{RoInitialize, RoUninitialize, RO_INIT_MULTITHREADED, RO_INIT_SINGLETHREADED},
 };
@@ -9,7 +9,7 @@ use windows::Win32::{
 pub(crate) struct Apartment(PhantomData<Rc<()>>);
 
 impl Apartment {
-    pub(crate) fn enter() -> windows::core::Result<Self> {
+    pub(crate) fn enter() -> windows052::core::Result<Self> {
         // Preserve an existing STA (e.g. Tauri's UI thread). A failed MTA
         // initialization owns no reference, so only the successful retry drops.
         unsafe {
@@ -34,12 +34,12 @@ impl Drop for Apartment {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use windows::Win32::System::Com::{
+    use windows052::Win32::System::Com::{
         CoGetApartmentType, CoInitializeEx, CoUninitialize, APTTYPE, APTTYPEQUALIFIER, APTTYPE_MTA,
         COINIT_APARTMENTTHREADED,
     };
 
-    fn apartment_type() -> windows::core::Result<APTTYPE> {
+    fn apartment_type() -> windows052::core::Result<APTTYPE> {
         let mut kind = APTTYPE::default();
         let mut qualifier = APTTYPEQUALIFIER::default();
         unsafe { CoGetApartmentType(&mut kind, &mut qualifier)? };
@@ -53,9 +53,9 @@ mod tests {
             {
                 let _outer = Apartment::enter().unwrap();
                 assert_eq!(apartment_type().unwrap(), APTTYPE_MTA);
-                let fail = || -> windows::core::Result<()> {
+                let fail = || -> windows052::core::Result<()> {
                     let _inner = Apartment::enter()?;
-                    Err(windows::core::Error::from(RPC_E_CHANGED_MODE))
+                    Err(windows052::core::Error::from(RPC_E_CHANGED_MODE))
                 };
                 assert!(fail().is_err());
                 assert_eq!(apartment_type().unwrap(), APTTYPE_MTA);

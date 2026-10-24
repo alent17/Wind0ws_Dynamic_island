@@ -3,9 +3,9 @@
 //! 提供媒体信息获取、播放控制和图片处理命令
 
 use crate::error::{AppError, AppResult};
-use crate::event_bus::EVENT_BUS;
 use crate::models::{MediaSessionInfo, MediaState, NeteaseSong, ResolvedCover};
-use tauri::AppHandle;
+use crate::state::AppState;
+use tauri::{AppHandle, Manager};
 
 #[tauri::command]
 pub fn cancel_artwork(window: tauri::WebviewWindow, slot: String, revision: u64) -> AppResult<()> {
@@ -94,9 +94,11 @@ pub async fn request_artwork(
 /// 获取当前播放的媒体信息
 #[tauri::command]
 pub async fn get_media_info_cmd(app: AppHandle) -> AppResult<MediaState> {
-    super::native_task::run_native(move || crate::services::media::get_media_info(&app))
-        .await
-        .map_err(|error| AppError::media(format!("读取媒体信息任务失败：{error}")))?
+    let actor = app
+        .state::<AppState>()
+        .media_actor()
+        .map_err(AppError::media)?;
+    actor.snapshot().await.map_err(AppError::media)
 }
 
 /// Cycle a NetEase playback mode through the bounded local CDP adapter.
@@ -176,33 +178,93 @@ pub async fn resolve_hd_cover(
 /// 操作完成后会自动更新媒体状态并通知前端
 #[tauri::command]
 pub async fn control_media(app: AppHandle, action: String) -> AppResult<()> {
-    let refresh_app = app.clone();
-    let refresh_play_state = action == "play_pause";
+    if action == "play_pause" {
+        let actor = app
+            .state::<AppState>()
+            .media_actor()
+            .map_err(AppError::media)?;
+        return actor.play_pause().await.map_err(AppError::media);
+    }
     super::native_task::run_native(move || crate::services::media::control_media(&app, &action))
         .await
-        .map_err(|error| AppError::media(format!("媒体控制后台任务失败：{error}")))??;
-
-    // Keep the short confirmation refresh off the UI thread. Preserve the
-    // existing command contract: a successful toggle
-    // returns only after the follow-up snapshot has been attempted.
-    if refresh_play_state {
-        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-        let result = super::native_task::run_native(move || {
-            crate::services::media::get_media_info(&refresh_app)
-        })
-        .await;
-        if let Ok(Ok(info)) = result {
-            let _ = EVENT_BUS.emit(crate::event_bus::EVENT_MEDIA_UPDATE, &info);
-        }
-    }
-    Ok(())
+        .map_err(|error| AppError::media(format!("媒体控制后台任务失败：{error}")))?
 }
 
 #[tauri::command]
-pub async fn seek_media(app: AppHandle, position_ms: u64) -> AppResult<()> {
-    super::native_task::run_native(move || crate::services::media::seek_media(&app, position_ms))
-        .await
-        .map_err(|error| AppError::media(format!("seek 后台任务失败：{error}")))?
+pub async fn seek_media(
+    app: AppHandle,
+    position_ms: u64,
+    expected_native_epoch: Option<String>,
+    expected_title: Option<String>,
+    expected_artist: Option<String>,
+    expected_track_generation: Option<u64>,
+) -> AppResult<Option<crate::services::netease_cdp::NeteaseProgress>> {
+    let actor = app
+        .state::<AppState>()
+        .media_actor()
+        .map_err(AppError::media)?;
+    let before = actor.snapshot().await.map_err(AppError::media)?;
+    let netease_basis = if before.source == "netease" {
+        let (Some(epoch), Some(title), Some(artist), Some(track_generation)) = (
+            expected_native_epoch,
+            expected_title,
+            expected_artist,
+            expected_track_generation,
+        ) else {
+            return Err(AppError::media("网易云 seek 缺少当前媒体快照身份"));
+        };
+        if epoch.len() > 128 || title.len() > 1024 || artist.len() > 1024 {
+            return Err(AppError::media("网易云 seek 媒体快照身份无效"));
+        }
+        crate::state::run_if_netease_seek_basis(
+            &before,
+            &epoch,
+            &title,
+            &artist,
+            track_generation,
+            || (),
+        )
+        .map_err(|_| AppError::media("媒体曲目已变化，请重试进度调整"))?;
+        Some((epoch, title, artist, track_generation))
+    } else {
+        None
+    };
+    let worker_app = app.clone();
+    let expected_title_for_cdp = netease_basis
+        .as_ref()
+        .map_or_else(String::new, |basis| basis.1.clone());
+    let expected_artist_for_cdp = netease_basis
+        .as_ref()
+        .map_or_else(String::new, |basis| basis.2.clone());
+    let progress = super::native_task::run_native(move || {
+        crate::services::media::seek_media(
+            &worker_app,
+            position_ms,
+            &expected_title_for_cdp,
+            &expected_artist_for_cdp,
+        )
+    })
+    .await
+    .map_err(|error| AppError::media(format!("seek 后台任务失败：{error}")))??;
+    if let Some(verified) = progress.as_ref() {
+        let Some((epoch, title, artist, track_generation)) = netease_basis else {
+            return Err(AppError::media("网易云 seek 的媒体快照身份已失效"));
+        };
+        actor
+            .confirmed_netease_seek(
+                epoch,
+                title,
+                artist,
+                track_generation,
+                verified.track_id.clone(),
+                verified.play_id.clone(),
+                verified.position_ms,
+                verified.duration_ms,
+            )
+            .await
+            .map_err(AppError::media)?;
+    }
+    Ok(progress)
 }
 
 #[tauri::command]
@@ -246,4 +308,3 @@ pub async fn pixelate_cover(image_path: String, pixel_size: u32) -> AppResult<St
     .await
     .map_err(|error| AppError::business(3010, format!("像素化后台任务失败：{error}")))?
 }
-

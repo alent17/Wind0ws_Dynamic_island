@@ -51,11 +51,13 @@ pub fn get_preferences(state: State<'_, AppState>) -> AppResult<AppPreferences> 
 }
 
 fn normalize_settings(settings: &mut AppPreferences) {
-    settings.compact_length = settings.compact_length.clamp(80, 300);
+    settings.floating_compact_length = settings.floating_compact_length.clamp(80, 300);
+    settings.edge_compact_length = settings.edge_compact_length.clamp(80, 300);
     settings.island_edge_position = settings.island_edge_position.min(100);
     settings.collapsed_edge_shoulder_radius = settings.collapsed_edge_shoulder_radius.min(16);
     settings.expanded_edge_shoulder_radius = settings.expanded_edge_shoulder_radius.min(64);
-    settings.expanded_corner_radius = settings.expanded_corner_radius.min(80);
+    settings.floating_expanded_corner_radius = settings.floating_expanded_corner_radius.min(80);
+    settings.edge_expanded_corner_radius = settings.edge_expanded_corner_radius.min(80);
     settings.idle_rotation_seconds = settings.idle_rotation_seconds.clamp(2, 60);
     settings.font_id = "misans".to_string();
     if let Some(ids) = settings.selected_player_ids.as_mut() {
@@ -223,6 +225,12 @@ where
         .settings
         .lock()
         .map_err(|_| AppError::lock("Failed to lock settings"))? = next.clone();
+    state.set_netease_progress_mode(next.netease_progress_mode);
+    if old.netease_progress_mode != next.netease_progress_mode {
+        if let Ok(actor) = state.media_actor() {
+            actor.wake_for_netease_progress_mode_change();
+        }
+    }
     let revision = state.settings_revision.fetch_add(1, Ordering::SeqCst) + 1;
     emit_setting_diffs(&old, &next);
     let _ = EVENT_BUS.emit(crate::event_bus::EVENT_SETTINGS_UPDATED, next.clone());
@@ -274,12 +282,6 @@ fn emit_setting_diffs(old: &AppPreferences, settings: &AppPreferences) {
         let _ = EVENT_BUS.emit(
             crate::event_bus::EVENT_FLOATING_WINDOW_ALWAYS_ON_TOP_CHANGED,
             serde_json::json!({"isAlwaysOnTop": settings.floating_window_always_on_top}),
-        );
-    }
-    if old.expanded_corner_radius != settings.expanded_corner_radius {
-        let _ = EVENT_BUS.emit(
-            crate::event_bus::EVENT_CORNER_RADIUS_CHANGED,
-            settings.expanded_corner_radius,
         );
     }
     if old.monitor_index != settings.monitor_index {

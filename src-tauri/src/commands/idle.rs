@@ -1,10 +1,15 @@
 use crate::error::AppResult;
-use crate::models::{IdleSnapshot, WeatherLocationCandidate};
+use crate::models::{IdleSnapshot, WeatherLocationCandidate, WeatherSnapshot};
 use tauri::AppHandle;
 
 #[tauri::command]
 pub async fn get_idle_snapshot(app: AppHandle) -> AppResult<IdleSnapshot> {
     crate::services::get_idle_snapshot(&app).await
+}
+
+#[tauri::command]
+pub async fn get_weather_snapshot(app: AppHandle) -> AppResult<WeatherSnapshot> {
+    crate::services::get_weather_snapshot(&app).await
 }
 
 #[tauri::command]

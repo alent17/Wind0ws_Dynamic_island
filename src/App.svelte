@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createArtworkOwner } from "$lib/artworkOwner";
-  import { artworkValue, withoutArtwork } from "$lib/mediaArtwork";
+  import { artworkValue, nativeStampDecision, readNativeMediaStamp, type NativeMediaStamp } from "$lib/mediaArtwork";
   import { onMount, onDestroy, untrack } from "svelte";
   import { convertFileSrc } from "@tauri-apps/api/core";
   import { emit, listen } from "@tauri-apps/api/event";
@@ -9,12 +9,26 @@
   import { mediaApi } from "$lib/api/media";
   import { islandMode, islandState, islandView, transitionIsland } from "$lib/islandStore";
   import { connectSettingsStore, refreshSettingsStore, settingsStore } from "$lib/settingsStore";
+  import { LatestValueWriteQueue } from "$lib/latestValueWriteQueue";
   import { createAsyncCleanup } from "$lib/asyncCleanup";
+import { createSeekHandler, createSeekRequestGate, formatSeekError, formatUserFacingError, seekSnapshotAllowsRollback } from "$lib/seekRequest";
   import { waitForOwner } from "$lib/asyncWait";
+  import { createIslandRegionSender } from "$lib/islandRegionSender";
+import { createMediaSyncSender, type MediaSyncSnapshot } from "$lib/mediaSyncSender";
+  import { isTransportDiagnosticsEnabled, recordTransportCounter, runTimedTransportCommand, runTransportEvent } from "$lib/transportDiagnostics";
   import { loadImage } from "$lib/imageLoad";
   const lifetime = createAsyncCleanup();
+  const appMediaSessionId = crypto.randomUUID();
+  let activeFloatingInstanceToken: string | undefined;
+  const retiredFloatingInstanceTokens = new Set<string>();
+  let appOverlaySequence = 0;
+  const floatingMediaSender = createMediaSyncSender({
+    dispatch: (payload) => emit(Events.ISLAND_MEDIA_SYNC, payload),
+    onError: (error) => console.warn("[媒体同步] 浮窗状态发送失败，将保留最新快照重试", error),
+  });
   let metadataImage: AbortController | undefined;
   onDestroy(() => {
+    floatingMediaSender.dispose();
     lifetime.dispose(); metadataImage?.abort();
     ++windowPlacementRevision; ++placementTransitionRevision; ++manualHideSequence;
     placementAnimation?.cancel(); placementAnimation = null;
@@ -34,17 +48,18 @@
     clampShoulderRadius,
     geometryFor,
     hiddenPlacementFor,
-    ISLAND_GAP,
-    navigationScaleForWorkArea,
+    islandContentScaleForWorkArea,
+    interactionSurfaceOffsetFor,
     navigationHostFor as hostFor,
     overlapAttachedEdge,
     placementFor,
+    physicalHostSizeFor,
     surfaceOffsetFor,
     type IslandEdge,
     type IslandRegionChange,
     type IslandStyle,
   } from "$lib/islandGeometry";
-  import type { AppSettings, AudioDeviceInfo, IdleSnapshot, MediaState, MonitorInfo, SystemAudioState } from "$lib/api/types";
+  import type { AppSettings, AudioDeviceInfo, MediaState, MonitorInfo, SystemAudioState, WeatherSnapshot } from "$lib/api/types";
   import { DEFAULT_SETTINGS } from "$lib/api/types";
   import type { IslandTool } from "$lib/featureRail";
   import { applyAppFont } from "$lib/font";
@@ -55,7 +70,7 @@
     type CaptureSnapshot,
   } from "$lib/captureMode";
   import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition } from "$lib/mediaClock";
-  import { adjustCountdown, completeCountdown, createCountdownState, formatClock, getRemainingMs, pauseCountdown, resetCountdown, resumeCountdown, startCountdown, type CountdownState } from "$lib/countdown";
+import { adjustCountdown, completeCountdown, createCountdownState, formatClock, getRemainingMs, pauseCountdown, resetCountdown, resumeCountdown, startCountdown, type CountdownState, type TimerSnapshot } from "$lib/countdown";
   import { ISLAND_MOTION } from "$lib/islandMotion";
   import {
     getCurrentWindow,
@@ -92,6 +107,7 @@
   let isPlaying = $state<boolean>(false);
   let neteasePlaybackMode = $state<MediaState["neteasePlaybackMode"]>();
   let neteaseModeBusy = $state(false);
+  let neteaseModeError = $state("");
   let lastNeteaseModeProbeKey: string | null = null;
   let lastSongKey: string | null = null;
   let metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
@@ -150,13 +166,19 @@
   let resumePlacementTimer: ReturnType<typeof setTimeout> | undefined;
   function handleVisibilityChange() {
     pageVisible = document.visibilityState === "visible";
-    if (pageVisible) scheduleResumeRecovery();
+    if (pageVisible) {
+      clockNow = Date.now();
+      updateTimeDisplay(true);
+      scheduleResumeRecovery();
+    }
   }
   function scheduleResumeRecovery() {
     if (document.visibilityState !== "visible") return;
     if (resumePlacementTimer !== undefined) clearTimeout(resumePlacementTimer);
     resumePlacementTimer = setTimeout(() => {
       resumePlacementTimer = undefined;
+      clockNow = Date.now();
+      updateTimeDisplay(true);
       if (!windowReady) return;
 
       // Re-enumerate displays after resume/focus so a monitor or work-area
@@ -175,6 +197,21 @@
   let currentSource = $state<string>("generic");
   let hasMediaSession = $state(false);
   let mediaCapabilities = $state<MediaState["capabilities"]>();
+  // Remembered/default/demo state is not authoritative enough to replay to a
+  // newly ready Floating consumer. This resets with each App mount.
+  let appNativeMediaReady = false;
+  let appNativeStamp = $state<NativeMediaStamp | undefined>(undefined);
+  let appNativeTrackGeneration = 0;
+  const seekRequestGate = createSeekRequestGate();
+  let nativeSeekSnapshotRevision = 0;
+  let seekErrorMessage = $state("");
+  let seekBusy = $state(false);
+  let progressKnown = $state(true);
+  let neteaseProgressAvailable = $state<boolean | undefined>(undefined);
+  let activeSeekRequests = 0;
+  let latestNativeSeekSnapshot: { epoch: string; trackGeneration: number; title: string; artist: string; positionMs: number; durationMs: number } | undefined;
+  let appNativeStampedMode = false;
+  const appRetiredNativeEpochs = new Set<string>();
   let islandMedia = $derived<MediaState>({
     title: hasMediaSession ? trackTitle : "",
     artist: hasMediaSession ? artistName : "",
@@ -186,7 +223,11 @@
     source: currentSource,
     sourceDisplay: playerNames[currentSource as keyof typeof playerNames] || "多媒体",
     capabilities: mediaCapabilities,
+    progressKnown,
+    neteaseProgressAvailable,
+    nativeTrackGeneration: appNativeTrackGeneration,
     neteasePlaybackMode,
+    ...(appNativeStamp ?? {}),
   });
   let displayedPosition = $derived(projectedPosition(islandMedia, clockNow));
 
@@ -198,21 +239,46 @@
     pendingHdImage?.abort(); pendingHdImage = undefined;
   }
   $effect(() => { if (!$appSettings.enableHdCover) cancelMainCover(); });
-  let lastSyncedArtwork = "";
-  let lastSyncedTrack = "";
   function syncFloatingMediaClock() {
-    if (lifetime.disposed) return Promise.resolve();
+    if (lifetime.disposed) return;
+    if (!appNativeMediaReady || !activeFloatingInstanceToken) {
+      if (isTransportDiagnosticsEnabled()) recordTransportCounter("mediaSync", "noConsumer");
+      return;
+    }
     const syncedAt = Date.now();
-    const snapshot: MediaState = {
+    if (appOverlaySequence >= Number.MAX_SAFE_INTEGER) {
+      logger.warn("浮窗媒体 overlay 序号已耗尽，本次挂载停止同步");
+      return;
+    }
+    const overlaySeq = ++appOverlaySequence;
+    const snapshot: MediaSyncSnapshot = {
       ...islandMedia,
       artworkResolved: hdArtworkResolved,
       positionMs: projectedPosition(islandMedia, syncedAt),
       lastUpdatedTimestamp: syncedAt,
+      appSessionId: appMediaSessionId,
+      overlaySeq,
+      ...(appNativeStamp ? { appOverlay: {
+        nativeEpoch: appNativeStamp.nativeEpoch,
+        nativeRevision: appNativeStamp.nativeRevision,
+        trackKey: `${islandMedia.source}|${mediaTrackKey(islandMedia.title, islandMedia.artist)}`,
+        title: islandMedia.title,
+        artist: islandMedia.artist,
+        albumArt: islandMedia.albumArt ?? "",
+        artworkResolved: hdArtworkResolved,
+        positionMs: projectedPosition(islandMedia, syncedAt),
+        lastUpdatedTimestamp: syncedAt,
+      } } : {}),
     };
-    const signature = `${snapshot.source}|${snapshot.title}|${snapshot.artist}`;
-    if (signature === lastSyncedTrack && snapshot.albumArt === lastSyncedArtwork) return emit(Events.ISLAND_MEDIA_SYNC, withoutArtwork({...snapshot}));
-    else { lastSyncedTrack = signature; lastSyncedArtwork = snapshot.albumArt; }
-    return emit(Events.ISLAND_MEDIA_SYNC, snapshot);
+    floatingMediaSender.offer(snapshot);
+  }
+
+  function pauseFloatingConsumer(instanceToken: string | undefined, retire: boolean) {
+    if (!instanceToken || activeFloatingInstanceToken !== instanceToken) return false;
+    floatingMediaSender.pauseForConsumer(`${appMediaSessionId}:${instanceToken}`);
+    activeFloatingInstanceToken = undefined;
+    if (retire) retiredFloatingInstanceTokens.add(instanceToken);
+    return true;
   }
   function normalizedStyle(value: string): IslandStyle {
     return value === "edge" ? "edge" : "floating";
@@ -225,6 +291,7 @@
   function normalizedSettings(value: Partial<AppSettings>): AppSettings {
     const position = Number(value.islandEdgePosition ?? DEFAULT_SETTINGS.islandEdgePosition);
     const legacyAutoHide = (value as Partial<AppSettings> & { autoHide?: boolean }).autoHide;
+    const legacyAppearance = value as Partial<AppSettings> & { compactLength?: number; expandedCornerRadius?: number };
     return {
       ...DEFAULT_SETTINGS,
       ...value,
@@ -235,8 +302,10 @@
       islandEdgePosition: Math.min(100, Math.max(0, Number.isFinite(position) ? position : 50)),
       collapsedEdgeShoulderRadius: Math.min(16, clampShoulderRadius(value.collapsedEdgeShoulderRadius ?? (value as Partial<AppSettings> & { edgeShoulderRadius?: number }).edgeShoulderRadius ?? 8)),
       expandedEdgeShoulderRadius: clampShoulderRadius(value.expandedEdgeShoulderRadius ?? 32),
-      expandedCornerRadius: clampExpandedRadius(value.expandedCornerRadius ?? 45),
-      compactLength: Math.min(300, Math.max(80, Number(value.compactLength ?? 80))),
+      floatingExpandedCornerRadius: clampExpandedRadius(value.floatingExpandedCornerRadius ?? legacyAppearance.expandedCornerRadius ?? 45),
+      edgeExpandedCornerRadius: clampExpandedRadius(value.edgeExpandedCornerRadius ?? legacyAppearance.expandedCornerRadius ?? 45),
+      floatingCompactLength: Math.min(300, Math.max(80, Number(value.floatingCompactLength ?? legacyAppearance.compactLength ?? 80))),
+      edgeCompactLength: Math.min(300, Math.max(80, Number(value.edgeCompactLength ?? legacyAppearance.compactLength ?? 80))),
       idleRotationSeconds: Math.min(60, Math.max(2, Number(value.idleRotationSeconds ?? 5))),
       idleItems: Array.isArray(value.idleItems) ? value.idleItems : DEFAULT_SETTINGS.idleItems,
       clockTimeZone: typeof value.clockTimeZone === "string" && value.clockTimeZone.trim().length > 0
@@ -245,25 +314,34 @@
     };
   }
 
+  function compactLengthFor(style: IslandStyle, settings: AppSettings) {
+    return style === "edge" ? settings.edgeCompactLength : settings.floatingCompactLength;
+  }
+
+  function expandedRadiusFor(style: IslandStyle, settings: AppSettings) {
+    return style === "edge" ? settings.edgeExpandedCornerRadius : settings.floatingExpandedCornerRadius;
+  }
+
   let interactionRegionRevision = Date.now() * 1000;
-  let lastInteractionRegionSignature = "";
   let expandedScale = $state(1);
+  type InteractionRegionPayload = Omit<Parameters<typeof windowApi.setIslandInteractionRegion>[0], "revision">;
+  const interactionRegionSender = createIslandRegionSender<InteractionRegionPayload>({
+    send: (region) => isTransportDiagnosticsEnabled()
+      ? runTimedTransportCommand("region", () => windowApi.setIslandInteractionRegion({ ...region, revision: ++interactionRegionRevision }))
+      : windowApi.setIslandInteractionRegion({ ...region, revision: ++interactionRegionRevision }),
+    onError: (error) => logger.warn("窗口区域更新失败，稍后重试", error),
+  });
+  onDestroy(() => interactionRegionSender.dispose());
+
   function applyIslandRegion({ geometry, radii, polygon, extraRects, anchorGap }: IslandRegionChange) {
-    const host = hostFor(renderedIslandStyle, renderedIslandEdge, $appSettings.compactLength, expandedScale);
-    const offset = surfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge, expandedScale);
-    if (anchorGap !== undefined) {
-      const delta = anchorGap - (renderedIslandStyle === "floating" ? ISLAND_GAP * expandedScale : 0);
-      if (renderedIslandEdge === "top") offset.y += delta;
-      else if (renderedIslandEdge === "bottom") offset.y -= delta;
-      else if (renderedIslandEdge === "left") offset.x += delta;
-      else offset.x -= delta;
-    }
+    const host = hostFor(renderedIslandStyle, renderedIslandEdge, compactLengthFor(renderedIslandStyle, $appSettings), expandedScale);
+    const offset = interactionSurfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge, expandedScale, anchorGap);
     const translatedExtraRects = (extraRects ?? []).map((rect) => ({
       ...rect,
       x: offset.x + rect.x,
       y: offset.y + rect.y,
     }));
-    const signature = JSON.stringify({
+    const region = {
       x: offset.x,
       y: offset.y,
       width: geometry.width,
@@ -271,19 +349,8 @@
       radii,
       polygon,
       extraRects: translatedExtraRects,
-    });
-    if (signature === lastInteractionRegionSignature) return;
-    lastInteractionRegionSignature = signature;
-    windowApi.setIslandInteractionRegion({
-      revision: ++interactionRegionRevision,
-      x: offset.x,
-      y: offset.y,
-      width: geometry.width,
-      height: geometry.height,
-      radii,
-      polygon,
-      extraRects: translatedExtraRects,
-    }).catch((error) => logger.warn("窗口区域更新失败", error));
+    } satisfies InteractionRegionPayload;
+    interactionRegionSender.offer(region, JSON.stringify(region));
   }
 
   let currentTime = $state("");
@@ -292,9 +359,9 @@
   // Clock text only changes once per minute. Keep the high-resolution clock
   // for media/timer interpolation, but avoid constructing Intl formatters on
   // every 250 ms tick.
-  function updateTimeDisplay() {
+  function updateTimeDisplay(force = false) {
     const minuteKey = `${$appSettings.clockTimeZone}|${$locale}|${Math.floor(Date.now() / 60_000)}`;
-    if (minuteKey === lastClockMinute) return;
+    if (!force && minuteKey === lastClockMinute) return;
     lastClockMinute = minuteKey;
     currentTime = formatClock($appSettings.clockTimeZone, $locale, Date.now());
   }
@@ -318,15 +385,43 @@
   });
 
   $effect(() => {
-    const interval = pageVisible && expanded && activeIslandPage === "music" && isPlaying ? 250
-      : countdown.status === "running" ? 1000 : 60_000;
-    const tick = () => { clockNow = Date.now(); updateTimeDisplay(); };
     $appSettings.clockTimeZone; $locale;
-    untrack(tick);
+    updateTimeDisplay();
     let timer: ReturnType<typeof setTimeout>;
-    const schedule = () => { timer = setTimeout(() => { tick(); schedule(); }, interval - Date.now() % interval); };
+    const schedule = () => {
+      timer = setTimeout(() => {
+        updateTimeDisplay();
+        schedule();
+      }, 60_000 - Date.now() % 60_000);
+    };
     schedule();
     return () => clearTimeout(timer);
+  });
+
+  $effect(() => {
+    const mediaClockNeeded = pageVisible && !isHidden && expanded && activeIslandPage === "music" && isPlaying;
+    const countdownRunning = countdown.status === "running";
+    const countdownDeadline = countdown.endsAt;
+    const hidden = !pageVisible || isHidden;
+    return untrack(() => {
+      clockNow = Date.now();
+      let timer: ReturnType<typeof setTimeout>;
+      const tick = () => { clockNow = Date.now(); };
+      const schedule = () => {
+        const now = Date.now();
+        if (mediaClockNeeded) {
+          timer = setTimeout(() => { tick(); schedule(); }, 250 - now % 250);
+          return;
+        }
+        if (!countdownRunning || countdownDeadline === null) return;
+        const remaining = countdownDeadline - now;
+        if (remaining <= 0) { tick(); return; }
+        const delay = hidden ? remaining : Math.min(remaining, remaining % 1_000 || 1_000);
+        timer = setTimeout(() => { tick(); schedule(); }, Math.max(1, delay));
+      };
+      schedule();
+      return () => clearTimeout(timer);
+    });
   });
 
   const playerApps: Record<string, string> = {
@@ -484,8 +579,15 @@
   let audioDevices = $state<AudioDeviceInfo[]>([]);
   let audioDeviceSwitching = $state(false);
   let audioStateRequest: Promise<SystemAudioState | null> | null = null;
-  let pendingVolume: number | null = null;
-  let volumeWriteRequest: Promise<void> | null = null;
+  const volumeWriteQueue = new LatestValueWriteQueue<number>(
+    (value) => isTransportDiagnosticsEnabled()
+      ? runTimedTransportCommand("volume", () => audioApi.setVolume(value))
+      : audioApi.setVolume(value),
+    (error, pendingWillRetry) => {
+      logger.error("设置系统音量失败", error);
+      if (!pendingWillRetry && !audioDeviceSwitching && !lifetime.disposed) void handleAudioOpen();
+    },
+  );
 
   async function handleAudioOpen(): Promise<SystemAudioState | null> {
     if (!(window as any).__TAURI_INTERNALS__) return null;
@@ -500,6 +602,7 @@
             return [] as AudioDeviceInfo[];
           }),
         ]);
+        volumeWriteQueue.invalidate();
         systemAudio = nextState;
         audioDevices = nextDevices;
         return nextState;
@@ -516,9 +619,10 @@
   }
 
   async function handleAudioVolume(volumePercent: number) {
+    if (audioDeviceSwitching || lifetime.disposed) return;
     const nextVolume = Math.max(0, Math.min(100, Math.round(volumePercent)));
     const currentAudio = systemAudio ?? await handleAudioOpen();
-    if (!currentAudio) return;
+    if (!currentAudio || audioDeviceSwitching || lifetime.disposed) return;
 
     systemAudio = {
       ...currentAudio,
@@ -526,34 +630,15 @@
       muted: nextVolume === 0,
     };
 
-    // Range inputs emit many events while dragging. Keep the latest value and
-    // serialize Windows audio writes so an older request cannot win the race
-    // and snap the thumb back to a stale volume.
-    pendingVolume = nextVolume;
-    if (volumeWriteRequest) return;
-
-    volumeWriteRequest = (async () => {
-      try {
-        while (pendingVolume !== null) {
-          const value = pendingVolume;
-          pendingVolume = null;
-          await audioApi.setVolume(value);
-        }
-      } catch (error) {
-        pendingVolume = null;
-        logger.error("设置系统音量失败", error);
-        void handleAudioOpen();
-      }
-    })().finally(() => {
-      volumeWriteRequest = null;
-    });
-
-    await volumeWriteRequest;
+    // Keep one native write active, coalesce pending moves to the latest
+    // integer, and ignore repeats for the same device/value pair.
+    await volumeWriteQueue.submit(nextVolume, `${currentAudio.deviceId}\0${nextVolume}`);
   }
 
   async function handleAudioDevice(deviceId: string) {
     if (audioDeviceSwitching || !deviceId || deviceId === systemAudio?.deviceId) return;
     audioDeviceSwitching = true;
+    volumeWriteQueue.cancelPending();
     try {
       await audioApi.setDefaultDevice(deviceId);
       await refreshSpectrumDevice().catch((error) => logger.warn("重连音频频谱失败", error));
@@ -561,6 +646,7 @@
         audioApi.getState(),
         audioApi.listDevices(),
       ]);
+      volumeWriteQueue.invalidate();
       systemAudio = nextState;
       audioDevices = nextDevices;
     } catch (error) {
@@ -572,12 +658,17 @@
   }
 
   onDestroy(() => {
-    pendingVolume = null;
-    volumeWriteRequest = null;
+    seekRequestGate.invalidate();
+    volumeWriteQueue.cancelPending();
     audioStateRequest = null;
   });
 
   let countdown = $state<CountdownState>(createCountdownState());
+  const timerAppSessionId = crypto.randomUUID();
+  let timerStateRevision = 0;
+  let lastTimerStateSignature = "";
+  let lastTimerBroadcastRevision = 0;
+  let timerSessionAnnounced = false;
   let timerRemainingMs = $derived(getRemainingMs(countdown, clockNow));
   let timerFinished = $state(false);
   let timerFinishedTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -627,39 +718,67 @@
     countdown = completeCountdown(countdown, clockNow);
   });
 
-  function timerSnapshot() {
+  function timerSnapshot(requestId?: string): TimerSnapshot {
+    const signature = JSON.stringify([
+      countdown.status,
+      countdown.durationMs,
+      countdown.endsAt,
+      countdown.pausedRemainingMs,
+      countdown.label,
+    ]);
+    if (signature !== lastTimerStateSignature) {
+      lastTimerStateSignature = signature;
+      timerStateRevision += 1;
+    }
     return {
       status: countdown.status,
       durationMs: countdown.durationMs,
-      remainingMs: timerRemainingMs,
+      endsAt: countdown.status === "running" ? countdown.endsAt : null,
+      remainingMs: countdown.status === "running" && countdown.endsAt !== null
+        ? Math.max(0, countdown.endsAt - Date.now())
+        : countdown.pausedRemainingMs,
       label: countdown.label,
+      appSessionId: timerAppSessionId,
+      stateRevision: timerStateRevision,
+      sessionStart: !timerSessionAnnounced,
+      ...(requestId ? { requestId } : {}),
     };
   }
 
-  let lastTimerBroadcast = "";
-  $effect(() => {
-    const snapshot = timerSnapshot();
+  async function dispatchTimerSnapshot(requestId?: string, force = false) {
     if (!(window as any).__TAURI_INTERNALS__) return;
+    const snapshot = timerSnapshot(requestId);
+    const revision = snapshot.stateRevision ?? 0;
+    if (!force && !requestId && revision <= lastTimerBroadcastRevision) return;
+    try {
+      if (isTransportDiagnosticsEnabled()) {
+        await runTransportEvent("timerState", () => emit(Events.TIMER_STATE_CHANGED, snapshot), Boolean(requestId));
+      } else {
+        await emit(Events.TIMER_STATE_CHANGED, snapshot);
+      }
+      timerSessionAnnounced = true;
+      if (revision >= lastTimerBroadcastRevision) {
+        lastTimerBroadcastRevision = revision;
+      }
+    } catch (error) {
+      logger.warn("广播倒计时状态失败；后续状态变更或窗口查询会补发", error);
+    }
+  }
 
-    // The timer window interpolates between snapshots locally. Broadcasting
-    // every 250 ms made the main window do unnecessary IPC and rendering work;
-    // one update per displayed second is enough while a timer is running.
-    const broadcastKey = JSON.stringify({
-      ...snapshot,
-      remainingMs: snapshot.status === "running"
-        ? Math.ceil(snapshot.remainingMs / 1000) * 1000
-        : snapshot.remainingMs,
-    });
-    if (broadcastKey === lastTimerBroadcast) return;
-    lastTimerBroadcast = broadcastKey;
-    void emit(Events.TIMER_STATE_CHANGED, snapshot);
+  $effect(() => {
+    countdown.status;
+    countdown.durationMs;
+    countdown.endsAt;
+    countdown.pausedRemainingMs;
+    countdown.label;
+    void untrack(() => dispatchTimerSnapshot());
   });
 
   $effect(() => {
     applyAppFont($appSettings.fontId);
     setLocale($appSettings.language);
   });
-  let idleSnapshot = $state<IdleSnapshot>({ cpuPercent: 0, memoryPercent: 0, uploadBytesPerSecond: 0, downloadBytesPerSecond: 0, batteryPercent: null, batteryCharging: null, weatherTemperature: null, weatherCode: null, weatherUpdatedAt: null, weatherForecast: [] });
+  let weatherSnapshot = $state<WeatherSnapshot>({ weatherTemperature: null, weatherCode: null, weatherUpdatedAt: null, weatherForecast: [] });
   // Keep weather available for the expanded function panel even while media
   // is playing. Compact mode still only renders it in the idle state.
   let showIdle = $derived(!hasMediaSession);
@@ -670,17 +789,17 @@
     const locationKey = JSON.stringify($appSettings.weatherLocation);
     if (lastWeatherLocation !== locationKey) {
       lastWeatherLocation = locationKey;
-      idleSnapshot = { ...idleSnapshot, weatherTemperature: null, weatherCode: null, weatherForecast: [], weatherUpdatedAt: null };
+      weatherSnapshot = { weatherTemperature: null, weatherCode: null, weatherForecast: [], weatherUpdatedAt: null };
     }
-    if (!pageVisible || (!showIdle && (!expanded || activeIslandPage !== "weather"))) return;
+    if (!pageVisible || isHidden || (!showIdle && (!expanded || activeIslandPage !== "weather"))) return;
     let pending = false;
     let disposed = false;
     const refresh = () => {
       if (pending) return;
       pending = true;
       weatherLoading = true;
-      void idleApi.getSnapshot(locationKey)
-        .then((value) => { if (!disposed) { idleSnapshot = value; weatherFailed = value.weatherUpdatedAt === null || Date.now() - value.weatherUpdatedAt * 1000 >= 30 * 60_000; } })
+      void idleApi.getWeatherSnapshot(locationKey)
+        .then((value) => { if (!disposed) { weatherSnapshot = value; weatherFailed = value.weatherUpdatedAt === null || Date.now() - value.weatherUpdatedAt * 1000 >= 30 * 60_000; } })
         .catch(() => { if (!disposed) weatherFailed = true; })
         .finally(() => { pending = false; if (!disposed) weatherLoading = false; });
     };
@@ -699,7 +818,7 @@
   let currentHost = $derived(hostFor(
     renderedIslandStyle,
     renderedIslandEdge,
-    $appSettings.compactLength,
+    compactLengthFor(renderedIslandStyle, $appSettings),
     expandedScale,
   ));
 
@@ -760,7 +879,8 @@
       monitorIndex,
       positionPercent,
       hidden,
-      compactLength: $appSettings.compactLength,
+      compactLength: compactLengthFor(style, $appSettings),
+      expandedRadius: expandedRadiusFor(style, $appSettings),
     });
     if (
       placementInput === lastPlacementInput
@@ -782,10 +902,12 @@
     const safeIndex = Math.min(Math.max(0, monitorIndex), allMonitors.length - 1);
     const monitor = allMonitors[safeIndex];
     const dpr = monitor.scaleFactor || window.devicePixelRatio || 1;
-    const layoutScale = navigationScaleForWorkArea(monitor.workWidth, monitor.workHeight, dpr);
-    expandedScale = layoutScale * 0.625;
-    const host = hostFor(style, edge, $appSettings.compactLength, expandedScale);
-    const physicalHost = { width: Math.round(host.width * dpr), height: Math.round(host.height * dpr) };
+    expandedScale = islandContentScaleForWorkArea(monitor.workWidth, monitor.workHeight, dpr);
+    // Monitor work area and native window bounds are physical pixels. The
+    // IslandSurface, host and interaction region remain CSS-logical pixels.
+    const compactLength = compactLengthFor(style, $appSettings);
+    const host = hostFor(style, edge, compactLength, expandedScale);
+    const physicalHost = physicalHostSizeFor(host, dpr);
     const baseShown = placementFor(
       { x: monitor.workX, y: monitor.workY, width: monitor.workWidth, height: monitor.workHeight },
       physicalHost,
@@ -795,7 +917,7 @@
     // Extend attached windows one physical pixel beyond the compositor edge,
     // so clip-path antialiasing cannot reveal a transparent seam.
     const shown = style === "edge" ? overlapAttachedEdge(baseShown, edge) : baseShown;
-    const compact = geometryFor("compact", $appSettings.expandedCornerRadius, edge, $appSettings.compactLength);
+    const compact = geometryFor("compact", expandedRadiusFor(style, $appSettings), edge, compactLength);
     const offset = surfaceOffsetFor(host, compact, style, edge, expandedScale);
     const target = hidden
       ? hiddenPlacementFor(
@@ -935,7 +1057,7 @@
   async function toggleFloatingWindow() {
     try {
       if (isFloatingWindowOpen) {
-        await windowApi.closeFloatingWindow();
+        await windowApi.closeFloatingWindow(activeFloatingInstanceToken);
         isFloatingWindowOpen = false;
       } else {
         await windowApi.openFloatingWindow();
@@ -988,7 +1110,11 @@
     if (!imgSrc) return;
     try {
       const colors = await extractSpectrumColorsFromImage(imgSrc, signal);
-      if (lifetime.disposed || signal.aborted || !colors || artworkUrl !== imgSrc) return;
+      const compactSurfaceVisible = $islandMode === "compact" || $islandMode === "hover";
+      const hasCompactColorConsumer = compactSurfaceVisible && ($appSettings.showSpectrum || isPlaying);
+      const hasExpandedSpectrumConsumer = $islandMode === "expanded" && activeIslandPage === "music" && $appSettings.showSpectrum;
+      const hasCurrentColorConsumer = pageVisible && !isHidden && (hasCompactColorConsumer || hasExpandedSpectrumConsumer);
+      if (lifetime.disposed || signal.aborted || !colors || artworkUrl !== imgSrc || !hasCurrentColorConsumer) return;
       spectrumTopColor = formatRgb(...colors.top);
       spectrumBottomColor = formatRgb(...colors.bottom);
     } catch (error) {
@@ -997,8 +1123,13 @@
   }
 
   $effect(() => {
+    const compactSurfaceVisible = $islandMode === "compact" || $islandMode === "hover";
+    const compactColorConsumer = compactSurfaceVisible && ($appSettings.showSpectrum || isPlaying);
+    const expandedSpectrumConsumer = $islandMode === "expanded" && activeIslandPage === "music" && $appSettings.showSpectrum;
+    const shouldExtractSpectrumColors = pageVisible && !isHidden && (compactColorConsumer || expandedSpectrumConsumer);
+    const cover = artworkUrl;
     const controller = new AbortController();
-    if (artworkUrl) void extractSpectrumColors(artworkUrl, controller.signal);
+    if (shouldExtractSpectrumColors && cover) void extractSpectrumColors(cover, controller.signal);
     return () => controller.abort();
   });
 
@@ -1007,49 +1138,116 @@
 
     if (action === "cycle_netease_mode") {
       if (currentSource !== "netease" || neteaseModeBusy) return;
+      const requestedOnTrack = lastSongKey;
+      neteaseModeError = "";
       neteaseModeBusy = true;
       try {
-        neteasePlaybackMode = await mediaApi.cycleNeteasePlaybackMode();
+        const confirmedMode = await mediaApi.cycleNeteasePlaybackMode();
+        if (!lifetime.disposed && currentSource === "netease") {
+          // Playback mode is a player-wide setting, so a verified result remains
+          // authoritative if the track changed while the command was in flight.
+          neteasePlaybackMode = confirmedMode;
+        }
       } catch (err) {
         console.error("网易云播放模式切换失败:", err);
+        if (!lifetime.disposed && currentSource === "netease" && lastSongKey === requestedOnTrack) {
+          neteaseModeError = formatUserFacingError(err, t("neteaseModeFailed"));
+        }
       } finally {
-        neteaseModeBusy = false;
+        if (!lifetime.disposed) neteaseModeBusy = false;
       }
       return;
     }
 
-    if (action === "play_pause") {
-      isPlaying = !isPlaying;
-    }
-
+    // Playback comes from media snapshots. A rejected request must not invert
+    // a newer snapshot or leave an optimistic state behind.
     try {
       await mediaApi.controlMedia(action as "play_pause" | "next" | "prev");
     } catch (err) {
-      if (action === "play_pause") {
-        isPlaying = !isPlaying;
-      }
       console.error("媒体控制失败:", err);
     }
   }
 
-  async function handleSeek(positionMs: number) {
-    const next = clampSeekPosition(positionMs, durationMs);
-    const previous = projectedPosition(islandMedia);
-    const seekTrack = lastSongKey;
-    pendingSeekUntil = Date.now() + 2000;
-    currentTimeMs = next;
-    mediaSnapshotAt = Date.now();
-    void syncFloatingMediaClock();
-    try {
-      await mediaApi.seekMedia(next);
-    } catch (error) {
-      if (seekTrack === lastSongKey) {
-        pendingSeekUntil = 0;
-        currentTimeMs = previous;
-        mediaSnapshotAt = Date.now();
+  const appSeekHandler = createSeekHandler({
+    gate: seekRequestGate,
+    createContext: (positionMs: number, requestId: number) => ({
+      next: clampSeekPosition(positionMs, durationMs),
+      track: lastSongKey,
+      requestId,
+      snapshotRevision: nativeSeekSnapshotRevision,
+      epoch: appNativeStamp?.nativeEpoch ?? "",
+      trackGeneration: appNativeTrackGeneration,
+      title: trackTitle,
+      artist: artistName,
+    }),
+    isCurrentTrack: (context) => context.track === lastSongKey,
+    isDisposed: () => lifetime.disposed,
+    request: (context) => mediaApi.seekMedia(context.next, {
+      nativeEpoch: context.epoch,
+      nativeTrackGeneration: context.trackGeneration,
+      title: context.title,
+      artist: context.artist,
+    }),
+    onBegin: (context) => {
+      seekErrorMessage = "";
+      pendingSeekUntil = Date.now() + 2000;
+      currentTimeMs = context.next;
+      mediaSnapshotAt = Date.now();
+      void syncFloatingMediaClock();
+    },
+    onConfirmed: (verified) => {
+      pendingSeekUntil = 0;
+      seekErrorMessage = "";
+      if (!verified) return;
+      currentTimeMs = verified.positionMs;
+      durationMs = verified.durationMs;
+      mediaSnapshotAt = Date.now();
+      void syncFloatingMediaClock();
+    },
+    onFailed: async (_error, context) => {
+      pendingSeekUntil = 0;
+      // New native samples already reconciled the UI while CDP was pending.
+      // Keep that newer state; the request remains current for its error alert.
+      if (!seekSnapshotAllowsRollback(context.snapshotRevision, nativeSeekSnapshotRevision)) {
         void syncFloatingMediaClock();
+        return;
       }
+      const latest = latestNativeSeekSnapshot;
+      if (latest && latest.epoch === context.epoch && latest.trackGeneration === context.trackGeneration
+        && latest.title === context.title && latest.artist === context.artist) {
+        currentTimeMs = latest.positionMs;
+        durationMs = latest.durationMs || durationMs;
+      } else {
+        try {
+          const snapshot = await mediaApi.getMediaInfo();
+          if (!seekRequestGate.isCurrent(context.requestId) || lifetime.disposed || context.track !== lastSongKey
+            || !seekSnapshotAllowsRollback(context.snapshotRevision, nativeSeekSnapshotRevision)) return;
+          if (snapshot.nativeEpoch === context.epoch && snapshot.nativeTrackGeneration === context.trackGeneration
+            && snapshot.title === context.title && snapshot.artist === context.artist) {
+            currentTimeMs = Number(snapshot.positionMs) || 0;
+            durationMs = Number(snapshot.durationMs) || durationMs;
+          }
+        } catch (refreshError) {
+          logger.warn("seek 失败后刷新媒体位置失败，等待下一次原生快照", refreshError);
+        }
+      }
+      mediaSnapshotAt = Date.now();
+      void syncFloatingMediaClock();
+    },
+    onError: (error) => {
       console.error("调整播放进度失败:", error);
+      seekErrorMessage = formatSeekError(error);
+    },
+  });
+
+  async function handleSeek(positionMs: number) {
+    activeSeekRequests++;
+    seekBusy = true;
+    try {
+      await appSeekHandler(positionMs);
+    } finally {
+      activeSeekRequests = Math.max(0, activeSeekRequests - 1);
+      if (!lifetime.disposed) seekBusy = activeSeekRequests > 0;
     }
   }
 
@@ -1088,6 +1286,9 @@
       if (!await waitForOwner(lifetime, ISLAND_MOTION.collapseDuration + ISLAND_MOTION.outwardDelay)) return;
     }
     if (lifetime.disposed || sequence !== manualHideSequence) return;
+    // The user may expand the island again while the collapse animation is
+    // finishing. Do not let this older hide request take over that newer state.
+    if (expanded) return;
 
     manualHideActive = true;
     syncCaptureVisibility();
@@ -1268,7 +1469,11 @@
       // race with the slower bootstrap work below.
       const unlistenTimerRequest = await listen(
         Events.TIMER_REQUEST_STATE,
-        () => { if (!lifetime.disposed) void emit(Events.TIMER_STATE_CHANGED, timerSnapshot()); },
+        (event) => {
+          if (lifetime.disposed) return;
+          const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
+          void dispatchTimerSnapshot(typeof requestId === "string" ? requestId : undefined, true);
+        },
       );
       cleanups.add(unlistenTimerRequest);
       if (cleanups.disposed) return;
@@ -1332,8 +1537,13 @@
                 }
               })
               .catch(console.error);
+          } else if (settingName === "monitor_index") {
+            // Built-in settings commits emit this legacy marker immediately
+            // before the full settings-updated snapshot. That snapshot is the
+            // source of truth and already drives monitor placement.
+            return;
           } else if (settingName !== "alwaysOnTop") {
-            void refreshSettingsStore(normalizedSettings);
+            void refreshSettingsStore(normalizedSettings, () => !lifetime.disposed);
           }
         },
       );
@@ -1420,18 +1630,88 @@
       if (lifetime.disposed) return;
       const unlistenFloatingWindowClosed = await eventManager.on(
         Events.FLOATING_WINDOW_CLOSED,
-        () => {
+        ({ instanceToken }: { instanceToken?: string } = {}) => {
           if (lifetime.disposed) return;
-          isFloatingWindowOpen = false;
-          console.log("[悬浮窗] 已关闭，更新状态");
+          if (pauseFloatingConsumer(instanceToken, true)) {
+            isFloatingWindowOpen = false;
+            console.log("[悬浮窗] 已关闭，更新状态");
+          }
         },
       );
       cleanups.add(unlistenFloatingWindowClosed);
       if (cleanups.disposed) return;
 
+      const unlistenFloatingMediaReady = await eventManager.on(
+        Events.FLOATING_MEDIA_READY,
+        ({ instanceToken, appSessionId }: { instanceToken?: string; appSessionId?: string }) => {
+          if (lifetime.disposed || !instanceToken) return;
+          if (appSessionId !== appMediaSessionId) {
+            void emit(Events.FLOATING_MEDIA_READY_QUERY, { appSessionId: appMediaSessionId, instanceToken }).catch((error) => {
+              if (!lifetime.disposed) logger.warn("向浮窗声明 App 媒体会话失败", error);
+            });
+            return;
+          }
+          if (retiredFloatingInstanceTokens.has(instanceToken)) return;
+          if (activeFloatingInstanceToken && activeFloatingInstanceToken !== instanceToken) {
+            retiredFloatingInstanceTokens.add(activeFloatingInstanceToken);
+          }
+          activeFloatingInstanceToken = instanceToken;
+          if (floatingMediaSender.resetForConsumer(`${appMediaSessionId}:${instanceToken}`) && appNativeMediaReady) syncFloatingMediaClock();
+        },
+      );
+      cleanups.add(unlistenFloatingMediaReady);
+      if (cleanups.disposed) return;
+
+      const unlistenFloatingMediaNotReady = await eventManager.on(
+        Events.FLOATING_MEDIA_NOT_READY,
+        ({ instanceToken, appSessionId, reason }: { instanceToken?: string; appSessionId?: string; reason?: "hidden" | "unmounted" } = {}) => {
+          if (lifetime.disposed || !instanceToken || (appSessionId !== undefined && appSessionId !== appMediaSessionId)) return;
+          if (pauseFloatingConsumer(instanceToken, reason !== "hidden")) {
+            if (reason !== "hidden") isFloatingWindowOpen = false;
+          }
+        },
+      );
+      cleanups.add(unlistenFloatingMediaNotReady);
+      if (cleanups.disposed) return;
+
       const unlistenMediaUpdate = await onMediaUpdate((data: any) => {
         if (lifetime.disposed) return;
+        const incomingStamp = readNativeMediaStamp(data);
+        const stampDecision = nativeStampDecision(appNativeStamp, appNativeStampedMode, appRetiredNativeEpochs, incomingStamp, true);
+        if (["older", "retired", "invalid"].includes(stampDecision)) return;
+        if (Number.isSafeInteger(data.nativeTrackGeneration) && data.nativeTrackGeneration >= 0) {
+          appNativeTrackGeneration = data.nativeTrackGeneration;
+        }
+        if (stampDecision === "switch") {
+          if (appNativeStamp) appRetiredNativeEpochs.add(appNativeStamp.nativeEpoch);
+          appNativeStamp = incomingStamp;
+          appNativeStampedMode = true;
+        } else if (stampDecision === "initial" || stampDecision === "newer" || (stampDecision === "same" && incomingStamp)) {
+          if (incomingStamp) {
+            appNativeStamp = incomingStamp;
+            appNativeStampedMode = true;
+          }
+        }
+        appNativeMediaReady = true;
         const receivedAt = Date.now();
+        if (data.source && appNativeStamp) {
+          nativeSeekSnapshotRevision++;
+          latestNativeSeekSnapshot = {
+            epoch: appNativeStamp.nativeEpoch,
+            trackGeneration: appNativeTrackGeneration,
+            title: String(data.title || ""),
+            artist: String(data.artist || ""),
+            positionMs: Number(data.positionMs) || 0,
+            durationMs: Number(data.durationMs) || 0,
+          };
+          if (pendingSeekUntil) {
+            // A newer native position can refresh optimistic UI, but it does not
+            // cancel the still-pending user seek or suppress its eventual error.
+            pendingSeekUntil = 0;
+          }
+        } else if (!data.source) {
+          latestNativeSeekSnapshot = undefined;
+        }
         // A removed session is an authoritative idle transition, not a metadata gap.
         if (!data.source) {
           cancelMainCover(); hdArtworkResolved=false;
@@ -1441,10 +1721,12 @@
           isPlaying = false;
           currentSource = "";
           lastSongKey = null;
+          seekErrorMessage = "";
           metadataImage?.abort(); metadataImage = undefined;
           metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
           lastReportedPosition = undefined;
           pendingSeekUntil = 0;
+          seekRequestGate.invalidate();
           trackTitle = "";
           artistName = "";
           artworkUrl = "";
@@ -1453,7 +1735,10 @@
           durationMs = 0;
           mediaSnapshotAt = receivedAt;
           mediaCapabilities = data.capabilities;
+          progressKnown = true;
+          neteaseProgressAvailable = undefined;
           neteasePlaybackMode = undefined;
+          neteaseModeError = "";
           lastNeteaseModeProbeKey = null;
           void syncFloatingMediaClock();
           return;
@@ -1474,8 +1759,13 @@
           hasMediaSession = Boolean(data.source);
           transitionIsland({ type: "media-session", active: hasMediaSession });
         currentSource = data.source || "";
+        progressKnown = data.progressKnown !== false;
+        neteaseProgressAvailable = currentSource === "netease" && typeof data.neteaseProgressAvailable === "boolean"
+          ? data.neteaseProgressAvailable
+          : undefined;
         if (currentSource !== "netease") {
           neteasePlaybackMode = undefined;
+          neteaseModeError = "";
           lastNeteaseModeProbeKey = null;
         }
         mediaCapabilities = data.capabilities;
@@ -1501,6 +1791,10 @@
         isPlaying = nextPlaying;
 
         if (songChanged) {
+          seekRequestGate.invalidate();
+          seekErrorMessage = "";
+          neteaseModeError = "";
+          if (currentSource === "netease") neteasePlaybackMode = undefined;
           pendingSeekUntil = 0;
           lastSongKey = currentSongKey;
           metadataImage?.abort(); metadataImage = undefined;
@@ -1594,6 +1888,12 @@
       });
       cleanups.add(unlistenMediaUpdate);
       if (cleanups.disposed) return;
+      // An already-mounted Floating window may have missed its ready event
+      // while this App WebView was being reloaded. Its query listener is
+      // installed before it announces ready, so this request is safe here.
+      void emit(Events.FLOATING_MEDIA_READY_QUERY, { appSessionId: appMediaSessionId }).catch((error) => {
+        if (!lifetime.disposed) logger.warn("查询浮窗媒体监听器状态失败", error);
+      });
       const recoveryTimer = setInterval(() => void recoverMissingMetadata(), 5_000);
       cleanups.add(() => clearInterval(recoveryTimer));
     })().catch(error => { if (!lifetime.disposed) logger.error("初始化失败", error); });
@@ -1630,6 +1930,18 @@
 
   onMount(() => {
     // 初始设置由主启动流程统一加载；这里仅监听设置页实时广播。
+    // Focus, pageshow and visibility recovery above handle normal display and
+    // taskbar changes promptly. Keep only a low-frequency fallback for work
+    // area changes that Windows does not surface to this WebView.
+    let workAreaListenerDisposed = false;
+    let unlistenWorkArea: (() => void) | undefined;
+    void listen("isle-work-area-changed", scheduleResumeRecovery)
+      .then((unlisten) => {
+        if (workAreaListenerDisposed) unlisten();
+        else unlistenWorkArea = unlisten;
+      })
+      .catch((error) => logger.warn("注册工作区变化监听失败，保留5分钟布局兜底", error));
+
     const workAreaTimer = setInterval(() => {
       if (windowReady) {
         void applyWindowPlacement(
@@ -1641,7 +1953,7 @@
           false,
         ).catch(() => undefined);
       }
-    }, 30_000);
+    }, 5 * 60_000);
 
     // 所有捕获场景统一从 Capture Mode 状态进入，不各自维护隐藏逻辑。
     const unlistenCaptureMode = eventManager.on(
@@ -1651,10 +1963,19 @@
 
     let mouseMoveTimeout: ReturnType<typeof setTimeout> | null = null;
     const handleMouseMoveThrottled = (e: MouseEvent) => {
+      // Fullscreen reveal is the only consumer of this document-wide mouse
+      // stream. Gate before allocating a timer so the normal desktop path
+      // does no debounce work at all.
+      if (!$appSettings.captureHideOnFullscreen || !isFullscreenApp || captureSnapshot.screenshot) {
+        if (mouseMoveTimeout) clearTimeout(mouseMoveTimeout);
+        mouseMoveTimeout = null;
+        return;
+      }
       if (mouseMoveTimeout) {
         clearTimeout(mouseMoveTimeout);
       }
       mouseMoveTimeout = setTimeout(() => {
+        mouseMoveTimeout = null;
         handleMouseMove(e);
       }, 100);
     };
@@ -1662,6 +1983,8 @@
     document.addEventListener("mousemove", handleMouseMoveThrottled);
 
     return () => {
+      workAreaListenerDisposed = true;
+      unlistenWorkArea?.();
       unlistenCaptureMode.then((unlisten) => unlisten());
 
       if (hideTimeout) {
@@ -1684,20 +2007,21 @@
   <IslandSurface
     media={islandMedia}
     {neteaseModeBusy}
+    neteaseModeError={neteaseModeError}
     mode={$islandMode}
     islandStyle={renderedIslandStyle}
     edge={renderedIslandEdge}
     position={displayedPosition}
-    expandedRadius={$appSettings.expandedCornerRadius ?? 45}
+    expandedRadius={expandedRadiusFor(renderedIslandStyle, $appSettings)}
     collapsedEdgeShoulderRadius={$appSettings.collapsedEdgeShoulderRadius ?? 8}
     expandedEdgeShoulderRadius={$appSettings.expandedEdgeShoulderRadius ?? 32}
     {expandedScale}
-    compactLength={$appSettings.compactLength ?? 80}
+    compactLength={compactLengthFor(renderedIslandStyle, $appSettings)}
     idle={showIdle}
     idleTime={currentTime}
-    idleWeatherTemperature={idleSnapshot.weatherTemperature}
-    idleWeatherCode={idleSnapshot.weatherCode}
-    idleWeatherForecast={idleSnapshot.weatherForecast}
+    idleWeatherTemperature={weatherSnapshot.weatherTemperature}
+    idleWeatherCode={weatherSnapshot.weatherCode}
+    idleWeatherForecast={weatherSnapshot.weatherForecast}
     {lastPlayedMedia}
     canResumeLastTrack={Boolean(lastPlayedMedia && playerApps[lastPlayedMedia.source])}
     {resumingLastTrack}
@@ -1716,6 +2040,8 @@
     onResumeLastTrack={resumeLastTrack}
     onMediaAction={(action) => handleMediaAction(action)}
     onSeek={handleSeek}
+    {seekBusy}
+    seekError={seekErrorMessage}
     onToggleFloating={toggleFloatingWindow}
     onHideForTenSeconds={hideForTenSeconds}
     onSettingsToggle={showSettingsWindow}
@@ -1724,7 +2050,7 @@
     visible={pageVisible && !isHidden}
     onPageChange={(page) => transitionIsland({ type: "select-page", page })}
     weatherCity={$appSettings.weatherLocation?.name ?? ""}
-    weatherUpdatedAt={idleSnapshot.weatherUpdatedAt}
+    weatherUpdatedAt={weatherSnapshot.weatherUpdatedAt}
     {weatherLoading}
     {weatherFailed}
     onPanelActivity={(active) => panelInteracting = active}

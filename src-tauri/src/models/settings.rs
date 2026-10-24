@@ -41,14 +41,22 @@ impl Default for IdleContentItem {
 
 fn default_idle_items() -> Vec<IdleContentItem> {
     ["clock", "weather"]
-    .into_iter()
-    .map(|kind| IdleContentItem {
-        id: kind.to_string(),
-        kind: kind.to_string(),
-        enabled: true,
-        text: String::new(),
-    })
-    .collect()
+        .into_iter()
+        .map(|kind| IdleContentItem {
+            id: kind.to_string(),
+            kind: kind.to_string(),
+            enabled: true,
+            text: String::new(),
+        })
+        .collect()
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NeteaseProgressMode {
+    #[default]
+    Real,
+    Estimate,
 }
 
 /// Persisted settings shared by the legacy player surfaces and the current
@@ -57,13 +65,15 @@ fn default_idle_items() -> Vec<IdleContentItem> {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppPreferences {
+    pub netease_progress_mode: NeteaseProgressMode,
     pub island_style: String,
     pub island_edge: String,
     pub island_edge_position: u8,
     #[serde(alias = "edgeShoulderRadius")]
     pub collapsed_edge_shoulder_radius: u8,
     pub expanded_edge_shoulder_radius: u8,
-    pub compact_length: u16,
+    pub floating_compact_length: u16,
+    pub edge_compact_length: u16,
     pub language: String,
     pub font_id: String,
     pub capture_hide_on_screenshot: bool,
@@ -92,8 +102,6 @@ pub struct AppPreferences {
     pub floating_window_y: Option<i32>,
     pub floating_window_width: Option<u32>,
     pub floating_window_height: Option<u32>,
-    pub floating_fill_color: String,
-    pub floating_use_album_color: bool,
     pub show_settings_tool: bool,
     pub show_floating_tool: bool,
     pub show_volume_tool: bool,
@@ -113,7 +121,8 @@ pub struct AppPreferences {
     pub hide_settings_button: bool,
     pub hide_monitor_selector: bool,
     pub hide_floating_window: bool,
-    pub expanded_corner_radius: u32,
+    pub floating_expanded_corner_radius: u32,
+    pub edge_expanded_corner_radius: u32,
     pub always_show_top_bar: bool,
     pub clock_time_zone: String,
 }
@@ -131,12 +140,14 @@ impl Default for AppPreferences {
         player_weights.insert("generic".to_string(), 10);
 
         Self {
+            netease_progress_mode: NeteaseProgressMode::Real,
             island_style: "floating".to_string(),
             island_edge: "top".to_string(),
             island_edge_position: 50,
             collapsed_edge_shoulder_radius: 8,
             expanded_edge_shoulder_radius: 32,
-            compact_length: 80,
+            floating_compact_length: 80,
+            edge_compact_length: 80,
             language: "system".to_string(),
             font_id: "misans".to_string(),
             capture_hide_on_screenshot: true,
@@ -164,8 +175,6 @@ impl Default for AppPreferences {
             floating_window_y: None,
             floating_window_width: None,
             floating_window_height: None,
-            floating_fill_color: "#28323c".to_string(),
-            floating_use_album_color: true,
             show_settings_tool: true,
             show_floating_tool: true,
             show_volume_tool: true,
@@ -185,7 +194,8 @@ impl Default for AppPreferences {
             hide_settings_button: false,
             hide_monitor_selector: false,
             hide_floating_window: false,
-            expanded_corner_radius: 45,
+            floating_expanded_corner_radius: 45,
+            edge_expanded_corner_radius: 45,
             always_show_top_bar: true,
             clock_time_zone: "system".to_string(),
         }
@@ -194,7 +204,7 @@ impl Default for AppPreferences {
 
 #[cfg(test)]
 mod tests {
-    use super::AppPreferences;
+    use super::{AppPreferences, NeteaseProgressMode};
 
     #[test]
     fn defaults_and_migrates_edge_shoulder_radius() {
@@ -202,17 +212,19 @@ mod tests {
         assert_eq!(AppPreferences::default().expanded_edge_shoulder_radius, 32);
         let loaded: AppPreferences = serde_json::from_str("{}").expect("defaulted settings");
         assert_eq!(loaded.collapsed_edge_shoulder_radius, 8);
-        assert_eq!(loaded.compact_length, 80);
+        assert_eq!(loaded.floating_compact_length, 80);
+        assert_eq!(loaded.edge_compact_length, 80);
         assert_eq!(loaded.language, "system");
         assert_eq!(loaded.font_id, "misans");
         assert_eq!(loaded.spectrum_mode, "realtime");
+        assert_eq!(loaded.netease_progress_mode, NeteaseProgressMode::Real);
+        assert_eq!(loaded.floating_expanded_corner_radius, 45);
+        assert_eq!(loaded.edge_expanded_corner_radius, 45);
         assert!(loaded.capture_hide_on_screenshot);
         assert!(loaded.capture_hide_on_recording);
         assert!(loaded.capture_hide_on_fullscreen);
         assert!(loaded.capture_hide_on_screen_share);
         assert!(loaded.selected_player_ids.is_none());
-        assert_eq!(loaded.floating_fill_color, "#28323c");
-        assert!(loaded.floating_use_album_color);
         assert!(loaded.show_settings_tool);
         assert!(loaded.show_hide_tool);
         assert!(loaded.show_clock_tool);
@@ -224,7 +236,35 @@ mod tests {
     #[test]
     fn migrates_legacy_auto_hide_to_fullscreen_capture_setting() {
         let loaded: AppPreferences =
-            serde_json::from_str(r#"{"autoHide":false}"#).expect("legacy settings");
+            serde_json::from_str(r#"{"autoHide":false,"edgeShoulderRadius":19}"#)
+                .expect("legacy settings");
         assert!(!loaded.capture_hide_on_fullscreen);
+        assert_eq!(loaded.collapsed_edge_shoulder_radius, 19);
+    }
+
+    #[test]
+    fn ignores_removed_floating_background_settings_without_resetting_preferences() {
+        let loaded: AppPreferences = serde_json::from_str(
+            r##"{"language":"en","floatingFillColor":"#abcdef","floatingUseAlbumColor":true}"##,
+        )
+        .expect("legacy background fields should be ignored");
+
+        assert_eq!(loaded.language, "en");
+        let persisted = serde_json::to_value(&loaded).expect("serialize settings");
+        assert!(persisted.get("floatingFillColor").is_none());
+        assert!(persisted.get("floatingUseAlbumColor").is_none());
+    }
+
+    #[test]
+    fn netease_progress_mode_roundtrips_and_rejects_unknown_values() {
+        let mut settings = AppPreferences::default();
+        settings.netease_progress_mode = NeteaseProgressMode::Estimate;
+        let encoded = serde_json::to_value(&settings).unwrap();
+        assert_eq!(encoded["neteaseProgressMode"], "estimate");
+        let decoded: AppPreferences = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded.netease_progress_mode, NeteaseProgressMode::Estimate);
+
+        let invalid = serde_json::json!({"neteaseProgressMode": "silently_fake_real"});
+        assert!(serde_json::from_value::<AppPreferences>(invalid).is_err());
     }
 }

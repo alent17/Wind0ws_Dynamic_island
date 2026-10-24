@@ -105,4 +105,3 @@ $late = if ($rows.Count) { $rows[-1].framesLate } else { $null }
 $missed = if ($rows.Count) { $rows[-1].framesMissed } else { $null }
 $dropped = if ($rows.Count) { $rows[-1].framesDropped } else { $null }
 "samples=$($rows.Count) p50Ms=$(& $p 0.50) p95Ms=$(& $p 0.95) p99Ms=$(& $p 0.99) maxMs=$(if($intervals.Count){$intervals[-1]}) late=$late missed=$missed dropped=$dropped qpcFrequency=$frequency scope=system-dwm-global output=$OutputPath"
-

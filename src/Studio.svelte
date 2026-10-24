@@ -6,7 +6,7 @@
   import IslandSurface from "$lib/components/island/IslandSurface.svelte";
   import StudioSlider from "$lib/components/settings/StudioSlider.svelte";
   import StudioSelect from "$lib/components/settings/StudioSelect.svelte";
-  import {  geometryFor, navigationHostFor as hostFor, type IslandMode } from "$lib/islandGeometry";
+  import {  geometryFor, navigationHostFor as hostFor, type IslandMode, type IslandPage } from "$lib/islandGeometry";
   import { DEMO_MEDIA, media, connectMedia } from "$lib/mediaStore";
   import { extractSpectrumColorsFromImage } from "$lib/spectrumColors";
   import { settingsApi } from "$lib/api/settings";
@@ -19,37 +19,37 @@
   import { idleApi } from "$lib/api/idle";
   import { applyAppFont } from "$lib/font";
   import { locale, setLocale, translate, type TranslationKey } from "$lib/i18n";
-  import { DEFAULT_SETTINGS, type AppLanguage, type AppPreferences, type IdleSnapshot, type MediaSessionInfo, type MediaState, type MonitorInfo, type WeatherForecastDay, type WeatherLocationCandidate } from "$lib/api/types";
+  import { DEFAULT_SETTINGS, normalizeAppSettings, type AppLanguage, type AppPreferences, type MediaSessionInfo, type MediaState, type MonitorInfo, type WeatherForecastDay, type WeatherLocationCandidate, type WeatherSnapshot } from "$lib/api/types";
   import type { IslandTool } from "$lib/featureRail";
   import { formatClock } from "$lib/countdown";
   let previewNow = $state(Date.now());
 
   type Scenario="playing"|"paused"|"no-art"|"long-title";
-  type PreviewTarget="shape"|"compactLength"|"shoulder"|"radius"|"background"|"spectrum"|null;
-  type AppearanceDraft=Pick<AppPreferences,"islandStyle"|"islandEdge"|"islandEdgePosition"|"compactLength"|"collapsedEdgeShoulderRadius"|"expandedEdgeShoulderRadius"|"expandedCornerRadius"|"showSpectrum"|"spectrumMode"|"floatingUseAlbumColor"|"floatingFillColor">;
+  type PreviewTarget="shape"|"compactLength"|"shoulder"|"radius"|"spectrum"|null;
+  type AppearanceDraft=Pick<AppPreferences,"islandStyle"|"islandEdge"|"islandEdgePosition"|"floatingCompactLength"|"edgeCompactLength"|"floatingExpandedCornerRadius"|"edgeExpandedCornerRadius"|"collapsedEdgeShoulderRadius"|"expandedEdgeShoulderRadius"|"showSpectrum"|"spectrumMode">;
 
   function createAppearanceDraft(source:AppPreferences):AppearanceDraft{
     return {
       islandStyle:source.islandStyle,
       islandEdge:source.islandEdge,
       islandEdgePosition:source.islandEdgePosition,
-      compactLength:source.compactLength,
+      floatingCompactLength:source.floatingCompactLength,
+      edgeCompactLength:source.edgeCompactLength,
       collapsedEdgeShoulderRadius:source.collapsedEdgeShoulderRadius,
       expandedEdgeShoulderRadius:source.expandedEdgeShoulderRadius,
-      expandedCornerRadius:source.expandedCornerRadius,
+      floatingExpandedCornerRadius:source.floatingExpandedCornerRadius,
+      edgeExpandedCornerRadius:source.edgeExpandedCornerRadius,
       showSpectrum:source.showSpectrum,
       spectrumMode:source.spectrumMode,
-      floatingUseAlbumColor:source.floatingUseAlbumColor,
-      floatingFillColor:source.floatingFillColor,
     };
   }
 
-  let mode=$state<IslandMode>("expanded"); let scenario=$state<Scenario>("playing"); let progress=$state(50); let settings=$state<AppPreferences>({...DEFAULT_SETTINGS}); let monitors=$state<MonitorInfo[]>([]); let cacheMessage=$state(""); let settingsSaveFailed=$state(false);
+  let mode=$state<IslandMode>("expanded"); let previewPage=$state<IslandPage>("music"); let scenario=$state<Scenario>("playing"); let progress=$state(50); let settings=$state<AppPreferences>({...DEFAULT_SETTINGS}); let monitors=$state<MonitorInfo[]>([]); let cacheMessage=$state(""); let settingsSaveFailed=$state(false);
   const previewClock = $derived(formatClock(settings.clockTimeZone, $locale, previewNow));
   let nativeRuntime=$state(false); let followingLive=$state(false); let liveMedia=$state<MediaState>(DEMO_MEDIA); let liveMediaDisconnect:undefined|(()=>void); let stageWidth=$state(0); let stageHeight=$state(0); let previewReady=$state(false);
-  let idleSnapshot=$state<IdleSnapshot|null>(null);
+  let weatherSnapshot=$state<WeatherSnapshot|null>(null);
   const demoForecast:WeatherForecastDay[]=[0,1,2,3].map((offset)=>({date:new Date(Date.now()+offset*86_400_000).toISOString().slice(0,10),weatherCode:[1,61,2,3][offset],temperatureMax:[33,34,34,32][offset],temperatureMin:[26,24,24,23][offset]}));
-  let sessions=$state<MediaSessionInfo[]>([]); let sessionsLoading=$state(false); let sessionsLoaded=$state(false); let sessionRequest=0; let weatherQuery=$state(""); let weatherResults=$state<WeatherLocationCandidate[]>([]); let weatherMessage=$state("");
+  let sessions=$state<MediaSessionInfo[]>([]); let sessionsLoading=$state(false); let sessionsLoaded=$state(false); let sessionRequest=0; let sessionInFlight=false; let sessionRefreshQueued=false; let sessionSettingsInitialized=false; let sessionSectionVisible=false; let weatherQuery=$state(""); let weatherResults=$state<WeatherLocationCandidate[]>([]); let weatherMessage=$state("");
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let persistInFlight: Promise<void> | undefined;
   let persistPending=false;
@@ -63,32 +63,40 @@
     return appearanceDraft.islandStyle!==settings.islandStyle||
       appearanceDraft.islandEdge!==settings.islandEdge||
       appearanceDraft.islandEdgePosition!==settings.islandEdgePosition||
-      appearanceDraft.compactLength!==settings.compactLength||
+      appearanceDraft.floatingCompactLength!==settings.floatingCompactLength||
+      appearanceDraft.edgeCompactLength!==settings.edgeCompactLength||
       appearanceDraft.collapsedEdgeShoulderRadius!==settings.collapsedEdgeShoulderRadius||
       appearanceDraft.expandedEdgeShoulderRadius!==settings.expandedEdgeShoulderRadius||
-      appearanceDraft.expandedCornerRadius!==settings.expandedCornerRadius||
+      appearanceDraft.floatingExpandedCornerRadius!==settings.floatingExpandedCornerRadius||
+      appearanceDraft.edgeExpandedCornerRadius!==settings.edgeExpandedCornerRadius||
       appearanceDraft.showSpectrum!==settings.showSpectrum||
-      appearanceDraft.spectrumMode!==settings.spectrumMode||
-      appearanceDraft.floatingUseAlbumColor!==settings.floatingUseAlbumColor||
-      appearanceDraft.floatingFillColor!==settings.floatingFillColor;
+      appearanceDraft.spectrumMode!==settings.spectrumMode;
   });
   let studioDisposed=false;
   const previewBars=[.45,.78,.58,.96,.7,.38];
   let scenarioMedia=$derived.by<MediaState>(()=>{const base={...DEMO_MEDIA,positionMs:244000*progress/100,lastUpdatedTimestamp:Date.now()};if(scenario==="paused")return{...base,isPlaying:false};if(scenario==="no-art")return{...base,albumArt:""};if(scenario==="long-title")return{...base,title:"宇宙尽头的浪漫主义与一场不会结束的午夜公路旅行",artist:"The Extremely Long Artist Name · 特别长的专辑名称"};return base});
   let sample=$derived(nativeRuntime&&followingLive?liveMedia:scenarioMedia);
-  let previewForecast=$derived(nativeRuntime?(idleSnapshot?.weatherForecast??[]):demoForecast);
+  let previewForecast=$derived(nativeRuntime?(weatherSnapshot?.weatherForecast??[]):demoForecast);
   let previewSpectrumTopColor=$state("#fff");
   let previewSpectrumBottomColor=$state("#888");
   $effect(()=>{
     const cover=sample.albumArt;
     if(!cover){previewSpectrumTopColor="#fff";previewSpectrumBottomColor="#888";return}
-    let cancelled=false;
-    void extractSpectrumColorsFromImage(cover).then(colors=>{
-      if(cancelled||!colors)return;
+    const compactSurfaceVisible=mode==="compact"||mode==="hover";
+    const compactColorConsumer=compactSurfaceVisible&&(!appearanceDraft.showSpectrum||sample.isPlaying);
+    const spectrumConsumer=appearanceDraft.showSpectrum&&(compactSurfaceVisible||(mode==="expanded"&&previewPage==="music"));
+    const shouldExtractSpectrumColors=previewReady&&(compactColorConsumer||spectrumConsumer);
+    if(!shouldExtractSpectrumColors)return;
+    const controller=new AbortController();
+    void extractSpectrumColorsFromImage(cover,controller.signal).then(colors=>{
+      const currentCompactSurfaceVisible=mode==="compact"||mode==="hover";
+      const hasCurrentCompactColorConsumer=currentCompactSurfaceVisible&&(!appearanceDraft.showSpectrum||sample.isPlaying);
+      const hasCurrentSpectrumConsumer=appearanceDraft.showSpectrum&&(currentCompactSurfaceVisible||(mode==="expanded"&&previewPage==="music"));
+      if(controller.signal.aborted||sample.albumArt!==cover||!previewReady||(!hasCurrentCompactColorConsumer&&!hasCurrentSpectrumConsumer)||!colors)return;
       previewSpectrumTopColor=`rgb(${colors.top.join(",")})`;
       previewSpectrumBottomColor=`rgb(${colors.bottom.join(",")})`;
     }).catch(()=>{});
-    return()=>{cancelled=true};
+    return()=>controller.abort();
   });
   // Keep the island at the current preview scale while the surrounding stage changes width.
   const previewScaleFloor=.79;
@@ -101,8 +109,11 @@
     ...(settings.showClockTool?["clock"]:[]),
     ...(settings.showWeatherTool?["weather"]:[]),
   ] as IslandTool[]);
-  let previewExpandedRadius=$derived(appearanceDraft.expandedCornerRadius);
-  let previewHost=$derived(hostFor(appearanceDraft.islandStyle,appearanceDraft.islandEdge,appearanceDraft.compactLength));
+  let compactLengthKey: "edgeCompactLength" | "floatingCompactLength" = $derived(appearanceDraft.islandStyle==="edge"?"edgeCompactLength":"floatingCompactLength");
+  let expandedRadiusKey: "edgeExpandedCornerRadius" | "floatingExpandedCornerRadius" = $derived(appearanceDraft.islandStyle==="edge"?"edgeExpandedCornerRadius":"floatingExpandedCornerRadius");
+  let previewCompactLength=$derived(appearanceDraft[compactLengthKey]);
+  let previewExpandedRadius=$derived(appearanceDraft[expandedRadiusKey]);
+  let previewHost=$derived(hostFor(appearanceDraft.islandStyle,appearanceDraft.islandEdge,previewCompactLength));
   let currentGeometry=$state(geometryFor("expanded"));
   let previewScale=$derived(Math.min(previewScaleFloor, Math.max(0.1, (stageWidth - 24) / previewHost.width)));
   const previewPosition=spring(50,{stiffness:.1,damping:.7,precision:.1});
@@ -125,25 +136,23 @@
         : Math.max(0,stageHeight-scaledHeight)*p;
     return `transform:translate3d(${x}px,${y}px,0) scale(${previewScale})`;
   });
-  async function enableLivePreview(){
+  function enableLivePreview(){
     if(!nativeRuntime)return;
     if(liveMediaDisconnect)return;
-    try{
-      const currentMedia=await mediaApi.getMediaInfo();
-      if(studioDisposed)return;
-      liveMedia=currentMedia;
-      const disconnect=await connectMedia();
-      if(studioDisposed)disconnect();
-      else{liveMediaDisconnect=disconnect;followingLive=true}
-    }catch{liveMediaDisconnect=undefined;followingLive=false}
+    const disconnect=connectMedia(()=>{
+      if(!studioDisposed)followingLive=true;
+    });
+    if(studioDisposed)disconnect();
+    else liveMediaDisconnect=disconnect;
   }
-  async function refreshIdleSnapshot(){
+  async function refreshWeatherSnapshot(){
     if(!nativeRuntime)return;
-    try{const snapshot=await idleApi.getSnapshot(JSON.stringify(settings.weatherLocation));if(!studioDisposed)idleSnapshot=snapshot}catch{}
+    const locationKey=JSON.stringify(settings.weatherLocation);
+    try{const snapshot=await idleApi.getWeatherSnapshot(locationKey);if(!studioDisposed&&locationKey===JSON.stringify(settings.weatherLocation))weatherSnapshot=snapshot}catch{}
   }
   const t=(key:TranslationKey,values:Record<string,string|number>={})=>translate(key,values,$locale);
   const enumLabel=(value:string)=>t(value as TranslationKey);
-  const previewTargetLabel=(target:PreviewTarget)=>target? t(({shape:"shape",compactLength:"compactLength",shoulder:"shoulder",radius:"expandedRadius",background:"floatingBackground",spectrum:"spectrum"} as const)[target]):t("previewReady");
+  const previewTargetLabel=(target:PreviewTarget)=>target? t(({shape:"shape",compactLength:"compactLength",shoulder:"shoulder",radius:"expandedRadius",spectrum:"spectrum"} as const)[target]):t("previewReady");
   function syncAppearanceDrafts(){
     appearanceDraft=createAppearanceDraft(settings);
   }
@@ -161,12 +170,20 @@
   }
   onMount(()=>{
     studioDisposed=false;
-    const clockTimer=setInterval(()=>previewNow=Date.now(),1000);
+    let clockTimer:ReturnType<typeof setTimeout>;
+    const refreshPreviewClock=()=>{
+      const now=Date.now();
+      previewNow=now;
+      clockTimer=setTimeout(refreshPreviewClock,60_000-(now%60_000));
+    };
+    refreshPreviewClock();
     nativeRuntime=Boolean((window as any).__TAURI_INTERNALS__);
     const unsubscribe=media.subscribe(value=>liveMedia=value);
     let disposed=false;
     let deferredFrame=0;
     let deferredTimers:ReturnType<typeof setTimeout>[]=[];
+    let sessionPollTimer:ReturnType<typeof setInterval>|undefined;
+    let sessionObserver:IntersectionObserver|undefined;
     let closePromise:Promise<()=>void>|undefined;
     if(nativeRuntime){
       const appWindow=getCurrentWindow();
@@ -193,12 +210,35 @@
     });
     if(nativeRuntime){
       void enableLivePreview();
-      void refreshIdleSnapshot();
-      const idleTimer=setInterval(()=>void refreshIdleSnapshot(),30_000);
+      void refreshWeatherSnapshot();
+      const idleTimer=setInterval(()=>void refreshWeatherSnapshot(),30_000);
       deferredTimers.push(idleTimer);
+      const playersSection=document.querySelector<HTMLElement>(".players-section");
+      const stopSessionPolling=()=>{
+        if(sessionPollTimer!==undefined){clearInterval(sessionPollTimer);sessionPollTimer=undefined}
+        sessionRequest++;
+        sessionRefreshQueued=false;
+        sessionsLoading=false;
+      };
+      const startSessionPolling=()=>{
+        if(disposed||!sessionSettingsInitialized||!sessionSectionVisible)return;
+        void refreshSessions();
+        if(sessionPollTimer===undefined)sessionPollTimer=setInterval(()=>void refreshSessions(),10_000);
+      };
+      if(playersSection&&typeof IntersectionObserver!=="undefined"){
+        sessionObserver=new IntersectionObserver((entries)=>{
+          const entry=entries.find(item=>item.target===playersSection);
+          if(!entry)return;
+          const visible=entry.isIntersecting&&entry.intersectionRatio>0;
+          if(visible===sessionSectionVisible)return;
+          sessionSectionVisible=visible;
+          if(visible)startSessionPolling();else stopSessionPolling();
+        });
+        sessionObserver.observe(playersSection);
+      }else sessionSectionVisible=true;
       void (async()=>{
         try{
-          const connection=await connectSettingsStore((value)=>({...DEFAULT_SETTINGS,...value}));
+          const connection=await connectSettingsStore(normalizeAppSettings);
           if(disposed){connection.disconnect();return}
           disconnectSettingsStore=connection.disconnect;
           applyExternalSettings(connection.settings);
@@ -207,16 +247,21 @@
           setLocale(settings.language);
         }catch{}
         if(disposed)return;
-        void refreshSessions();
-        deferredTimers.push(setInterval(()=>void refreshSessions(),10_000));
+        sessionSettingsInitialized=true;
+        startSessionPolling();
       })();
     }
     return()=>{
       disposed=true;
-      clearInterval(clockTimer);
+      clearTimeout(clockTimer);
       studioDisposed=true;
       if(deferredFrame)cancelAnimationFrame(deferredFrame);
       deferredTimers.forEach(timer=>clearTimeout(timer));
+      if(sessionPollTimer!==undefined){clearInterval(sessionPollTimer);sessionPollTimer=undefined}
+      sessionObserver?.disconnect();
+      sessionObserver=undefined;
+      sessionRequest++;
+      sessionRefreshQueued=false;
       if(closePromise)void closePromise.then(unlisten=>unlisten()).catch(()=>{});
       if(saveTimer)clearTimeout(saveTimer);
       void persist().catch(()=>{});
@@ -288,6 +333,8 @@
   function sessionFor(id:string):MediaSessionInfo{return sessions.find(item=>item.id===id)??{id,displayName:playerNameFromId(id),source:"generic",isPlaying:false}}
   async function refreshSessions(){
     if(!nativeRuntime)return;
+    if(sessionInFlight){sessionRefreshQueued=true;return}
+    sessionInFlight=true;
     const request=++sessionRequest;
     if(!sessionsLoaded)sessionsLoading=true;
     try{
@@ -300,7 +347,14 @@
       const nextOrder=mergePlayerOrderIds(retainedOrder,nextSessions,settings.selectedPlayerIds);
       if(nextOrder.join("\u0000")!==settings.playerOrderIds.join("\u0000"))updatePreference({playerOrderIds:nextOrder});
     }catch(error){console.error("[播放器] 刷新媒体会话失败:",error)}
-    finally{if(request===sessionRequest){sessionsLoading=false;sessionsLoaded=true}}
+    finally{
+      if(request===sessionRequest){sessionsLoading=false;sessionsLoaded=true}
+      sessionInFlight=false;
+      if(sessionRefreshQueued&&sessionSettingsInitialized&&sessionSectionVisible&&!studioDisposed){
+        sessionRefreshQueued=false;
+        void refreshSessions();
+      }
+    }
   }
   function togglePlayer(id:string,checked:boolean){
     const order=currentPlayerOrderIds();
@@ -324,7 +378,7 @@
   async function searchWeather(){weatherMessage=t("searching");try{weatherResults=await idleApi.searchLocations(weatherQuery,$locale==="zh-CN"?"zh":$locale);weatherMessage=weatherResults.length?"":t("noCity")}catch{weatherMessage=t("weatherFailed")}}
   function weatherLocationLabel(item:WeatherLocationCandidate){return [...new Set([item.name,item.admin2,item.admin1,item.country].filter(Boolean))].join(" · ")}
   function weatherCandidateDetail(item:WeatherLocationCandidate){const label=[...new Set([item.admin2,item.admin1,item.country].filter(Boolean))].join(" · ");const duplicates=weatherResults.filter(other=>weatherLocationLabel(other)===weatherLocationLabel(item)).length;return duplicates>1?`${label} · ${item.latitude.toFixed(2)}, ${item.longitude.toFixed(2)}`:label}
-  function selectWeather(item:WeatherLocationCandidate){updatePreference({weatherLocation:{name:weatherLocationLabel(item),latitude:item.latitude,longitude:item.longitude}});weatherResults=[];weatherMessage=t("citySaved");void persist().then(()=>{if(!studioDisposed)void refreshIdleSnapshot()}).catch(()=>{})}
+  function selectWeather(item:WeatherLocationCandidate){updatePreference({weatherLocation:{name:weatherLocationLabel(item),latitude:item.latitude,longitude:item.longitude}});weatherResults=[];weatherMessage=t("citySaved");void persist().then(()=>{if(!studioDisposed)void refreshWeatherSnapshot()}).catch(()=>{})}
   async function clearCache(){cacheMessage=t("clearing");try{await cacheApi.clearCache();cacheMessage=t("cacheCleared")}catch{cacheMessage=t("clearFailed")}}
 </script>
 
@@ -349,7 +403,7 @@
       <div class="stage-topline"><span><i aria-hidden="true"></i>{t("previewLabel")}</span><small>{nativeRuntime&&followingLive?t("currentMusic"):nativeRuntime?t("previewReady"):t("browserDemo")}</small></div>
       <div class="preview-host" style={`width:${previewHost.width}px;height:${previewHost.height}px;${previewPositionStyle}`}>
         {#if previewReady}
-        <IslandSurface weatherCity={nativeRuntime ? settings.weatherLocation?.name ?? "" : "Shanghai"} weatherUpdatedAt={idleSnapshot?.weatherUpdatedAt ?? null} onRegionChange={({geometry}) => currentGeometry = geometry} media={sample} clockText={previewClock} clockTimeZone={settings.clockTimeZone} idle={nativeRuntime && followingLive && !sample.title} idleTime={previewClock} idleWeatherTemperature={idleSnapshot?.weatherTemperature ?? null} idleWeatherCode={idleSnapshot?.weatherCode ?? null} idleWeatherForecast={previewForecast} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedRadius={appearanceDraft.expandedCornerRadius} collapsedEdgeShoulderRadius={appearanceDraft.collapsedEdgeShoulderRadius} expandedEdgeShoulderRadius={appearanceDraft.expandedEdgeShoulderRadius} compactLength={appearanceDraft.compactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} spectrumTopColor={previewSpectrumTopColor} spectrumBottomColor={previewSpectrumBottomColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={!nativeRuntime&&appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget === "background" ? null : previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} showCustomFunctionPanel={settings.showCustomFunctionPanel} systemAudio={{volumePercent:42,muted:false,deviceId:"studio-speakers",deviceName:"Speakers"}} audioDevices={[{id:"studio-speakers",name:"Speakers (Realtek Audio)",isDefault:true},{id:"studio-headphones",name:"Headphones",isDefault:false}]} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.showStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{if(nativeRuntime&&followingLive){if(action==="cycle_netease_mode"){void mediaApi.cycleNeteasePlaybackMode();return}void mediaApi.controlMedia(action);return}if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
+        <IslandSurface weatherCity={nativeRuntime ? settings.weatherLocation?.name ?? "" : "Shanghai"} weatherUpdatedAt={weatherSnapshot?.weatherUpdatedAt ?? null} onRegionChange={({geometry}) => currentGeometry = geometry} onPageChange={(page)=>previewPage=page} media={sample} clockText={previewClock} clockTimeZone={settings.clockTimeZone} idle={nativeRuntime && followingLive && !sample.title} idleTime={previewClock} idleWeatherTemperature={weatherSnapshot?.weatherTemperature ?? null} idleWeatherCode={weatherSnapshot?.weatherCode ?? null} idleWeatherForecast={previewForecast} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedRadius={previewExpandedRadius} collapsedEdgeShoulderRadius={appearanceDraft.collapsedEdgeShoulderRadius} expandedEdgeShoulderRadius={appearanceDraft.expandedEdgeShoulderRadius} compactLength={previewCompactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} spectrumTopColor={previewSpectrumTopColor} spectrumBottomColor={previewSpectrumBottomColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={!nativeRuntime&&appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} showCustomFunctionPanel={settings.showCustomFunctionPanel} systemAudio={{volumePercent:42,muted:false,deviceId:"studio-speakers",deviceName:"Speakers"}} audioDevices={[{id:"studio-speakers",name:"Speakers (Realtek Audio)",isDefault:true},{id:"studio-headphones",name:"Headphones",isDefault:false}]} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.showStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{if(nativeRuntime&&followingLive){if(action==="cycle_netease_mode"){void mediaApi.cycleNeteasePlaybackMode();return}void mediaApi.controlMedia(action);return}if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
         {/if}
       </div>
       <div class="stage-caption" class:editing={previewTarget!==null} aria-live="polite">
@@ -365,15 +419,10 @@
           <div class="field-label"><span>{t("shape")}</span><small>{t("shapeHint")}</small></div>
           <div class="segmented two"><button aria-pressed={appearanceDraft.islandStyle==="floating"} class:active={appearanceDraft.islandStyle==="floating"} onclick={()=>{appearanceDraft.islandStyle="floating";previewTarget="shape"}}>{t("floating")}</button><button aria-pressed={appearanceDraft.islandStyle==="edge"} class:active={appearanceDraft.islandStyle==="edge"} onclick={()=>{appearanceDraft.islandStyle="edge";previewTarget="shape"}}>{t("attached")}</button></div>
         </div>
-        <StudioSlider label={t("compactLength")} hint={t("shapeHint")} min={80} max={300} unit="px" bind:value={appearanceDraft.compactLength} previewTarget={previewTarget === "compactLength" ? "compactLength" : null} onPreviewStart={()=>previewTarget="compactLength"} onPreviewMove={()=>previewTarget="compactLength"} onPreviewEnd={()=>previewTarget=null}/>
+        <StudioSlider label={t("compactLength")} hint={t("shapeHint")} min={80} max={300} unit="px" bind:value={appearanceDraft[compactLengthKey]} previewTarget={previewTarget === "compactLength" ? "compactLength" : null} onPreviewStart={()=>previewTarget="compactLength"} onPreviewMove={()=>previewTarget="compactLength"} onPreviewEnd={()=>previewTarget=null}/>
         <StudioSlider label={t("collapsedShoulder")} min={0} max={16} unit="px" bind:value={appearanceDraft.collapsedEdgeShoulderRadius} previewTarget={previewTarget === "shoulder" ? "shoulder" : null} onPreviewStart={()=>previewTarget="shoulder"} onPreviewMove={()=>previewTarget="shoulder"} onPreviewEnd={()=>previewTarget=null}/>
         <StudioSlider label={t("expandedShoulder")} min={0} max={64} unit="px" bind:value={appearanceDraft.expandedEdgeShoulderRadius} previewTarget={previewTarget === "shoulder" ? "shoulder" : null} onPreviewStart={()=>previewTarget="shoulder"} onPreviewMove={()=>previewTarget="shoulder"} onPreviewEnd={()=>previewTarget=null}/>
-        <StudioSlider label={t("expandedRadius")} min={0} max={80} unit="px" bind:value={appearanceDraft.expandedCornerRadius} previewTarget={previewTarget === "radius" ? "radius" : null} onPreviewStart={()=>previewTarget="radius"} onPreviewMove={()=>previewTarget="radius"} onPreviewEnd={()=>previewTarget=null}/>
-        <div class="preview-setting" role="group" data-preview-target="background" onmouseenter={()=>previewTarget="background"} onfocusin={()=>previewTarget="background"} onmouseleave={()=>previewTarget=null} onfocusout={()=>previewTarget=null}>
-          <div class="setting-grid single"><button type="button" class="setting-choice" class:active={appearanceDraft.floatingUseAlbumColor} aria-pressed={appearanceDraft.floatingUseAlbumColor} onclick={()=>{appearanceDraft.floatingUseAlbumColor=!appearanceDraft.floatingUseAlbumColor;previewTarget="background"}}><span class="choice-mark" aria-hidden="true">{appearanceDraft.floatingUseAlbumColor?"✓":""}</span><span class="choice-copy"><strong>{t("useAlbumColor")}</strong><small>{t("useAlbumColorHint")}</small></span></button></div>
-          <label class="select-row color-row"><span>{t("floatingBackground")}</span><input aria-label={t("floatingBackground")} type="color" bind:value={appearanceDraft.floatingFillColor} oninput={()=>previewTarget="background"}/></label>
-          <p class="hint">{t("floatingBackgroundHint")}</p>
-        </div>
+        <StudioSlider label={t("expandedRadius")} min={0} max={80} unit="px" bind:value={appearanceDraft[expandedRadiusKey]} previewTarget={previewTarget === "radius" ? "radius" : null} onPreviewStart={()=>previewTarget="radius"} onPreviewMove={()=>previewTarget="radius"} onPreviewEnd={()=>previewTarget=null}/>
         <div class="appearance-apply-bar" class:dirty={appearanceDirty}>
           <div class="apply-state"><i aria-hidden="true"></i><span>{appearanceDirty?t("appearancePreviewing"):t("appearanceApplied")}</span></div>
           <div class="apply-actions"><button type="button" class="reset-button" disabled={!appearanceDirty} onclick={resetAppearanceDraft}>{t("resetAppearance")}</button><button type="button" class="apply-button" disabled={!appearanceDirty||applyingAppearance} onclick={applyAppearance}>{applyingAppearance?t("applyingAppearance"):t("applyAppearance")}</button></div>
@@ -392,6 +441,17 @@
             {value:"Europe/London",label:"Europe/London"},{value:"UTC",label:"UTC"}
           ]} onSelect={(value)=>updatePreference({clockTimeZone:value})}/></div>
         </div>
+      </section>
+      <section class="netease-progress-section">
+        <h2>{t("neteaseProgress")}</h2>
+        <p class="hint">{t("neteaseProgressHint")}</p>
+        <div class="segmented two" role="group" aria-label={t("neteaseProgress")}>
+          <button aria-pressed={settings.neteaseProgressMode==="real"} class:active={settings.neteaseProgressMode==="real"} onclick={()=>updatePreference({neteaseProgressMode:"real"})}><span>{t("neteaseProgressReal")}</span><small>{t("neteaseProgressRealHint")}</small></button>
+          <button aria-pressed={settings.neteaseProgressMode==="estimate"} class:active={settings.neteaseProgressMode==="estimate"} onclick={()=>updatePreference({neteaseProgressMode:"estimate"})}><span>{t("neteaseProgressEstimate")}</span><small>{t("neteaseProgressEstimateHint")}</small></button>
+        </div>
+        <p class="hint">{t("neteaseProgressMeasurePending")}</p>
+        {#if nativeRuntime && followingLive && liveMedia.source==="netease" && liveMedia.neteaseProgressAvailable===false}<p class="netease-progress-status" role="status">{t("neteaseProgressUnavailable")}</p>{/if}
+        {#if nativeRuntime && followingLive && liveMedia.source==="netease" && liveMedia.progressKnown===false && settings.neteaseProgressMode==="estimate"}<p class="netease-progress-status" role="status">{t("neteaseProgressPending")}</p>{/if}
       </section>
       <section class="spectrum-section"><h2>{t("spectrum")}</h2><div class="preview-setting" role="group" data-preview-target="spectrum" onmouseenter={()=>previewTarget="spectrum"} onfocusin={()=>previewTarget="spectrum"} onmouseleave={()=>previewTarget=null} onfocusout={()=>previewTarget=null}><div class="setting-grid single"><button type="button" class="setting-choice" class:active={appearanceDraft.showSpectrum} aria-pressed={appearanceDraft.showSpectrum} onclick={()=>{appearanceDraft.showSpectrum=!appearanceDraft.showSpectrum;previewTarget="spectrum"}}><span class="choice-mark" aria-hidden="true">{appearanceDraft.showSpectrum?"✓":""}</span><span class="choice-copy"><strong>{t("showSpectrum")}</strong><small>{t("showSpectrumHint")}</small></span></button></div>{#if appearanceDraft.showSpectrum}<div class="field-label"><span>{t("animationSource")}</span><small>{t("animationSourceHint")}</small></div><div class="segmented two"><button aria-pressed={appearanceDraft.spectrumMode==="realtime"} class:active={appearanceDraft.spectrumMode==="realtime"} onclick={()=>{appearanceDraft.spectrumMode="realtime";previewTarget="spectrum"}}>{t("realtime")}</button><button aria-pressed={appearanceDraft.spectrumMode==="random"} class:active={appearanceDraft.spectrumMode==="random"} onclick={()=>{appearanceDraft.spectrumMode="random";previewTarget="spectrum"}}>{t("random")}</button></div>{/if}</div></section>
       <section class="feature-tools-section">
@@ -477,7 +537,7 @@
   .select-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.preferences-section{background:#fff;border-color:#e0e1e6}.preferences-section .section-title{margin-bottom:12px}
   .compact-select-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;padding:10px 12px;border:1px solid transparent;border-radius:11px;background:#f6f6f8;transition:border-color 140ms ease,background 140ms ease}.compact-select-row:focus-within{border-color:#cfd3df;background:#fff}
   .compact-select-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.compact-select-row :global(.studio-select){flex:0 1 150px;margin-left:auto}
-  .select-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-top:1px solid #e5e5e8}.select-row span{display:flex;align-items:center;gap:8px;font-size:12px}.select-row :global(.studio-select){flex:0 1 160px;margin-left:auto}.color-row input[type=color]{width:44px;height:28px;padding:3px;border:1px solid #d7d7dc;border-radius:8px;background:#fff;cursor:pointer}
+  .select-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-top:1px solid #e5e5e8}.select-row span{display:flex;align-items:center;gap:8px;font-size:12px}.select-row :global(.studio-select){flex:0 1 160px;margin-left:auto}
   .icon-button,.ordered-row button,.search-row button{display:grid;place-items:center;border:0;border-radius:8px;background:#fff;color:#414148;cursor:pointer;transition:background 140ms ease,color 140ms ease,transform 120ms ease}.icon-button{width:30px;height:30px}.icon-button:hover,.ordered-row button:hover,.search-row button:hover{background:#ececf0;color:#111113}
   .hint,.empty{margin:7px 0;color:#777780;font-size:11px;line-height:1.45}.ordered-list{display:flex;flex-direction:column;gap:6px;margin-top:11px}.ordered-row{display:flex;align-items:center;gap:7px;min-height:42px;padding:7px;border:1px solid transparent;border-radius:10px;background:#fff;transition:border-color 140ms ease,background 140ms ease}.ordered-row:hover{border-color:#dedfe4;background:#fcfcfd}.ordered-row.offline{opacity:.62}.ordered-row>span{min-width:0;display:flex;flex:1;flex-direction:column;gap:2px}.ordered-row strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.ordered-row small{color:#777780;font-size:11px}.ordered-row button{width:27px;height:27px}
   .skeleton-list{pointer-events:none}.skeleton-row{min-height:48px}.skeleton-row>span{gap:6px}.skeleton-row i{display:block;height:7px;border-radius:99px;background:linear-gradient(90deg,#ececf0 25%,#f7f7f8 50%,#ececf0 75%);background-size:200% 100%;animation:skeleton-shimmer 1.25s ease-in-out infinite}.skeleton-row i:first-child{width:42%}.skeleton-row i:last-child{width:24%;opacity:.75}@keyframes skeleton-shimmer{to{background-position:-200% 0}}
@@ -553,7 +613,7 @@
   .compact-select-row{background:#22252a;border-color:#3a3d45}
   .compact-select-row:hover:not(:focus-within){background:#2b2e34}
   .compact-select-row:focus-within{background:#292c32;border-color:var(--studio-accent)}
-  .search-row input,.color-row input[type=color]{color:#f2f3f5;background:#22252a;border:1px solid #484b53}
+  .search-row input{color:#f2f3f5;background:#22252a;border:1px solid #484b53}
   .preferences-section{position:relative;z-index:2}
   .search-row input::placeholder{color:#969aa5}
   .icon-button,.ordered-row button,.search-row button{color:#edf0f4;background:#282b31;border:1px solid #42454e}

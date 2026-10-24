@@ -3,8 +3,9 @@
 //! 使用 Mutex 实现线程安全的状态共享
 //! 通过 Tauri 的状态管理机制注入到命令处理函数中
 
-use crate::models::AppPreferences;
-use std::sync::{atomic::AtomicU64, Mutex};
+use super::media_actor::MediaActorHandle;
+use crate::models::{AppPreferences, NeteaseProgressMode};
+use std::sync::{atomic::{AtomicU8, AtomicU64, Ordering}, Mutex};
 use tokio::sync::Mutex as AsyncMutex;
 
 /// 媒体缓存状态
@@ -38,8 +39,43 @@ pub struct AppState {
     pub settings_writer: AsyncMutex<()>,
     /// Monotonic revision for successful settings commits.
     pub settings_revision: AtomicU64,
+    /// Latest persisted NetEase progress policy, read by the media actor even
+    /// when its bounded wake queue is full.
+    netease_progress_mode: AtomicU8,
     /// 媒体缓存（运行时临时缓存）
     pub media_cache: Mutex<MediaCache>,
+    /// Handle to the sole SMTC snapshot actor, installed during setup.
+    pub(crate) media_actor: Mutex<Option<MediaActorHandle>>,
+}
+
+impl AppState {
+    pub(crate) fn set_netease_progress_mode(&self, mode: NeteaseProgressMode) {
+        self.netease_progress_mode.store(
+            match mode { NeteaseProgressMode::Real => 0, NeteaseProgressMode::Estimate => 1 },
+            Ordering::Release,
+        );
+    }
+
+    pub(crate) fn netease_progress_mode(&self) -> NeteaseProgressMode {
+        match self.netease_progress_mode.load(Ordering::Acquire) {
+            1 => NeteaseProgressMode::Estimate,
+            _ => NeteaseProgressMode::Real,
+        }
+    }
+
+    pub(crate) fn set_media_actor(&self, actor: MediaActorHandle) -> Result<(), String> {
+        let mut slot = self.media_actor.lock().map_err(|error| error.to_string())?;
+        *slot = Some(actor);
+        Ok(())
+    }
+
+    pub(crate) fn media_actor(&self) -> Result<MediaActorHandle, String> {
+        self.media_actor
+            .lock()
+            .map_err(|error| error.to_string())?
+            .clone()
+            .ok_or_else(|| "media actor is not ready".to_string())
+    }
 }
 
 /// 默认状态实现
@@ -49,7 +85,9 @@ impl Default for AppState {
             settings: Mutex::new(AppPreferences::default()),
             settings_writer: AsyncMutex::new(()),
             settings_revision: AtomicU64::new(0),
+            netease_progress_mode: AtomicU8::new(0),
             media_cache: Mutex::new(MediaCache::default()),
+            media_actor: Mutex::new(None),
         }
     }
 }

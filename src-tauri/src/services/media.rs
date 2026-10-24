@@ -11,7 +11,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
-use windows::{
+use windows052::{
     Media::{Control::*, MediaPlaybackAutoRepeatMode},
     Storage::Streams::*,
 };
@@ -589,10 +589,8 @@ fn ordered_selected_ids<'a>(order: &'a [String], selected: &'a [String]) -> Vec<
 
 fn selected_session(
     app: &AppHandle,
+    manager: &GlobalSystemMediaTransportControlsSessionManager,
 ) -> AppResult<Option<(GlobalSystemMediaTransportControlsSession, String, String)>> {
-    let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
-        .and_then(|op| op.get())
-        .map_err(|e| AppError::media(format!("RequestAsync failed: {:?}", e)))?;
     let sessions = manager
         .GetSessions()
         .map_err(|e| AppError::media(format!("GetSessions failed: {:?}", e)))?;
@@ -677,6 +675,117 @@ fn selected_session(
     }))
 }
 
+const LISTENER_METADATA_TTL: Duration = Duration::from_secs(5);
+
+#[derive(Clone, Default)]
+struct MediaMetadata {
+    title: String,
+    artist: String,
+    album_art: String,
+}
+
+/// Owned by the media listener's COM apartment and bounded to its one selected session.
+#[derive(Default)]
+pub(crate) struct MediaListenerMetadataCache {
+    session: Option<GlobalSystemMediaTransportControlsSession>,
+    metadata: Option<MediaMetadata>,
+    refreshed_at: Option<Instant>,
+}
+
+impl MediaListenerMetadataCache {
+    pub(crate) fn clear(&mut self) {
+        self.session = None;
+        self.metadata = None;
+        self.refreshed_at = None;
+    }
+}
+
+pub(crate) struct MediaListenerSnapshot {
+    pub(crate) result: AppResult<MediaState>,
+    pub(crate) metadata_read_attempted: bool,
+    pub(crate) metadata_updated: bool,
+    pub(crate) metadata_reused: bool,
+}
+
+pub(crate) fn media_sessions_have_same_identity(
+    left: &GlobalSystemMediaTransportControlsSession,
+    right: &GlobalSystemMediaTransportControlsSession,
+) -> bool {
+    use windows052::core::ComInterface;
+
+    left.as_unknown() == right.as_unknown()
+}
+
+fn listener_metadata_refresh_due(
+    same_session: bool,
+    has_metadata: bool,
+    invalidated: bool,
+    refreshed_at: Option<Instant>,
+    now: Instant,
+) -> bool {
+    !same_session
+        || !has_metadata
+        || invalidated
+        || refreshed_at.is_none_or(|refreshed_at| {
+            now.saturating_duration_since(refreshed_at) >= LISTENER_METADATA_TTL
+        })
+}
+
+#[cfg(test)]
+mod listener_metadata_cache_tests {
+    use super::listener_metadata_refresh_due;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn metadata_refresh_policy_covers_identity_invalidation_and_five_second_ttl() {
+        let refreshed_at = Instant::now();
+        assert!(listener_metadata_refresh_due(
+            false,
+            true,
+            false,
+            Some(refreshed_at),
+            refreshed_at + Duration::from_secs(1),
+        ));
+        assert!(listener_metadata_refresh_due(
+            true,
+            false,
+            false,
+            Some(refreshed_at),
+            refreshed_at + Duration::from_secs(1),
+        ));
+        assert!(listener_metadata_refresh_due(
+            true,
+            true,
+            true,
+            Some(refreshed_at),
+            refreshed_at + Duration::from_secs(1),
+        ));
+        assert!(!listener_metadata_refresh_due(
+            true,
+            true,
+            false,
+            Some(refreshed_at),
+            refreshed_at + Duration::from_millis(4999),
+        ));
+        assert!(listener_metadata_refresh_due(
+            true,
+            true,
+            false,
+            Some(refreshed_at),
+            refreshed_at + Duration::from_secs(5),
+        ));
+    }
+}
+
+fn selected_session_from_current_manager(
+    app: &AppHandle,
+) -> AppResult<Option<(GlobalSystemMediaTransportControlsSession, String, String)>> {
+    let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+        .and_then(|operation| operation.get())
+        .map_err(|error| AppError::media(format!("RequestAsync failed: {error:?}")))?;
+    selected_session(app, &manager)
+}
+
 pub fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
     let _apartment = super::apartment::Apartment::enter().map_err(|error| {
         AppError::media(format!("Media apartment initialization failed: {error}"))
@@ -727,19 +836,119 @@ pub fn list_media_sessions() -> AppResult<Vec<MediaSessionInfo>> {
 /// - QQ音乐 (qqmusic)
 /// - Apple Music
 /// - 其他通用播放器
+#[allow(dead_code)]
 pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
     let _apartment = super::apartment::Apartment::enter().map_err(|error| {
         AppError::media(format!("Media apartment initialization failed: {error}"))
     })?;
-    let (session, source_type, raw_id) = match selected_session(app)? {
+    let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+        .and_then(|operation| operation.get())
+        .map_err(|error| AppError::media(format!("RequestAsync failed: {error:?}")))?;
+    get_media_info_from_manager(app, &manager)
+}
+
+/// Read the selected session from a manager owned by the caller's media actor.
+/// Keeping the manager alive lets the listener subscribe once and refresh from
+/// SMTC events without reacquiring the WinRT singleton for every snapshot.
+#[allow(dead_code)]
+pub(crate) fn get_media_info_from_manager(
+    app: &AppHandle,
+    manager: &GlobalSystemMediaTransportControlsSessionManager,
+) -> AppResult<MediaState> {
+    let (session, source_type, raw_id) = match selected_session(app, manager)? {
         Some(s) => s,
         None => return Ok(MediaState::default()),
     };
 
-    // 获取时间线属性（播放进度）
-    let timeline = session.GetTimelineProperties().ok();
+    let metadata = read_media_metadata(app, &session, &raw_id)?;
+    build_media_state(&session, source_type, raw_id, metadata)
+}
 
-    // 获取媒体属性（标题、艺术家、封面）
+/// Listener-only snapshot path. The cache belongs to the caller's actor and
+/// contains the concrete COM session interface, not only its source/AppID.
+pub(crate) fn get_media_info_from_manager_for_listener(
+    app: &AppHandle,
+    manager: &GlobalSystemMediaTransportControlsSessionManager,
+    cache: &mut MediaListenerMetadataCache,
+    metadata_invalidated: bool,
+) -> MediaListenerSnapshot {
+    let selected = match selected_session(app, manager) {
+        Ok(selected) => selected,
+        Err(error) => {
+            return MediaListenerSnapshot {
+                result: Err(error),
+                metadata_read_attempted: false,
+                metadata_updated: false,
+                metadata_reused: false,
+            };
+        }
+    };
+    let Some((session, source_type, raw_id)) = selected else {
+        cache.clear();
+        return MediaListenerSnapshot {
+            result: Ok(MediaState::default()),
+            metadata_read_attempted: false,
+            metadata_updated: false,
+            metadata_reused: false,
+        };
+    };
+
+    let same_session = cache
+        .session
+        .as_ref()
+        .is_some_and(|cached| media_sessions_have_same_identity(cached, &session));
+    if !same_session {
+        cache.clear();
+        cache.session = Some(session.clone());
+    }
+
+    let refresh_metadata = listener_metadata_refresh_due(
+        same_session,
+        cache.metadata.is_some(),
+        metadata_invalidated,
+        cache.refreshed_at,
+        Instant::now(),
+    );
+    let (metadata, metadata_read_attempted, metadata_updated, metadata_reused) = if refresh_metadata
+    {
+        match read_media_metadata(app, &session, &raw_id) {
+            Ok(metadata) => {
+                cache.metadata = Some(metadata.clone());
+                cache.refreshed_at = Some(Instant::now());
+                (metadata, true, true, false)
+            }
+            Err(error) => {
+                return MediaListenerSnapshot {
+                    result: Err(error),
+                    metadata_read_attempted: true,
+                    metadata_updated: false,
+                    metadata_reused: false,
+                };
+            }
+        }
+    } else {
+        // A cache entry can only exist with a concrete matching session.
+        let metadata = cache
+            .metadata
+            .as_ref()
+            .expect("metadata refresh decision requires a populated cache")
+            .clone();
+        (metadata, false, false, true)
+    };
+
+    MediaListenerSnapshot {
+        result: build_media_state(&session, source_type, raw_id, metadata),
+        metadata_read_attempted,
+        metadata_updated,
+        metadata_reused,
+    }
+}
+
+fn read_media_metadata(
+    app: &AppHandle,
+    session: &GlobalSystemMediaTransportControlsSession,
+    raw_id: &str,
+) -> AppResult<MediaMetadata> {
     let info = session
         .TryGetMediaPropertiesAsync()
         .map_err(|e| AppError::media(format!("TryGetMediaPropertiesAsync failed: {:?}", e)))?
@@ -748,9 +957,9 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
 
     let title = info.Title().unwrap_or_default().to_string();
     let artist = info.Artist().unwrap_or_default().to_string();
-    // Thumbnail versions are content identities, not just title/artist. Read
-    // the bounded stream each poll; unchanged bytes reuse the prepared image.
-    let mut thumbnail_base64 = String::new();
+    // Thumbnail versions are content identities, not just title/artist. This
+    // stream is read on invalidation or the listener's bounded metadata TTL.
+    let mut album_art = String::new();
     if let Ok(thumbnail_ref) = info.Thumbnail() {
         if let Ok(stream) = thumbnail_ref
             .OpenReadAsync()
@@ -773,17 +982,17 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
                             let state = app.state::<AppState>();
                             if let Ok(mut cache) = state.media_cache.lock() {
                                 if cache.track_id == identity && !cache.base64_img.is_empty() {
-                                    thumbnail_base64 = cache.base64_img.clone();
+                                    album_art = cache.base64_img.clone();
                                 } else if let Ok(prepared) =
                                     super::image_budget::prepare_artwork(&bytes)
                                 {
-                                    thumbnail_base64 = format!(
+                                    album_art = format!(
                                         "data:{};base64,{}",
                                         prepared.content_type,
                                         general_purpose::STANDARD.encode(&prepared.bytes)
                                     );
                                     cache.track_id = identity;
-                                    cache.base64_img = thumbnail_base64.clone();
+                                    cache.base64_img = album_art.clone();
                                 }
                             };
                         }
@@ -792,6 +1001,25 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
             }
         }
     }
+
+    Ok(MediaMetadata {
+        title,
+        artist,
+        album_art,
+    })
+}
+
+fn build_media_state(
+    session: &GlobalSystemMediaTransportControlsSession,
+    source_type: String,
+    raw_id: String,
+    metadata: MediaMetadata,
+) -> AppResult<MediaState> {
+    // 获取时间线属性（播放进度）
+    let timeline = session.GetTimelineProperties().ok();
+    let title = metadata.title;
+    let artist = metadata.artist;
+    let thumbnail_base64 = metadata.album_art;
 
     // 获取播放状态
     let playback_info = session
@@ -807,9 +1035,11 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
             previous: controls.IsPreviousEnabled().unwrap_or(false),
             play_pause: controls.IsPlayPauseToggleEnabled().unwrap_or(false),
             next: controls.IsNextEnabled().unwrap_or(false),
-            // 网易云未声明 seek 时也开放 UI 尝试一次 SMTC 位置变更请求；
-            // 是否成功以 seek_media 的系统调用结果为准。
-            seek: controls.IsPlaybackPositionEnabled().unwrap_or(false) || source_type == "netease",
+            // 网易云实际跳转走本机 CDP；其它播放器遵循 SMTC 能力声明。
+            seek: seek_supported(
+                &source_type,
+                controls.IsPlaybackPositionEnabled().unwrap_or(false),
+            ),
             shuffle: controls.IsShuffleEnabled().unwrap_or(false),
             repeat: controls.IsRepeatEnabled().unwrap_or(false),
         })
@@ -890,6 +1120,8 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
         is_playing,
         position_ms: timeline.position_ms,
         duration_ms: timeline.duration_ms,
+        progress_known: true,
+        netease_progress_available: None,
         last_updated_timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -908,6 +1140,9 @@ pub fn get_media_info(app: &AppHandle) -> AppResult<MediaState> {
                 _ => "none".to_string(),
             })
         }),
+        native_epoch: String::new(),
+        native_revision: 0,
+        native_track_generation: 0,
     })
 }
 
@@ -977,20 +1212,55 @@ async fn get_netease_mv_url_internal(mv_id: u64) -> AppResult<Option<String>> {
     Ok(None)
 }
 
-/// 控制媒体播放
-///
-/// 支持的操作：
-/// - "play_pause": 播放/暂停切换
-/// - "next": 下一曲
-/// - "prev": 上一曲
+fn require_control_session<T>(session: Option<T>) -> AppResult<T> {
+    session.ok_or_else(|| AppError::media("未找到可控制的媒体会话"))
+}
+
+fn seek_supported(source: &str, declared: bool) -> bool {
+    declared || source == "netease"
+}
+
+fn finish_media_request(action: &str, result: windows052::core::Result<bool>) -> AppResult<()> {
+    let accepted = result
+        .map_err(|error| AppError::media(format!("执行媒体操作 {action} 失败: {error:?}")))?;
+    if !accepted {
+        return Err(AppError::media(format!("播放器拒绝媒体操作: {action}")));
+    }
+    Ok(())
+}
+
+fn request_seek<F>(source: &str, session_id: &str, declared: bool, request: F) -> AppResult<()>
+where
+    F: FnOnce() -> windows052::core::Result<bool>,
+{
+    if !seek_supported(source, declared) {
+        return Err(AppError::media(format!(
+            "媒体会话不支持调整播放进度: {session_id}"
+        )));
+    }
+    finish_media_request("seek", request())
+}
+
+/// 控制媒体播放，并传播播放器的受理或拒绝结果。
+/// 支持 play_pause、next 和 prev。
 pub fn control_media(app: &AppHandle, action: &str) -> AppResult<()> {
     let _apartment = super::apartment::Apartment::enter().map_err(|error| {
         AppError::media(format!("Media apartment initialization failed: {error}"))
     })?;
+    let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+        .and_then(|operation| operation.get())
+        .map_err(|error| AppError::media(format!("RequestAsync failed: {error:?}")))?;
+    control_media_with_manager(app, &manager, action)
+}
 
-    let Some((session, _, _)) = selected_session(app)? else {
-        return Err(AppError::media("未找到可控制的媒体会话"));
-    };
+/// Execute a control request against the manager already owned by the media
+/// actor. The caller must be on that manager's COM apartment.
+pub(crate) fn control_media_with_manager(
+    app: &AppHandle,
+    manager: &GlobalSystemMediaTransportControlsSessionManager,
+    action: &str,
+) -> AppResult<()> {
+    let (session, _, _) = require_control_session(selected_session(app, manager)?)?;
 
     // GSMTC control methods return an IAsyncOperation.  Dropping that
     // operation immediately makes the request fire-and-forget; in practice
@@ -1010,33 +1280,46 @@ pub fn control_media(app: &AppHandle, action: &str) -> AppResult<()> {
         _ => return Err(AppError::media(format!("不支持的媒体操作: {action}"))),
     };
 
-    result.map_err(|error| AppError::media(format!("执行媒体操作 {action} 失败: {error:?}")))?;
-    Ok(())
+    finish_media_request(action, result)
 }
 
-pub fn seek_media(app: &AppHandle, position_ms: u64) -> AppResult<()> {
+pub fn seek_media(
+    app: &AppHandle,
+    position_ms: u64,
+    expected_title: &str,
+    expected_artist: &str,
+) -> AppResult<Option<super::netease_cdp::NeteaseProgress>> {
     let _apartment = super::apartment::Apartment::enter().map_err(|error| {
         AppError::media(format!("Media apartment initialization failed: {error}"))
     })?;
-    let (session, _, _) =
-        selected_session(app)?.ok_or_else(|| AppError::media("No active media session"))?;
-    let accepted = session
-        .TryChangePlaybackPositionAsync(
-            (position_ms.saturating_mul(10_000)).min(i64::MAX as u64) as i64
-        )
-        .and_then(|op| op.get())
-        .map_err(|e| AppError::media(format!("Seek failed: {:?}", e)))?;
-    if !accepted {
-        return Err(AppError::media("Player rejected the seek request"));
+    let (session, source, raw_id) =
+        require_control_session(selected_session_from_current_manager(app)?)?;
+    if source == "netease" {
+        return super::netease_cdp::LocalCdpClient::default()
+            .seek_position(position_ms, expected_title, expected_artist)
+            .map(Some)
+            .map_err(|error| AppError::media(error.to_string()));
     }
-    Ok(())
+    let declared = session
+        .GetPlaybackInfo()
+        .and_then(|info| info.Controls())
+        .and_then(|controls| controls.IsPlaybackPositionEnabled())
+        .map_err(|error| AppError::media(format!("读取 seek 能力失败: {error:?}")))?;
+    request_seek(&source, &raw_id, declared, || {
+        session
+            .TryChangePlaybackPositionAsync(
+                (position_ms.saturating_mul(10_000)).min(i64::MAX as u64) as i64,
+            )
+            .and_then(|op| op.get())
+    })?;
+    Ok(None)
 }
 
 pub fn toggle_shuffle(app: &AppHandle) -> AppResult<()> {
     let _apartment = super::apartment::Apartment::enter().map_err(|error| {
         AppError::media(format!("Media apartment initialization failed: {error}"))
     })?;
-    if let Some((session, _, _)) = selected_session(app)? {
+    if let Some((session, _, _)) = selected_session_from_current_manager(app)? {
         let current = session
             .GetPlaybackInfo()
             .ok()
@@ -1055,7 +1338,7 @@ pub fn cycle_repeat(app: &AppHandle) -> AppResult<()> {
     let _apartment = super::apartment::Apartment::enter().map_err(|error| {
         AppError::media(format!("Media apartment initialization failed: {error}"))
     })?;
-    if let Some((session, _, _)) = selected_session(app)? {
+    if let Some((session, _, _)) = selected_session_from_current_manager(app)? {
         let current = session
             .GetPlaybackInfo()
             .ok()
@@ -1073,6 +1356,76 @@ pub fn cycle_repeat(app: &AppHandle) -> AppResult<()> {
             .map_err(|e| AppError::media(format!("Repeat failed: {:?}", e)))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod control_tests {
+    use super::*;
+    use std::cell::Cell;
+
+    #[test]
+    fn accepted_request_is_success_but_rejection_is_serialized_error() {
+        assert!(finish_media_request("play_pause", Ok(true)).is_ok());
+        for action in ["play_pause", "next", "prev", "seek"] {
+            let error = finish_media_request(action, Ok(false)).unwrap_err();
+            let payload = serde_json::to_value(&error).unwrap();
+            assert_eq!(payload["code"], 2001);
+            assert!(payload["message"].as_str().unwrap().contains("拒绝"));
+            assert!(payload["message"].as_str().unwrap().contains(action));
+        }
+    }
+
+    #[test]
+    fn winrt_failure_is_not_replaced_with_success_or_rejection() {
+        let native = windows052::core::Error::new(
+            windows052::core::HRESULT(0x80004005u32 as i32),
+            windows052::core::HSTRING::from("test native failure"),
+        );
+        let error = finish_media_request("next", Err(native)).unwrap_err();
+        assert_eq!(error.code(), 2001);
+        assert!(error.to_string().contains("执行媒体操作 next 失败"));
+    }
+
+    #[test]
+    fn unsupported_seek_never_dispatches_to_the_player() {
+        let calls = Cell::new(0);
+        let error = request_seek(
+            "apple",
+            "AppleInc.AppleMusicWin_nzyj5cx40ttqa!App",
+            false,
+            || {
+                calls.set(calls.get() + 1);
+                Ok(true)
+            },
+        )
+        .unwrap_err();
+        assert_eq!(calls.get(), 0);
+        assert_eq!(error.code(), 2001);
+        assert!(error.to_string().contains("不支持调整播放进度"));
+        assert!(error.to_string().contains("AppleInc.AppleMusicWin"));
+    }
+
+    #[test]
+    fn declared_seek_and_netease_compatibility_dispatch_once_and_check_result() {
+        for (source, declared) in [("apple", true), ("netease", false)] {
+            let calls = Cell::new(0);
+            assert!(request_seek(source, "session", declared, || {
+                calls.set(calls.get() + 1);
+                Ok(true)
+            })
+            .is_ok());
+            assert_eq!(calls.get(), 1);
+            assert!(request_seek(source, "session", declared, || Ok(false)).is_err());
+        }
+        assert!(!seek_supported("spotify", false));
+    }
+
+    #[test]
+    fn missing_session_is_a_structured_error() {
+        let error = require_control_session::<()>(None).unwrap_err();
+        assert_eq!(serde_json::to_value(error).unwrap()["code"], 2001);
+        assert_eq!(require_control_session(Some(42)).unwrap(), 42);
+    }
 }
 
 #[cfg(test)]

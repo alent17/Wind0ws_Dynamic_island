@@ -12,9 +12,14 @@ export type CornerRadii = {
 };
 
 export type IslandGeometry = { width: number; height: number; radius: number };
+/** WebView/CSS logical pixels. */
 export type HostGeometry = { width: number; height: number };
+/** Native window dimensions in physical screen pixels. */
+export type PhysicalWindowSize = { width: number; height: number };
 export type Point = { x: number; y: number };
+/** Monitor work-area origin and dimensions reported by Win32, in physical pixels. */
 export type MonitorBounds = Point & { width: number; height: number };
+/** Native window screen bounds in physical pixels. */
 export type WindowBounds = MonitorBounds;
 export type InteractionExtraRect = { x: number; y: number; width: number; height: number; radius: number };
 
@@ -36,7 +41,6 @@ export const ISLAND_GEOMETRY = {
 
 export const ISLAND_GAP = 22;
 export const ISLAND_OVERSHOOT = 4;
-export const FEATURE_RAIL_RESERVE = 0;
 export const ISLAND_HOST = {
   width: Math.max(ISLAND_GEOMETRY.expanded.width, FEATURE_RAIL_WIDTH),
   height: ISLAND_GEOMETRY.expanded.height + ISLAND_GAP + FEATURE_RAIL_GAP + FEATURE_RAIL_HEIGHT + ISLAND_OVERSHOOT,
@@ -205,16 +209,62 @@ export function surfaceOffsetFor(
   edge: IslandEdge,
   scale = 1,
 ): Point {
-  const gap = style === "floating" ? ISLAND_GAP * Math.min(1, Math.max(0.62, scale)) : 0;
+  // Geometry passed to the WebView and the native hit test is CSS-logical px.
+  // Use the same content scale as the visible anchor; the .62 floor belongs
+  // only to native host sizing, not to the silhouette's visual gap.
+  const gap = style === "floating" ? islandAnchorGap(scale) : 0;
   if (edge === "top") return { x: (host.width - geometry.width) / 2, y: gap };
   if (edge === "right") return { x: host.width - gap - geometry.width, y: (host.height - geometry.height) / 2 };
   if (edge === "bottom") return { x: (host.width - geometry.width) / 2, y: host.height - gap - geometry.height };
   return { x: gap, y: (host.height - geometry.height) / 2 };
 }
 
+function normalizedContentScale(scale: number) {
+  return Number.isFinite(scale) ? Math.min(1, Math.max(0, scale)) : 1;
+}
+
+export function scaleIslandGeometry(geometry: IslandGeometry, scale: number): IslandGeometry {
+  const safeScale = normalizedContentScale(scale);
+  return {
+    width: geometry.width * safeScale,
+    height: geometry.height * safeScale,
+    radius: geometry.radius * safeScale,
+  };
+}
+
+export function islandAnchorGap(scale: number, styleProgress = 0) {
+  const progress = Number.isFinite(styleProgress) ? Math.min(1, Math.max(0, styleProgress)) : 0;
+  return ISLAND_GAP * normalizedContentScale(scale) * (1 - progress);
+}
+
+/** Region origin in CSS-logical px, aligned to the same animated anchor as IslandSurface. */
+export function interactionSurfaceOffsetFor(
+  host: HostGeometry,
+  geometry: IslandGeometry,
+  style: IslandStyle,
+  edge: IslandEdge,
+  scale: number,
+  anchorGap?: number,
+): Point {
+  const offset = surfaceOffsetFor(host, geometry, style, edge, scale);
+  if (anchorGap === undefined) return offset;
+  const delta = anchorGap - (style === "floating" ? islandAnchorGap(scale) : 0);
+  if (edge === "top") offset.y += delta;
+  else if (edge === "bottom") offset.y -= delta;
+  else if (edge === "left") offset.x += delta;
+  else offset.x -= delta;
+  return offset;
+}
+
+/** Convert a CSS-logical host size to the integer physical pixels used by native window bounds. */
+export function physicalHostSizeFor(host: HostGeometry, scaleFactor: number): PhysicalWindowSize {
+  const dpr = Number.isFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1;
+  return { width: Math.round(host.width * dpr), height: Math.round(host.height * dpr) };
+}
+
 export function placementFor(
   monitor: MonitorBounds,
-  host: HostGeometry,
+  host: PhysicalWindowSize,
   edge: IslandEdge,
   positionPercent: number,
 ): WindowBounds {
@@ -262,27 +312,6 @@ export function hiddenPlacementFor(
   return hidden;
 }
 
-export function stableEnvelope(current: IslandGeometry, target: IslandGeometry): IslandGeometry {
-  const currentArea = current.width * current.height;
-  const targetArea = target.width * target.height;
-  return currentArea >= targetArea ? { ...current } : { ...target };
-}
-
-export function expansionForWidth(width: number) {
-  return Math.min(1, Math.max(0, (width - ISLAND_GEOMETRY.hover.width) /
-    (ISLAND_GEOMETRY.expanded.width - ISLAND_GEOMETRY.hover.width)));
-}
-
-export function expansionForGeometry(geometry: IslandGeometry, edge: IslandEdge, compactLength = 80) {
-  const compact = geometryFor("hover", geometry.radius, edge, compactLength);
-  const compactArea = compact.width * compact.height;
-  const expandedArea = ISLAND_GEOMETRY.expanded.width * ISLAND_GEOMETRY.expanded.height;
-  return Math.min(1, Math.max(0,
-    (geometry.width * geometry.height - compactArea) / (expandedArea - compactArea),
-  ));
-}
-
-
 export type IslandPage = "music" | "timer" | "volume" | "clock" | "weather";
 
 export function navigationGeometry(page: IslandPage, toolCount: number, radius = 45,
@@ -301,12 +330,22 @@ export function navigationScaleForWorkArea(workWidth: number, workHeight: number
   const dpr = Number.isFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1;
   const logicalWidth = Math.max(1, workWidth) / dpr;
   const logicalHeight = Math.max(1, workHeight) / dpr;
+  // Preserve the existing 62% minimum layout scale. App's separate 0.625
+  // content-fit factor then yields the intended 0.3875 minimum Island scale.
   return Math.max(0.62, Math.min(1, logicalWidth / NAVIGATION_REFERENCE_WORK_AREA.width, logicalHeight / NAVIGATION_REFERENCE_WORK_AREA.height));
+}
+
+// The monitor work area is supplied in physical pixels; content geometry stays
+// in CSS-logical px and is scaled down from the reference work area.
+export function islandContentScaleForWorkArea(workWidth: number, workHeight: number, scaleFactor = 1) {
+  return navigationScaleForWorkArea(workWidth, workHeight, scaleFactor) * 0.625;
 }
 
 // Reserve the largest page once; only the visible silhouette and hit region morph.
 export function navigationHostFor(style: IslandStyle, edge: IslandEdge, compactLength = 80, scale = 1): HostGeometry {
   const base = hostFor(style, edge, compactLength);
+  // Keep the existing .62 minimum native envelope. It stabilizes the largest
+  // page's host bounds; it must not be reused as the visual/content scale.
   const safeScale = Math.min(1, Math.max(0.62, scale));
   // Expanded content remains horizontal on side edges. A floating island needs
   // its outer gap inside the native host on those edges, just as top/bottom

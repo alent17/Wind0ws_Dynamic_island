@@ -11,7 +11,16 @@ export const mediaApi = {
     return invoke("control_media", { action });
   },
 
-  seekMedia: (positionMs: number) => invoke<void>("seek_media", { positionMs: Math.round(positionMs) }),
+  seekMedia: (
+    positionMs: number,
+    basis: { nativeEpoch: string; nativeTrackGeneration: number; title: string; artist: string },
+  ) => invoke<{ trackId: string; positionMs: number; durationMs: number } | null>("seek_media", {
+    positionMs: Math.round(positionMs),
+    expectedNativeEpoch: basis.nativeEpoch,
+    expectedTrackGeneration: basis.nativeTrackGeneration,
+    expectedTitle: basis.title,
+    expectedArtist: basis.artist,
+  }),
   toggleShuffle: () => invoke<void>("toggle_shuffle"),
   cycleRepeat: () => invoke<void>("cycle_repeat"),
   getNeteasePlaybackMode: () => invoke<NeteasePlaybackMode | null>("get_netease_playback_mode"),
@@ -23,10 +32,6 @@ export const mediaApi = {
 
   resolveHdCover: (title: string, artist: string, source: string) =>
     invoke<ResolvedCover | null>("resolve_hd_cover", { title, artist, source }),
-
-  async getNeteaseDuration(): Promise<number | null> {
-    return invoke<number | null>("get_netease_duration_cmd");
-  },
 
   async getNeteaseMvUrl(mvId: number): Promise<string | null> {
     return invoke<string | null>("get_netease_mv_url_cmd", { mvId });

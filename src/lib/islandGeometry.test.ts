@@ -1,18 +1,20 @@
 import { navigationGeometry, navigationHostFor, navigationScaleForWorkArea } from "./islandGeometry";
 import { describe, expect, it } from "vitest";
 import {
-  expansionForGeometry,
-  expansionForWidth,
   geometryFor,
   hiddenPlacementFor,
   hostFor,
+  interactionSurfaceOffsetFor,
+  islandAnchorGap,
+  islandContentScaleForWorkArea,
   interpolatePolygon,
   ISLAND_HOST,
   overlapAttachedEdge,
   placementFor,
+  physicalHostSizeFor,
   radiiFor,
+  scaleIslandGeometry,
   shapePolygonFor,
-  stableEnvelope,
   surfaceOffsetFor,
 } from "./islandGeometry";
 
@@ -65,23 +67,24 @@ describe("island geometry", () => {
     expect(geometryFor("hover", 45, "top", 300)).toEqual({ width: 300, height: 30, radius: 15 });
     expect(geometryFor("compact", 45, "left", 300)).toEqual({ width: 28, height: 300, radius: 14 });
     expect(hostFor("edge", "left", 300)).toEqual({ width: 600, height: 300 });
-    expect(expansionForGeometry(geometryFor("compact", 45, "top", 300), "top", 300)).toBe(0);
   });
 
   it("places the host along positive and negative-origin monitors", () => {
     const monitor = { x: -1920, y: -120, width: 1920, height: 1080 };
-    const host = hostFor("edge", "top");
+    const host = physicalHostSizeFor(hostFor("edge", "top"), 1);
     expect(placementFor(monitor, host, "top", 0)).toEqual({ x: -1920, y: -120, width: 600, height: 286 });
     expect(placementFor(monitor, host, "top", 50)).toEqual({ x: -1260, y: -120, width: 600, height: 286 });
     expect(placementFor(monitor, host, "bottom", 100)).toEqual({ x: -600, y: 674, width: 600, height: 286 });
   });
 
-  it("overdraws one physical pixel beyond every attached screen edge", () => {
-    const shown = { x: 100, y: 200, width: 300, height: 160 };
-    expect(overlapAttachedEdge(shown, "top")).toEqual({ ...shown, y: 199 });
-    expect(overlapAttachedEdge(shown, "right")).toEqual({ ...shown, x: 101 });
-    expect(overlapAttachedEdge(shown, "bottom")).toEqual({ ...shown, y: 201 });
-    expect(overlapAttachedEdge(shown, "left")).toEqual({ ...shown, x: 99 });
+  it("overdraws exactly one physical pixel beyond every attached screen edge at each DPR", () => {
+    for (const dpr of [1, 1.25, 1.5, 2]) {
+      const shown = { x: -100, y: 200, width: Math.round(300 * dpr), height: Math.round(160 * dpr) };
+      expect(overlapAttachedEdge(shown, "top").y).toBe(shown.y - 1);
+      expect(overlapAttachedEdge(shown, "right").x).toBe(shown.x + 1);
+      expect(overlapAttachedEdge(shown, "bottom").y).toBe(shown.y + 1);
+      expect(overlapAttachedEdge(shown, "left").x).toBe(shown.x - 1);
+    }
   });
 
   it("builds fixed-size iPhone shoulder polygons in all four directions", () => {
@@ -147,24 +150,6 @@ describe("island geometry", () => {
     }
   });
 
-  it("clamps crossfade progress during rapid retargeting", () => {
-    expect(expansionForWidth(80)).toBe(0);
-    expect(expansionForWidth(90)).toBe(0);
-    expect(expansionForWidth(345)).toBeCloseTo(0.5);
-    expect(expansionForWidth(600)).toBe(1);
-    expect(expansionForWidth(800)).toBe(1);
-  });
-
-  it("keeps the larger stable envelope until a transition settles", () => {
-    const compact = geometryFor("compact");
-    const hover = geometryFor("hover");
-    const expanded = geometryFor("expanded", 38);
-
-    expect(stableEnvelope(compact, hover)).toEqual(hover);
-    expect(stableEnvelope(hover, compact)).toEqual(hover);
-    expect(stableEnvelope(expanded, compact)).toEqual(expanded);
-    expect(stableEnvelope(compact, expanded)).toEqual(expanded);
-  });
 });
 
 
@@ -214,6 +199,108 @@ describe("in-island navigation geometry", () => {
             expect(offset.x + geometry.width).toBeLessThanOrEqual(host.width + 0.001);
             expect(offset.y + geometry.height).toBeLessThanOrEqual(host.height + 0.001);
           }
+        }
+      }
+    }
+  });
+
+  it("keeps the real content scale, animated visual anchor, hit region and physical cursor coordinates aligned", () => {
+    const edges = ["top", "right", "bottom", "left"] as const;
+    const styles = ["floating", "edge"] as const;
+    const dprs = [1, 1.25, 1.5, 2] as const;
+    const expectedScales = [0.3875, 0.4, 0.55, 0.62, 0.625];
+
+    // Exercise the production App scale calculation using Win32-style physical
+    // work-area dimensions (including a taskbar-reduced area) and each DPR.
+    for (const dpr of dprs) {
+      const fullAreaScale = islandContentScaleForWorkArea(2100 * dpr, 1180 * dpr, dpr);
+      expect(fullAreaScale).toBeCloseTo(0.625);
+      const minimumScale = islandContentScaleForWorkArea(2100 * 0.62 * dpr, 1180 * 0.62 * dpr, dpr);
+      expect(minimumScale).toBeCloseTo(0.3875);
+    }
+    expect(islandContentScaleForWorkArea(2100 * 0.64 * 1.25, 1180 * 0.64 * 1.25, 1.25)).toBeCloseTo(0.4);
+    expect(islandContentScaleForWorkArea(2100 * 0.88 * 1.5, 1180 * 0.88 * 1.5, 1.5)).toBeCloseTo(0.55);
+    expect(islandContentScaleForWorkArea(2100 * 0.992, 1180 * 0.992, 1)).toBeCloseTo(0.62);
+
+    for (const scale of expectedScales) {
+      for (const dpr of dprs) {
+        const baseGeometry = navigationGeometry("music", 0, 45);
+        const visualGeometry = scaleIslandGeometry(baseGeometry, scale);
+        const progress = 0.37;
+        const visibleGap = islandAnchorGap(scale, progress);
+        expect(visibleGap).toBeCloseTo(22 * scale * (1 - progress));
+
+        for (const style of styles) {
+          for (const edge of edges) {
+            // These are the same production helpers used by App placement,
+            // region submission, and IslandSurface rendering.
+            const host = navigationHostFor(style, edge, 80, scale);
+            const regionOrigin = interactionSurfaceOffsetFor(
+              host, visualGeometry, style, edge, scale, visibleGap,
+            );
+            if (edge === "top") {
+              expect(regionOrigin.y).toBeCloseTo(visibleGap);
+              expect(regionOrigin.x).toBeCloseTo((host.width - visualGeometry.width) / 2);
+            } else if (edge === "bottom") {
+              expect(regionOrigin.y).toBeCloseTo(host.height - visibleGap - visualGeometry.height);
+              expect(regionOrigin.x).toBeCloseTo((host.width - visualGeometry.width) / 2);
+            } else if (edge === "left") {
+              expect(regionOrigin.x).toBeCloseTo(visibleGap);
+              expect(regionOrigin.y).toBeCloseTo((host.height - visualGeometry.height) / 2);
+            } else {
+              expect(regionOrigin.x).toBeCloseTo(host.width - visibleGap - visualGeometry.width);
+              expect(regionOrigin.y).toBeCloseTo((host.height - visualGeometry.height) / 2);
+            }
+
+            const physicalHost = physicalHostSizeFor(host, dpr);
+            const workArea = { x: -1920, y: -90, width: 1920, height: 1020 };
+            const windowBounds = placementFor(workArea, physicalHost, edge, 37);
+            expect(windowBounds.x).toBeGreaterThanOrEqual(workArea.x);
+            expect(windowBounds.y).toBeGreaterThanOrEqual(workArea.y);
+            expect(windowBounds.x + windowBounds.width).toBeLessThanOrEqual(workArea.x + workArea.width);
+            expect(windowBounds.y + windowBounds.height).toBeLessThanOrEqual(workArea.y + workArea.height);
+
+            // Native cursor code computes (screen physical - window physical
+            // origin) / scaleFactor. Rounding a CSS point to a physical screen
+            // pixel must therefore return to the same hit point within 1 CSS px.
+            const localPoint = {
+              x: regionOrigin.x + visualGeometry.width * 0.43,
+              y: regionOrigin.y + visualGeometry.height * 0.61,
+            };
+            const cursorPhysical = {
+              x: windowBounds.x + Math.round(localPoint.x * dpr),
+              y: windowBounds.y + Math.round(localPoint.y * dpr),
+            };
+            const nativeLocal = {
+              x: (cursorPhysical.x - windowBounds.x) / dpr,
+              y: (cursorPhysical.y - windowBounds.y) / dpr,
+            };
+            expect(Math.abs(nativeLocal.x - localPoint.x)).toBeLessThanOrEqual(1);
+            expect(Math.abs(nativeLocal.y - localPoint.y)).toBeLessThanOrEqual(1);
+          }
+        }
+      }
+    }
+  });
+
+  it("preserves the two physical-pixel reveal after logical-to-physical placement at fractional scales", () => {
+    const dpr = 1.5;
+    const styles = ["floating", "edge"] as const;
+    for (const scale of [0.3875, 0.4, 0.55, 0.62, 0.625]) {
+      for (const style of styles) {
+        for (const edge of ["top", "right", "bottom", "left"] as const) {
+          const host = navigationHostFor(style, edge, 80, scale);
+          const physicalHost = physicalHostSizeFor(host, dpr);
+          const compact = geometryFor("compact", 45, edge);
+          const logicalOffset = interactionSurfaceOffsetFor(host, compact, style, edge, scale);
+          const physicalOffset = { x: logicalOffset.x * dpr, y: logicalOffset.y * dpr };
+          const physicalCompact = { ...compact, width: compact.width * dpr, height: compact.height * dpr };
+          const shown = placementFor({ x: -1500, y: 35, width: 1500, height: 900 }, physicalHost, edge, 50);
+          const hidden = hiddenPlacementFor(shown, physicalOffset, physicalCompact, edge, 2);
+          if (edge === "top") expect(Math.abs(hidden.y + physicalOffset.y + physicalCompact.height - (shown.y + 2))).toBeLessThanOrEqual(0.5);
+          if (edge === "right") expect(Math.abs(hidden.x + physicalOffset.x - (shown.x + physicalHost.width - 2))).toBeLessThanOrEqual(0.5);
+          if (edge === "bottom") expect(Math.abs(hidden.y + physicalOffset.y - (shown.y + physicalHost.height - 2))).toBeLessThanOrEqual(0.5);
+          if (edge === "left") expect(Math.abs(hidden.x + physicalOffset.x + physicalCompact.width - (shown.x + 2))).toBeLessThanOrEqual(0.5);
         }
       }
     }

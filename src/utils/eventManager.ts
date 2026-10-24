@@ -241,11 +241,11 @@ export async function onDebounced(
   return eventManager.on(event, handler, { debounce: delay });
 }
 
-// 便捷函数：注册媒体更新监听器（自动节流）
+// 便捷函数：媒体状态事件逐条交付，避免在前端丢掉最终播放状态或delta字段
 export async function onMediaUpdate(
   handler: (payload: any) => unknown
 ): Promise<() => void> {
-  return onThrottled(Events.MEDIA_UPDATE, handler, 500);
+  return eventManager.on(Events.MEDIA_UPDATE, handler);
 }
 
 // 便捷函数：注册频谱监听器（自动节流）

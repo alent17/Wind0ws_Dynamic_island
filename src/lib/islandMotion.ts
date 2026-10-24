@@ -1,13 +1,14 @@
-import { ISLAND_OVERSHOOT } from "./islandGeometry";
+import { ISLAND_OVERSHOOT, type IslandMode } from "./islandGeometry";
 
 export const ISLAND_MOTION = {
   crossAxisDuration: 280,
   outwardDelay: 0,
-  outwardDuration: 240,
+  outwardDuration: 420,
   settleDuration: 60,
   radiusDuration: 320,
-  collapseDuration: 240,
-  hoverDuration: 140,
+  collapseDuration: 360,
+  hoverDuration: 240,
+  layoutDuration: 240,
   styleDuration: 180,
   overshoot: ISLAND_OVERSHOOT,
 } as const;
@@ -54,8 +55,25 @@ export function cubicBezierEasing(x1: number, y1: number, x2: number, y2: number
   };
 }
 
-export const islandMorphEasing = cubicBezierEasing(0.22, 0.8, 0.2, 1);
+export const islandMorphEasing = cubicBezierEasing(0.25, 0.1, 0.25, 1);
+export const islandHoverEasing = cubicBezierEasing(0.3, 0, 0.2, 1);
 export const islandSettleEasing = cubicBezierEasing(0.23, 1, 0.32, 1);
+
+export function islandShapeMotion(from: IslandMode, to: IslandMode, instant = false) {
+  if (instant) return { duration: 0, easing: islandMorphEasing };
+  if (to === "expanded" && from !== "expanded") {
+    return { duration: ISLAND_MOTION.outwardDuration, easing: islandMorphEasing };
+  }
+  if (from === "expanded" && (to === "compact" || to === "hover")) {
+    return { duration: ISLAND_MOTION.collapseDuration, easing: islandMorphEasing };
+  }
+  if ((from === "compact" || from === "hover") && (to === "compact" || to === "hover") && from !== to) {
+    return { duration: ISLAND_MOTION.hoverDuration, easing: islandHoverEasing };
+  }
+  // Page, settings and style changes keep their existing timing. Hover must
+  // not borrow the more abrupt settling curve used for those layout changes.
+  return { duration: ISLAND_MOTION.layoutDuration, easing: islandSettleEasing };
+}
 
 // Keep both layouts attached to the same edge while their shared elements move.
 export function anchoredLayoutOffset(
@@ -68,5 +86,3 @@ export function anchoredLayoutOffset(
   if (edge === "left") return { x: 0, y: (surface.height - layout.height) / 2 };
   return { x: surface.width - layout.width, y: (surface.height - layout.height) / 2 };
 }
-
-export const ISLAND_SPRING = { stiffness: 0.08, damping: 0.85, precision: 0.01 } as const;

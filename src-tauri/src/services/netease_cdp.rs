@@ -1,11 +1,11 @@
 //! Bounded, IPv4-loopback-only CDP access for NetEase playback modes.
 //!
-//! This module is intentionally not wired to a Tauri command yet. Callers
-//! should run its synchronous operations away from the UI thread.
+//! Synchronous operations are dispatched away from the UI thread.
 
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
-    io::{Read, Write},
+    io::{BufRead, BufReader, Write},
     net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream},
     num::NonZeroU16,
     time::{Duration, Instant},
@@ -25,7 +25,7 @@ const MAX_PAGE_TARGETS: usize = 64;
 const MAX_COMMAND_BYTES: usize = 16 * 1024;
 const MAX_UNMATCHED_MESSAGES: usize = 8;
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(400);
-const IO_TIMEOUT: Duration = Duration::from_millis(500);
+const IO_TIMEOUT: Duration = Duration::from_secs(5);
 const OPERATION_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,6 +42,17 @@ pub struct VerifiedModeAction {
     pub observed: PlaybackMode,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NeteaseProgress {
+    pub track_id: String,
+    pub play_id: String,
+    pub title: String,
+    pub artist: String,
+    pub position_ms: u64,
+    pub duration_ms: u64,
+}
+
 #[derive(Debug)]
 pub enum CdpError {
     InvalidPort,
@@ -51,6 +62,9 @@ pub enum CdpError {
     NoInitializedPage,
     AmbiguousPage,
     UnsupportedCurrentMode,
+    UnsupportedTrack,
+    InvalidPosition,
+    TrackChanged,
     VerificationFailed,
     InvalidCommand,
     TimedOut,
@@ -68,11 +82,34 @@ impl std::fmt::Display for CdpError {
             Self::NoInitializedPage => f.write_str("未找到已初始化的网易云播放页面"),
             Self::AmbiguousPage => f.write_str("发现多个已初始化的网易云播放页面"),
             Self::UnsupportedCurrentMode => f.write_str("当前网易云播放模式不支持切换"),
-            Self::VerificationFailed => f.write_str("网易云播放模式读回校验失败"),
+            Self::UnsupportedTrack => f.write_str("网易云当前歌曲不是可控制的普通音频"),
+            Self::InvalidPosition => f.write_str("网易云跳转位置超出当前歌曲时长"),
+            Self::TrackChanged => f.write_str("网易云在跳转期间切换了歌曲或播放实例"),
+            Self::VerificationFailed => f.write_str("网易云操作读回校验失败"),
             Self::InvalidCommand => f.write_str("CDP 命令无效或超出长度限制"),
             Self::TimedOut => f.write_str("本机 CDP 操作超时"),
             Self::Protocol => f.write_str("本机 CDP 返回了错误响应"),
             Self::WebSocket(_) => f.write_str("本机 CDP WebSocket 连接失败"),
+        }
+    }
+}
+
+impl CdpError {
+    #[cfg(feature = "c2-media-probe")]
+    pub(crate) fn diagnostic_kind(&self) -> &'static str {
+        match self {
+            Self::TrackChanged => "identity_mismatch",
+            Self::NoInitializedPage => "no_initialized_page",
+            Self::AmbiguousPage => "ambiguous_page",
+            Self::TimedOut => "timeout",
+            Self::Io(_) => "io",
+            Self::InvalidResponse | Self::Protocol | Self::WebSocket(_) => "protocol",
+            Self::UnsafeWebSocketEndpoint => "unsafe_endpoint",
+            Self::InvalidPort | Self::InvalidCommand => "invalid_request",
+            Self::UnsupportedCurrentMode | Self::UnsupportedTrack | Self::InvalidPosition => {
+                "unsupported"
+            }
+            Self::VerificationFailed => "verification_failed",
         }
     }
 }
@@ -142,8 +179,13 @@ impl LocalCdpClient {
     /// Reads the current ordinary mode from exactly one initialized NetEase page.
     pub fn playback_mode(self) -> Result<Option<PlaybackMode>, CdpError> {
         let deadline = Instant::now() + OPERATION_TIMEOUT;
-        let (_, raw_mode) = self.initialized_page(deadline)?;
-        Ok(mode_from_provider(&raw_mode))
+        let (_, value) =
+            self.initialized_page_using(deadline, CLOUD_MUSIC_READ_EXPRESSION, "mode")?;
+        let mode = value
+            .get("mode")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        Ok(mode_from_provider(mode))
     }
 
     /// Sets an allowlisted ordinary mode and verifies the store's read-back.
@@ -153,8 +195,13 @@ impl LocalCdpClient {
         requested: PlaybackMode,
     ) -> Result<VerifiedModeAction, CdpError> {
         let deadline = Instant::now() + OPERATION_TIMEOUT;
-        let (mut connection, current) = self.initialized_page(deadline)?;
-        if mode_from_provider(&current).is_none() {
+        let (mut connection, current_value) =
+            self.initialized_page_using(deadline, CLOUD_MUSIC_READ_EXPRESSION, "mode")?;
+        let current = current_value
+            .get("mode")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if mode_from_provider(current).is_none() {
             return Err(CdpError::UnsupportedCurrentMode);
         }
 
@@ -189,7 +236,78 @@ impl LocalCdpClient {
         })
     }
 
-    fn initialized_page(self, deadline: Instant) -> Result<(CdpConnection, String), CdpError> {
+    /// Executes the only verified NetEase seek action and checks actual playback progress.
+    pub fn seek_position(
+        self,
+        position_ms: u64,
+        expected_title: &str,
+        expected_artist: &str,
+    ) -> Result<NeteaseProgress, CdpError> {
+        let deadline = Instant::now() + Duration::from_secs(6);
+        let (mut connection, initial) =
+            self.initialized_page_using(deadline, CLOUD_MUSIC_PROGRESS_EXPRESSION, "ready")?;
+        let initial_progress = parse_netease_progress(&initial)?;
+        validate_expected_identity(&initial_progress, expected_title, expected_artist)?;
+        if position_ms >= initial_progress.duration_ms {
+            return Err(CdpError::InvalidPosition);
+        }
+        let expression = cloud_music_seek_expression(
+            position_ms as f64 / 1000.0,
+            expected_title,
+            expected_artist,
+        );
+        let response = connection.request(
+            "Runtime.evaluate",
+            &json!({ "expression": expression, "returnByValue": true, "awaitPromise": true }),
+            deadline,
+        )?;
+        if response.get("exceptionDetails").is_some() {
+            return Err(CdpError::Protocol);
+        }
+        let value = response
+            .pointer("/result/value")
+            .ok_or(CdpError::InvalidResponse)?;
+        if value.get("verified").and_then(Value::as_bool) != Some(true) {
+            if value.get("unsupported").and_then(Value::as_bool) == Some(true) {
+                return Err(CdpError::UnsupportedTrack);
+            }
+            if value.get("invalidPosition").and_then(Value::as_bool) == Some(true) {
+                return Err(CdpError::InvalidPosition);
+            }
+            if value.get("trackChanged").and_then(Value::as_bool) == Some(true) {
+                return Err(CdpError::TrackChanged);
+            }
+            if value.get("identityMismatch").and_then(Value::as_bool) == Some(true) {
+                return Err(CdpError::TrackChanged);
+            }
+            if value.get("timedOut").and_then(Value::as_bool) == Some(true) {
+                return Err(CdpError::TimedOut);
+            }
+            return Err(CdpError::VerificationFailed);
+        }
+        parse_netease_progress(value)
+    }
+
+    /// Reads an identity-bound progress sample from the initialized player page.
+    pub fn read_progress(
+        self,
+        expected_title: &str,
+        expected_artist: &str,
+    ) -> Result<NeteaseProgress, CdpError> {
+        let deadline = Instant::now() + OPERATION_TIMEOUT;
+        let (_, value) =
+            self.initialized_page_using(deadline, CLOUD_MUSIC_PROGRESS_EXPRESSION, "ready")?;
+        let progress = parse_netease_progress(&value)?;
+        validate_expected_identity(&progress, expected_title, expected_artist)?;
+        Ok(progress)
+    }
+
+    fn initialized_page_using(
+        self,
+        deadline: Instant,
+        expression: &str,
+        ready_key: &str,
+    ) -> Result<(CdpConnection, Value), CdpError> {
         // Validate the browser-level endpoint returned by CDP as well as every
         // page endpoint. We never connect to a host supplied by that response.
         let version = self.get_json("/json/version", deadline)?;
@@ -229,26 +347,25 @@ impl LocalCdpClient {
             let Ok(mut connection) = self.connect_path(path, deadline) else {
                 continue;
             };
-            let Ok(response) = connection.request(
-                "Runtime.evaluate",
-                &json!({
-                    "expression": CLOUD_MUSIC_READ_EXPRESSION,
-                    "returnByValue": true,
-                    "awaitPromise": true
-                }),
-                deadline,
-            ) else {
+            let params = runtime_evaluate_params(expression);
+            let Ok(response) = connection.request("Runtime.evaluate", &params, deadline) else {
                 continue;
             };
             if response.get("exceptionDetails").is_some() {
                 continue;
             }
-            if let Some(mode) = response
-                .pointer("/result/value/mode")
-                .and_then(Value::as_str)
-                .filter(|mode| !mode.is_empty() && mode.len() <= 64)
-            {
-                matches.push((connection, mode.to_owned()));
+            if let Some(value) = response.pointer("/result/value") {
+                let ready = if ready_key == "ready" {
+                    value.get("ready").and_then(Value::as_bool) == Some(true)
+                } else {
+                    value
+                        .get(ready_key)
+                        .and_then(Value::as_str)
+                        .is_some_and(|field| !field.is_empty() && field.len() <= 64)
+                };
+                if ready {
+                    matches.push((connection, value.clone()));
+                }
             }
         }
 
@@ -271,10 +388,7 @@ impl LocalCdpClient {
             "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\nAccept: application/json\r\n\r\n",
             self.port()
         )?;
-        let max_response = (MAX_HEADER_BYTES + MAX_BODY_BYTES + 1) as u64;
-        let mut response = Vec::with_capacity(1024);
-        stream.take(max_response).read_to_end(&mut response)?;
-        Ok(parse_http_json_body(&response)?.to_vec())
+        read_http_json_response(&mut stream, deadline)
     }
 
     fn connect_tcp(self, deadline: Instant) -> Result<TcpStream, CdpError> {
@@ -369,19 +483,11 @@ fn validate_required_string(value: &Value, key: &str) -> Result<(), CdpError> {
     required_string(value, key).map(|_| ())
 }
 
-fn parse_http_json_body(response: &[u8]) -> Result<&[u8], CdpError> {
-    if response.len() > MAX_HEADER_BYTES + MAX_BODY_BYTES {
+fn parse_http_json_headers(headers: &[u8]) -> Result<usize, CdpError> {
+    if headers.len() > MAX_HEADER_BYTES {
         return Err(CdpError::InvalidResponse);
     }
-    let header_end = response
-        .windows(4)
-        .position(|window| window == b"\r\n\r\n")
-        .ok_or(CdpError::InvalidResponse)?;
-    if header_end > MAX_HEADER_BYTES {
-        return Err(CdpError::InvalidResponse);
-    }
-    let headers =
-        std::str::from_utf8(&response[..header_end]).map_err(|_| CdpError::InvalidResponse)?;
+    let headers = std::str::from_utf8(headers).map_err(|_| CdpError::InvalidResponse)?;
     let mut lines = headers.split("\r\n");
     let status = lines.next().ok_or(CdpError::InvalidResponse)?;
     if status != "HTTP/1.1 200 OK" && status != "HTTP/1.0 200 OK" {
@@ -415,11 +521,83 @@ fn parse_http_json_body(response: &[u8]) -> Result<&[u8], CdpError> {
             return Err(CdpError::InvalidResponse);
         }
     }
+    if !is_json {
+        return Err(CdpError::InvalidResponse);
+    }
+    content_length.ok_or(CdpError::InvalidResponse)
+}
+
+fn parse_http_json_body(response: &[u8]) -> Result<&[u8], CdpError> {
+    if response.len() > MAX_HEADER_BYTES + 4 + MAX_BODY_BYTES {
+        return Err(CdpError::InvalidResponse);
+    }
+    let header_end = response
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .ok_or(CdpError::InvalidResponse)?;
+    let content_length = parse_http_json_headers(&response[..header_end])?;
     let body = &response[header_end + 4..];
-    if !is_json || body.len() != content_length.ok_or(CdpError::InvalidResponse)? {
+    if body.len() != content_length {
         return Err(CdpError::InvalidResponse);
     }
     Ok(body)
+}
+
+fn read_http_json_response(stream: &mut TcpStream, deadline: Instant) -> Result<Vec<u8>, CdpError> {
+    let mut reader = BufReader::with_capacity(4096, stream);
+    let max_header_section = MAX_HEADER_BYTES + 4;
+    let mut response = Vec::with_capacity(1024);
+    let header_end = loop {
+        if let Some(header_end) = response.windows(4).position(|window| window == b"\r\n\r\n") {
+            break header_end;
+        }
+        let room = max_header_section.saturating_sub(response.len());
+        if room == 0 {
+            return Err(CdpError::InvalidResponse);
+        }
+        reader
+            .get_mut()
+            .set_read_timeout(Some(remaining_timeout(deadline, IO_TIMEOUT)?))?;
+        let available = reader.fill_buf()?;
+        if available.is_empty() {
+            return Err(CdpError::InvalidResponse);
+        }
+        let count = available.len().min(room);
+        response.extend_from_slice(&available[..count]);
+        reader.consume(count);
+    };
+    if header_end > MAX_HEADER_BYTES {
+        return Err(CdpError::InvalidResponse);
+    }
+
+    let content_length = parse_http_json_headers(&response[..header_end])?;
+    let expected_length = header_end
+        .checked_add(4)
+        .and_then(|header| header.checked_add(content_length))
+        .filter(|length| *length <= MAX_HEADER_BYTES + 4 + MAX_BODY_BYTES)
+        .ok_or(CdpError::InvalidResponse)?;
+    if response.len() > expected_length {
+        return Err(CdpError::InvalidResponse);
+    }
+
+    while response.len() < expected_length {
+        reader
+            .get_mut()
+            .set_read_timeout(Some(remaining_timeout(deadline, IO_TIMEOUT)?))?;
+        let available = reader.fill_buf()?;
+        if available.is_empty() {
+            return Err(CdpError::InvalidResponse);
+        }
+        let remaining = expected_length - response.len();
+        if available.len() > remaining {
+            return Err(CdpError::InvalidResponse);
+        }
+        let count = available.len();
+        response.extend_from_slice(available);
+        reader.consume(count);
+    }
+
+    Ok(parse_http_json_body(&response)?.to_vec())
 }
 
 fn validate_endpoint<'a>(
@@ -459,7 +637,7 @@ fn is_netease_page_url(url: &str) -> bool {
             && normalized.ends_with("app.html"))
 }
 
-const CLOUD_MUSIC_CAPTURE_TOOL: &str = r#"function captureTool() {
+const CLOUD_MUSIC_CAPTURE_TOOL: &str = r#"function captureTool(withProgress = false) {
   const queue = globalThis.webpackJsonp;
   if (!Array.isArray(queue) || queue.push === Array.prototype.push) return {};
   const main = queue.find(chunk => chunk && chunk[1] && chunk[1][8] &&
@@ -475,7 +653,9 @@ const CLOUD_MUSIC_CAPTURE_TOOL: &str = r#"function captureTool() {
     if (!req || !req.c || !req.c[8] || !req.c[previousEntry]) return {};
     const tool = req.c[8].exports.a;
     if (!tool || !tool.inited || !tool.app || !tool.app._store || typeof tool.getStore !== 'function') return {};
-    return tool;
+    const progress = withProgress && req.c[148] && req.c[148].exports && req.c[148].exports.b;
+    if (withProgress && typeof progress !== 'function') return {};
+    return { tool, progress };
   } catch (_) {
     return {};
   } finally {
@@ -486,15 +666,136 @@ const CLOUD_MUSIC_CAPTURE_TOOL: &str = r#"function captureTool() {
 }"#;
 
 const CLOUD_MUSIC_READ_EXPRESSION: &str = r#"(() => {
-  const tool = (__CAPTURE_TOOL__)();
+  const { tool } = (__CAPTURE_TOOL__)();
   const playing = tool.getStore().playing;
   return playing && typeof playing.playingMode === 'string' ? { mode: playing.playingMode } : {};
 })()"#;
 
+const CLOUD_MUSIC_PROGRESS_EXPRESSION: &str = r#"(() => {
+  const captured = (__CAPTURE_TOOL__)(true);
+  const tool = captured.tool;
+  const playing = tool && tool.getStore().playing;
+  if (!playing || playing.isLoadingFirst || playing.restoreResource || playing.isPlayingVideo || !playing.playId) return {};
+  const native = captured.progress();
+  const track = playing.curPlaying && playing.curPlaying.track;
+  const artists = track && (track.artists || track.ar);
+  const title = String(playing.resourceName || track && track.name || '');
+  const artist = String(playing.resourceArtist || (Array.isArray(artists) ? artists.map(item => item && item.name || '').filter(Boolean).join(', ') : ''));
+  const position = Number(native && native.current);
+  const duration = Number(playing.resourceDuration);
+  const trackId = String(playing.onlineResourceId || '');
+  if (!native || native.playId !== playing.playId || !trackId || !title || !Number.isFinite(position) || !Number.isFinite(duration) || position < 0 || duration <= 0 || position > duration) return {};
+  return { ready: true, trackId, playId: String(playing.playId), title, artist, positionMs: Math.round(position * 1000), durationMs: Math.round(duration * 1000) };
+})()"#;
+
+const CLOUD_MUSIC_SEEK_EXPRESSION: &str = r#"(async () => {
+  const captured = (__CAPTURE_TOOL__)(true);
+  const tool = captured.tool;
+  const requested = __REQUESTED_SECONDS__;
+  const expectedIdentity = __EXPECTED_IDENTITY__;
+  const read = () => {
+    const playing = tool && tool.getStore().playing;
+    if (!playing || playing.isLoadingFirst || playing.restoreResource || playing.isPlayingVideo || !playing.playId) return null;
+    const native = captured.progress();
+    const track = playing.curPlaying && playing.curPlaying.track;
+    const artists = track && (track.artists || track.ar);
+    const artist = String(playing.resourceArtist || (Array.isArray(artists) ? artists.map(item => item && item.name || '').filter(Boolean).join(', ') : ''));
+    const position = Number(native && native.current);
+    const duration = Number(playing.resourceDuration);
+    const trackId = String(playing.onlineResourceId || '');
+    if (!native || native.playId !== playing.playId || !trackId || !Number.isFinite(position) || !Number.isFinite(duration) || position < 0 || duration <= 0 || position > duration) return null;
+    return { trackId, playId: playing.playId, title: String(playing.resourceName || track && track.name || ''), artist, position, duration };
+  };
+  const before = read();
+  if (!before) return { verified: false, unsupported: true };
+  if (before.title !== expectedIdentity.title || before.artist !== expectedIdentity.artist) return { verified: false, identityMismatch: true };
+  if (!Number.isFinite(requested) || requested < 0 || requested >= before.duration) return { verified: false, invalidPosition: true };
+  await tool.getDispatch()({ type: 'playing/setPlayingPosition', payload: { duration: requested } });
+  const deadline = Date.now() + 4000;
+  while (Date.now() <= deadline) {
+    const after = read();
+    if (!after || after.trackId !== before.trackId || after.playId !== before.playId || after.title !== before.title || after.artist !== before.artist) return { verified: false, trackChanged: true };
+    if (Math.abs(after.position - requested) <= 1) {
+      return { verified: true, trackId: after.trackId, playId: String(after.playId), title: after.title, artist: after.artist, positionMs: Math.round(after.position * 1000), durationMs: Math.round(after.duration * 1000) };
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return { verified: false, timedOut: true };
+})()"#;
+
+fn cloud_music_seek_expression(
+    requested_seconds: f64,
+    expected_title: &str,
+    expected_artist: &str,
+) -> String {
+    let requested =
+        serde_json::to_string(&requested_seconds).unwrap_or_else(|_| "null".to_string());
+    let expected_identity = serde_json::to_string(&json!({
+        "title": expected_title,
+        "artist": expected_artist,
+    }))
+    .unwrap_or_else(|_| "null".to_string());
+    CLOUD_MUSIC_SEEK_EXPRESSION
+        .replace("__CAPTURE_TOOL__", CLOUD_MUSIC_CAPTURE_TOOL)
+        .replace("__REQUESTED_SECONDS__", &requested)
+        .replace("__EXPECTED_IDENTITY__", &expected_identity)
+}
+
+fn runtime_evaluate_params(expression: &str) -> Value {
+    json!({
+        "expression": expression.replace("__CAPTURE_TOOL__", CLOUD_MUSIC_CAPTURE_TOOL),
+        "returnByValue": true,
+        "awaitPromise": true
+    })
+}
+
+fn parse_netease_progress(value: &Value) -> Result<NeteaseProgress, CdpError> {
+    let position_ms = value
+        .get("positionMs")
+        .and_then(Value::as_u64)
+        .ok_or(CdpError::InvalidResponse)?;
+    let duration_ms = value
+        .get("durationMs")
+        .and_then(Value::as_u64)
+        .ok_or(CdpError::InvalidResponse)?;
+    let track_id = required_string(value, "trackId")?;
+    let play_id = required_string(value, "playId")?;
+    let title = required_string(value, "title")?;
+    let artist = required_string(value, "artist")?;
+    if position_ms > duration_ms
+        || duration_ms == 0
+        || track_id.len() > 128
+        || play_id.len() > 128
+        || title.len() > 1024
+        || artist.len() > 1024
+    {
+        return Err(CdpError::InvalidResponse);
+    }
+    Ok(NeteaseProgress {
+        track_id: track_id.to_string(),
+        play_id: play_id.to_string(),
+        title: title.to_string(),
+        artist: artist.to_string(),
+        position_ms,
+        duration_ms,
+    })
+}
+
+fn validate_expected_identity(
+    progress: &NeteaseProgress,
+    expected_title: &str,
+    expected_artist: &str,
+) -> Result<(), CdpError> {
+    if progress.title != expected_title || progress.artist != expected_artist {
+        return Err(CdpError::TrackChanged);
+    }
+    Ok(())
+}
+
 fn cloud_music_set_expression(requested: &str) -> String {
     let requested = serde_json::to_string(requested).unwrap_or_else(|_| "null".to_string());
     let expression = r#"(async () => {
-  const tool = (__CAPTURE_TOOL__)();
+  const tool = (__CAPTURE_TOOL__)().tool;
   const modes = ['playOrder', 'playCycle', 'playOneCycle', 'playRandom'];
   const requested = __REQUESTED_MODE__;
   const previous = tool.getStore().playing.playingMode;
@@ -573,6 +874,43 @@ impl CdpConnection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{net::TcpListener, thread};
+
+    fn read_test_response(
+        parts: Vec<Vec<u8>>,
+        keep_open_after_body: bool,
+        fragment_delay: Duration,
+        deadline: Duration,
+    ) -> Result<Vec<u8>, CdpError> {
+        let listener = TcpListener::bind(SocketAddrV4::new(LOOPBACK, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let server = thread::spawn(move || {
+            let (mut peer, _) = listener.accept().unwrap();
+            for (index, part) in parts.iter().enumerate() {
+                if peer.write_all(part).is_err() {
+                    return;
+                }
+                let _ = peer.flush();
+                if index + 1 < parts.len() && !fragment_delay.is_zero() {
+                    thread::sleep(fragment_delay);
+                }
+            }
+            if keep_open_after_body {
+                let _ = release_rx.recv_timeout(Duration::from_secs(2));
+            }
+        });
+
+        let mut client = TcpStream::connect(address).unwrap();
+        let started = Instant::now();
+        let result = read_http_json_response(&mut client, started + deadline);
+        drop(client);
+        if keep_open_after_body {
+            let _ = release_tx.send(());
+        }
+        server.join().unwrap();
+        result
+    }
 
     #[test]
     fn validates_browser_and_page_websocket_host_port_and_path() {
@@ -637,6 +975,37 @@ mod tests {
     }
 
     #[test]
+    fn runtime_evaluate_params_expands_mode_and_progress_capture_tool() {
+        for (template, expects_progress_capture) in [
+            (CLOUD_MUSIC_READ_EXPRESSION, false),
+            (CLOUD_MUSIC_PROGRESS_EXPRESSION, true),
+        ] {
+            let params = runtime_evaluate_params(template);
+            let expression = params
+                .get("expression")
+                .and_then(Value::as_str)
+                .expect("Runtime.evaluate expression string");
+            assert!(!expression.contains("__CAPTURE_TOOL__"));
+            assert!(expression.contains("function captureTool(withProgress = false)"));
+            assert_eq!(
+                params.get("returnByValue").and_then(Value::as_bool),
+                Some(true)
+            );
+            assert_eq!(
+                params.get("awaitPromise").and_then(Value::as_bool),
+                Some(true)
+            );
+            if expects_progress_capture {
+                assert!(expression.contains("const captured = (function captureTool"));
+                assert!(expression.contains("})(true);"));
+            } else {
+                assert!(expression.contains("const { tool } = (function captureTool"));
+                assert!(expression.contains("})();"));
+            }
+        }
+    }
+
+    #[test]
     fn recognizes_only_netease_page_schemes_and_initialization_urls() {
         for url in [
             "orpheus://orpheus/pub/app.html",
@@ -665,5 +1034,79 @@ mod tests {
         assert!(parse_http_json_body(incomplete).is_err());
         let chunked = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n{}";
         assert!(parse_http_json_body(chunked).is_err());
+        let extra =
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}x";
+        assert!(parse_http_json_body(extra).is_err());
+        let duplicate_length = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\ncontent-length: 2\r\n\r\n{}";
+        assert!(parse_http_json_body(duplicate_length).is_err());
+        let oversized = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n",
+            MAX_BODY_BYTES + 1
+        );
+        assert!(parse_http_json_body(oversized.as_bytes()).is_err());
     }
+
+    #[test]
+    fn reads_content_length_body_while_server_keeps_connection_open() {
+        let header =
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n";
+        let body = b"{}";
+        let result = read_test_response(
+            vec![header.to_vec(), body.to_vec()],
+            true,
+            Duration::from_millis(20),
+            Duration::from_secs(1),
+        );
+        assert_eq!(result.unwrap(), body);
+    }
+
+    #[test]
+    fn rejects_truncated_content_length_body_when_peer_closes() {
+        let response =
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 3\r\n\r\n{}";
+        let result = read_test_response(
+            vec![response.to_vec()],
+            false,
+            Duration::ZERO,
+            Duration::from_secs(1),
+        );
+        assert!(matches!(result, Err(CdpError::InvalidResponse)));
+    }
+
+    #[test]
+    fn slow_fragmented_http_response_respects_the_overall_deadline() {
+        let response =
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}";
+        let parts = response.chunks(10).map(|chunk| chunk.to_vec()).collect();
+        let result = read_test_response(
+            parts,
+            false,
+            Duration::from_millis(60),
+            Duration::from_millis(220),
+        );
+        assert!(matches!(result, Err(CdpError::TimedOut)));
+    }
+
+    #[test]
+    fn parses_progress_sample_with_track_and_play_instance_identity() {
+        let value = json!({
+            "ready": true,
+            "trackId": "track-17",
+            "playId": "play-29",
+            "title": "Song",
+            "artist": "Artist",
+            "positionMs": 12_500,
+            "durationMs": 180_000,
+        });
+        let progress = parse_netease_progress(&value).unwrap();
+        assert_eq!(progress.track_id, "track-17");
+        assert_eq!(progress.play_id, "play-29");
+        assert_eq!(progress.position_ms, 12_500);
+        assert!(validate_expected_identity(&progress, "Other", "Artist").is_err());
+        assert!(parse_netease_progress(&json!({
+            "trackId": "track-17", "positionMs": 10, "durationMs": 180_000,
+        }))
+        .is_err());
+    }
+
 }

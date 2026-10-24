@@ -27,8 +27,8 @@ export const windowApi = {
     return invoke("toggle_timer_window");
   },
 
-  async closeFloatingWindow(): Promise<void> {
-    return invoke("close_floating_window");
+  async closeFloatingWindow(instanceToken?: string): Promise<void> {
+    return invoke("close_floating_window", instanceToken ? { instanceToken } : {});
   },
 
   async resetFloatingWindow(): Promise<void> {

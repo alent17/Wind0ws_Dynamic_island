@@ -1,6 +1,37 @@
 import { test, expect } from "@playwright/test";
 
 test.use({ reducedMotion: "no-preference" });
+
+for (const remembered of [false, true]) test(`long ${remembered ? "remembered" : "current"} title animates only while the music panel is visible`, async ({ page }) => {
+  await page.goto("/ui-tests/island-fixture.html");
+  const longTitle = "A deliberately long fixture title that must scroll across the visible music panel";
+  await page.evaluate(({remembered,longTitle}) => (window as any).configureIsland({
+    idle:remembered,
+    title:longTitle,
+    rememberedTitle:remembered ? longTitle : "",
+  }), {remembered,longTitle});
+  const marquee = page.locator(remembered ? ".idle-player .marquee-title span" : ".music-pane .marquee-title span");
+  await expect(marquee).toHaveCount(1);
+  await expect.poll(() => marquee.evaluate(element => element.getAnimations().some(animation => animation.playState === "running"))).toBe(false);
+  await page.evaluate(() => (window as any).configureIsland({mode:"expanded"}));
+  await expect.poll(() => marquee.evaluate(element => element.getAnimations().some(animation => animation.playState === "running"))).toBe(true);
+
+  await page.evaluate(() => (window as any).configureIsland({mode:"compact"}));
+  await expect.poll(() => marquee.evaluate(element => element.getAnimations().some(animation => animation.playState === "running"))).toBe(false);
+  await page.evaluate(() => (window as any).configureIsland({mode:"expanded"}));
+  await expect.poll(() => marquee.evaluate(element => element.getAnimations().some(animation => animation.playState === "running"))).toBe(true);
+
+  await page.evaluate(() => (window as any).configureIsland({visible:false}));
+  await expect(page.locator(".expanded-layer")).toHaveCount(0);
+  await page.evaluate(() => (window as any).configureIsland({visible:true,mode:"expanded"}));
+  await expect.poll(() => page.locator(remembered ? ".idle-player .marquee-title span" : ".music-pane .marquee-title span").evaluate(element => element.getAnimations().some(animation => animation.playState === "running"))).toBe(true);
+  await page.evaluate((selector) => {
+    (window as any).marqueeNode = document.querySelector(selector);
+    (window as any).unmountIsland();
+  }, remembered ? ".idle-player .marquee-title span" : ".music-pane .marquee-title span");
+  expect(await page.evaluate(() => (window as any).marqueeNode.getAnimations().some((animation: Animation) => animation.playState === "running"))).toBe(false);
+});
+
 for (const edge of ["top", "right", "bottom", "left"]) {
   test(`cover follows the live ${edge} layout and settles quickly`, async ({ page }) => {
     const errors: string[] = [];
@@ -105,4 +136,183 @@ test("scaled previews preserve artwork coordinates", async ({ page }) => {
   });
   expect(Math.abs(error.x)).toBeLessThan(1);
   expect(Math.abs(error.y)).toBeLessThan(1);
+});
+
+test("expansion leaves time to see the shell and cover move", async ({ page }) => {
+  await page.goto("/ui-tests/island-fixture.html");
+  await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true");
+  const sample = await page.evaluate(async () => {
+    const surface = document.querySelector<HTMLElement>(".island-surface")!;
+    const startHeight = parseFloat(surface.style.height);
+    (window as any).configureIsland({ mode: "expanded" });
+    const start = performance.now();
+    while (performance.now() - start < 100) await new Promise(requestAnimationFrame);
+    return { height: parseFloat(surface.style.height), startHeight,
+      settled: document.querySelector(".stage")!.getAttribute("data-settled") };
+  });
+  expect(sample.height).toBeGreaterThan(sample.startHeight);
+  expect(sample.settled).toBe("false");
+  await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true", { timeout: 650 });
+  const endHeight = await page.locator(".island-surface").evaluate((element) => parseFloat((element as HTMLElement).style.height));
+  // A short initial interval must not complete most of the motion.
+  expect((sample.height - sample.startHeight) / (endHeight - sample.startHeight)).toBeLessThan(.6);
+});
+
+test("an unfinished hover can expand without snapping the compact artwork", async ({ page }) => {
+  await page.goto("/ui-tests/island-fixture.html");
+  await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true");
+  const jump = await page.evaluate(async () => {
+    const configure = (window as any).configureIsland;
+    configure({ mode: "hover" });
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const cover = document.querySelector<HTMLElement>(".compact-cover")!;
+    const before = cover.getBoundingClientRect();
+    configure({ mode: "expanded" });
+    await Promise.resolve();
+    await Promise.resolve();
+    const after = cover.getBoundingClientRect();
+    return { x: after.x - before.x, y: after.y - before.y };
+  });
+  expect(Math.abs(jump.x)).toBeLessThan(1);
+  expect(Math.abs(jump.y)).toBeLessThan(1);
+  await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true", { timeout: 650 });
+});
+
+test("pointer hover grows gently and can return without a position jump", async ({ page }) => {
+  await page.goto("/ui-tests/island-fixture.html");
+  await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true");
+  await page.evaluate(() => {
+    const anchor = document.querySelector<HTMLElement>(".surface-anchor")!;
+    const surface = document.querySelector<HTMLElement>(".island-surface")!;
+    const cover = document.querySelector<HTMLElement>(".compact-cover")!;
+    (window as any).leaveSample = new Promise((resolve) => {
+      anchor.addEventListener("mouseleave", async () => {
+        const width = parseFloat(surface.style.width);
+        await Promise.resolve();
+        await Promise.resolve();
+        resolve({ width, after: parseFloat(surface.style.width) });
+      }, { once: true });
+    });
+    (window as any).hoverSample = new Promise((resolve) => {
+      anchor.addEventListener("mouseenter", async () => {
+        const start = performance.now();
+        const startWidth = parseFloat(surface.style.width);
+        const initialCover = cover.getBoundingClientRect();
+        await Promise.resolve();
+        await Promise.resolve();
+        const nextCover = cover.getBoundingClientRect();
+        while (performance.now() - start < 60) await new Promise(requestAnimationFrame);
+        const width = parseFloat(surface.style.width);
+        resolve({ startWidth, width, jumpX: nextCover.x - initialCover.x, jumpY: nextCover.y - initialCover.y });
+      }, { once: true });
+    });
+  });
+  await page.locator(".island-surface").hover();
+  const sample = await page.evaluate(() => (window as any).hoverSample);
+  expect(sample.width).toBeGreaterThan(sample.startWidth);
+  expect(sample.width - sample.startWidth).toBeLessThan(5.5);
+  expect(Math.abs(sample.jumpX)).toBeLessThan(.5);
+  expect(Math.abs(sample.jumpY)).toBeLessThan(.5);
+  await page.mouse.move(0, 0);
+  const leave = await page.evaluate(() => (window as any).leaveSample);
+  expect(Math.abs(leave.after - leave.width)).toBeLessThan(.5);
+  await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true", { timeout: 650 });
+  const width = await page.locator(".island-surface").evaluate((element) => parseFloat((element as HTMLElement).style.width));
+  expect(width).toBeCloseTo(sample.startWidth, 1);
+});
+
+test("page navigation focuses only the latest request and does not focus after collapse or hide", async ({page}) => {
+  await page.goto("/ui-tests/island-fixture.html");
+  await page.evaluate(() => {
+    (window as any).focusAttempts = [];
+    const original = HTMLButtonElement.prototype.focus;
+    HTMLButtonElement.prototype.focus = function(options?: FocusOptions) {
+      const target = this.matches(".page-back") ? "page-back"
+        : this.closest(".feature-menu") ? "menu-button"
+        : "other-button";
+      (window as any).focusAttempts.push(target);
+      return original.call(this, options);
+    };
+    (window as any).configureIsland({mode:"expanded",toolbar:true});
+  });
+  await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true");
+
+  // Reach a real non-music page through its production toolbar action.
+  await page.locator(".feature-menu button").nth(0).click({force:true});
+  const back = page.locator(".navigation-page .page-back");
+  await expect(back).toBeVisible();
+  await expect(back).toBeFocused();
+  await expect.poll(() => page.evaluate(() => (window as any).focusAttempts.at(-1))).toBe("page-back");
+
+  // Two production click handlers run in one task: the first asks for Music,
+  // the second replaces that request with Timer. The stale Music focus must not run.
+  await page.evaluate(() => {
+    const backButton = document.querySelector<HTMLButtonElement>(".page-back")!;
+    const timerButton = document.querySelectorAll<HTMLButtonElement>(".feature-menu button")[0];
+    (window as any).focusAttempts = [];
+    backButton.click();
+    timerButton.click();
+  });
+  await expect(back).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as any).focusAttempts)).toEqual(["page-back"]);
+
+  // Collapse during the pending Music navigation; the request must not attempt focus.
+  await page.evaluate(() => {
+    (window as any).focusAttempts = [];
+    document.querySelector<HTMLButtonElement>(".page-back")!.click();
+    (window as any).configureIsland({mode:"compact"});
+  });
+  await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true", {timeout:650});
+  await page.waitForTimeout(50);
+  expect(await page.evaluate(() => (window as any).focusAttempts)).toEqual([]);
+
+  // Hidden visibility also leaves no stale focus attempt while the layer is removed.
+  await page.evaluate(() => {
+    (window as any).configureIsland({mode:"expanded",visible:true});
+  });
+  await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true", {timeout:650});
+  await page.locator(".feature-menu button").nth(0).click({force:true});
+  await expect(page.locator(".navigation-page .page-back")).toBeVisible();
+  await page.evaluate(() => {
+    (window as any).focusAttempts = [];
+    document.querySelector<HTMLButtonElement>(".page-back")!.click();
+    (window as any).configureIsland({visible:false});
+  });
+  await expect(page.locator(".expanded-layer")).toHaveCount(0);
+  await page.waitForTimeout(50);
+  expect(await page.evaluate(() => (window as any).focusAttempts)).toEqual([]);
+});
+
+test("neutral control fills preserve existing island button proportions", async ({page}) => {
+  await page.goto("/ui-tests/island-fixture.html");
+  await page.evaluate(() => (window as any).configureIsland({mode:"expanded",toolbar:true}));
+  await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true");
+  const initial = await page.evaluate(() => {
+    const transport = document.querySelector<HTMLButtonElement>(".transport-controls .play")!;
+    const tool = document.querySelector<HTMLElement>(".function-glyph")!;
+    const transportStyle = getComputedStyle(transport);
+    const toolStyle = getComputedStyle(tool);
+    return {
+      transport: {width: transport.getBoundingClientRect().width, height: transport.getBoundingClientRect().height, background: transportStyle.backgroundColor},
+      tool: {width: tool.getBoundingClientRect().width, height: tool.getBoundingClientRect().height, background: toolStyle.backgroundColor},
+    };
+  });
+  expect(initial.transport.width).toBeCloseTo(58, 0);
+  expect(initial.transport.height).toBeCloseTo(58, 0);
+  expect(initial.transport.background).toBe("rgba(255, 255, 255, 0.043)");
+  expect(initial.tool.width).toBeCloseTo(28, 0);
+  expect(initial.tool.height).toBeCloseTo(28, 0);
+  expect(initial.tool.background).toBe("rgba(255, 255, 255, 0.1)");
+
+  await page.locator(".feature-menu button").nth(0).click({force:true});
+  const back = page.locator(".navigation-page .page-back");
+  await expect(back).toBeVisible();
+  const backStyle = await back.evaluate((button) => ({
+    width: button.getBoundingClientRect().width,
+    height: button.getBoundingClientRect().height,
+    background: getComputedStyle(button).backgroundColor,
+  }));
+  expect(backStyle.width).toBeCloseTo(28, 0);
+  expect(backStyle.height).toBeCloseTo(28, 0);
+  expect(backStyle.background).toBe("rgba(255, 255, 255, 0.08)");
 });

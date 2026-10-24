@@ -1,0 +1,26 @@
+// Offline analysis of the immutable first attempt. No live imports or requests.
+import {readFile,writeFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
+import {resolve,join} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const index=process.argv.indexOf('--root');
+const root=index>=0?resolve(process.argv[index+1]):resolve(fileURLToPath(new URL('../',import.meta.url)));
+const at=path=>join(root,path);
+const raw=await readFile(at('raw/evidence.json'));
+const native=await readFile(at('raw/helper-native.jsonl'));
+const e=JSON.parse(raw),j=native.toString('utf8').trim().split(/\r?\n/).map(line=>JSON.parse(line));
+const sha=b=>createHash('sha256').update(b).digest('hex').toUpperCase();
+const state=e.commands.filter(c=>c.command==='experimental_region_control'&&c.args.action==='status');
+const pending=state.filter(s=>s.value.phase==='Enqueued');
+const actions={};for(const n of j)if(n.action)actions[n.action]=(actions[n.action]??0)+1;
+const sends=j.flatMap(n=>n.apiCalls??[]);
+assert.equal(e.result.trials.length,0);assert.equal(sends.length,0);
+assert(!j.some(n=>['move','press-down','press-up','capture','freeze','begin-trial','receipts'].includes(n.action)));
+assert.equal(pending.length,161);assert(pending.every(s=>s.value.nativeApplied===false&&s.value.nativeReady===false));
+const firstRoots=e.operations.find(o=>o.action==='roots').value;
+const lastRoots=e.operations.filter(o=>o.action==='roots').at(-1);
+const releaseOp=e.operations.find(o=>o.action==='release-owned');
+const result={scope:e.scope,startedUtc:e.startedUtc,attemptEndedUtc:e.finishedUtc,attempts:1,experiment:{plannedMaximumDowns:4,attemptedDowns:0,successfulDowns:0,ups:0,testMoves:0,nativeInputApis:0,pointsFrozen:false,canvasRead:false,desktopCaptured:false,receiversAttached:false,rawReceiptExport:'N/A; precondition stopped before receivers/export, never infer OS delivery from later point lookup'},failure:{exact:e.result.failure,nativeStatusQueries:state.length,pendingStatusQueries:pending.length,firstEnqueuedStartUtc:pending[0].startedUtc,lastEnqueuedEndUtc:pending.at(-1).endedUtc,phase:'Enqueued',nativeApplied:false,nativeReady:false,acceptedRevision:pending[0].value.desiredRevision,rootCause:'unconfirmed; creation/enqueue acknowledgment is not application completion'},statusSideEffect:{beforeOpen:state[0].value.phase,invalidDuringPreflight:state.filter(s=>s.value.phase==='Invalid').length,closeReturned:e.commands.find(c=>c.command==='experimental_region_control'&&c.args.action==='close').value,meaning:'explicit close Invalid is restoration bookkeeping, not an observed OS-routing failure'},plate:{...e.plate,creationForegroundUnchanged:e.plate.foregroundBefore===e.plate.foregroundAfter,inputNoActivate:'not exercised'},identity:{spawn:e.spawn,helperPid:j.find(n=>n.ready).helperPid,normalSessionRuntime:e.normalSessionRuntime,sourceInitial:firstRoots.find(w=>w.title==='Isle'),sourceLast:lastRoots.value.find(w=>w.title==='Isle')},release:{proof:releaseOp.value,observedUtc:releaseOp.after.utc,physicalInputIdle:releaseOp.after.inputIdle,ownedHeld:releaseOp.held,nativeApiLog:sends},restorationOriginal:e.result.restoration,lastNativeReadback:{utc:lastRoots.after.utc,cursor:lastRoots.after.cursor,foregroundHwnd:lastRoots.after.foregroundHwnd,inputIdle:lastRoots.after.inputIdle,originalCursorMatches:lastRoots.after.cursor.x===e.originalNative.cursor.x&&lastRoots.after.cursor.y===e.originalNative.cursor.y,originalForegroundMatches:lastRoots.after.foregroundHwnd===e.originalNative.foregroundHwnd,meaning:'historical observation after Studio close; not explicit restore or proof of current idle'},nativeActionCounts:actions,settingsCommands:{updateSettings:e.commands.filter(c=>c.command==='update_settings').length,reads:e.commands.filter(c=>c.command==='get_settings')},sourceCandidate:{file:'src/Studio.svelte',onMountRefresh:210,refresh:289,autoMergeWrite:301,saveDelayMs:300,closePersist:175,callerProven:false},rawHashes:{evidence:{bytes:raw.length,sha256:sha(raw)},nativeJournal:{bytes:native.length,sha256:sha(native)}},C1:false,A5:false};
+await writeFile(at('recomputed-analysis.json'),JSON.stringify(result,null,2)+'\n');
+console.log(JSON.stringify({downs:0,ups:0,testMoves:0,status:state.length,enqueued:pending.length,raw:result.rawHashes,restorationPending:true}));

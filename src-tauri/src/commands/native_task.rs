@@ -95,4 +95,3 @@ mod tests {
         assert_eq!(pool.slots.available_permits(), 1);
     }
 }
-

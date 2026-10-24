@@ -1,5 +1,7 @@
 use crate::error::{AppError, AppResult};
-use crate::models::{IdleSnapshot, WeatherForecastDay, WeatherLocation, WeatherLocationCandidate};
+use crate::models::{
+    IdleSnapshot, WeatherForecastDay, WeatherLocation, WeatherLocationCandidate, WeatherSnapshot,
+};
 use crate::state::AppState;
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -40,7 +42,7 @@ static SYSTEM_COLLECTOR: OnceLock<Mutex<SystemCollector>> = OnceLock::new();
 static WEATHER_CACHE: OnceLock<Mutex<WeatherCache>> = OnceLock::new();
 
 fn battery_status() -> (Option<u8>, Option<bool>) {
-    use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+    use windows052::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
     let mut status = SYSTEM_POWER_STATUS::default();
     if unsafe { GetSystemPowerStatus(&mut status) }.is_err() || status.BatteryLifePercent == 255 {
         return (None, None);
@@ -290,6 +292,37 @@ async fn weather_for(location: &WeatherLocation) -> AppResult<WeatherCache> {
     Ok(next)
 }
 
+fn cached_weather_for_location(cache: &WeatherCache, location: &WeatherLocation) -> WeatherCache {
+    if cache_matches_location(cache, location) {
+        cache.clone()
+    } else {
+        WeatherCache::default()
+    }
+}
+
+fn weather_snapshot_from_cache(weather: WeatherCache) -> WeatherSnapshot {
+    WeatherSnapshot {
+        weather_temperature: weather.temperature,
+        weather_code: weather.code,
+        weather_updated_at: weather.updated_at,
+        weather_forecast: weather.forecast,
+    }
+}
+
+async fn weather_for_or_cached(location: &WeatherLocation) -> AppResult<WeatherCache> {
+    match weather_for(location).await {
+        Ok(value) => Ok(value),
+        Err(_) => {
+            let cache = WEATHER_CACHE
+                .get_or_init(|| Mutex::new(WeatherCache::default()))
+                .lock()
+                .map_err(|_| AppError::lock("Failed to lock weather cache"))?
+                .clone();
+            Ok(cached_weather_for_location(&cache, location))
+        }
+    }
+}
+
 pub async fn get_idle_snapshot(app: &AppHandle) -> AppResult<IdleSnapshot> {
     // sysinfo refresh can block on Windows. Keep it off Tokio's async workers.
     let mut snapshot = tauri::async_runtime::spawn_blocking(system_snapshot)
@@ -302,27 +335,28 @@ pub async fn get_idle_snapshot(app: &AppHandle) -> AppResult<IdleSnapshot> {
         .ok()
         .and_then(|settings| settings.weather_location.clone());
     if let Some(location) = location {
-        let weather = match weather_for(&location).await {
-            Ok(value) => value,
-            Err(_) => {
-                let cached = WEATHER_CACHE
-                    .get_or_init(|| Mutex::new(WeatherCache::default()))
-                    .lock()
-                    .map_err(|_| AppError::lock("Failed to lock weather cache"))?
-                    .clone();
-                if cache_matches_location(&cached, &location) {
-                    cached
-                } else {
-                    WeatherCache::default()
-                }
-            }
-        };
+        let weather = weather_for_or_cached(&location).await?;
         snapshot.weather_temperature = weather.temperature;
         snapshot.weather_code = weather.code;
         snapshot.weather_updated_at = weather.updated_at;
         snapshot.weather_forecast = weather.forecast;
     }
     Ok(snapshot)
+}
+
+pub async fn get_weather_snapshot(app: &AppHandle) -> AppResult<WeatherSnapshot> {
+    let location = app
+        .state::<AppState>()
+        .settings
+        .lock()
+        .ok()
+        .and_then(|settings| settings.weather_location.clone());
+    let Some(location) = location else {
+        return Ok(WeatherSnapshot::default());
+    };
+
+    let weather = weather_for_or_cached(&location).await?;
+    Ok(weather_snapshot_from_cache(weather))
 }
 
 fn cache_matches_location(cache: &WeatherCache, location: &WeatherLocation) -> bool {
@@ -332,8 +366,8 @@ fn cache_matches_location(cache: &WeatherCache, location: &WeatherLocation) -> b
 #[cfg(test)]
 mod tests {
     use super::{
-        cache_matches_location, dedupe_weather_candidates, geocoding_rank, GeocodingResult,
-        WeatherCache,
+        cache_matches_location, cached_weather_for_location, dedupe_weather_candidates,
+        geocoding_rank, weather_snapshot_from_cache, GeocodingResult, WeatherCache,
     };
     use crate::models::{WeatherLocation, WeatherLocationCandidate};
 
@@ -402,5 +436,48 @@ mod tests {
         };
         assert!(cache_matches_location(&cache, &jiangmen));
         assert!(!cache_matches_location(&cache, &same_name_elsewhere));
+    }
+
+    #[test]
+    fn stale_weather_fallback_is_only_reused_for_the_same_coordinates() {
+        let cache = WeatherCache {
+            location: Some((22.58, 113.08)),
+            temperature: Some(27.5),
+            code: Some(2),
+            updated_at: Some(123),
+            ..WeatherCache::default()
+        };
+        let same_location = WeatherLocation {
+            name: "Renamed city".to_string(),
+            latitude: 22.58,
+            longitude: 113.08,
+        };
+        let different_location = WeatherLocation {
+            name: "Other city".to_string(),
+            latitude: 25.29,
+            longitude: 109.98,
+        };
+        assert_eq!(
+            cached_weather_for_location(&cache, &same_location).temperature,
+            Some(27.5)
+        );
+        assert_eq!(
+            cached_weather_for_location(&cache, &different_location).temperature,
+            None
+        );
+    }
+
+    #[test]
+    fn weather_snapshot_contains_only_weather_fields() {
+        let snapshot = weather_snapshot_from_cache(WeatherCache {
+            temperature: Some(19.5),
+            code: Some(61),
+            updated_at: Some(456),
+            ..WeatherCache::default()
+        });
+        assert_eq!(snapshot.weather_temperature, Some(19.5));
+        assert_eq!(snapshot.weather_code, Some(61));
+        assert_eq!(snapshot.weather_updated_at, Some(456));
+        assert!(snapshot.weather_forecast.is_empty());
     }
 }

@@ -6,7 +6,9 @@ param(
     [int]$RootPid = 0,
     [switch]$Control,
     [switch]$IncludeGpu,
-    [string]$StopFile = ''
+    [string]$StopFile = '',
+    [string]$RunId = '',
+    [string]$ReadyFile = ''
 )
 $ErrorActionPreference = 'Stop'
 $logicalCores = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
@@ -18,6 +20,7 @@ $processHistory = @{}
 $timer = [Diagnostics.Stopwatch]::StartNew()
 
 function Read-Sample {
+    $sampleReadStartedUtc = [DateTime]::UtcNow.ToString('o')
     $all = @(Get-CimInstance Win32_Process)
     $roots = @($all | Where-Object { $_.Name -eq 'isle.exe' -and ($RootPid -eq 0 -or $_.ProcessId -eq $RootPid) })
     if (-not $Control -and -not $roots.Count) { throw 'No matching running Isle process found.' }
@@ -42,16 +45,20 @@ function Read-Sample {
         $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
         if (-not $process) { continue }
         try {
+            $cpuReadStartedUtc = [DateTime]::UtcNow.ToString('o')
             $cpu = [double]$process.TotalProcessorTime.TotalSeconds
+            $cpuReadEndedUtc = [DateTime]::UtcNow.ToString('o')
             $counterAt = $timer.Elapsed.TotalSeconds
             $birth = $process.StartTime.ToUniversalTime().ToString('o')
             $key = "$processId/$birth"
             $cpuSingleCore = $null
+            $prior = $null
             if ($previous.ContainsKey($key)) {
+                $prior = $previous[$key]
                 $deltaSeconds = $counterAt - $previous[$key].at
                 if ($deltaSeconds -gt 0) { $cpuSingleCore = 100 * [math]::Max([double]0, [double]($cpu - $previous[$key].cpu)) / $deltaSeconds }
             }
-            $previous[$key] = @{ at = $counterAt; cpu = $cpu }
+            $previous[$key] = @{ at = $counterAt; cpu = $cpu; readStartedUtc = $cpuReadStartedUtc; readEndedUtc = $cpuReadEndedUtc }
             $role = if ($item.Name -eq 'isle.exe') { 'app' } elseif ($item.Name -ne 'msedgewebview2.exe') { $item.Name } elseif ($item.CommandLine -match '--type=([^ ]+)') { $matches[1] } else { 'browser' }
             $counters = $memory | Where-Object { [int]$_.IDProcess -eq $processId } | Select-Object -First 1
             if (-not $processHistory.ContainsKey($key)) {
@@ -64,6 +71,13 @@ function Read-Sample {
                 pid = $processId
                 role = $role
                 cumulativeCpuSeconds = $cpu
+                processKey = $key
+                cpuReadStartedUtc = $cpuReadStartedUtc
+                cpuReadEndedUtc = $cpuReadEndedUtc
+                previousCpuReadStartedUtc = if ($prior) { $prior.readStartedUtc } else { $null }
+                previousCpuReadEndedUtc = if ($prior) { $prior.readEndedUtc } else { $null }
+                previousCumulativeCpuSeconds = if ($prior) { $prior.cpu } else { $null }
+                cpuDeltaSeconds = if ($prior) { $cpu - $prior.cpu } else { $null }
                 cpuCounterTimestampSeconds = $counterAt
                 cpuPercentOfMachine = $machineCpu
                 cpuPercentOfOneCore = $cpuSingleCore
@@ -83,6 +97,8 @@ function Read-Sample {
         } finally { $process.Dispose() }
     })
     [pscustomobject]@{
+        sampleReadStartedUtc=$sampleReadStartedUtc
+        sampleReadEndedUtc=[DateTime]::UtcNow.ToString('o')
         elapsedSeconds=$at
         timestampUtc=[DateTime]::UtcNow.ToString('o')
         machineCpuPercent=(Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'").PercentProcessorTime
@@ -96,18 +112,39 @@ function Read-Sample {
     }
 }
 
+New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
+if ($ReadyFile -and (-not $RunId -or $RootPid -le 0)) { throw 'ReadyFile requires RunId and explicit RootPid.' }
+if ($ReadyFile -and (Test-Path -LiteralPath $ReadyFile)) { throw 'Refusing pre-existing readiness file.' }
+$probeStartedUtc = [DateTime]::UtcNow.ToString('o')
 if ($WarmupSeconds) { Start-Sleep -Seconds $WarmupSeconds }
-$null = Read-Sample
+$baselineSample = Read-Sample
+$samples.Add($baselineSample)
+$streamPath = Join-Path $OutputDirectory "$Label.samples.jsonl"
+$baselineSample | ConvertTo-Json -Depth 12 -Compress | Set-Content -LiteralPath $streamPath -Encoding utf8
+$readiness = $null
 $started = $timer.Elapsed.TotalSeconds
 for ($index=0; $timer.Elapsed.TotalSeconds - $started -lt $Seconds; $index++) {
     if ($StopFile -and (Test-Path -LiteralPath $StopFile)) { break }
     $remaining = [math]::Min($started + $Seconds, $started + $index + 1) - $timer.Elapsed.TotalSeconds
     if ($remaining -gt 0) { Start-Sleep -Milliseconds ([int]($remaining * 1000)) }
-    $samples.Add((Read-Sample))
+    $sample = Read-Sample
+    $samples.Add($sample)
+    $sample | ConvertTo-Json -Depth 12 -Compress | Add-Content -LiteralPath $streamPath -Encoding utf8
+    if (-not $readiness -and $sample.processes.Count -gt 0 -and @($sample.processes | Where-Object { -not $_.cpuSampleAvailable }).Count -eq 0 -and $RootPid -in $sample.processes.pid) {
+        $readiness = [ordered]@{ runId=$RunId; rootPid=$RootPid; probeStartedUtc=$probeStartedUtc; readyUtc=[DateTime]::UtcNow.ToString('o'); validIncrementSampleIndex=$samples.Count-1; processKeys=@($sample.processes.processKey); lastCpuReadUtc=($sample.processes.cpuReadEndedUtc | Sort-Object | Select-Object -Last 1) }
+        if ($ReadyFile) {
+            $readiness | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath "$ReadyFile.tmp" -Encoding utf8
+            Move-Item -LiteralPath "$ReadyFile.tmp" -Destination $ReadyFile
+        }
+    }
 }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $report = [ordered]@{
     label=$Label
+    runId=$RunId
+    rootPid=$RootPid
+    probeStartedUtc=$probeStartedUtc
+    readiness=$readiness
     createdUtc=[DateTime]::UtcNow.ToString('o')
     requestedSeconds=$Seconds
     actualSeconds=$timer.Elapsed.TotalSeconds - $started

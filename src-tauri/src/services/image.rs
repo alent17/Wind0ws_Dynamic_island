@@ -123,4 +123,3 @@ mod tests {
         assert_eq!(result.get_pixel(1, 0).0, [100, 30, 50, 255]);
     }
 }
-

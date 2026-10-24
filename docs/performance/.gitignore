@@ -1,0 +1,10 @@
+# Keep machine-specific capture outputs out of source uploads.
+**/raw/
+**/*.csv
+**/*.tsv
+**/*.jsonl
+**/*.exe
+**/*.dll
+**/*stdout*.txt
+**/*stderr*.txt
+/local-upload-backup/

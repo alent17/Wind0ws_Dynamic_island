@@ -1,18 +1,18 @@
 use crate::error::{AppError, AppResult};
 use crate::models::{AudioDeviceInfo, SystemAudioState};
-use windows::core::{ComInterface, IUnknown, IUnknown_Vtbl, Interface, GUID, PCWSTR};
-use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
-use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
-use windows::Win32::Media::Audio::{
+use windows052::core::{ComInterface, IUnknown, IUnknown_Vtbl, Interface, GUID, PCWSTR};
+use windows052::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
+use windows052::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
+use windows052::Win32::Media::Audio::{
     eCommunications, eConsole, eMultimedia, eRender, IMMDevice, IMMDeviceEnumerator,
     MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
 };
-use windows::Win32::System::Com::StructuredStorage::{
+use windows052::Win32::System::Com::StructuredStorage::{
     PropVariantClear, PropVariantToString, PROPVARIANT,
 };
-use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_ALL, STGM_READ};
+use windows052::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_ALL, STGM_READ};
 
-fn audio_error(context: &str, error: windows::core::Error) -> AppError {
+fn audio_error(context: &str, error: windows052::core::Error) -> AppError {
     AppError::business(5101, format!("{}: {}", context, error))
 }
 
@@ -74,12 +74,12 @@ fn property_name(value: OwnedPropVariant) -> String {
 mod resource_tests {
     use super::*;
     use std::mem::ManuallyDrop;
-    use windows::core::PWSTR;
-    use windows::Win32::System::Com::{
+    use windows052::core::PWSTR;
+    use windows052::Win32::System::Com::{
         CoTaskMemAlloc,
         StructuredStorage::{PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0},
     };
-    use windows::Win32::System::Variant::VT_LPWSTR;
+    use windows052::Win32::System::Variant::VT_LPWSTR;
 
     fn string_property(text: &str) -> OwnedPropVariant {
         let wide: Vec<u16> = text.encode_utf16().chain(Some(0)).collect();
@@ -226,7 +226,7 @@ struct IPolicyConfig_Vtbl {
     GetPropertyValue: usize,
     SetPropertyValue: usize,
     SetDefaultEndpoint:
-        unsafe extern "system" fn(*mut core::ffi::c_void, PCWSTR, i32) -> windows::core::HRESULT,
+        unsafe extern "system" fn(*mut core::ffi::c_void, PCWSTR, i32) -> windows052::core::HRESULT,
     SetEndpointVisibility: usize,
 }
 

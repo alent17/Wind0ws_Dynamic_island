@@ -16,11 +16,13 @@
   import WeatherIcon from "$lib/components/media/WeatherIcon.svelte";
   import type { IslandTool } from "$lib/featureRail";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
-  import { ISLAND_MOTION, islandSettleEasing, anchoredLayoutOffset } from "$lib/islandMotion";
+  import { clampSeekPosition } from "$lib/mediaClock";
+  import { ISLAND_MOTION, islandSettleEasing, islandShapeMotion, anchoredLayoutOffset } from "$lib/islandMotion";
   import type { AudioDeviceInfo, MediaState, SpectrumMode, SystemAudioState, WeatherForecastDay } from "$lib/api/types";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
   import {
     navigationGeometry,
+    islandAnchorGap,
     type IslandPage,
     borderRadiusCss,
     geometryFor,
@@ -28,6 +30,7 @@
     radiiFor,
     polygonCss,
     shapePolygonFor,
+    scaleIslandGeometry,
     type IslandGeometry,
     type IslandEdge,
     type IslandMode,
@@ -57,6 +60,7 @@
     canResumeLastTrack = false,
     resumingLastTrack = false,
     neteaseModeBusy = false,
+    neteaseModeError = "",
     showSpectrum = true,
     spectrumMode = "realtime",
     enableAnimations = true,
@@ -81,6 +85,8 @@
     onResumeLastTrack,
     onMediaAction,
     onSeek,
+    seekBusy = false,
+    seekError = "",
     onToggleFloating,
     onHideForTenSeconds,
     onHoverChange,
@@ -133,6 +139,7 @@
     canResumeLastTrack?: boolean;
     resumingLastTrack?: boolean;
     neteaseModeBusy?: boolean;
+    neteaseModeError?: string;
     showSpectrum?: boolean;
     spectrumMode?: SpectrumMode;
     enableAnimations?: boolean;
@@ -157,6 +164,8 @@
     onResumeLastTrack?: () => void;
     onMediaAction?: (action: "prev" | "play_pause" | "next" | "cycle_netease_mode") => void;
     onSeek?: (positionMs: number) => void | Promise<void>;
+    seekBusy?: boolean;
+    seekError?: string;
     onToggleFloating?: () => void;
     onHideForTenSeconds?: () => void;
     onSettingsToggle?: () => void;
@@ -205,7 +214,8 @@
     effectiveCompactLength,
     0,
   ));
-  const motionOptions = { duration: ISLAND_MOTION.outwardDuration, easing: islandSettleEasing };
+  const motionOptions = { duration: ISLAND_MOTION.layoutDuration, easing: islandSettleEasing };
+  let previousMotionMode = untrack(() => mode);
   const widthMotion = tweened(initial.width, motionOptions);
   const heightMotion = tweened(initial.height, motionOptions);
   const radiusMotion = tweened(initial.radius, motionOptions);
@@ -221,6 +231,7 @@
   let animatedShoulder = $state(untrack(() => mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius));
   const unsubscribeShoulder = shoulderMotion.subscribe(value => animatedShoulder = value);
   let shapeSettled = $state(false);
+  let compactShapeMotion = $state(untrack(() => mode === "compact" || mode === "hover"));
   let transitionRevision = 0;
   const unsubscribeWidth = widthMotion.subscribe((value) => animatedWidth = value);
   const unsubscribeHeight = heightMotion.subscribe((value) => animatedHeight = value);
@@ -230,6 +241,7 @@
 
   const size = $derived({ width: Math.max(1, animatedWidth), height: Math.max(1, animatedHeight), radius: Math.max(0, Math.min(80, animatedRadius)) });
   let page = $state<IslandPage>("music");
+  let pageNavigationRevision = 0;
   let wasTimerFinished = $state(false);
   let menuScroll = $state(0);
   let pageRoot = $state<HTMLDivElement>();
@@ -241,9 +253,7 @@
   const menuItems = $derived(toolOrder.filter(tool => enabledTools.includes(tool)).map(tool => ({ id: tool, label: t(toolLabels[tool]), shortLabel: t(shortLabels[tool]), icon: toolIcons[tool] })));
   const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius));
   const expandedGeometry = $derived({
-    width: expandedBaseGeometry.width * expandedScale,
-    height: expandedBaseGeometry.height * expandedScale,
-    radius: expandedBaseGeometry.radius * expandedScale,
+    ...scaleIslandGeometry(expandedBaseGeometry, expandedScale),
   });
 
   let compactRoot = $state<HTMLDivElement>();
@@ -253,7 +263,11 @@
   const compactGeometry = $derived(geometryFor(compactMode, expandedRadius, edge, effectiveCompactLength));
   const compactInset = $derived(islandStyle === "edge" ? Math.min(collapsedEdgeShoulderRadius, Math.max(compactGeometry.width, compactGeometry.height) / 4, Math.min(compactGeometry.width, compactGeometry.height) / 2) : 0);
   const expandedInset = $derived(islandStyle === "edge" ? Math.min(expandedEdgeShoulderRadius, Math.max(expandedGeometry.width, expandedGeometry.height) / 4, Math.min(expandedGeometry.width, expandedGeometry.height) / 2) : 0);
-  const compactOffset = $derived(anchoredLayoutOffset(size, compactGeometry, edge));
+  const compactLayout = $derived(compactShapeMotion ? size : {
+    width: Math.min(size.width, compactGeometry.width),
+    height: Math.min(size.height, compactGeometry.height),
+  });
+  const compactOffset = $derived(anchoredLayoutOffset(size, compactLayout, edge));
   const expandedOffset = $derived(anchoredLayoutOffset(size, expandedGeometry, edge));
 
   // Read the real layout boxes, including CSS zoom, toolbar and shoulder padding.
@@ -264,6 +278,9 @@
     const expanded = pageRoot;
     compactGeometry; expandedGeometry; compactInset; expandedInset; panelVisible; renderedPage; idle; showTime; timerActive;
     if (!compact || !expanded) { coverLayouts = null; return; }
+    // A hover layout follows the shell. Its artwork does not fly, so wait
+    // for the endpoint instead of measuring every ResizeObserver delivery.
+    if (compactShapeMotion && !shapeSettled) return;
     let disposed = false;
     const measure = () => {
       if (disposed) return;
@@ -289,9 +306,10 @@
   let surfaceDisposed = false;
   onDestroy(() => { surfaceDisposed = true; });
   async function navigate(next: IslandPage) {
+    const revision = ++pageNavigationRevision;
     page = next;
     await tick();
-    if (surfaceDisposed) return;
+    if (surfaceDisposed || revision !== pageNavigationRevision || mode !== "expanded" || !visible || page !== next || renderedPage !== next) return;
     pageRoot?.querySelector<HTMLButtonElement>(next === "music" ? ".feature-menu button" : ".page-back")?.focus({ preventScroll: true });
   }
   function goBack() {
@@ -325,18 +343,22 @@
   $effect(() => {
     const target = mode === "expanded" ? expandedGeometry : geometryFor(mode, expandedRadius, edge, effectiveCompactLength);
     const hard = !enableAnimations || reduceAnimations || prefersReducedMotion;
-    const duration = hard ? 0 : mode === "expanded" ? ISLAND_MOTION.outwardDuration : ISLAND_MOTION.collapseDuration;
+    compactShapeMotion = (previousMotionMode === "compact" || previousMotionMode === "hover")
+      && (mode === "compact" || mode === "hover");
+    const motion = islandShapeMotion(previousMotionMode, mode, hard);
+    previousMotionMode = mode;
     const revision = ++transitionRevision;
     shapeSettled = false;
     void Promise.all([
-      widthMotion.set(target.width, { duration }),
-      heightMotion.set(target.height, { duration }),
-      radiusMotion.set(target.radius, { duration }),
-      shoulderMotion.set(mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius, { duration }),
-      styleMorph.set(islandStyle === "edge" ? 1 : 0, { duration }),
+      widthMotion.set(target.width, motion),
+      heightMotion.set(target.height, motion),
+      radiusMotion.set(target.radius, motion),
+      shoulderMotion.set(mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius, motion),
+      styleMorph.set(islandStyle === "edge" ? 1 : 0, motion),
     ]).then(() => {
       if (revision === transitionRevision) {
         shapeSettled = true;
+        compactShapeMotion = mode === "compact" || mode === "hover";
       }
     });
   });
@@ -378,7 +400,7 @@
   });
 
   const anchorTransform = $derived.by(() => {
-    const gap = 22 * expandedScale * (1 - styleProgress);
+    const gap = islandAnchorGap(expandedScale, styleProgress);
     const mix = (shown: number, hidden: number) => shown + (hidden - shown) * hideProgress;
     if (edge === "top") return `translateX(-50%) translateY(${mix(gap, 2 - size.height)}px)`;
     if (edge === "right") return `translateY(-50%) translateX(${mix(-gap, size.width - 2)}px)`;
@@ -386,6 +408,7 @@
     return `translateY(-50%) translateX(${mix(gap, 2 - size.width)}px)`;
   });
   const outwardProgress = $derived.by(() => {
+    if (compactShapeMotion) return 0;
     const horizontalEdge = edge === "top" || edge === "bottom";
     const compact = compactGeometry;
     const expanded = expandedGeometry;
@@ -417,9 +440,10 @@
   const surfaceClipPath = $derived(polygonCss(currentPolygon));
   const resolvedClipPath = $derived(styleProgress > 0 || islandStyle === "edge" ? surfaceClipPath : "none");
   $effect(() => {
-    notifyRegionChange({ geometry: size, radii: currentRadii, polygon: currentPolygon, extraRects: [], anchorGap: 22 * expandedScale * (1 - styleProgress), settled: shapeSettled });
+    notifyRegionChange({ geometry: size, radii: currentRadii, polygon: currentPolygon, extraRects: [], anchorGap: islandAnchorGap(expandedScale, styleProgress), settled: shapeSettled });
   });
   const expandedOpacity = $derived(outwardProgress);
+  const musicTitleActive = $derived(visible && mode === "expanded" && page === "music" && expandedOpacity > .5);
   const sharedCover = $derived.by(() => {
     if (!coverLayouts) return null;
     const p = outwardProgress;
@@ -513,7 +537,7 @@
     {/if}
 
     {#if visible && mode !== "hidden"}
-    <div class="compact-layer" bind:this={compactRoot} class:vertical={edge === "left" || edge === "right"} class:edge-inset={islandStyle === "edge"} style={`opacity:${compactOpacity};--shoulder-inset:${compactInset}px;width:${compactGeometry.width}px;height:${compactGeometry.height}px;left:${compactOffset.x}px;top:${compactOffset.y}px`} aria-hidden={mode === "expanded" || expandedOpacity > .5} inert={mode === "expanded"}>
+    <div class="compact-layer" bind:this={compactRoot} class:vertical={edge === "left" || edge === "right"} class:edge-inset={islandStyle === "edge"} style={`opacity:${compactOpacity};--shoulder-inset:${compactInset}px;width:${compactLayout.width}px;height:${compactLayout.height}px;left:${compactOffset.x}px;top:${compactOffset.y}px`} aria-hidden={mode === "expanded" || expandedOpacity > .5} inert={mode === "expanded"}>
       {#if timerActive}
         <button
           class="compact-timer"
@@ -550,7 +574,7 @@
       {:else}
         <button class="cover compact-cover" class:shared-cover-source={movingCover} type="button" aria-label={t("openPlayer")} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
           {#if media.albumArt}
-            <span class="compact-disc" class:spinning={mode === "compact" && media.isPlaying && enableAnimations && !reduceAnimations}>
+            <span class="compact-disc">
               <CoverArt src={media.albumArt} />
             </span>
           {:else}
@@ -591,7 +615,7 @@
               {#if media.albumArt}<CoverArt src={media.albumArt} />{:else}<Music2 size={30} />{/if}
             </button>
             <div class="metadata">
-              <MarqueeTitle text={media.title || t("waitingPlayback")} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} />
+              <MarqueeTitle text={media.title || t("waitingPlayback")} active={musicTitleActive} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} />
               <span title={media.artist}>{media.artist || t("unknownArtist")}</span>
             </div>
             {#if showSpectrum}
@@ -600,28 +624,28 @@
             </div>
 
             <div class="progress-block">
-              <MediaProgress position={position} duration={media.durationMs} seekable={Boolean(media.capabilities?.seek)} reduceMotion={reduceAnimations || !enableAnimations} {onSeek} />
+              <MediaProgress position={position} duration={media.durationMs} progressKnown={media.progressKnown !== false} seekable={Boolean(media.capabilities?.seek)} {seekBusy} reduceMotion={reduceAnimations || !enableAnimations} {seekError} {onSeek} />
             </div>
 
             <div class="control-row">
               <div class="utility-controls leading-controls" aria-label={t("playbackControls")}>
-                <span class="control-mark" aria-hidden="true"><ListMusic size={28} strokeWidth={2} /></span>
-                <span class="control-mark favorite-mark" aria-hidden="true"><Star size={30} strokeWidth={2} /></span>
+                <span class="control-mark" aria-hidden="true"><ListMusic size={34} strokeWidth={2} /></span>
+                <span class="control-mark favorite-mark" aria-hidden="true"><Star size={36} strokeWidth={2} /></span>
               </div>
               <div class="transport-controls" aria-label={t("playbackControls")}>
-                <button type="button" aria-label={t("previous")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("prev"); }}><SkipBack size={32} fill="currentColor" /></button>
-                <button type="button" class="play" aria-label={media.isPlaying ? t("pause") : t("play")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("play_pause"); }}>
-                  <PlayPauseIcon playing={media.isPlaying} size={38} reduceMotion={reduceAnimations || !enableAnimations} />
+                <button type="button" aria-label={t("previous")} disabled={media.capabilities?.previous === false} onclick={(e) => { e.stopPropagation(); onMediaAction?.("prev"); }}><SkipBack size={48} fill="currentColor" /></button>
+                <button type="button" class="play" aria-label={media.isPlaying ? t("pause") : t("play")} disabled={media.capabilities?.playPause === false} onclick={(e) => { e.stopPropagation(); onMediaAction?.("play_pause"); }}>
+                  <PlayPauseIcon playing={media.isPlaying} size={50} reduceMotion={reduceAnimations || !enableAnimations} />
                 </button>
-                <button type="button" aria-label={t("next")} onclick={(e) => { e.stopPropagation(); onMediaAction?.("next"); }}><SkipForward size={32} fill="currentColor" /></button>
+                <button type="button" aria-label={t("next")} disabled={media.capabilities?.next === false} onclick={(e) => { e.stopPropagation(); onMediaAction?.("next"); }}><SkipForward size={48} fill="currentColor" /></button>
               </div>
               <div class="utility-controls trailing-controls">
                 {#if media.source === "netease" && media.neteasePlaybackMode}
-                  <NeteaseModeControl mode={media.neteasePlaybackMode} disabled={neteaseModeBusy} onCycle={() => onMediaAction?.("cycle_netease_mode")} />
+                  <NeteaseModeControl mode={media.neteasePlaybackMode} disabled={neteaseModeBusy} error={neteaseModeError} onCycle={() => onMediaAction?.("cycle_netease_mode")} />
                 {:else}
-                  <span class="control-mark" aria-hidden="true"><Shuffle size={28} strokeWidth={2} /></span>
+                  <span class="control-mark" aria-hidden="true"><Shuffle size={34} strokeWidth={2} /></span>
                 {/if}
-                <button type="button" aria-label={t("toggleFloating")} onclick={(e) => { e.stopPropagation(); onToggleFloating?.(); }}><Airplay size={29} strokeWidth={1.8} /></button>
+                <button type="button" aria-label={t("toggleFloating")} onclick={(e) => { e.stopPropagation(); onToggleFloating?.(); }}><Airplay size={34} strokeWidth={1.8} /></button>
               </div>
             </div>
           {:else}
@@ -631,7 +655,7 @@
                   {#if lastPlayedMedia?.albumArt}<CoverArt src={lastPlayedMedia.albumArt} />{:else}<Music2 size={27} />{/if}
                 </div>
                 <div class="metadata">
-                  <MarqueeTitle text={lastPlayedMedia?.title || t("mediaPlayer")} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} />
+                  <MarqueeTitle text={lastPlayedMedia?.title || t("mediaPlayer")} active={musicTitleActive} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} />
                   <span title={lastPlayedMedia?.artist}>{lastPlayedMedia?.artist || lastPlayedMedia?.sourceDisplay || t("waitingPlayback")}</span>
                 </div>
               </div>
@@ -729,14 +753,15 @@
 </div>
 
 <style>
-  .cover.moving-cover{position:absolute;left:0;top:0;z-index:3;width:84px;height:84px;visibility:hidden;transform-origin:top left;pointer-events:none;will-change:transform}
-  .cover.moving-cover.in-motion{visibility:visible}
+  .cover.moving-cover{position:absolute;left:0;top:0;z-index:3;width:84px;height:84px;visibility:hidden;transform-origin:top left;pointer-events:none}
+  .cover.moving-cover.in-motion{visibility:visible;will-change:transform}
   .cover.shared-cover-source{visibility:hidden}
   .island-frame{position:relative;width:100%;height:100%;flex:none;overflow:visible;box-sizing:border-box}.island-frame.simulate-hidden{overflow:hidden}.surface-anchor{position:absolute;z-index:1}.edge-top .surface-anchor{top:0;left:50%}.edge-right .surface-anchor{top:50%;right:0}.edge-bottom .surface-anchor{bottom:0;left:50%}.edge-left .surface-anchor{top:50%;left:0}
   .island-surface{position:relative;z-index:1;overflow:hidden;flex:none;box-sizing:border-box;color:#fff;font-family:var(--app-font);text-rendering:optimizeLegibility;font-synthesis:none;contain:layout style;transition:transform 140ms cubic-bezier(.23,1,.32,1),box-shadow 180ms cubic-bezier(.23,1,.32,1)}
+  .island-surface:focus-visible{outline:none}
   .floating-style .island-surface:active{transform:scale(.97) translateZ(0)}.compact-layer,.expanded-layer{position:absolute;z-index:1;box-sizing:border-box;pointer-events:none}
   .compact-layer{inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 4px}.compact-layer.edge-inset:not(.vertical){padding-left:calc(4px + var(--shoulder-inset));padding-right:calc(8px + var(--shoulder-inset))}.compact-layer.vertical{flex-direction:column;padding:4px 0 8px}.compact-layer.edge-inset.vertical{padding-top:calc(4px + var(--shoulder-inset));padding-bottom:calc(8px + var(--shoulder-inset))}.compact-layer button,.compact-layer :global(canvas){pointer-events:auto}.time-display{width:100%;text-align:center;color:rgba(255,255,255,.8);font:500 12px/1 var(--app-font);letter-spacing:.05em;font-variant-numeric:tabular-nums;user-select:none}.cover{position:relative;display:grid;place-items:center;flex:none;padding:0;overflow:hidden;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);border:0;cursor:pointer;user-select:none}.compact-cover{width:20px;height:20px;border-radius:50%}.expanded-cover{width:84px;height:84px;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.35);outline:1px solid rgba(255,255,255,.1)}.playing-dot{width:3px;height:3px;border-radius:50%}
-  .compact-disc{position:relative;display:block;width:100%;height:100%;transform-origin:center}.compact-disc.spinning{animation:compact-disc-spin 8s linear 1}@keyframes compact-disc-spin{to{transform:rotate(1turn)}}
+  .compact-disc{position:relative;display:block;width:100%;height:100%;transform-origin:center}
   .idle-compact-dashboard{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0 7px;color:rgba(255,255,255,.92);user-select:none}.idle-clock{font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums;letter-spacing:.02em}.idle-weather{display:flex;align-items:center;gap:4px;font:500 11px/1 var(--app-font);font-variant-numeric:tabular-nums}.idle-weather :global(svg){flex:none;color:rgba(255,255,255,.82)}.idle-compact-dashboard.vertical{flex-direction:column;padding:7px 0;gap:10px}.idle-compact-dashboard.vertical .idle-weather{flex-direction:column}
   .debug-overlay{position:absolute;z-index:4;top:4px;left:50%;display:flex;gap:5px;max-width:calc(100% - 12px);padding:2px 6px;border-radius:5px;transform:translateX(-50%);overflow:hidden;color:#4ade80;background:rgba(0,0,0,.75);font:500 8px/1.3 var(--app-font);white-space:nowrap;pointer-events:none}.debug-overlay span{overflow:hidden;text-overflow:ellipsis}
   .expanded-layer{inset:0;width:100%;height:100%;padding:0;transform-origin:left top;will-change:transform,opacity}.expanded-layer.vertical{transform-origin:center top}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,600px);height:var(--expanded-content-height,210px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:11px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}
@@ -753,7 +778,7 @@
   @media (prefers-reduced-motion:reduce){}
   .studio-preview-highlight{position:absolute;z-index:20;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}.studio-preview-highlight::before,.studio-preview-highlight::after{content:"";position:absolute;pointer-events:none}.highlight-shape::after{inset:2px;border:2px solid rgba(167,139,250,.9);border-radius:inherit;box-shadow:0 0 12px rgba(167,139,250,.42),inset 0 0 7px rgba(167,139,250,.18)}.highlight-edge::before{background:#60a5fa;box-shadow:0 0 9px rgba(96,165,250,.8)}.edge-top .highlight-edge::before,.edge-bottom .highlight-edge::before{left:18px;right:18px;height:2px}.edge-top .highlight-edge::before{top:2px}.edge-bottom .highlight-edge::before{bottom:2px}.edge-left .highlight-edge::before,.edge-right .highlight-edge::before{top:18px;bottom:18px;width:2px}.edge-left .highlight-edge::before{left:2px}.edge-right .highlight-edge::before{right:2px}.highlight-position::after{width:8px;height:8px;border:2px solid #fff;border-radius:50%;background:#60a5fa;box-shadow:0 0 0 3px rgba(96,165,250,.2),0 0 10px rgba(96,165,250,.92)}.edge-top .highlight-position::after,.edge-bottom .highlight-position::after{left:calc(var(--preview-position) * 1% - 6px)}.edge-top .highlight-position::after{top:-3px}.edge-bottom .highlight-position::after{bottom:-3px}.edge-left .highlight-position::after,.edge-right .highlight-position::after{top:calc(var(--preview-position) * 1% - 6px)}.edge-left .highlight-position::after{left:-3px}.edge-right .highlight-position::after{right:-3px}.corner{position:absolute;width:calc(var(--preview-radius-tl) + 9px);height:calc(var(--preview-radius-tl) + 9px);max-width:48px;max-height:48px;opacity:.95}.corner.top-left{top:2px;left:2px;width:calc(var(--preview-radius-tl) + 9px);height:calc(var(--preview-radius-tl) + 9px);border:2px solid;border-color:#a78bfa transparent transparent #a78bfa;border-radius:var(--preview-radius-tl) 0 0 0}.corner.top-right{top:2px;right:2px;width:calc(var(--preview-radius-tr) + 9px);height:calc(var(--preview-radius-tr) + 9px);border:2px solid;border-color:#a78bfa #a78bfa transparent transparent;border-radius:0 var(--preview-radius-tr) 0 0}.corner.bottom-left{bottom:2px;left:2px;width:calc(var(--preview-radius-bl) + 9px);height:calc(var(--preview-radius-bl) + 9px);border:2px solid;border-color:transparent transparent #a78bfa #a78bfa;border-radius:0 0 0 var(--preview-radius-bl)}.corner.bottom-right{right:2px;bottom:2px;width:calc(var(--preview-radius-br) + 9px);height:calc(var(--preview-radius-br) + 9px);border:2px solid;border-color:transparent #a78bfa #a78bfa transparent;border-radius:0 0 var(--preview-radius-br) 0}.length-handle{position:absolute;width:3px;height:22px;border-radius:999px;background:#60a5fa;box-shadow:0 0 9px rgba(96,165,250,.8)}.length-handle.start{left:2px;top:50%;transform:translateY(-50%)}.length-handle.end{right:2px;top:50%;transform:translateY(-50%)}.length-vertical .length-handle{width:22px;height:3px;left:50%;transform:translateX(-50%)}.length-vertical .length-handle.start{top:2px}.length-vertical .length-handle.end{top:auto;right:auto;bottom:2px}.shoulder-handle{position:absolute;width:3px;height:18px;border-radius:999px;background:#a78bfa;box-shadow:0 0 8px rgba(167,139,250,.8)}.edge-top .shoulder-handle.start{top:2px;left:calc(var(--preview-shoulder) + 1px)}.edge-top .shoulder-handle.end{top:2px;right:calc(var(--preview-shoulder) + 1px)}.edge-bottom .shoulder-handle.start{bottom:2px;left:calc(var(--preview-shoulder) + 1px)}.edge-bottom .shoulder-handle.end{right:calc(var(--preview-shoulder) + 1px);bottom:2px}.edge-left .shoulder-handle,.edge-right .shoulder-handle{width:18px;height:3px;top:calc(var(--preview-shoulder) + 1px)}.edge-left .shoulder-handle.start{left:2px}.edge-left .shoulder-handle.end{bottom:calc(var(--preview-shoulder) + 1px);top:auto;left:2px}.edge-right .shoulder-handle.start{right:2px}.edge-right .shoulder-handle.end{right:2px;top:auto;bottom:calc(var(--preview-shoulder) + 1px)}.background-wash{position:absolute;inset:2px;border-radius:inherit;background:rgba(167,139,250,.14);box-shadow:inset 0 0 0 1px rgba(196,181,253,.72),0 0 16px rgba(167,139,250,.22)}.spectrum-focus{position:absolute;z-index:1;top:50%;right:5px;width:23px;height:21px;border:1px solid #60a5fa;border-radius:6px;background:rgba(96,165,250,.1);box-shadow:0 0 10px rgba(96,165,250,.55);transform:translateY(-50%)}.preview-expanded .spectrum-focus{top:14px;right:22px;width:47px;height:31px;border-radius:8px}
   @media (hover:hover) and (pointer:fine){.controls button:hover:not(:disabled){background:rgba(255,255,255,.1);transform:scale(1.06);color:#fff}.cover:hover{filter:brightness(1.08)}}
-  @media (prefers-reduced-motion:reduce){.surface-anchor{transition:none!important}.island-surface,.expanded-layer,.controls button{transition-duration:120ms!important}.island-surface{transition-property:opacity,box-shadow!important}.expanded-layer{transform:none!important}.compact-disc{animation:none}.studio-preview-highlight .corner,.studio-preview-highlight::after,.studio-preview-highlight .length-handle,.studio-preview-highlight .shoulder-handle,.studio-preview-highlight .background-wash,.studio-preview-highlight .spectrum-focus{animation:none!important;opacity:.78}}
+  @media (prefers-reduced-motion:reduce){.surface-anchor{transition:none!important}.island-surface,.expanded-layer,.controls button{transition-duration:120ms!important}.island-surface{transition-property:opacity,box-shadow!important}.expanded-layer{transform:none!important}.studio-preview-highlight .corner,.studio-preview-highlight::after,.studio-preview-highlight .length-handle,.studio-preview-highlight .shoulder-handle,.studio-preview-highlight .background-wash,.studio-preview-highlight .spectrum-focus{animation:none!important;opacity:.78}}
 
   .expanded-shell{display:block;width:var(--page-width);height:var(--page-height);zoom:var(--content-scale,1);transform-origin:top left}
   .music-pane{width:100%;height:100%}
@@ -770,8 +795,8 @@
   .attached-style.edge-left .navigation-page,.attached-style.edge-right .navigation-page{padding-top:calc(16px + var(--shoulder-content-inset,0px));padding-bottom:calc(24px + var(--shoulder-content-inset,0px))}
   .page-header{display:flex;align-items:center;gap:9px;min-width:0;height:28px;flex:none;margin-bottom:12px;color:rgba(235,244,255,.78);font:500 11px/1 var(--app-font,system-ui)}
   .page-header span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .page-back{display:grid;place-items:center;width:28px;height:28px;flex:none;padding:0;border:0;border-radius:8px;color:#91caff;background:rgba(65,145,235,.14);cursor:pointer}
-  .page-back:hover{background:rgba(65,145,235,.25)}
+  .page-back{display:grid;place-items:center;width:28px;height:28px;flex:none;padding:0;border:0;border-radius:8px;color:#91caff;background:rgba(255,255,255,.08);cursor:pointer}
+  .page-back:hover{background:rgba(255,255,255,.15)}
 
   .page-content{display:flex;flex:1;min-height:0;align-items:center;animation:page-enter 180ms ease both}
   .page-content>:global(*){width:100%}
@@ -788,7 +813,6 @@
   .reduce-page-motion .page-body{transition:none}
   .music-pane :global(.metadata .marquee-title){font-size:18px;line-height:1.2}.music-pane .metadata>span{font-size:15px}.music-pane :global(.progress-block .time){font-size:14px}.music-pane :global(.progress-block.with-times){column-gap:14px}.music-pane :global(.progress-block .track){height:8px}
   .expanded-cover{border-radius:20px}
-  .island-surface.expanded-surface::before{content:"";position:absolute;z-index:0;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,0) 48%,rgba(18,27,43,.34) 74%,rgba(31,44,66,.88) 100%)}
   .top-row{gap:24px;margin-bottom:0}
   .music-pane :global(.metadata .marquee-title){font-size:24px;line-height:1.12;margin-bottom:5px}
   .music-pane .metadata>span{font-size:18px;line-height:1.15}
@@ -799,11 +823,12 @@
   .control-row{display:flex;align-items:center;justify-content:space-between;gap:0;width:100%;height:60px;margin-top:0}
   .utility-controls,.transport-controls{display:flex;align-items:center;flex:none}
   .utility-controls{gap:22px}
-  .transport-controls{gap:30px}
-  .control-row button,.control-mark{display:grid;place-items:center;flex:none;width:38px;height:48px;padding:0;border:0;border-radius:9px;color:rgba(255,255,255,.95);background:transparent}
+  .transport-controls{gap:38px}
+  .control-row button,.control-mark{display:grid;place-items:center;flex:none;width:38px;height:48px;padding:0;border:0;border-radius:9px;color:rgba(255,255,255,.95);background:rgba(255,255,255,.045)}
+  .transport-controls button{width:58px;height:58px;border-radius:12px}
   .control-row button{cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}
   .control-row button:active:not(:disabled){transform:scale(.92)}
-  .control-row button:disabled{opacity:.45;cursor:default}
+  .control-row button:disabled{opacity:.45;cursor:default;background:rgba(255,255,255,.025)}
   .control-row .play{color:#fff}
   .favorite-mark{color:rgba(232,238,248,.82)}
   .trailing-controls button:last-child{color:rgba(225,234,249,.62)}

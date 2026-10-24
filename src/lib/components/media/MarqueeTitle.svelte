@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  let { text, reduceMotion = false } = $props<{text:string;reduceMotion?:boolean}>();
+  let { text, active = true, reduceMotion = false } = $props<{text:string;active?:boolean;reduceMotion?:boolean}>();
   let viewport: HTMLDivElement;
   let content: HTMLSpanElement;
   let overflow = $state(false);
@@ -17,7 +17,7 @@
     if (!mounted) return;
     const distance = Math.max(0, content.scrollWidth - viewport.clientWidth);
     overflow = distance > 1;
-    if (!overflow || reduceMotion) return;
+    if (!active || !overflow || reduceMotion) return;
     const travel = distance / 24 * 1000;
     const duration = travel * 2 + 2400;
     const pause = 1200 / duration, end = (1200 + travel) / duration;

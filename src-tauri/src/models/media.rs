@@ -48,6 +48,15 @@ pub struct IdleSnapshot {
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WeatherSnapshot {
+    pub weather_temperature: Option<f32>,
+    pub weather_code: Option<u16>,
+    pub weather_updated_at: Option<u64>,
+    pub weather_forecast: Vec<WeatherForecastDay>,
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WeatherForecastDay {
     pub date: String,
     pub weather_code: u16,
@@ -85,6 +94,12 @@ pub struct MediaState {
     pub position_ms: u64,
     /// 总时长（毫秒）
     pub duration_ms: u64,
+    /// Whether the reported timeline has a confirmed anchor for this track.
+    #[serde(default = "default_true")]
+    pub progress_known: bool,
+    /// Last real NetEase CDP availability result; None means not checked yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub netease_progress_available: Option<bool>,
     /// 最后更新时间戳（毫秒）
     pub last_updated_timestamp: u64,
     /// 媒体来源标识（如 netease, spotify 等）
@@ -94,7 +109,22 @@ pub struct MediaState {
     pub capabilities: MediaCapabilities,
     pub shuffle_active: Option<bool>,
     pub repeat_mode: Option<String>,
+    /// Ordering domain for snapshots emitted by the single native media actor.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub native_epoch: String,
+    /// Actor-owned counter, kept within JavaScript's exact integer range.
+    #[serde(default, skip_serializing_if = "is_zero_revision")]
+    pub native_revision: u64,
+    /// Actor-owned generation incremented only when the selected media identity changes.
+    #[serde(default, skip_serializing_if = "is_zero_revision")]
+    pub native_track_generation: u64,
 }
+
+fn is_zero_revision(revision: &u64) -> bool {
+    *revision == 0
+}
+
+fn default_true() -> bool { true }
 
 /// 默认媒体状态实现
 impl Default for MediaState {
@@ -106,6 +136,8 @@ impl Default for MediaState {
             is_playing: false,
             position_ms: 0,
             duration_ms: 0,
+            progress_known: true,
+            netease_progress_available: None,
             last_updated_timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -115,21 +147,11 @@ impl Default for MediaState {
             capabilities: MediaCapabilities::default(),
             shuffle_active: None,
             repeat_mode: None,
+            native_epoch: String::new(),
+            native_revision: 0,
+            native_track_generation: 0,
         }
     }
-}
-
-/// 音频频谱数据
-///
-/// 用于可视化音频波形
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
-pub struct SpectrumData {
-    /// 频谱条数据（归一化值 0.0-1.0）
-    pub bars: Vec<f32>,
-    /// 数据时间戳
-    pub timestamp: u64,
 }
 
 /// 网易云音乐歌曲信息

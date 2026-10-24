@@ -29,4 +29,3 @@ pub async fn set_default_audio_output(device_id: String) -> AppResult<()> {
         .await
         .map_err(|error| AppError::business(3010, format!("切换音频设备后台任务失败：{error}")))?
 }
-

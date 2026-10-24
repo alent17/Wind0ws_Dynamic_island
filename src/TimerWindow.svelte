@@ -5,15 +5,9 @@
   import { emit, listen } from "@tauri-apps/api/event";
   import { Check, Lock, Minus, Pause, Pin, Plus, RotateCcw, Unlock, X } from "lucide-svelte";
   import { Events } from "./utils/eventConstants";
-  import { formatCountdown, type CountdownStatus } from "$lib/countdown";
+  import { isTransportDiagnosticsEnabled, recordTransportCounter } from "$lib/transportDiagnostics";
+  import { formatCountdown, type TimerSnapshot } from "$lib/countdown";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
-
-  type TimerSnapshot = {
-    status: CountdownStatus;
-    durationMs: number;
-    remainingMs: number;
-    label: string;
-  };
 
   const presets = [5, 10, 25, 60] as const;
   const maxCustomMinutes = 24 * 60;
@@ -22,7 +16,7 @@
   const compactWindowLogicalSize = { width: 236, height: 58 };
   const t = (key: TranslationKey, values: Record<string, string | number> = {}) => translate(key, values, $locale);
 
-  let snapshot = $state<TimerSnapshot>({ status: "idle", durationMs: 0, remainingMs: 0, label: "倒计时" });
+  let snapshot = $state<TimerSnapshot>({ status: "idle", durationMs: 0, endsAt: null, remainingMs: 0, label: "倒计时" });
   let syncedAt = $state(Date.now());
   let now = $state(Date.now());
   let pageVisible = $state(false);
@@ -43,9 +37,16 @@
   let windowTransitioning = $state(false);
   let expandedBounds: { x: number; y: number; width: number; height: number } | null = null;
   let dispose: (() => void) | undefined;
+  let pendingSnapshotRequestId: string | undefined;
+  let activeAppSessionId: string | undefined;
+  let lastStateRevision = -1;
+  const retiredAppSessions = new Set<string>();
 
   let remainingMs = $derived(snapshot.status === "running"
-    ? Math.max(0, snapshot.remainingMs - (now - syncedAt))
+    ? Number.isFinite(snapshot.endsAt)
+      ? Math.max(0, snapshot.endsAt! - now)
+      // Backward compatibility for an older App that does not send endsAt.
+      : Math.max(0, snapshot.remainingMs - (now - syncedAt))
     : snapshot.remainingMs);
   let active = $derived((snapshot.status === "running" || snapshot.status === "paused") && remainingMs > 0);
   let paused = $derived(snapshot.status === "paused" && remainingMs > 0);
@@ -53,7 +54,9 @@
   let selectedLabel = $derived(formatDurationLabel(selectedMinutes));
   let previewRemainingMs = $derived(active ? remainingMs : selectedMinutes * 60_000);
   const localRemainingAt = (time: number) => snapshot.status === "running"
-    ? Math.max(0, snapshot.remainingMs - (time - syncedAt))
+    ? Number.isFinite(snapshot.endsAt)
+      ? Math.max(0, snapshot.endsAt! - time)
+      : Math.max(0, snapshot.remainingMs - (time - syncedAt))
     : snapshot.remainingMs;
 
   function updateTimerDisplay() {
@@ -72,17 +75,27 @@
     return remaining;
   }
 
+  function delayUntilNextDisplaySecond(remaining: number) {
+    const displayedSeconds = Math.ceil(remaining / 1_000);
+    return Math.max(1, remaining - (displayedSeconds - 1) * 1_000);
+  }
+
   $effect(() => {
     snapshot.status;
+    snapshot.endsAt;
     snapshot.remainingMs;
     syncedAt;
     selectedMinutes;
     const remaining = updateTimerDisplay();
     if (!pageVisible || snapshot.status !== "running" || remaining <= 0) return;
-    const interval = window.setInterval(() => {
-      if (updateTimerDisplay() <= 0) window.clearInterval(interval);
-    }, 250);
-    return () => window.clearInterval(interval);
+    let timeout: number | undefined;
+    const refreshAtNextDisplaySecond = () => {
+      const currentRemaining = updateTimerDisplay();
+      if (!pageVisible || snapshot.status !== "running" || currentRemaining <= 0) return;
+      timeout = window.setTimeout(refreshAtNextDisplaySecond, delayUntilNextDisplaySecond(currentRemaining));
+    };
+    timeout = window.setTimeout(refreshAtNextDisplaySecond, delayUntilNextDisplaySecond(remaining));
+    return () => { if (timeout !== undefined) window.clearTimeout(timeout); };
   });
 
   const wheelPrevious = $derived(formatCountdown(Math.max(0, previewRemainingMs + 1_000)));
@@ -125,6 +138,15 @@
   function send(action: string, durationMs?: number) {
     void emit(Events.TIMER_ACTION, { action, ...(durationMs === undefined ? {} : { durationMs }) }).catch((error) => {
       console.error("[倒计时] 发送操作失败:", error);
+    });
+  }
+
+  function requestTimerSnapshot() {
+    const requestId = crypto.randomUUID();
+    pendingSnapshotRequestId = requestId;
+    void emit(Events.TIMER_REQUEST_STATE, { requestId }).catch((error) => {
+      if (pendingSnapshotRequestId === requestId) pendingSnapshotRequestId = undefined;
+      console.error("[倒计时] 请求最新状态失败:", error);
     });
   }
 
@@ -226,7 +248,7 @@
       localStorage.setItem(timerUiStorageKey, JSON.stringify({ positionFixed, alwaysOnTop }));
       if (position) localStorage.setItem(timerPositionStorageKey, JSON.stringify(position));
     } catch {
-      // Local storage is optional for the pre-created timer window.
+      // Local storage is optional; keep this window usable if persistence is unavailable.
     }
   }
 
@@ -298,15 +320,57 @@
 
   onMount(() => {
     let disposed = false;
-    const updateVisibility = () => { pageVisible = document.visibilityState === "visible"; };
+    pageVisible = document.visibilityState === "visible";
+    const updateVisibility = () => {
+      const visible = document.visibilityState === "visible";
+      const becameVisible = visible && !pageVisible;
+      pageVisible = visible;
+      if (becameVisible) {
+        now = Date.now();
+        requestTimerSnapshot();
+      }
+    };
     document.addEventListener("visibilitychange", updateVisibility);
-    updateVisibility();
     void (async () => {
       const unlisten = await listen<TimerSnapshot>(Events.TIMER_STATE_CHANGED, (event) => {
+        if (isTransportDiagnosticsEnabled()) recordTransportCounter("timerState", "received");
         const value = event.payload;
         if (!value) return;
-        snapshot = { ...snapshot, ...value };
+        const isRequestResponse = typeof value.requestId === "string" && value.requestId === pendingSnapshotRequestId;
+        const legacyRequestResponse = pendingSnapshotRequestId !== undefined
+          && !value.requestId
+          && !value.appSessionId
+          && value.stateRevision === undefined
+          && value.endsAt === undefined
+          && !activeAppSessionId;
+        if (pendingSnapshotRequestId && !isRequestResponse && !legacyRequestResponse) return;
+        if (isRequestResponse || legacyRequestResponse) pendingSnapshotRequestId = undefined;
+
+        const incomingSession = typeof value.appSessionId === "string" && value.appSessionId
+          ? value.appSessionId
+          : undefined;
+        if (incomingSession) {
+          if (retiredAppSessions.has(incomingSession)) return;
+          if (incomingSession !== activeAppSessionId) {
+            if (!isRequestResponse && value.sessionStart !== true) return;
+            if (activeAppSessionId) retiredAppSessions.add(activeAppSessionId);
+            activeAppSessionId = incomingSession;
+            lastStateRevision = -1;
+          }
+          const revision = Number(value.stateRevision);
+          if (!Number.isSafeInteger(revision) || revision < lastStateRevision) return;
+          if (revision === lastStateRevision && !isRequestResponse) return;
+          lastStateRevision = revision;
+        } else if (activeAppSessionId) {
+          // Once a versioned App is active, an unversioned legacy event cannot roll it back.
+          return;
+        } else if (pendingSnapshotRequestId && !isRequestResponse) {
+          return;
+        }
+
+        snapshot = { ...snapshot, ...value, endsAt: Number.isFinite(value.endsAt) ? value.endsAt! : null };
         syncedAt = Date.now();
+        now = syncedAt;
         if (value.durationMs > 0) {
           syncSelection(value.durationMs);
           if (value.status !== "running") transitionWheelTo(value.remainingMs || value.durationMs);
@@ -317,7 +381,7 @@
         return;
       }
       dispose = unlisten;
-      await emit(Events.TIMER_REQUEST_STATE).catch(() => undefined);
+      requestTimerSnapshot();
     })().catch((error) => {
       console.error("[倒计时] 初始化事件监听失败:", error);
     });
@@ -344,6 +408,7 @@
 
     return () => {
       disposed = true;
+      pendingSnapshotRequestId = undefined;
       document.removeEventListener("visibilitychange", updateVisibility);
       dispose?.();
     };
@@ -903,8 +968,6 @@
     opacity: .62;
     background: repeating-linear-gradient(135deg, rgba(56,157,255,.72) 0 3px, rgba(44,139,254,.18) 3px 7px, transparent 7px 11px);
     background-size: 22px 22px;
-    animation: stripe-flow 820ms linear infinite;
-    will-change: transform, background-position;
   }
 
   .indicator-sheen {
@@ -1002,11 +1065,6 @@
 
   button:focus-visible, input:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 
-  @keyframes stripe-flow {
-    from { background-position: 0 0; transform: translate3d(-8px, -8px, 0); }
-    to { background-position: -11px 11px; transform: translate3d(8px, 8px, 0); }
-  }
-
   @keyframes form-enter {
     from { opacity: 0; transform: translateY(-5px) scale(.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
@@ -1071,7 +1129,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .stripe-layer { animation: none; }
     .window-actions, .window-button, .action-button, .selection-indicator, .custom-toggle, .custom-chevron, .custom-form, .collapsed-surface { transition: none; animation: none; }
     .action-button { transform: translateY(var(--action-y)); }
     .wheel-stack.roll-down .previous, .wheel-stack.roll-down .current, .wheel-stack.roll-down .next,

@@ -1,15 +1,18 @@
 export type IslandStyle = "floating" | "edge";
 export type IslandEdge = "top" | "right" | "bottom" | "left";
 export type SpectrumMode = "realtime" | "random";
+export type NeteaseProgressMode = "real" | "estimate";
 export type AppLanguage = "system" | "zh-CN" | "en" | "ja";
 
 export interface AppSettings {
+  neteaseProgressMode: NeteaseProgressMode;
   islandStyle: IslandStyle;
   islandEdge: IslandEdge;
   islandEdgePosition: number;
   collapsedEdgeShoulderRadius: number;
   expandedEdgeShoulderRadius: number;
-  compactLength: number;
+  floatingCompactLength: number;
+  edgeCompactLength: number;
   language: AppLanguage;
   fontId: FontId;
   captureHideOnScreenshot: boolean;
@@ -37,8 +40,6 @@ export interface AppSettings {
   floatingWindowY: number | null;
   floatingWindowWidth: number | null;
   floatingWindowHeight: number | null;
-  floatingFillColor: string;
-  floatingUseAlbumColor: boolean;
   showSettingsTool: boolean;
   showFloatingTool: boolean;
   showVolumeTool: boolean;
@@ -58,7 +59,8 @@ export interface AppSettings {
   hideSettingsButton: boolean;
   hideMonitorSelector: boolean;
   hideFloatingWindow: boolean;
-  expandedCornerRadius: number;
+  floatingExpandedCornerRadius: number;
+  edgeExpandedCornerRadius: number;
   alwaysShowTopBar: boolean;
   clockTimeZone: string;
 }
@@ -75,6 +77,12 @@ export interface IdleSnapshot {
   downloadBytesPerSecond: number;
   batteryPercent: number | null;
   batteryCharging: boolean | null;
+  weatherTemperature: number | null;
+  weatherCode: number | null;
+  weatherUpdatedAt: number | null;
+  weatherForecast: WeatherForecastDay[];
+}
+export interface WeatherSnapshot {
   weatherTemperature: number | null;
   weatherCode: number | null;
   weatherUpdatedAt: number | null;
@@ -101,12 +109,20 @@ export interface MediaCapabilities {
 
 export interface MediaState {
   artworkResolved?: boolean;
+  /** Additive actor-owned native snapshot order; absent on legacy producers. */
+  nativeEpoch?: string;
+  /** Integer <= Number.MAX_SAFE_INTEGER, monotonic within nativeEpoch. */
+  nativeRevision?: number;
+  /** Actor-owned generation incremented when the selected track identity changes. */
+  nativeTrackGeneration?: number;
   title: string;
   artist: string;
   albumArt: string;
   isPlaying: boolean;
   positionMs: number;
   durationMs: number;
+  progressKnown?: boolean;
+  neteaseProgressAvailable?: boolean;
   lastUpdatedTimestamp: number;
   source: string;
   sourceDisplay: string;
@@ -170,12 +186,14 @@ export interface AppError {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  neteaseProgressMode: "real",
   islandStyle: "floating",
   islandEdge: "top",
   islandEdgePosition: 50,
   collapsedEdgeShoulderRadius: 8,
   expandedEdgeShoulderRadius: 32,
-  compactLength: 80,
+  floatingCompactLength: 80,
+  edgeCompactLength: 80,
   language: "system",
   fontId: "misans",
   captureHideOnScreenshot: true,
@@ -215,8 +233,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   floatingWindowY: null,
   floatingWindowWidth: null,
   floatingWindowHeight: null,
-  floatingFillColor: "#28323c",
-  floatingUseAlbumColor: true,
   showSettingsTool: true,
   showFloatingTool: true,
   showVolumeTool: true,
@@ -236,12 +252,28 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hideSettingsButton: false,
   hideMonitorSelector: false,
   hideFloatingWindow: false,
-  expandedCornerRadius: 45,
+  floatingExpandedCornerRadius: 45,
+  edgeExpandedCornerRadius: 45,
   alwaysShowTopBar: true,
   clockTimeZone: "system",
 };
 
 export const DEFAULT_PREFERENCES = DEFAULT_SETTINGS;
+
+export function normalizeAppSettings(value: Partial<AppSettings>): AppSettings {
+  const legacy = value as Partial<AppSettings> & { compactLength?: number; expandedCornerRadius?: number };
+  const legacyCompactLength = Number(legacy.compactLength ?? 80);
+  const legacyExpandedRadius = Number(legacy.expandedCornerRadius ?? 45);
+  const merged = { ...DEFAULT_SETTINGS, ...value } as AppSettings;
+  merged.floatingCompactLength = Math.min(300, Math.max(80, Number(value.floatingCompactLength ?? legacyCompactLength)));
+  merged.edgeCompactLength = Math.min(300, Math.max(80, Number(value.edgeCompactLength ?? legacyCompactLength)));
+  merged.floatingExpandedCornerRadius = Math.min(80, Math.max(0, Number(value.floatingExpandedCornerRadius ?? legacyExpandedRadius)));
+  merged.edgeExpandedCornerRadius = Math.min(80, Math.max(0, Number(value.edgeExpandedCornerRadius ?? legacyExpandedRadius)));
+  if (merged.neteaseProgressMode !== "real" && merged.neteaseProgressMode !== "estimate") {
+    merged.neteaseProgressMode = DEFAULT_SETTINGS.neteaseProgressMode;
+  }
+  return merged;
+}
 
 export const PLAYER_NAMES: Record<string, string> = {
   netease: "网易云音乐",

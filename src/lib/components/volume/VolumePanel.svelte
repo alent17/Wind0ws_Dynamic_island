@@ -70,9 +70,13 @@
 
   function endDrag(event: PointerEvent) {
     if (pointerId !== event.pointerId) return;
-    if (!moved && event.type === "pointerup") {
-      const rect = rulerElement.getBoundingClientRect();
-      chooseVolume(startVolume + (event.clientX - rect.left - rect.width / 2) / 10);
+    if (event.type === "pointerup") {
+      if (moved) {
+        chooseVolume(startVolume + (startX - event.clientX) / 10);
+      } else {
+        const rect = rulerElement.getBoundingClientRect();
+        chooseVolume(startVolume + (event.clientX - rect.left - rect.width / 2) / 10);
+      }
     }
     pointerId = null;
     if (rulerElement.hasPointerCapture(event.pointerId)) rulerElement.releasePointerCapture(event.pointerId);

@@ -1,4 +1,20 @@
 export type CountdownStatus = "idle" | "running" | "paused";
+export type TimerSnapshot = {
+  status: CountdownStatus;
+  durationMs: number;
+  /** Absolute deadline for running timers; null for paused and idle timers. */
+  endsAt: number | null;
+  /** Exact frozen remaining time for paused/idle timers and legacy fallback. */
+  remainingMs: number;
+  label: string;
+  /** App producer identity and monotonic state order for stale-event rejection. */
+  appSessionId?: string;
+  stateRevision?: number;
+  /** Marks the first state snapshot from a newly mounted App session. */
+  sessionStart?: boolean;
+  /** Present only for an on-demand request/response handshake. */
+  requestId?: string;
+};
 
 export type CountdownState = {
   status: CountdownStatus;

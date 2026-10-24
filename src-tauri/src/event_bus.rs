@@ -79,7 +79,6 @@ pub const EVENT_SETTINGS_COMMITTED: &str = "settings-committed";
 /// 单个设置项变更时触发
 pub const EVENT_SETTINGS_CHANGED: &str = "settings-changed";
 
-pub const EVENT_CORNER_RADIUS_CHANGED: &str = "corner-radius-changed";
 pub const EVENT_LOCK_FLOATING_WINDOW_CHANGED: &str = "lock-floating-window-changed";
 pub const EVENT_ALWAYS_ON_TOP_CHANGED: &str = "always-on-top-changed";
 pub const EVENT_FLOATING_WINDOW_ALWAYS_ON_TOP_CHANGED: &str =
@@ -156,6 +155,15 @@ pub struct EventStats {
 
     /// 最后一次发送时间
     pub last_emit_time: Option<Instant>,
+}
+
+/// Result of attempting to hand an event to Tauri's AppHandle.
+/// Only `Emitted` is an acknowledgement that may advance producer state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EmitOutcome {
+    Emitted,
+    Throttled,
+    Disabled,
 }
 
 // ============================================================================
@@ -296,6 +304,54 @@ impl EventBus {
         payload: T,
         throttle_config: Option<ThrottleConfig>,
     ) -> AppResult<()> {
+        self.emit_with_options_outcome(event, payload, throttle_config)
+            .map(|_| ())
+    }
+
+    /// Like `emit_with_options`, but distinguishes a successful AppHandle
+    /// emission from intentional throttle or disabled outcomes.
+    pub fn emit_with_options_outcome<T: Serialize + Clone>(
+        &self,
+        event: &str,
+        payload: T,
+        throttle_config: Option<ThrottleConfig>,
+    ) -> AppResult<EmitOutcome> {
+        {
+            let enabled = self
+                .enabled
+                .lock()
+                .map_err(|_| AppError::lock("Lock failed"))?;
+            if !*enabled {
+                return Ok(EmitOutcome::Disabled);
+            }
+        }
+        let app = {
+            let handle = self
+                .app_handle
+                .lock()
+                .map_err(|_| AppError::lock("Lock failed"))?;
+            match handle.as_ref() {
+                Some(app) => app.clone(),
+                None => return Err(AppError::lock("AppHandle not initialized")),
+            }
+        };
+        self.emit_with_options_using(event, payload, throttle_config, move |event, payload| {
+            app.emit(event, payload).map_err(|error| {
+                AppError::Window(format!("[EventBus] 发送事件失败 {}: {}", event, error))
+            })
+        })
+    }
+
+    fn emit_with_options_using<T, F>(
+        &self,
+        event: &str,
+        payload: T,
+        throttle_config: Option<ThrottleConfig>,
+        emit: F,
+    ) -> AppResult<EmitOutcome>
+    where
+        F: FnOnce(&str, T) -> AppResult<()>,
+    {
         // 检查是否启用
         {
             let enabled = self
@@ -303,7 +359,7 @@ impl EventBus {
                 .lock()
                 .map_err(|_| AppError::lock("Lock failed"))?;
             if !*enabled {
-                return Ok(());
+                return Ok(EmitOutcome::Disabled);
             }
         }
 
@@ -326,7 +382,7 @@ impl EventBus {
                         .map_err(|_| AppError::lock("Lock failed"))?;
                     let entry = stats.entry(event.to_string()).or_default();
                     entry.total_dropped += 1;
-                    return Ok(()); // 被节流，直接返回
+                    return Ok(EmitOutcome::Throttled); // 被节流，未向任何WebView发送
                 }
             }
 
@@ -334,36 +390,15 @@ impl EventBus {
             states.insert(event.to_string(), (now, config));
         }
 
-        // 获取 AppHandle
-        let app = {
-            let handle = self
-                .app_handle
-                .lock()
-                .map_err(|_| AppError::lock("Lock failed"))?;
-            match handle.as_ref() {
-                Some(app) => app.clone(),
-                None => return Err(AppError::lock("AppHandle not initialized")),
-            }
-        };
-
-        // 发送事件
-        match app.emit(event, payload) {
-            Ok(_) => {
-                // 更新统计
-                let mut stats = self
-                    .stats
-                    .lock()
-                    .map_err(|_| AppError::lock("Failed to lock stats"))?;
-                let entry = stats.entry(event.to_string()).or_default();
-                entry.total_emitted += 1;
-                entry.last_emit_time = Some(Instant::now());
-                Ok(())
-            }
-            Err(e) => {
-                let err_msg = format!("[EventBus] 发送事件失败 {}: {}", event, e);
-                Err(AppError::Window(err_msg))
-            }
-        }
+        emit(event, payload)?;
+        let mut stats = self
+            .stats
+            .lock()
+            .map_err(|_| AppError::lock("Failed to lock stats"))?;
+        let entry = stats.entry(event.to_string()).or_default();
+        entry.total_emitted += 1;
+        entry.last_emit_time = Some(Instant::now());
+        Ok(EmitOutcome::Emitted)
     }
 
     /// 批量发送事件
@@ -435,6 +470,70 @@ impl Default for EventBus {
     }
 }
 
+#[cfg(test)]
+mod outcome_tests {
+    use super::{EmitOutcome, EventBus, EventPriority, ThrottleConfig, EVENT_MEDIA_UPDATE};
+    use crate::error::AppError;
+
+    fn throttle() -> ThrottleConfig {
+        ThrottleConfig {
+            interval_ms: 500,
+            priority: EventPriority::Normal,
+        }
+    }
+
+    #[test]
+    fn outcome_distinguishes_emitted_throttled_disabled_and_send_failure() {
+        let bus = EventBus::new();
+        let emitted =
+            bus.emit_with_options_using(EVENT_MEDIA_UPDATE, 1u32, Some(throttle()), |_, _| Ok(()));
+        assert_eq!(emitted.unwrap(), EmitOutcome::Emitted);
+
+        let second_call = std::cell::Cell::new(false);
+        let throttled =
+            bus.emit_with_options_using(EVENT_MEDIA_UPDATE, 2u32, Some(throttle()), |_, _| {
+                second_call.set(true);
+                Ok(())
+            });
+        assert_eq!(throttled.unwrap(), EmitOutcome::Throttled);
+        assert!(!second_call.get());
+        let stats = bus.get_stats();
+        let media = stats.get(EVENT_MEDIA_UPDATE).unwrap();
+        assert_eq!(media.total_emitted, 1);
+        assert_eq!(media.total_dropped, 1);
+
+        bus.set_enabled(false).unwrap();
+        let disabled_call = std::cell::Cell::new(false);
+        let disabled = bus.emit_with_options_using(EVENT_MEDIA_UPDATE, 3u32, None, |_, _| {
+            disabled_call.set(true);
+            Ok(())
+        });
+        assert_eq!(disabled.unwrap(), EmitOutcome::Disabled);
+        assert!(!disabled_call.get());
+
+        let uninitialized_bus = EventBus::new();
+        let uninitialized =
+            uninitialized_bus.emit_with_options_outcome(EVENT_MEDIA_UPDATE, 5u32, Some(throttle()));
+        assert!(uninitialized.is_err()); // No AppHandle is not an Emitted acknowledgement.
+        assert!(uninitialized_bus
+            .emit_with_options_outcome(EVENT_MEDIA_UPDATE, 6u32, Some(throttle()))
+            .is_err()); // Initialization errors are not misreported as later throttle drops.
+
+        let failed_bus = EventBus::new();
+        let failed = failed_bus.emit_with_options_using(EVENT_MEDIA_UPDATE, 4u32, None, |_, _| {
+            Err(AppError::Window("fixture send failure".into()))
+        });
+        assert!(failed.is_err());
+        assert_eq!(
+            failed_bus
+                .get_stats()
+                .get(EVENT_MEDIA_UPDATE)
+                .map_or(0, |stats| stats.total_emitted),
+            0
+        );
+    }
+}
+
 // ============================================================================
 // 全局实例
 // ============================================================================
@@ -456,8 +555,15 @@ lazy_static::lazy_static! {
 /// # 参数
 ///
 /// - `payload`: 媒体状态数据
+#[allow(dead_code)]
 pub fn emit_media_update<T: Serialize + Clone>(payload: T) -> AppResult<()> {
-    EVENT_BUS.emit_with_options(
+    emit_media_update_outcome(payload).map(|_| ())
+}
+
+/// Media-specific form that tells the producer whether Tauri actually accepted
+/// the event, so delta baselines are advanced only for a real emission.
+pub fn emit_media_update_outcome<T: Serialize + Clone>(payload: T) -> AppResult<EmitOutcome> {
+    EVENT_BUS.emit_with_options_outcome(
         EVENT_MEDIA_UPDATE,
         payload,
         Some(ThrottleConfig {

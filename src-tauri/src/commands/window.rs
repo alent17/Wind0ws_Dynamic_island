@@ -2,11 +2,13 @@ use crate::error::{AppError, AppResult};
 use crate::event_bus::EVENT_BUS;
 use crate::state::AppState;
 use serde::Deserialize;
+use std::collections::{HashMap, HashSet};
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
-    Mutex, OnceLock,
+    Arc, Mutex, OnceLock,
 };
-use tauri::{AppHandle, Manager, Emitter};
+use std::time::Instant;
+use tauri::{AppHandle, Emitter, Manager};
 
 const DEFAULT_FLOATING_WINDOW_WIDTH: u32 = 260;
 const DEFAULT_FLOATING_WINDOW_HEIGHT: u32 = 360;
@@ -52,19 +54,339 @@ struct IslandInteractionRegion {
 
 static ISLAND_INTERACTION_REGION: OnceLock<Mutex<IslandInteractionRegion>> = OnceLock::new();
 static ISLAND_INTERACTION_REGION_REVISION: AtomicU64 = AtomicU64::new(0);
+#[cfg(feature = "experimental-native-region")]
+static ISLAND_INTERACTION_REGION_ACCEPTED_REVISION: AtomicU64 = AtomicU64::new(0);
 static ISLAND_CURSOR_MONITOR_STARTED: AtomicBool = AtomicBool::new(false);
 static ISLAND_CURSOR_WATCHDOG_STARTED: AtomicBool = AtomicBool::new(false);
 static ISLAND_CURSOR_MONITOR_GENERATION: AtomicU64 = AtomicU64::new(0);
 static ISLAND_CURSOR_MONITOR_HEARTBEAT: AtomicU64 = AtomicU64::new(0);
+static ISLAND_CURSOR_MONITOR_LABEL: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+static ISLAND_CURSOR_SCALE_FACTORS: OnceLock<CursorScaleFactorRegistry> = OnceLock::new();
+static MAIN_WORK_AREA_INSTALL_GENERATION: AtomicU64 = AtomicU64::new(0);
+static MAIN_WORK_AREA_SUBCLASSES: OnceLock<MainWorkAreaSubclassRegistry> = OnceLock::new();
 static WINDOW_MOTION_REVISION: AtomicU64 = AtomicU64::new(0);
+
+// Shared raster/offline reference; absent from the default production build.
+#[cfg(any(test, feature = "experimental-native-region"))]
+#[allow(dead_code)]
+#[path = "window_region_prototype.rs"]
+mod region_prototype;
+
+#[cfg(feature = "experimental-native-region")]
+#[path = "window_region_adapter.rs"]
+mod region_adapter;
+
+#[cfg(feature = "compact-native-probe")]
+#[path = "window_compact_probe.rs"]
+mod compact_probe;
+#[cfg(feature = "compact-native-probe")]
+pub use compact_probe::apply_compact_probe_region;
 
 const CURSOR_MONITOR_ACTIVE_INTERVAL_MS: u64 = 33;
 const CURSOR_MONITOR_NEAR_INTERVAL_MS: u64 = 50;
 const CURSOR_MONITOR_IDLE_INTERVAL_MS: u64 = 200;
 const CURSOR_MONITOR_NEAR_DISTANCE_PX: i64 = 240;
 const CURSOR_MONITOR_RETRY_MS: u64 = 100;
+const CURSOR_SCALE_FACTOR_REFRESH_MS: u64 = 1_000;
 const CURSOR_MONITOR_WATCHDOG_INTERVAL_MS: u64 = 1_000;
 const CURSOR_MONITOR_STALE_MS: u64 = 3_000;
+const MAIN_WORK_AREA_SUBCLASS_ID: usize = 0x4953_4C45;
+const MAIN_WORK_AREA_EVENT: &str = "isle-work-area-changed";
+const MAIN_WINDOW_LABEL: &str = "main";
+
+struct MainWorkAreaNotice {
+    app: AppHandle,
+    pending: AtomicBool,
+    destroyed: AtomicBool,
+    destroy_cleanup_started: AtomicBool,
+}
+
+#[derive(Default)]
+struct MainWorkAreaSubclassRegistry {
+    windows: Mutex<HashSet<isize>>,
+}
+
+impl MainWorkAreaSubclassRegistry {
+    fn contains(&self, hwnd: isize) -> bool {
+        self.windows
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(&hwnd)
+    }
+
+    fn insert(&self, hwnd: isize) {
+        self.windows
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(hwnd);
+    }
+
+    fn remove(&self, hwnd: isize) {
+        self.windows
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&hwnd);
+    }
+}
+
+fn main_work_area_subclass_registry() -> &'static MainWorkAreaSubclassRegistry {
+    MAIN_WORK_AREA_SUBCLASSES.get_or_init(MainWorkAreaSubclassRegistry::default)
+}
+
+fn is_main_work_area_change_message(message: u32, wparam: usize) -> bool {
+    use windows052::Win32::UI::WindowsAndMessaging::{
+        SPI_SETWORKAREA, WM_DISPLAYCHANGE, WM_SETTINGCHANGE,
+    };
+
+    message == WM_DISPLAYCHANGE
+        || (message == WM_SETTINGCHANGE && wparam == SPI_SETWORKAREA.0 as usize)
+}
+
+/// Queue installation without blocking a WebView/event callback. The actual
+/// subclass operation is dispatched to the window's UI thread below.
+pub fn schedule_main_work_area_listener(window: tauri::Window) {
+    if window.label() != MAIN_WINDOW_LABEL {
+        return;
+    }
+    let generation = MAIN_WORK_AREA_INSTALL_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
+    let app = window.app_handle().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let hwnd = match window.hwnd() {
+            Ok(hwnd) => windows052::Win32::Foundation::HWND(hwnd.0 as isize),
+            Err(error) => {
+                tracing::warn!("[Work area] 获取主窗口句柄失败，保留5分钟布局兜底: {error}");
+                return;
+            }
+        };
+        let install_app = app.clone();
+        if let Err(error) = app.run_on_main_thread(move || {
+            if generation != MAIN_WORK_AREA_INSTALL_GENERATION.load(Ordering::Acquire) {
+                return;
+            }
+            if !unsafe { windows052::Win32::UI::WindowsAndMessaging::IsWindow(hwnd) }.as_bool() {
+                return;
+            }
+            if let Err(error) = install_main_work_area_subclass(hwnd, install_app) {
+                tracing::warn!("[Work area] 安装主窗口消息监听失败，保留5分钟布局兜底: {error}");
+            }
+        }) {
+            tracing::warn!("[Work area] 调度主窗口消息监听失败，保留5分钟布局兜底: {error}");
+        }
+    });
+}
+
+/// Invalidate pending setup work when `main` is destroyed. The native
+/// WM_NCDESTROY callback separately removes its own subclass and state.
+pub fn main_work_area_listener_window_destroyed(label: &str) {
+    if label == MAIN_WINDOW_LABEL {
+        MAIN_WORK_AREA_INSTALL_GENERATION.fetch_add(1, Ordering::AcqRel);
+    }
+}
+
+fn install_main_work_area_subclass(
+    hwnd: windows052::Win32::Foundation::HWND,
+    app: AppHandle,
+) -> Result<(), &'static str> {
+    use windows052::Win32::UI::Shell::SetWindowSubclass;
+
+    let key = hwnd.0 as isize;
+    let registry = main_work_area_subclass_registry();
+    if registry.contains(key) {
+        return Ok(());
+    }
+
+    let notice = Box::new(std::sync::Arc::new(MainWorkAreaNotice {
+        app,
+        pending: AtomicBool::new(false),
+        destroyed: AtomicBool::new(false),
+        destroy_cleanup_started: AtomicBool::new(false),
+    }));
+    let ref_data = Box::into_raw(notice) as usize;
+    if !unsafe {
+        SetWindowSubclass(
+            hwnd,
+            Some(main_work_area_subclass_proc),
+            MAIN_WORK_AREA_SUBCLASS_ID,
+            ref_data,
+        )
+    }
+    .as_bool()
+    {
+        unsafe {
+            drop(Box::from_raw(
+                ref_data as *mut std::sync::Arc<MainWorkAreaNotice>,
+            ))
+        };
+        return Err("SetWindowSubclass returned false");
+    }
+    registry.insert(key);
+    Ok(())
+}
+
+unsafe extern "system" fn main_work_area_subclass_proc(
+    hwnd: windows052::Win32::Foundation::HWND,
+    message: u32,
+    wparam: windows052::Win32::Foundation::WPARAM,
+    lparam: windows052::Win32::Foundation::LPARAM,
+    subclass_id: usize,
+    ref_data: usize,
+) -> windows052::Win32::Foundation::LRESULT {
+    use windows052::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass};
+    use windows052::Win32::UI::WindowsAndMessaging::WM_NCDESTROY;
+
+    let mut release_ref_data_after_default_proc = false;
+    if ref_data != 0 {
+        let notice = &*(ref_data as *const std::sync::Arc<MainWorkAreaNotice>);
+        if is_main_work_area_change_message(message, wparam.0)
+            && !notice.destroyed.load(Ordering::Acquire)
+            && !notice.pending.swap(true, Ordering::AcqRel)
+        {
+            let notice = std::sync::Arc::clone(notice);
+            tauri::async_runtime::spawn(async move {
+                if !notice.destroyed.load(Ordering::Acquire) {
+                    let _ = notice
+                        .app
+                        .emit_to(MAIN_WINDOW_LABEL, MAIN_WORK_AREA_EVENT, ());
+                }
+                notice.pending.store(false, Ordering::Release);
+            });
+        }
+
+        if message == WM_NCDESTROY {
+            notice.destroyed.store(true, Ordering::Release);
+            if !notice.destroy_cleanup_started.swap(true, Ordering::AcqRel) {
+                if !RemoveWindowSubclass(hwnd, Some(main_work_area_subclass_proc), subclass_id)
+                    .as_bool()
+                {
+                    tracing::warn!("[Work area] WM_NCDESTROY期间移除主窗口subclass未确认");
+                }
+                main_work_area_subclass_registry().remove(hwnd.0 as isize);
+                release_ref_data_after_default_proc = true;
+            }
+        }
+    }
+
+    let result = DefSubclassProc(hwnd, message, wparam, lparam);
+    if release_ref_data_after_default_proc {
+        drop(Box::from_raw(
+            ref_data as *mut std::sync::Arc<MainWorkAreaNotice>,
+        ));
+    }
+    result
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct CursorScaleFactorSnapshot {
+    event_revision: u64,
+    scale_factor: Option<f64>,
+}
+
+#[derive(Default)]
+struct CursorScaleFactorCache {
+    state: Mutex<CursorScaleFactorSnapshot>,
+}
+
+impl CursorScaleFactorCache {
+    fn snapshot(&self) -> CursorScaleFactorSnapshot {
+        *self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn update_from_event(&self, scale_factor: f64) {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.event_revision = state.event_revision.wrapping_add(1);
+        state.scale_factor = valid_scale_factor(scale_factor).then_some(scale_factor);
+    }
+
+    fn update_from_query(&self, observed_event_revision: u64, scale_factor: f64) -> bool {
+        if !valid_scale_factor(scale_factor) {
+            return false;
+        }
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if state.event_revision != observed_event_revision {
+            return false;
+        }
+        state.scale_factor = Some(scale_factor);
+        true
+    }
+
+    fn clear_from_query(&self, observed_event_revision: u64) -> bool {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if state.event_revision != observed_event_revision {
+            return false;
+        }
+        state.scale_factor = None;
+        true
+    }
+}
+
+#[derive(Default)]
+struct CursorScaleFactorRegistry {
+    by_label: Mutex<HashMap<String, Arc<CursorScaleFactorCache>>>,
+}
+
+impl CursorScaleFactorRegistry {
+    fn for_window(&self, label: &str) -> Arc<CursorScaleFactorCache> {
+        let mut by_label = self
+            .by_label
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Arc::clone(
+            by_label
+                .entry(label.to_string())
+                .or_insert_with(|| Arc::new(CursorScaleFactorCache::default())),
+        )
+    }
+
+    fn remove_window(&self, label: &str) {
+        self.by_label
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(label);
+    }
+}
+
+fn valid_scale_factor(scale_factor: f64) -> bool {
+    scale_factor.is_finite() && scale_factor > 0.0
+}
+
+fn cursor_scale_factor_registry() -> &'static CursorScaleFactorRegistry {
+    ISLAND_CURSOR_SCALE_FACTORS.get_or_init(CursorScaleFactorRegistry::default)
+}
+
+/// Keep the cursor monitor's per-window scale factor current without making
+/// every cursor poll synchronously query the Tauri event loop.
+pub fn update_cursor_scale_factor_from_event(label: &str, scale_factor: f64) {
+    cursor_scale_factor_registry()
+        .for_window(label)
+        .update_from_event(scale_factor);
+}
+
+/// Invalidate the monitor generation and its DPI cache when its window dies.
+pub fn cursor_monitor_window_destroyed(label: &str) {
+    cursor_scale_factor_registry().remove_window(label);
+    let active_label = ISLAND_CURSOR_MONITOR_LABEL.get_or_init(|| Mutex::new(None));
+    let mut active_label = active_label
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if active_label.as_deref() == Some(label) {
+        *active_label = None;
+        ISLAND_CURSOR_MONITOR_GENERATION.fetch_add(1, Ordering::AcqRel);
+        ISLAND_CURSOR_MONITOR_HEARTBEAT.store(0, Ordering::Release);
+        ISLAND_CURSOR_MONITOR_STARTED.store(false, Ordering::Release);
+    }
+}
 
 #[derive(Default)]
 struct WindowMotionState {
@@ -378,7 +700,7 @@ fn interaction_revision_is_current(candidate: u64, current: u64) -> bool {
 fn cursor_monitor_interval(
     cursor_x: i32,
     cursor_y: i32,
-    rect: &windows::Win32::Foundation::RECT,
+    rect: &windows052::Win32::Foundation::RECT,
     inside: bool,
 ) -> u64 {
     if inside {
@@ -409,15 +731,31 @@ fn cursor_monitor_interval(
 }
 
 fn spawn_cursor_monitor(window: tauri::WebviewWindow, generation: u64) -> AppResult<()> {
-    use windows::Win32::Foundation::{HWND, POINT, RECT};
-    use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetWindowRect};
+    use windows052::Win32::Foundation::{HWND, POINT, RECT};
+    use windows052::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetWindowRect};
 
+    let window_label = window.label().to_string();
+    let scale_factor_cache = cursor_scale_factor_registry().for_window(&window_label);
+    let current_window = window
+        .app_handle()
+        .get_webview_window(&window_label)
+        .ok_or_else(|| AppError::window("Cursor monitor window no longer exists"))?;
     let raw_handle = window
         .hwnd()
         .map_err(|error| AppError::window(error.to_string()))?;
+    let current_handle = current_window
+        .hwnd()
+        .map_err(|error| AppError::window(error.to_string()))?;
+    if raw_handle.0 != current_handle.0 {
+        return Err(AppError::window(
+            "Cursor monitor window was recreated during startup",
+        ));
+    }
     let handle = HWND(raw_handle.0 as _);
     std::thread::spawn(move || {
         let mut last_ignored = None;
+        let mut observed_scale_event_revision = scale_factor_cache.snapshot().event_revision;
+        let mut next_scale_factor_refresh = Instant::now();
         while monitor_owns_generation(
             generation,
             ISLAND_CURSOR_MONITOR_GENERATION.load(Ordering::Acquire),
@@ -425,7 +763,7 @@ fn spawn_cursor_monitor(window: tauri::WebviewWindow, generation: u64) -> AppRes
             ISLAND_CURSOR_MONITOR_HEARTBEAT.store(unix_millis(), Ordering::Release);
             if window
                 .app_handle()
-                .get_webview_window(window.label())
+                .get_webview_window(&window_label)
                 .is_none()
             {
                 break;
@@ -442,14 +780,49 @@ fn spawn_cursor_monitor(window: tauri::WebviewWindow, generation: u64) -> AppRes
                 continue;
             }
 
-            let scale = match window.scale_factor() {
-                Ok(scale) => scale.max(f64::EPSILON),
-                Err(_) => {
-                    let _ = window.set_ignore_cursor_events(false);
-                    last_ignored = Some(false);
-                    std::thread::sleep(std::time::Duration::from_millis(CURSOR_MONITOR_RETRY_MS));
-                    continue;
+            let now = Instant::now();
+            let mut scale_snapshot = scale_factor_cache.snapshot();
+            if scale_snapshot.event_revision != observed_scale_event_revision {
+                observed_scale_event_revision = scale_snapshot.event_revision;
+                let refresh_ms = if scale_snapshot.scale_factor.is_some() {
+                    CURSOR_SCALE_FACTOR_REFRESH_MS
+                } else {
+                    0
+                };
+                next_scale_factor_refresh = now + std::time::Duration::from_millis(refresh_ms);
+            }
+            if now >= next_scale_factor_refresh {
+                let query_revision = scale_snapshot.event_revision;
+                match window.scale_factor() {
+                    Ok(scale_factor) => {
+                        if !scale_factor_cache.update_from_query(query_revision, scale_factor)
+                            && !valid_scale_factor(scale_factor)
+                        {
+                            scale_factor_cache.clear_from_query(query_revision);
+                        }
+                    }
+                    Err(_) => {
+                        scale_factor_cache.clear_from_query(query_revision);
+                    }
                 }
+                scale_snapshot = scale_factor_cache.snapshot();
+                observed_scale_event_revision = scale_snapshot.event_revision;
+                let refresh_ms = if scale_snapshot.scale_factor.is_some() {
+                    CURSOR_SCALE_FACTOR_REFRESH_MS
+                } else {
+                    CURSOR_MONITOR_RETRY_MS
+                };
+                next_scale_factor_refresh =
+                    Instant::now() + std::time::Duration::from_millis(refresh_ms);
+            }
+            let Some(scale) = scale_snapshot
+                .scale_factor
+                .filter(|scale| valid_scale_factor(*scale))
+            else {
+                let _ = window.set_ignore_cursor_events(false);
+                last_ignored = Some(false);
+                std::thread::sleep(std::time::Duration::from_millis(CURSOR_MONITOR_RETRY_MS));
+                continue;
             };
             let local_x = (cursor.x - window_rect.left) as f64 / scale;
             let local_y = (cursor.y - window_rect.top) as f64 / scale;
@@ -519,6 +892,12 @@ fn ensure_cursor_watchdog(window: &tauri::WebviewWindow) {
 }
 
 pub fn install_island_cursor_passthrough(window: &tauri::WebviewWindow) -> AppResult<()> {
+    #[cfg(feature = "experimental-native-region")]
+    if window.label() == region_adapter::LABEL {
+        return Err(AppError::window(
+            "Experimental region window has an exclusive owner",
+        ));
+    }
     let initial_radii = InteractionCornerRadii {
         top_left: 14.0,
         top_right: 14.0,
@@ -536,6 +915,12 @@ pub fn install_island_cursor_passthrough(window: &tauri::WebviewWindow) -> AppRe
     )
     .map_err(AppError::window)?;
     ISLAND_INTERACTION_REGION.get_or_init(|| Mutex::new(initial));
+
+    *ISLAND_CURSOR_MONITOR_LABEL
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(window.label().to_string());
+    let _ = cursor_scale_factor_registry().for_window(window.label());
 
     ensure_cursor_watchdog(window);
 
@@ -577,18 +962,65 @@ pub fn set_island_interaction_region(
         return Ok(());
     }
     if *region == next {
+        #[cfg(feature = "experimental-native-region")]
+        ISLAND_INTERACTION_REGION_ACCEPTED_REVISION.store(revision, Ordering::Release);
         return Ok(());
     }
     *region = next;
+    #[cfg(feature = "experimental-native-region")]
+    ISLAND_INTERACTION_REGION_ACCEPTED_REVISION.store(revision, Ordering::Release);
     Ok(())
+}
+
+// These entry points reject in a default build. They never alter main's policy.
+#[tauri::command]
+pub async fn experimental_region_open(
+    app: AppHandle,
+    revision: u64,
+    mode: String,
+) -> AppResult<serde_json::Value> {
+    #[cfg(feature = "experimental-native-region")]
+    {
+        return region_adapter::open(app, revision, mode)
+            .await
+            .map_err(AppError::window);
+    }
+    #[cfg(not(feature = "experimental-native-region"))]
+    {
+        let _ = (app, revision, mode);
+        Err(AppError::window(
+            "experimental-native-region feature is disabled",
+        ))
+    }
+}
+
+#[tauri::command]
+pub async fn experimental_region_control(
+    app: AppHandle,
+    action: String,
+) -> AppResult<serde_json::Value> {
+    #[cfg(feature = "experimental-native-region")]
+    {
+        return region_adapter::control(app, action)
+            .await
+            .map_err(AppError::window);
+    }
+    #[cfg(not(feature = "experimental-native-region"))]
+    {
+        let _ = (app, action);
+        Err(AppError::window(
+            "experimental-native-region feature is disabled",
+        ))
+    }
 }
 
 #[cfg(test)]
 mod interaction_region_tests {
     use super::{
-        cursor_monitor_is_stale, interaction_revision_is_current, monitor_owns_generation,
-        normalized_interaction_region, point_in_rounded_rect, InteractionCornerRadii,
-        InteractionExtraRect, InteractionPoint,
+        cursor_monitor_is_stale, interaction_revision_is_current, is_main_work_area_change_message,
+        monitor_owns_generation, normalized_interaction_region, point_in_rounded_rect,
+        CursorScaleFactorCache, CursorScaleFactorRegistry, InteractionCornerRadii,
+        InteractionExtraRect, InteractionPoint, MainWorkAreaSubclassRegistry,
     };
 
     fn radii(value: f64) -> InteractionCornerRadii {
@@ -749,6 +1181,90 @@ mod interaction_region_tests {
         assert!(!cursor_monitor_is_stale(true, 7_001, 10_000));
         assert!(cursor_monitor_is_stale(true, 7_000, 10_000));
     }
+
+    #[test]
+    fn a_scale_event_wins_over_an_in_flight_initial_query() {
+        let cache = CursorScaleFactorCache::default();
+        let before_query = cache.snapshot();
+
+        cache.update_from_event(1.5);
+        assert!(!cache.update_from_query(before_query.event_revision, 1.0));
+
+        let after_event = cache.snapshot();
+        assert_eq!(after_event.event_revision, 1);
+        assert_eq!(after_event.scale_factor, Some(1.5));
+    }
+
+    #[test]
+    fn scale_factor_cache_rejects_non_positive_and_non_finite_values() {
+        let cache = CursorScaleFactorCache::default();
+        assert!(cache.update_from_query(0, 2.0));
+        assert_eq!(cache.snapshot().scale_factor, Some(2.0));
+
+        for invalid in [0.0, -1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(!cache.update_from_query(0, invalid));
+            cache.update_from_event(invalid);
+            assert_eq!(cache.snapshot().scale_factor, None);
+        }
+    }
+
+    #[test]
+    fn failed_query_clears_only_the_scale_it_observed() {
+        let cache = CursorScaleFactorCache::default();
+        assert!(cache.update_from_query(0, 1.5));
+        assert!(cache.clear_from_query(0));
+        assert_eq!(cache.snapshot().scale_factor, None);
+
+        cache.update_from_event(2.0);
+        assert!(!cache.clear_from_query(0));
+        assert_eq!(cache.snapshot().scale_factor, Some(2.0));
+    }
+
+    #[test]
+    fn scale_factor_cache_is_per_window_and_recreated_after_destroy() {
+        let registry = CursorScaleFactorRegistry::default();
+        let main = registry.for_window("main");
+        let studio = registry.for_window("studio-window");
+
+        main.update_from_event(1.25);
+        assert_eq!(main.snapshot().scale_factor, Some(1.25));
+        assert_eq!(studio.snapshot().scale_factor, None);
+
+        registry.remove_window("main");
+        let recreated_main = registry.for_window("main");
+        assert_eq!(recreated_main.snapshot().scale_factor, None);
+        assert!(!std::sync::Arc::ptr_eq(&main, &recreated_main));
+    }
+
+    #[test]
+    fn work_area_notice_filters_display_and_work_area_messages_only() {
+        use windows052::Win32::UI::WindowsAndMessaging::{
+            SPI_SETWORKAREA, WM_DISPLAYCHANGE, WM_SETTINGCHANGE, WM_WINDOWPOSCHANGED,
+        };
+
+        assert!(is_main_work_area_change_message(WM_DISPLAYCHANGE, 0));
+        assert!(is_main_work_area_change_message(
+            WM_SETTINGCHANGE,
+            SPI_SETWORKAREA.0 as usize
+        ));
+        assert!(!is_main_work_area_change_message(WM_SETTINGCHANGE, 0));
+        assert!(!is_main_work_area_change_message(WM_WINDOWPOSCHANGED, 0));
+    }
+
+    #[test]
+    fn destroyed_work_area_subclass_can_be_installed_again_for_same_label_window() {
+        let registry = MainWorkAreaSubclassRegistry::default();
+        let hwnd = 0xCAFE;
+        assert!(!registry.contains(hwnd));
+        registry.insert(hwnd);
+        assert!(registry.contains(hwnd));
+
+        registry.remove(hwnd);
+        assert!(!registry.contains(hwnd));
+        registry.insert(hwnd);
+        assert!(registry.contains(hwnd));
+        registry.remove(hwnd);
+    }
 }
 
 #[tauri::command]
@@ -802,7 +1318,7 @@ pub async fn show_studio_window(app: AppHandle) -> AppResult<()> {
     .map_err(|e| AppError::window(format!("创建设置窗口失败: {}", e)))?;
 
     window.show().map_err(|e| AppError::window(e.to_string()))?;
-        let _ = window.emit("isle-window-visible", true);
+    let _ = window.emit("isle-window-visible", true);
     window
         .set_focus()
         .map_err(|e| AppError::window(e.to_string()))?;
@@ -814,7 +1330,9 @@ pub async fn show_studio_window(app: AppHandle) -> AppResult<()> {
 pub async fn toggle_studio_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("studio-window") {
         if window.is_visible().unwrap_or(false) {
-            window.close().map_err(|e| AppError::window(e.to_string()))?;
+            window
+                .close()
+                .map_err(|e| AppError::window(e.to_string()))?;
             return Ok(());
         }
 
@@ -828,14 +1346,104 @@ pub async fn toggle_studio_window(app: AppHandle) -> AppResult<()> {
 pub async fn toggle_floating_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("floating_player") {
         if window.is_visible().unwrap_or(false) {
-            return close_floating_window(app).await;
+            return close_floating_window(app, None).await;
         }
     }
     open_floating_window(app).await
 }
 
+async fn find_or_create_window<'a, T, E>(
+    create_lock: &'a tokio::sync::Mutex<()>,
+    find_existing: impl FnOnce() -> Option<T>,
+    create: impl FnOnce() -> Result<T, E>,
+) -> Result<(T, bool, tokio::sync::MutexGuard<'a, ()>), E> {
+    let guard = create_lock.lock().await;
+    if let Some(window) = find_existing() {
+        return Ok((window, false, guard));
+    }
+    create().map(|window| (window, true, guard))
+}
+
+#[cfg(test)]
+mod floating_window_create_tests {
+    use super::find_or_create_window;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    };
+
+    #[tokio::test]
+    async fn concurrent_open_requests_build_only_one_instance() {
+        let create_lock = Arc::new(tokio::sync::Mutex::new(()));
+        let registry = Arc::new(Mutex::new(None::<usize>));
+        let build_count = Arc::new(AtomicUsize::new(0));
+
+        let open = |create_lock: Arc<tokio::sync::Mutex<()>>,
+                    registry: Arc<Mutex<Option<usize>>>,
+                    build_count: Arc<AtomicUsize>| async move {
+            let (window, created, _guard) = find_or_create_window(
+                &create_lock,
+                || *registry.lock().unwrap(),
+                || {
+                    let id = build_count.fetch_add(1, Ordering::SeqCst) + 1;
+                    *registry.lock().unwrap() = Some(id);
+                    Ok::<_, ()>(id)
+                },
+            )
+            .await
+            .unwrap();
+            (window, created)
+        };
+
+        let (first, second) = tokio::join!(
+            open(create_lock.clone(), registry.clone(), build_count.clone()),
+            open(create_lock, registry.clone(), build_count.clone()),
+        );
+
+        assert_eq!(first.0, second.0);
+        assert_ne!(first.1, second.1);
+        assert_eq!(build_count.load(Ordering::SeqCst), 1);
+        assert_eq!(*registry.lock().unwrap(), Some(first.0));
+    }
+
+    #[tokio::test]
+    async fn existing_instance_is_reused_without_building() {
+        let create_lock = tokio::sync::Mutex::new(());
+        let (window, created, _guard) = find_or_create_window(
+            &create_lock,
+            || Some("existing-label"),
+            || -> Result<&str, ()> { panic!("existing instance must skip builder") },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(window, "existing-label");
+        assert!(!created);
+    }
+
+    #[tokio::test]
+    async fn failed_build_releases_lock_and_allows_retry() {
+        let create_lock = tokio::sync::Mutex::new(());
+        let failed = find_or_create_window(
+            &create_lock,
+            || None::<usize>,
+            || Err::<usize, _>("build failed"),
+        )
+        .await;
+        assert_eq!(failed.unwrap_err(), "build failed");
+
+        let (window, created, _guard) =
+            find_or_create_window(&create_lock, || None::<usize>, || Ok::<_, &str>(42))
+                .await
+                .unwrap();
+        assert_eq!(window, 42);
+        assert!(created);
+    }
+}
+
 #[tauri::command]
 pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
+    static CREATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     let animate = floating_window_animations_enabled(&app);
     let state = app.state::<AppState>();
     let (saved_position, always_on_top) = {
@@ -854,7 +1462,44 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
         )
     };
 
-    if let Some(window) = app.get_webview_window("floating_player") {
+    let (window, created, _create) = find_or_create_window(
+        &CREATE,
+        || app.get_webview_window("floating_player"),
+        || {
+            let mut builder = tauri::WebviewWindowBuilder::new(
+                &app,
+                "floating_player",
+                tauri::WebviewUrl::App("index.html?window=floating".into()),
+            )
+            .title("Mini Player")
+            .min_inner_size(200.0, 200.0)
+            .resizable(true)
+            .decorations(false)
+            .transparent(true)
+            .shadow(false)
+            .skip_taskbar(true)
+            .always_on_top(always_on_top);
+
+            if let (Some(x), Some(y), Some(w), Some(h)) = saved_position {
+                builder = builder.inner_size(w.max(200) as f64, h.max(200) as f64);
+                builder = builder.position(x as f64, y as f64);
+            } else {
+                builder = builder.inner_size(
+                    DEFAULT_FLOATING_WINDOW_WIDTH as f64,
+                    DEFAULT_FLOATING_WINDOW_HEIGHT as f64,
+                );
+                builder = builder.center();
+            }
+
+            builder
+                .visible(false)
+                .build()
+                .map_err(|e| AppError::window(e.to_string()))
+        },
+    )
+    .await?;
+
+    if !created {
         window
             .set_shadow(false)
             .map_err(|e| AppError::window(e.to_string()))?;
@@ -892,36 +1537,6 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
         return Ok(());
     }
 
-    let mut builder = tauri::WebviewWindowBuilder::new(
-        &app,
-        "floating_player",
-        tauri::WebviewUrl::App("index.html?window=floating".into()),
-    )
-    .title("Mini Player")
-    .min_inner_size(200.0, 200.0)
-    .resizable(true)
-    .decorations(false)
-    .transparent(true)
-    .shadow(false)
-    .skip_taskbar(true)
-    .always_on_top(always_on_top);
-
-    if let (Some(x), Some(y), Some(w), Some(h)) = saved_position {
-        builder = builder.inner_size(w.max(200) as f64, h.max(200) as f64);
-        builder = builder.position(x as f64, y as f64);
-    } else {
-        builder = builder.inner_size(
-            DEFAULT_FLOATING_WINDOW_WIDTH as f64,
-            DEFAULT_FLOATING_WINDOW_HEIGHT as f64,
-        );
-        builder = builder.center();
-    }
-
-    let window = builder
-        .visible(false)
-        .build()
-        .map_err(|e| AppError::window(e.to_string()))?;
-
     let target = window
         .outer_position()
         .map_err(|e| AppError::window(e.to_string()))?;
@@ -937,7 +1552,7 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
             .map_err(|e| AppError::window(e.to_string()))?;
     }
     window.show().map_err(|e| AppError::window(e.to_string()))?;
-        let _ = window.emit("isle-window-visible", true);
+    let _ = window.emit("isle-window-visible", true);
     window
         .set_focus()
         .map_err(|e| AppError::window(e.to_string()))?;
@@ -953,27 +1568,35 @@ pub async fn open_timer_window(app: AppHandle) -> AppResult<()> {
     let window = if let Some(window) = app.get_webview_window("timer_window") {
         window
     } else {
-        tauri::WebviewWindowBuilder::new(&app, "timer_window", tauri::WebviewUrl::App("index.html?window=timer".into()))
-            .title("Timer")
-            .devtools(false)
-            .skip_taskbar(true)
-            .inner_size(448.0, 512.0)
-            .min_inner_size(200.0, 48.0)
-            .resizable(true)
-            .decorations(false)
-            .shadow(false)
-            .transparent(true)
-            .always_on_top(true)
-            .center()
-            .build()
-            .map_err(|e| AppError::window(format!("创建倒计时窗口失败: {}", e)))?
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            "timer_window",
+            tauri::WebviewUrl::App("index.html?window=timer".into()),
+        )
+        .title("Timer")
+        .devtools(false)
+        .skip_taskbar(true)
+        .inner_size(448.0, 512.0)
+        .min_inner_size(200.0, 48.0)
+        .resizable(true)
+        .decorations(false)
+        .shadow(false)
+        .transparent(true)
+        .always_on_top(true)
+        .center()
+        .build()
+        .map_err(|e| AppError::window(format!("创建倒计时窗口失败: {}", e)))?
     };
     if window.is_minimized().unwrap_or(false) {
-        window.unminimize().map_err(|e| AppError::window(e.to_string()))?;
+        window
+            .unminimize()
+            .map_err(|e| AppError::window(e.to_string()))?;
     }
     window.show().map_err(|e| AppError::window(e.to_string()))?;
     let _ = window.emit("isle-window-visible", true);
-    window.set_focus().map_err(|e| AppError::window(e.to_string()))?;
+    window
+        .set_focus()
+        .map_err(|e| AppError::window(e.to_string()))?;
     Ok(())
 }
 
@@ -981,7 +1604,9 @@ pub async fn open_timer_window(app: AppHandle) -> AppResult<()> {
 pub async fn toggle_timer_window(app: AppHandle) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("timer_window") {
         if window.is_visible().unwrap_or(false) {
-            window.close().map_err(|e| AppError::window(e.to_string()))?;
+            window
+                .close()
+                .map_err(|e| AppError::window(e.to_string()))?;
             return Ok(());
         }
     }
@@ -989,7 +1614,10 @@ pub async fn toggle_timer_window(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub async fn close_floating_window(app: AppHandle) -> AppResult<()> {
+pub async fn close_floating_window(
+    app: AppHandle,
+    instance_token: Option<String>,
+) -> AppResult<()> {
     if let Some(window) = app.get_webview_window("floating_player") {
         if window.is_visible().unwrap_or(false) {
             let animate = floating_window_animations_enabled(&app);
@@ -1016,7 +1644,13 @@ pub async fn close_floating_window(app: AppHandle) -> AppResult<()> {
         window
             .close()
             .map_err(|e| AppError::window(e.to_string()))?;
-        let _ = EVENT_BUS.emit(crate::event_bus::EVENT_FLOATING_WINDOW_CLOSED, ());
+        let closed_payload = instance_token
+            .map(|token| serde_json::json!({ "instanceToken": token }))
+            .unwrap_or_else(|| serde_json::json!({}));
+        let _ = EVENT_BUS.emit(
+            crate::event_bus::EVENT_FLOATING_WINDOW_CLOSED,
+            closed_payload,
+        );
     }
     Ok(())
 }
@@ -1048,8 +1682,8 @@ pub fn sync_window_bounds(
     x: i32,
     y: i32,
 ) -> AppResult<()> {
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::UI::WindowsAndMessaging::{
+    use windows052::Win32::Foundation::HWND;
+    use windows052::Win32::UI::WindowsAndMessaging::{
         SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOZORDER,
     };
 
@@ -1089,8 +1723,8 @@ pub fn configure_main_window_visibility(window: &tauri::WebviewWindow) -> AppRes
 pub fn hide_main_window_from_task_switcher(window: &tauri::WebviewWindow) -> AppResult<()> {
     #[cfg(target_os = "windows")]
     {
-        use windows::Win32::Foundation::HWND;
-        use windows::Win32::UI::WindowsAndMessaging::{
+        use windows052::Win32::Foundation::HWND;
+        use windows052::Win32::UI::WindowsAndMessaging::{
             GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, SWP_FRAMECHANGED,
             SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER,
             WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
@@ -1133,8 +1767,8 @@ pub fn animate_window_bounds(
     y: i32,
     animate: bool,
 ) -> AppResult<()> {
-    use windows::Win32::Foundation::{HWND, RECT};
-    use windows::Win32::UI::WindowsAndMessaging::{
+    use windows052::Win32::Foundation::{HWND, RECT};
+    use windows052::Win32::UI::WindowsAndMessaging::{
         GetWindowRect, SetWindowPos, HWND_TOP, SWP_NOACTIVATE, SWP_NOZORDER,
     };
 
@@ -1377,8 +2011,8 @@ pub fn check_fullscreen_app(
     monitor_width: i32,
     monitor_height: i32,
 ) -> AppResult<bool> {
-    use windows::Win32::Foundation::RECT;
-    use windows::Win32::UI::WindowsAndMessaging::{
+    use windows052::Win32::Foundation::RECT;
+    use windows052::Win32::UI::WindowsAndMessaging::{
         GetForegroundWindow, GetWindowLongPtrW, GetWindowRect, GWL_STYLE, WS_CAPTION,
     };
 
@@ -1463,4 +2097,3 @@ pub async fn set_current_monitor_index(
 ) -> AppResult<()> {
     crate::commands::update_settings(app, state, serde_json::json!({"monitorIndex": index})).await
 }
-

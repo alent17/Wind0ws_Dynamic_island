@@ -38,12 +38,4 @@ export const settingsApi = {
   getFloatingWindowPosition: () =>
     invoke<[number, number, number, number] | null>("get_floating_window_position"),
 
-  setHideSettingsButton: (enable: boolean) =>
-    invoke<void>("set_hide_settings_button", { enable }),
-  setHideMonitorSelector: (enable: boolean) =>
-    invoke<void>("set_hide_monitor_selector", { enable }),
-  setHideFloatingWindow: (enable: boolean) =>
-    invoke<void>("set_hide_floating_window", { enable }),
-  setExpandedCornerRadius: (radius: number) =>
-    invoke<void>("set_expanded_corner_radius", { radius }),
 };
