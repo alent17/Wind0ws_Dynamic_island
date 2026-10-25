@@ -2284,7 +2284,7 @@
   .floating-like-control {
     position: absolute;
     top: 8px;
-    right: 44px;
+    right: 10px;
     z-index: 2;
     width: 48px;
     height: 48px;
@@ -2294,7 +2294,7 @@
 
   .track-info-layer:has(.floating-like-control) .track-title,
   .track-info-layer:has(.floating-like-control) .track-artist {
-    padding-right: 82px;
+    padding-right: 58px;
   }
 
   .player.circular-album .album-wrapper {
@@ -2506,8 +2506,8 @@
   .corner-resize-se {
     right: 0;
     bottom: 0;
-    width: 40px;
-    height: 40px;
+    width: 18px;
+    height: 18px;
     cursor: nwse-resize;
     touch-action: none;
     user-select: none;

@@ -14,19 +14,15 @@ use image::imageops::FilterType;
 /// # 返回
 /// RGB 元组 (r, g, b)
 pub fn extract_dominant_color(image_path: &str) -> AppResult<(u8, u8, u8)> {
-    let img_data = load_image_data(image_path)?;
-    extract_dominant_color_bytes(&img_data)
-}
-
-pub fn extract_dominant_color_bytes(img_data: &[u8]) -> AppResult<(u8, u8, u8)> {
     let _work = super::image_budget::ImageWork::enter()?;
-    super::artwork_jobs::trace_bytes("color", img_data);
+    let img_data = load_image_data(image_path)?;
+    super::artwork_jobs::trace_bytes("color", &img_data);
 
     if img_data.is_empty() {
         return Ok((60, 80, 100)); // 默认颜色
     }
 
-    let img = super::image_budget::decode(img_data)?;
+    let img = super::image_budget::decode(&img_data)?;
 
     // 缩小图片以提高处理速度
     let resized = img.resize_exact(80, 80, FilterType::Lanczos3);

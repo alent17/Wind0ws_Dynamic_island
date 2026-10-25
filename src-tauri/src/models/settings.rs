@@ -59,12 +59,33 @@ pub enum NeteaseProgressMode {
     Estimate,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct IslandWidgets {
+    pub left: Vec<String>,
+    pub right: Vec<String>,
+}
+
+impl IslandWidgets {
+    pub fn normalize(&mut self) {
+        let mut seen = std::collections::HashSet::new();
+        for items in [&mut self.left, &mut self.right] {
+            items.retain(|kind| {
+                seen.len() < 2
+                    && matches!(kind.as_str(), "timer" | "weather" | "clock" | "volume")
+                    && seen.insert(kind.clone())
+            });
+        }
+    }
+}
+
 /// Persisted settings shared by the legacy player surfaces and the current
 /// Isle Studio. Missing fields from newer, reduced settings files are filled
 /// from the legacy defaults.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppPreferences {
+    pub island_widgets: IslandWidgets,
     pub netease_progress_mode: NeteaseProgressMode,
     pub netease_auto_connect: bool,
     pub netease_executable_path: Option<String>,
@@ -145,6 +166,7 @@ impl Default for AppPreferences {
         player_weights.insert("generic".to_string(), 10);
 
         Self {
+            island_widgets: IslandWidgets::default(),
             netease_progress_mode: NeteaseProgressMode::Real,
             netease_auto_connect: false,
             netease_executable_path: None,
@@ -227,6 +249,22 @@ mod tests {
         let encoded = serde_json::to_value(&loaded).unwrap();
         assert_eq!(encoded["floatingExpandedLength"], 720);
         assert_eq!(encoded["edgeExpandedLength"], 520);
+    }
+
+    #[test]
+    fn widget_layout_defaults_normalizes_and_roundtrips() {
+        let old: AppPreferences = serde_json::from_str("{}").unwrap();
+        assert!(old.island_widgets.left.is_empty());
+        assert!(old.island_widgets.right.is_empty());
+        let mut loaded: AppPreferences = serde_json::from_str(
+            r#"{"islandWidgets":{"left":["bad","timer","timer"],"right":["volume","clock"]}}"#,
+        ).unwrap();
+        loaded.island_widgets.normalize();
+        assert_eq!(loaded.island_widgets.left, vec!["timer"]);
+        assert_eq!(loaded.island_widgets.right, vec!["volume"]);
+        let encoded = serde_json::to_string(&loaded).unwrap();
+        let restored: AppPreferences = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(loaded.island_widgets, restored.island_widgets);
     }
 
     #[test]

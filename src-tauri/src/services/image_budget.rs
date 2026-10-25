@@ -1,6 +1,7 @@
 //! Shared artwork budgets. Encoded input, decoder output and work admission
 //! are independent from the disk cache quota.
 use crate::error::{AppError, AppResult};
+use base64::{engine::general_purpose, Engine};
 use image::{DynamicImage, GenericImageView, ImageFormat, ImageReader, Limits};
 use std::borrow::Cow;
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
@@ -13,6 +14,21 @@ pub const MAX_IMAGE_PIXELS: u64 = 16 * 1024 * 1024;
 pub const MAX_DECODE_BYTES: u64 = 64 * 1024 * 1024;
 pub const MAX_ARTWORK_EDGE: u32 = 1280; // 640 logical px at 2x DPI.
 
+/// Write Base64 into the final IPC string; avoid a second full encoded copy.
+pub fn artwork_data_uri(bytes: &[u8], content_type: &str) -> String {
+    let prefix_len = "data:;base64,".len() + content_type.len();
+    let mut uri = String::with_capacity(prefix_len + bytes.len().div_ceil(3) * 4);
+    uri.push_str("data:");
+    uri.push_str(content_type);
+    uri.push_str(";base64,");
+    general_purpose::STANDARD.encode_string(bytes, &mut uri);
+    uri
+}
+// A decoder may use 64 MiB before resizing. Serialize heavyweight image work
+// across windows; two concurrent decoders alone exceed the application's goal.
+const MAX_IMAGE_WORKERS: usize = 1;
+const MAX_IMAGE_WAITERS: usize = 4;
+
 static WORK: (Mutex<(usize, usize)>, Condvar) = (Mutex::new((0, 0)), Condvar::new());
 pub struct ImageWork;
 impl ImageWork {
@@ -22,11 +38,11 @@ impl ImageWork {
             .0
             .lock()
             .map_err(|_| AppError::lock("图片工作锁失败"))?;
-        if state.0 >= 2 && state.1 >= 4 {
+        if state.0 >= MAX_IMAGE_WORKERS && state.1 >= MAX_IMAGE_WAITERS {
             return Err(AppError::business(3005, "图片处理队列已满"));
         }
         state.1 += 1;
-        while state.0 >= 2 {
+        while state.0 >= MAX_IMAGE_WORKERS {
             if let Err(error) = super::artwork_jobs::checkpoint() {
                 state.1 -= 1;
                 return Err(error);
@@ -59,8 +75,8 @@ pub fn checked_stream_size(size: u64) -> AppResult<u32> {
     u32::try_from(size).map_err(|_| AppError::business(3004, "封面大小转换溢出"))
 }
 
-pub fn read_limited(mut input: impl Read) -> AppResult<Vec<u8>> {
-    let mut bytes = Vec::new();
+pub fn read_limited(mut input: impl Read, capacity_hint: usize) -> AppResult<Vec<u8>> {
+    let mut bytes = Vec::with_capacity(capacity_hint.min(MAX_IMAGE_BYTES));
     input
         .by_ref()
         .take(MAX_IMAGE_BYTES as u64 + 1)
@@ -69,6 +85,17 @@ pub fn read_limited(mut input: impl Read) -> AppResult<Vec<u8>> {
         return Err(AppError::business(3004, "图片超过 12 MiB"));
     }
     Ok(bytes)
+}
+
+pub fn read_file_limited(path: impl AsRef<std::path::Path>) -> AppResult<Vec<u8>> {
+    let file = std::fs::File::open(path)?;
+    let length = file.metadata()?.len();
+    if length > MAX_IMAGE_BYTES as u64 {
+        return Err(AppError::business(3004, "图片文件超过预算"));
+    }
+    // The hint saves geometric Vec growth for known files. take() still
+    // enforces the byte limit if the file grows after this metadata snapshot.
+    read_limited(file, length as usize)
 }
 
 fn reader(bytes: &[u8]) -> AppResult<ImageReader<Cursor<&[u8]>>> {
@@ -226,6 +253,61 @@ pub fn prepare_artwork(bytes: &[u8]) -> AppResult<PreparedArtwork<'_>> {
 mod tests {
     use super::*;
     #[test]
+    fn file_length_hint_avoids_growth_but_never_relaxes_the_byte_limit() {
+        let payload = vec![7u8; 128 * 1024 + 17];
+        let loaded = read_limited(Cursor::new(&payload), payload.len()).unwrap();
+        assert_eq!(loaded, payload);
+        assert_eq!(loaded.capacity(), payload.len());
+        // Simulate stale metadata: fewer or more bytes than the hint said.
+        assert_eq!(read_limited(Cursor::new(&payload), 1).unwrap(), payload);
+        assert_eq!(
+            read_limited(Cursor::new(&payload), payload.len() * 2).unwrap(),
+            payload
+        );
+        assert!(read_limited(io::repeat(0), 1).is_err());
+        assert!(read_limited(io::repeat(0), usize::MAX).is_err());
+    }
+    #[test]
+    fn direct_data_uri_encoding_matches_base64_padding_and_mime() {
+        for count in 0..=64 {
+            let bytes: Vec<u8> = (0..count).map(|index| (index * 37) as u8).collect();
+            for mime in ["image/png", "image/jpeg"] {
+                assert_eq!(
+                    artwork_data_uri(&bytes, mime),
+                    format!(
+                        "data:{mime};base64,{}",
+                        general_purpose::STANDARD.encode(&bytes)
+                    )
+                );
+            }
+        }
+    }
+    #[test]
+    fn heavy_image_jobs_do_not_overlap_across_threads() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc, Barrier,
+        };
+        let active = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let start = Arc::new(Barrier::new(4));
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                let (active, peak, start) = (active.clone(), peak.clone(), start.clone());
+                scope.spawn(move || {
+                    start.wait();
+                    let _permit = ImageWork::enter().unwrap();
+                    let count = active.fetch_add(1, Ordering::SeqCst) + 1;
+                    peak.fetch_max(count, Ordering::SeqCst);
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                    active.fetch_sub(1, Ordering::SeqCst);
+                });
+            }
+        });
+        assert_eq!(peak.load(Ordering::SeqCst), 1);
+        assert_eq!(active.load(Ordering::SeqCst), 0);
+    }
+    #[test]
     fn rejects_smtc_zero_oversize_and_u64_overflow_before_allocating() {
         assert!(checked_stream_size(0).is_err());
         assert!(checked_stream_size(MAX_IMAGE_BYTES as u64 + 1).is_err());
@@ -255,7 +337,7 @@ mod tests {
     #[test]
     fn byte_reader_stops_before_an_unbounded_input_is_retained() {
         let input = io::repeat(0).take(MAX_IMAGE_BYTES as u64 + 1024);
-        assert!(read_limited(input).is_err());
+        assert!(read_limited(input, 0).is_err());
     }
     #[test]
     fn rejects_a_valid_image_beyond_the_edge_budget() {

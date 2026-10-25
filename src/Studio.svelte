@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { spring } from "svelte/motion";
   import { RotateCcw,Trash2,ExternalLink,Monitor,RefreshCw,ChevronUp,ChevronDown,CloudSun,Search } from "lucide-svelte";
+  import { normalizeWidgets, type IslandWidgets } from "$lib/widgetLayout";
   import IslandSurface from "$lib/components/island/IslandSurface.svelte";
   import StudioSlider from "$lib/components/settings/StudioSlider.svelte";
   import StudioSelect from "$lib/components/settings/StudioSelect.svelte";
@@ -60,7 +61,7 @@
   let unsubscribeSettingsStore:(()=>void)|undefined;
   let appearanceDraft=$state<AppearanceDraft>(createAppearanceDraft(DEFAULT_SETTINGS));
   let previewTarget=$state<PreviewTarget>(null);
-  let applyingAppearance=$state(false);
+
   let appearanceDirty=$derived.by(()=>{
     return appearanceDraft.islandStyle!==settings.islandStyle||
       appearanceDraft.islandEdge!==settings.islandEdge||
@@ -80,17 +81,17 @@
   let neteaseSetupBusy=$state(false);
   let neteaseSetupMessage=$state("");
   let neteaseShortcut=$state("");
-  async function setupNetease(restart:boolean){
+  async function setupNetease(restart:boolean,configureOnly=false){
     if(neteaseSetupBusy||!nativeRuntime)return;
     neteaseSetupBusy=true;
     neteaseSetupMessage="";
     neteaseShortcut="";
     try{
       await persist();
-      const result=await mediaApi.setupNeteaseConnection(restart,true);
+      const result=await mediaApi.setupNeteaseConnection(restart,true,configureOnly);
       if(studioDisposed)return;
       neteaseShortcut=result.configured?result.shortcutPath:"";
-      neteaseSetupMessage=t(result.bindingFailed?"neteaseBindFailed":result.boundSessionId?"neteaseBound":result.connected?"neteaseBindPending":result.configured?"neteaseConfigured":"neteaseDisconnected");
+      neteaseSetupMessage=configureOnly&&result.configured&&result.launchEntries>0?t("neteaseLaunchEntriesReady",{count:result.launchEntries}):t(result.bindingFailed?"neteaseBindFailed":result.boundSessionId?"neteaseBound":result.connected?"neteaseBindPending":result.configured?"neteaseConfigured":"neteaseDisconnected");
       if(result.boundSessionId){
         applyExternalSettings(normalizeAppSettings(await settingsApi.getSettings()));
         await refreshSessions();
@@ -144,9 +145,18 @@
   let previewCompactLength=$derived(appearanceDraft[compactLengthKey]);
   let previewExpandedRadius=$derived(appearanceDraft[expandedRadiusKey]);
   let previewExpandedLength=$derived(appearanceDraft.islandStyle==="edge"?appearanceDraft.edgeExpandedLength:appearanceDraft.floatingExpandedLength);
-  let previewHost=$derived(hostFor(appearanceDraft.islandStyle,appearanceDraft.islandEdge,previewCompactLength,1,previewExpandedLength));
+  let previewLayout=$state<IslandWidgets|null>(null);
+  let previewEditing=$state(false);
+  const previewWidgets=$derived(previewLayout ?? normalizeWidgets(settings.islandWidgets));
+  const previewWidgetCount=$derived(previewEditing ? 2 : previewWidgets.left.length + previewWidgets.right.length);
+  async function savePreviewWidgets(layout:IslandWidgets){
+    const islandWidgets=normalizeWidgets(layout);
+    if(nativeRuntime)await settingsApi.updateSettings({islandWidgets});
+    settings={...settings,islandWidgets};
+  }
+  let previewHost=$derived(hostFor(appearanceDraft.islandStyle,appearanceDraft.islandEdge,previewCompactLength,1,previewExpandedLength,previewWidgetCount));
   let currentGeometry=$state(geometryFor("expanded"));
-  let previewScale=$derived(Math.min(previewScaleFloor, Math.max(0.1, (stageWidth - 24) / previewHost.width)));
+  let previewScale=$derived(Math.min(previewScaleFloor, Math.max(0.01, Math.min((stageWidth - 24) / previewHost.width, (stageHeight - 24) / previewHost.height))));
   const previewPosition=spring(50,{stiffness:.1,damping:.7,precision:.1});
   $effect(()=>{previewPosition.set(appearanceDraft.islandEdgePosition,{hard:!settings.enableAnimations||settings.reduceAnimations})});
   let previewPositionStyle=$derived.by(()=>{
@@ -184,9 +194,6 @@
   const t=(key:TranslationKey,values:Record<string,string|number>={})=>translate(key,values,$locale);
   const enumLabel=(value:string)=>t(value as TranslationKey);
   const previewTargetLabel=(target:PreviewTarget)=>target? t(({shape:"shape",compactLength:"compactLength",shoulder:"shoulder",radius:"expandedRadius",spectrum:"spectrum"} as const)[target]):t("previewReady");
-  function syncAppearanceDrafts(){
-    appearanceDraft=createAppearanceDraft(settings);
-  }
   const appearanceKeys=(Object.keys(createAppearanceDraft(DEFAULT_SETTINGS)) as (keyof AppearanceDraft)[]);
   function applyExternalSettings(next:AppPreferences){
     const dirtyAppearanceKeys=new Set(appearanceKeys.filter((key)=>appearanceDraft[key]!==settings[key]));
@@ -343,19 +350,16 @@
   }
   function setAlwaysOnTop(value:boolean){updatePreference({alwaysOnTop:value})}
   function setAutoStart(value:boolean){updatePreference({autoStart:value})}
-  function resetAppearanceDraft(){appearanceDraft=createAppearanceDraft(settings);previewTarget=null}
-  async function applyAppearance(){
-    if(!appearanceDirty||applyingAppearance)return;
-    applyingAppearance=true;
-    try{
-      commitPreference({...appearanceDraft});
-      await persist();
-      syncAppearanceDrafts();
-      previewTarget=null;
-    }catch{
-      // The pending patch remains available to the retry action.
-    }finally{applyingAppearance=false}
-  }
+  // Publish each edit immediately; persist() serializes concurrent changes and
+  // retains the newest pending values if saving fails.
+  $effect(()=>{
+    if(!appearanceDirty)return;
+    const patch={...appearanceDraft};
+    untrack(()=>{
+      commitPreference(patch);
+      void persist().catch(()=>{});
+    });
+  });
   function setLanguage(value:AppLanguage){setLocale(value);updatePreference({language:value})}
   function mergePlayerOrderIds(existing:string[],available:MediaSessionInfo[],selected:string[]|null){
     return [...new Set([...existing,...available.map(item=>item.id),...(selected??[])].filter(id=>id.trim().length>0))];
@@ -443,7 +447,7 @@
       <div class="stage-topline"><span><i aria-hidden="true"></i>{t("previewLabel")}</span><small>{nativeRuntime&&followingLive?t("currentMusic"):nativeRuntime?t("previewReady"):t("browserDemo")}</small></div>
       <div class="preview-host" style={`width:${previewHost.width}px;height:${previewHost.height}px;${previewPositionStyle}`}>
         {#if previewReady}
-        <IslandSurface weatherCity={nativeRuntime ? settings.weatherLocation?.name ?? "" : "Shanghai"} weatherUpdatedAt={weatherSnapshot?.weatherUpdatedAt ?? null} onRegionChange={({geometry}) => currentGeometry = geometry} onPageChange={(page)=>previewPage=page} media={sample} clockText={previewClock} clockTimeZone={settings.clockTimeZone} idle={nativeRuntime && followingLive && !sample.title} idleTime={previewClock} idleWeatherTemperature={weatherSnapshot?.weatherTemperature ?? null} idleWeatherCode={weatherSnapshot?.weatherCode ?? null} idleWeatherForecast={previewForecast} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedLength={previewExpandedLength} expandedRadius={previewExpandedRadius} collapsedEdgeShoulderRadius={appearanceDraft.collapsedEdgeShoulderRadius} expandedEdgeShoulderRadius={appearanceDraft.expandedEdgeShoulderRadius} compactLength={previewCompactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} spectrumTopColor={previewSpectrumTopColor} spectrumBottomColor={previewSpectrumBottomColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={!nativeRuntime&&appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} showCustomFunctionPanel={settings.showCustomFunctionPanel} systemAudio={{volumePercent:42,muted:false,deviceId:"studio-speakers",deviceName:"Speakers"}} audioDevices={[{id:"studio-speakers",name:"Speakers (Realtek Audio)",isDefault:true},{id:"studio-headphones",name:"Headphones",isDefault:false}]} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.showStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{if(nativeRuntime&&followingLive){if(action==="cycle_netease_mode"){void mediaApi.cycleNeteasePlaybackMode();return}void mediaApi.controlMedia(action);return}if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
+        <IslandSurface islandWidgets={settings.islandWidgets} onLayoutPreview={(layout,editing)=>{previewLayout=layout;previewEditing=editing}} onWidgetsSave={savePreviewWidgets} weatherCity={nativeRuntime ? settings.weatherLocation?.name ?? "" : "Shanghai"} weatherUpdatedAt={weatherSnapshot?.weatherUpdatedAt ?? null} onRegionChange={({geometry}) => currentGeometry = geometry} onPageChange={(page)=>previewPage=page} media={sample} clockText={previewClock} clockTimeZone={settings.clockTimeZone} idle={nativeRuntime && followingLive && !sample.title} idleTime={previewClock} idleWeatherTemperature={weatherSnapshot?.weatherTemperature ?? null} idleWeatherCode={weatherSnapshot?.weatherCode ?? null} idleWeatherForecast={previewForecast} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedLength={previewExpandedLength} expandedRadius={previewExpandedRadius} collapsedEdgeShoulderRadius={appearanceDraft.collapsedEdgeShoulderRadius} expandedEdgeShoulderRadius={appearanceDraft.expandedEdgeShoulderRadius} compactLength={previewCompactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} spectrumTopColor={previewSpectrumTopColor} spectrumBottomColor={previewSpectrumBottomColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={!nativeRuntime&&appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} showCustomFunctionPanel={settings.showCustomFunctionPanel} systemAudio={{volumePercent:42,muted:false,deviceId:"studio-speakers",deviceName:"Speakers"}} audioDevices={[{id:"studio-speakers",name:"Speakers (Realtek Audio)",isDefault:true},{id:"studio-headphones",name:"Headphones",isDefault:false}]} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.showStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{if(nativeRuntime&&followingLive){if(action==="cycle_netease_mode"){void mediaApi.cycleNeteasePlaybackMode();return}void mediaApi.controlMedia(action);return}if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
         {/if}
       </div>
       <div class="stage-caption" class:editing={previewTarget!==null} aria-live="polite">
@@ -476,10 +480,6 @@
           <StudioSlider label={t("expandedRadius")} min={0} max={80} unit="px" bind:value={appearanceDraft.edgeExpandedCornerRadius} previewTarget={previewTarget === "radius" ? "radius" : null} onPreviewStart={()=>{appearanceDraft.islandStyle="edge";previewTarget="radius"}} onPreviewMove={()=>{appearanceDraft.islandStyle="edge";previewTarget="radius"}} onPreviewEnd={()=>previewTarget=null}/>
         </fieldset>
         {/if}
-        <div class="appearance-apply-bar" class:dirty={appearanceDirty}>
-          <div class="apply-state"><i aria-hidden="true"></i><span>{appearanceDirty?t("appearancePreviewing"):t("appearanceApplied")}</span></div>
-          <div class="apply-actions"><button type="button" class="reset-button" disabled={!appearanceDirty} onclick={resetAppearanceDraft}>{t("resetAppearance")}</button><button type="button" class="apply-button" disabled={!appearanceDirty||applyingAppearance} onclick={applyAppearance}>{applyingAppearance?t("applyingAppearance"):t("applyAppearance")}</button></div>
-        </div>
       </section>
       <section class="preferences-section">
         <div class="section-title"><h2>{t("preferences")}</h2><span class="section-note">{t("studioIntro")}</span></div>
@@ -498,41 +498,32 @@
       <section class="netease-progress-section">
         <h2>{t("neteaseConnection")}</h2>
         <p class="hint">{t("neteasePersistentHint")}</p>
-        <div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.neteaseAutoConnect} aria-pressed={settings.neteaseAutoConnect} disabled={!nativeRuntime} onclick={()=>updatePreference({neteaseAutoConnect:!settings.neteaseAutoConnect})}><span class="choice-mark" aria-hidden="true">{settings.neteaseAutoConnect?"✓":""}</span><span class="choice-copy"><strong>{t("neteaseAutoConnect")}</strong><small>{t("neteaseAutoConnectHint")}</small></span></button></div>
-        <div class="tool-list">
-          <button type="button" disabled={!nativeRuntime||neteaseSetupBusy} onclick={()=>setupNetease(true)}><RefreshCw size={17}/>{t(neteaseSetupBusy?"neteaseConnecting":"neteaseBindAction")}</button>
+        <div class="netease-auto-row">
+          <label><input type="checkbox" checked={settings.neteaseAutoConnect} disabled={!nativeRuntime} onchange={(event)=>updatePreference({neteaseAutoConnect:event.currentTarget.checked})}/><span>{t("neteaseAutoConnect")}</span></label>
+        </div>
+        <div class="netease-actions">
+          <button type="button" class="netease-primary" title={t("neteaseBindHint")} disabled={!nativeRuntime||neteaseSetupBusy} onclick={()=>setupNetease(true)}><RefreshCw size={15}/>{t(neteaseSetupBusy?"neteaseConnecting":"neteaseBindAction")}</button>
           <button type="button" disabled={!nativeRuntime||neteaseSetupBusy} onclick={()=>setupNetease(false)}>{t("neteaseCheckBind")}</button>
         </div>
+        <details class="netease-details">
+          <summary>{t("neteaseMoreOptions")}</summary>
+          <p class="hint">{t("neteaseSetupHint")}</p>
+          <p class="hint">{t("neteasePlayButtonHint")}</p>
+          <button type="button" disabled={!nativeRuntime||neteaseSetupBusy} onclick={()=>setupNetease(false,true)}>{t(neteaseSetupBusy?"neteaseConnecting":"neteaseConfigureLaunchEntries")}</button>
+        </details>
         {#if neteaseSetupMessage}<p class="message" role="status">{neteaseSetupMessage}</p>{/if}
         {#if neteaseShortcut}<p class="hint netease-shortcut">{neteaseShortcut}</p>{/if}
         <h2>{t("neteaseProgress")}</h2>
-        <p class="hint">{t("neteaseProgressHint")}</p>
+
         <div class="segmented two progress-options" role="group" aria-label={t("neteaseProgress")}>
           <button aria-pressed={settings.neteaseProgressMode==="real"} class:active={settings.neteaseProgressMode==="real"} onclick={()=>updatePreference({neteaseProgressMode:"real"})}><span>{t("neteaseProgressReal")}</span><small>{t("neteaseProgressRealHint")}</small></button>
           <button aria-pressed={settings.neteaseProgressMode==="estimate"} class:active={settings.neteaseProgressMode==="estimate"} onclick={()=>updatePreference({neteaseProgressMode:"estimate"})}><span>{t("neteaseProgressEstimate")}</span><small>{t("neteaseProgressEstimateHint")}</small></button>
         </div>
-        <p class="hint">{t("neteaseProgressMeasurePending")}</p>
+
         {#if nativeRuntime && followingLive && liveMedia.source==="netease" && liveMedia.neteaseProgressAvailable===false}<p class="netease-progress-status" role="status">{t("neteaseProgressUnavailable")}</p>{/if}
         {#if nativeRuntime && followingLive && liveMedia.source==="netease" && liveMedia.progressKnown===false && settings.neteaseProgressMode==="estimate"}<p class="netease-progress-status" role="status">{t("neteaseProgressPending")}</p>{/if}
       </section>
       <section class="spectrum-section"><h2>{t("spectrum")}</h2><div class="preview-setting" role="group" data-preview-target="spectrum" onmouseenter={()=>previewTarget="spectrum"} onfocusin={()=>previewTarget="spectrum"} onmouseleave={()=>previewTarget=null} onfocusout={()=>previewTarget=null}><div class="setting-grid single"><button type="button" class="setting-choice" class:active={appearanceDraft.showSpectrum} aria-pressed={appearanceDraft.showSpectrum} onclick={()=>{appearanceDraft.showSpectrum=!appearanceDraft.showSpectrum;previewTarget="spectrum"}}><span class="choice-mark" aria-hidden="true">{appearanceDraft.showSpectrum?"✓":""}</span><span class="choice-copy"><strong>{t("showSpectrum")}</strong><small>{t("showSpectrumHint")}</small></span></button></div>{#if appearanceDraft.showSpectrum}<div class="field-label"><span>{t("animationSource")}</span><small>{t("animationSourceHint")}</small></div><div class="segmented two"><button aria-pressed={appearanceDraft.spectrumMode==="realtime"} class:active={appearanceDraft.spectrumMode==="realtime"} onclick={()=>{appearanceDraft.spectrumMode="realtime";previewTarget="spectrum"}}>{t("realtime")}</button><button aria-pressed={appearanceDraft.spectrumMode==="random"} class:active={appearanceDraft.spectrumMode==="random"} onclick={()=>{appearanceDraft.spectrumMode="random";previewTarget="spectrum"}}>{t("random")}</button></div>{/if}</div></section>
-      <section class="feature-tools-section">
-        <h2>{t("featureTools")}</h2>
-        <p class="hint">{t("featureToolsHint")}</p>
-        <button type="button" class="setting-choice panel-toggle-choice" class:active={settings.showCustomFunctionPanel} aria-pressed={settings.showCustomFunctionPanel} onclick={()=>updatePreference({showCustomFunctionPanel:!settings.showCustomFunctionPanel})}>
-          <span class="choice-mark" aria-hidden="true">{settings.showCustomFunctionPanel?"✓":""}</span>
-          <span class="choice-copy"><strong>{t("customFunctionPanel")}</strong><small>{t("customFunctionPanelHint")}</small></span>
-        </button>
-        <div class="setting-grid" class:tools-disabled={!settings.showCustomFunctionPanel}>
-          <button type="button" class="setting-choice" class:active={settings.showSettingsTool} aria-pressed={settings.showSettingsTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showSettingsTool:!settings.showSettingsTool})}><span class="choice-mark" aria-hidden="true">{settings.showSettingsTool?"✓":""}</span><span class="choice-copy"><strong>{t("settingsTool")}</strong></span></button>
-          <button type="button" class="setting-choice" class:active={settings.showFloatingTool} aria-pressed={settings.showFloatingTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showFloatingTool:!settings.showFloatingTool})}><span class="choice-mark" aria-hidden="true">{settings.showFloatingTool?"✓":""}</span><span class="choice-copy"><strong>{t("floatingTool")}</strong></span></button>
-          <button type="button" class="setting-choice" class:active={settings.showVolumeTool} aria-pressed={settings.showVolumeTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showVolumeTool:!settings.showVolumeTool})}><span class="choice-mark" aria-hidden="true">{settings.showVolumeTool?"✓":""}</span><span class="choice-copy"><strong>{t("volumeTool")}</strong></span></button>
-          <button type="button" class="setting-choice" class:active={settings.showTimerTool} aria-pressed={settings.showTimerTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showTimerTool:!settings.showTimerTool})}><span class="choice-mark" aria-hidden="true">{settings.showTimerTool?"✓":""}</span><span class="choice-copy"><strong>{t("timerTool")}</strong></span></button>
-          <button type="button" class="setting-choice" class:active={settings.showHideTool} aria-pressed={settings.showHideTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showHideTool:!settings.showHideTool})}><span class="choice-mark" aria-hidden="true">{settings.showHideTool?"✓":""}</span><span class="choice-copy"><strong>{t("hideTool")}</strong></span></button>
-          <button type="button" class="setting-choice" class:active={settings.showClockTool} aria-pressed={settings.showClockTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showClockTool:!settings.showClockTool})}><span class="choice-mark" aria-hidden="true">{settings.showClockTool?"✓":""}</span><span class="choice-copy"><strong>{t("clock")}</strong></span></button>
-          <button type="button" class="setting-choice" class:active={settings.showWeatherTool} aria-pressed={settings.showWeatherTool} disabled={!settings.showCustomFunctionPanel} onclick={()=>updatePreference({showWeatherTool:!settings.showWeatherTool})}><span class="choice-mark" aria-hidden="true">{settings.showWeatherTool?"✓":""}</span><span class="choice-copy"><strong>{t("weather")}</strong></span></button>
-        </div>
-      </section>
       <section class="players-section"><div class="section-title"><h2>{t("players")}</h2><button class="icon-button" aria-label={t("refreshPlayers")} disabled={!nativeRuntime} onclick={refreshSessions}><RefreshCw size={15}/></button></div><p class="hint">{t("playersHint")}</p>
         {#each sessions.filter(player=>player.source==="generic"||settings.playerSourceOverrides[player.id]==="netease") as player (player.id)}
           <div class="player-identity">
@@ -574,7 +565,16 @@
   .progress-options button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:0;padding:12px 8px}
   .progress-options button span{font-weight:600;line-height:1.3}
   .progress-options button small{font-size:11px;line-height:1.5;opacity:.72}
-  .netease-progress-section .tool-list + h2{margin-top:20px}
+  .netease-progress-section h2:not(:first-child){margin-top:20px}
+  .netease-auto-row{margin:14px 0}
+  .netease-auto-row label{display:flex;align-items:center;gap:9px;font-size:12px;cursor:pointer}
+  .netease-auto-row input{margin:0;accent-color:var(--studio-accent)}
+  .netease-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .netease-actions button,.netease-details button{display:flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:8px 10px;border:1px solid #40434b;border-radius:10px;background:#23262c;color:#e9eaf0;font:500 12px/1.4 var(--app-font);cursor:pointer}
+  .netease-actions .netease-primary{background:#f5f6f7;color:#111216;border-color:transparent}
+  .netease-details{margin-top:12px;font-size:11px;color:#aeb3c0}
+  .netease-details summary{cursor:pointer;width:fit-content}
+  .netease-details button{width:100%;margin-top:10px}
   .netease-shortcut{overflow-wrap:anywhere;user-select:text}
   :global(html),:global(body),:global(#app){min-width:780px;min-height:600px;background:#fff;color:#111113}
   :global(body){overflow:auto}
@@ -623,8 +623,7 @@
   .idle-fixed-hint{max-width:58ch;margin-top:0}.idle-layout-preview{display:flex;align-items:center;justify-content:space-between;margin-top:13px;padding:10px 12px;border:1px solid #e1e1e5;border-radius:10px;background:#fff;color:#4c4d55;font-size:12px}.idle-layout-preview>span{display:flex;align-items:center;gap:6px}.idle-layout-preview :global(svg){color:#3158c8}.weather-box{margin-top:14px;padding-top:13px;border-top:1px solid #e2e2e5}.weather-box>label{font-size:12px;font-weight:600}.search-row{display:grid;grid-template-columns:1fr 34px;gap:6px;margin-top:7px}.search-row input{min-width:0;border:1px solid #dddde1;border-radius:9px;padding:8px}.selected-city{margin:7px 0 0;font-size:11px;color:#39724a}.weather-results{display:flex;flex-direction:column;gap:4px;margin-top:7px}.weather-results button{display:flex;align-items:center;justify-content:space-between;border:0;border-radius:8px;padding:8px;background:#fff;text-align:left;cursor:pointer}.weather-results small{color:#777780}
   .tool-list button{display:flex;align-items:center;gap:8px;border:1px solid transparent;border-radius:11px;color:#414148;background:#fff;cursor:pointer;transition:color 140ms ease,background 140ms ease,border-color 140ms ease,transform 120ms ease}.tool-list button:hover{border-color:#d9dbe1;color:#111113;background:#fcfcfd}.tool-list{display:flex;flex-direction:column;gap:7px}.tool-list button{padding:10px 11px;font-size:12px}.tool-list button:active,.icon-button:active,.ordered-row button:active{transform:scale(.97)}
   button:disabled,input:disabled{cursor:not-allowed;opacity:.45}.message{margin:10px 0 0;color:#39724a;font-size:12px}.segmented button:focus-visible,.tool-list button:focus-visible,.icon-button:focus-visible,.ordered-row button:focus-visible,.weather-results button:focus-visible,input:focus-visible{outline:2px solid #111;outline-offset:2px}
-  .setting-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.setting-grid.single{grid-template-columns:1fr}.setting-choice{min-width:0;min-height:66px;display:flex;align-items:flex-start;gap:8px;padding:11px;border:1px solid #e1e1e5;border-radius:11px;color:#36363d;background:#fff;text-align:left;cursor:pointer;transition:transform 120ms ease,background 140ms ease,border-color 140ms ease,color 140ms ease}.setting-choice:hover{border-color:#cfd1d8;background:#fcfcfd}.setting-choice.active{border-color:#111113;color:#fff;background:#111113}.setting-choice.active:hover{border-color:#111113;background:#202126}.setting-choice:active{transform:scale(.98)}.setting-choice:disabled{cursor:not-allowed}.setting-choice.unavailable{cursor:not-allowed;opacity:.7}.panel-toggle-choice{width:100%;margin-bottom:8px}.tools-disabled{opacity:.45}.choice-mark{display:grid;place-items:center;flex:none;width:17px;height:17px;margin-top:1px;border:1px solid #bdbdc4;border-radius:5px;color:transparent;font-size:12px;font-weight:800;line-height:1}.setting-choice.active .choice-mark,.player-selection .choice-mark{border-color:#fff;color:#111113;background:#fff}.choice-copy{min-width:0;display:flex;flex-direction:column;gap:4px}.choice-copy strong{font-size:12px;line-height:1.2}.choice-copy small{color:#777780;font-size:11px;line-height:1.35}.setting-choice.active .choice-copy small{color:rgba(255,255,255,.68)}.player-selection{width:27px!important;height:27px!important;padding:0!important;border:0!important;background:transparent!important}.player-selection .choice-mark{width:17px;height:17px;margin:0}.setting-choice:focus-visible,.player-selection:focus-visible{outline:2px solid #111;outline-offset:2px}.player-selection:focus-visible{outline-color:#111}.setting-choice.active:focus-visible{outline-color:#fff}
-  .appearance-apply-bar{position:sticky;bottom:12px;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:18px;padding:10px;border:1px solid #dedee3;border-radius:12px;background:rgba(255,255,255,.96);box-shadow:0 10px 28px rgba(20,20,26,.09);backdrop-filter:blur(10px)}.apply-state{display:flex;align-items:center;gap:6px;min-width:0;color:#777780;font-size:11px}.apply-state i{width:6px;height:6px;flex:none;border-radius:50%;background:#b7b7be}.appearance-apply-bar.dirty .apply-state{color:var(--studio-accent)}.appearance-apply-bar.dirty .apply-state i{background:var(--studio-accent);box-shadow:0 0 0 4px rgba(49,88,200,.13)}.apply-actions{display:flex;gap:6px}.reset-button,.apply-button{height:30px;padding:0 12px;border:0;border-radius:8px;font:600 11px/1 var(--app-font);cursor:pointer;transition:transform 120ms ease,background 140ms ease}.reset-button{color:#55555d;background:#f0f0f2}.reset-button:hover:not(:disabled){background:#e7e7eb}.apply-button{color:#fff;background:#111113}.apply-button:hover:not(:disabled){background:#2a2b31}.reset-button:disabled,.apply-button:disabled{opacity:.38;cursor:default}.appearance-apply-bar button:focus-visible{outline:2px solid #111;outline-offset:2px}
+  .setting-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.setting-grid.single{grid-template-columns:1fr}.setting-choice{min-width:0;min-height:66px;display:flex;align-items:flex-start;gap:8px;padding:11px;border:1px solid #e1e1e5;border-radius:11px;color:#36363d;background:#fff;text-align:left;cursor:pointer;transition:transform 120ms ease,background 140ms ease,border-color 140ms ease,color 140ms ease}.setting-choice:hover{border-color:#cfd1d8;background:#fcfcfd}.setting-choice.active{border-color:#111113;color:#fff;background:#111113}.setting-choice.active:hover{border-color:#111113;background:#202126}.setting-choice:active{transform:scale(.98)}.setting-choice:disabled{cursor:not-allowed}.setting-choice.unavailable{cursor:not-allowed;opacity:.7}.choice-mark{display:grid;place-items:center;flex:none;width:17px;height:17px;margin-top:1px;border:1px solid #bdbdc4;border-radius:5px;color:transparent;font-size:12px;font-weight:800;line-height:1}.setting-choice.active .choice-mark,.player-selection .choice-mark{border-color:#fff;color:#111113;background:#fff}.choice-copy{min-width:0;display:flex;flex-direction:column;gap:4px}.choice-copy strong{font-size:12px;line-height:1.2}.choice-copy small{color:#777780;font-size:11px;line-height:1.35}.setting-choice.active .choice-copy small{color:rgba(255,255,255,.68)}.player-selection{width:27px!important;height:27px!important;padding:0!important;border:0!important;background:transparent!important}.player-selection .choice-mark{width:17px;height:17px;margin:0}.setting-choice:focus-visible,.player-selection:focus-visible{outline:2px solid #111;outline-offset:2px}.player-selection:focus-visible{outline-color:#111}.setting-choice.active:focus-visible{outline-color:#fff}
   /* Studio rhythm: controls within a group stay close; groups and panels breathe. */
   main{--studio-space-2:8px;--studio-space-3:12px;--studio-space-4:16px;--studio-space-5:20px}
   .workspace aside{gap:var(--studio-space-4)}
@@ -635,7 +634,6 @@
   .preview-state .field-label,.preview-setting .field-label{margin:0 0 var(--studio-space-2)}
   .appearance-section>.preview-setting{margin-top:var(--studio-space-4)}
   .appearance-section :global(.studio-slider){margin-top:var(--studio-space-4)}
-  .appearance-apply-bar{margin-top:var(--studio-space-5)}
   .select-grid{gap:var(--studio-space-3)}
   .setting-grid{gap:var(--studio-space-2)}
   .setting-choice{min-height:70px;padding:var(--studio-space-3)}
@@ -651,7 +649,7 @@
   .compact-select-row:hover:not(:focus-within){background:#f0f1f4}
   .compact-select-row:focus-within{border-color:var(--studio-accent);background:#fff}
   .search-row input:focus-visible{outline:2px solid var(--studio-accent);outline-offset:2px}
-  .segmented button:focus-visible,.setting-choice:focus-visible,.tool-list button:focus-visible,.icon-button:focus-visible,.ordered-row button:focus-visible,.weather-results button:focus-visible,.search-row button:focus-visible,.appearance-apply-bar button:focus-visible{outline:2px solid var(--studio-accent);outline-offset:2px}
+  .segmented button:focus-visible,.setting-choice:focus-visible,.tool-list button:focus-visible,.icon-button:focus-visible,.ordered-row button:focus-visible,.weather-results button:focus-visible,.search-row button:focus-visible{outline:2px solid var(--studio-accent);outline-offset:2px}
   .setting-choice.active:focus-visible{outline-offset:3px}
   button:disabled,input:disabled{cursor:not-allowed}
   .setting-choice:disabled{opacity:1;color:#858892;background:#eceef1;border-color:#eceef1}
@@ -659,7 +657,6 @@
   .setting-choice.active:disabled{color:#555963;background:#e1e3e8;border-color:#e1e3e8}
   .setting-choice:disabled .choice-mark{border-color:#a8acb5}
   .icon-button:disabled,.ordered-row button:disabled,.search-row button:disabled{background:#eff0f2;color:#a1a4ad}
-  .appearance-apply-bar button:disabled{cursor:not-allowed}
 
   /* Studio borrows the island's black shell and white active surfaces. */
   :global(html),:global(body),:global(#app){background:#0b0c0e;color:#f5f6f7}
@@ -700,18 +697,11 @@
   .icon-button:disabled,.ordered-row button:disabled,.search-row button:disabled{color:#81858e;background:#202126;border-color:#303239}
   .idle-layout-preview :global(svg){color:#84a8ff}
   .selected-city,.message{color:#9fd2ad}
-  .appearance-apply-bar{background:#1c1e23;border-color:#40434b;box-shadow:0 14px 30px rgba(0,0,0,.26)}
-  .apply-state{color:#b0b3bc}
-  .reset-button{color:#f0f1f3;background:#30333a}
-  .reset-button:hover:not(:disabled){background:#41454e}
-  .apply-button{color:#111216;background:#f5f6f7}
-  .apply-button:hover:not(:disabled){background:#fff}
-  .appearance-apply-bar button:disabled{opacity:.44}
   .skeleton-row i{background:linear-gradient(90deg,#2a2d33 25%,#393c43 50%,#2a2d33 75%);background-size:200% 100%}
 
   @media(max-width:1040px){main{padding-inline:24px}.workspace{grid-template-columns:minmax(340px,.8fr) minmax(400px,1.2fr);gap:18px}}
-  @media(max-width:900px){:global(html),:global(body),:global(#app){min-width:0}main{padding:0 18px 36px}.studio-header{align-items:flex-start;flex-direction:column;gap:14px;margin-bottom:18px}.studio-status{align-self:stretch}.workspace{grid-template-columns:1fr}.stage{position:relative;top:0;height:340px}.workspace aside{grid-template-columns:repeat(2,minmax(0,1fr))}.appearance-apply-bar{position:static}}
-  @media(max-width:620px){main{padding:0 12px 28px}.studio-brand h1{font-size:23px}.studio-brand p{font-size:12px}.stage{height:300px;border-radius:20px}.stage::before{inset:12px;border-radius:15px}.stage-topline{left:15px;right:15px;top:14px}.workspace aside{grid-template-columns:1fr;gap:12px}aside>section{padding:16px}aside>.appearance-section,aside>.preferences-section,aside>.players-section,aside>.idle-section{grid-column:auto}.select-grid{grid-template-columns:1fr}.appearance-apply-bar{align-items:stretch;flex-direction:column}.apply-actions{justify-content:flex-end}}
-  @media(prefers-reduced-motion:reduce){.skeleton-row i{animation:none}.setting-choice,.segmented button,.tool-list button,.ordered-row,.icon-button,.ordered-row button,.search-row button,.apply-button,.reset-button{transition:none}}
-  @media(prefers-reduced-transparency:reduce){.appearance-apply-bar{background:#fff;backdrop-filter:none}}
+  @media(max-width:900px){:global(html),:global(body),:global(#app){min-width:0}main{padding:0 18px 36px}.studio-header{align-items:flex-start;flex-direction:column;gap:14px;margin-bottom:18px}.studio-status{align-self:stretch}.workspace{grid-template-columns:1fr}.stage{position:relative;top:0;height:340px}.workspace aside{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:620px){main{padding:0 12px 28px}.studio-brand h1{font-size:23px}.studio-brand p{font-size:12px}.stage{height:300px;border-radius:20px}.stage::before{inset:12px;border-radius:15px}.stage-topline{left:15px;right:15px;top:14px}.workspace aside{grid-template-columns:1fr;gap:12px}aside>section{padding:16px}aside>.appearance-section,aside>.preferences-section,aside>.players-section,aside>.idle-section{grid-column:auto}.select-grid{grid-template-columns:1fr}}
+  @media(prefers-reduced-motion:reduce){.skeleton-row i{animation:none}.setting-choice,.segmented button,.tool-list button,.ordered-row,.icon-button,.ordered-row button,.search-row button{transition:none}}
+  @media(prefers-reduced-transparency:reduce){}
 </style>

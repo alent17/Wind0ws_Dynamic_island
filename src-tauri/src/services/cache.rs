@@ -317,7 +317,7 @@ pub fn get_cached_media(url: &str) -> AppResult<Option<String>> {
         return Ok(None);
     };
     if artwork {
-        let bytes = super::image_budget::read_limited(fs::File::open(&path)?)?;
+        let bytes = super::image_budget::read_file_limited(&path)?;
         let (width, height) = super::image_budget::dimensions(&bytes)?;
         if width > super::image_budget::MAX_ARTWORK_EDGE
             || height > super::image_budget::MAX_ARTWORK_EDGE
@@ -397,7 +397,7 @@ async fn download_and_cache_inner(url: &str, content_type: &str) -> AppResult<St
     let mut downloaded = super::http_budget::download(&client, url, &directory, limit).await?;
     let mut stored_type = content_type;
     if is_image(content_type) {
-        let bytes = super::image_budget::read_limited(fs::File::open(&downloaded.path)?)?;
+        let bytes = super::image_budget::read_file_limited(&downloaded.path)?;
         let prepared = super::image_budget::prepare_artwork(&bytes)?;
         if matches!(prepared.bytes, std::borrow::Cow::Owned(_)) {
             fs::write(&downloaded.path, &prepared.bytes)?;

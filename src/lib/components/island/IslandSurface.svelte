@@ -12,6 +12,8 @@
   import SmtcModeControls from "$lib/components/media/SmtcModeControls.svelte";
   import TimerPanel from "$lib/components/time/TimerPanel.svelte";
   import MarqueeTitle from "$lib/components/media/MarqueeTitle.svelte";
+  import WidgetLayout from "$lib/components/island/WidgetLayout.svelte";
+  import { normalizeWidgets, type IslandWidgets } from "$lib/widgetLayout";
   import InfoPanel from "$lib/components/island/InfoPanel.svelte";
   import FeatureMenu from "$lib/components/island/FeatureMenu.svelte";
   import VolumePanel from "$lib/components/volume/VolumePanel.svelte";
@@ -55,6 +57,9 @@
 
   let {
     media,
+    islandWidgets = { left: [], right: [] },
+    onWidgetsSave,
+    onLayoutPreview,
     mode = "compact",
     islandStyle = "floating",
     edge = "top",
@@ -135,6 +140,9 @@
     enabledTools = ["settings", "floating", "volume", "timer", "hide"],
   } = $props<{
     media: MediaState;
+    islandWidgets?: IslandWidgets;
+    onWidgetsSave?: (layout: IslandWidgets) => Promise<void>;
+    onLayoutPreview?: (layout: IslandWidgets, editing: boolean) => void;
     mode?: IslandMode;
     islandStyle?: IslandStyle;
     edge?: IslandEdge;
@@ -242,8 +250,8 @@
   let styleProgress = $state(untrack(() => islandStyle === "edge" ? 1 : 0));
   let hideProgress = $state(untrack(() => simulateHidden && mode === "hidden" ? 1 : 0));
   let prefersReducedMotion = $state(false);
-  const shoulderMotion = tweened(untrack(() => mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius), motionOptions);
-  let animatedShoulder = $state(untrack(() => mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius));
+  const shoulderMotion = tweened(untrack(() => mode === "expanded" ? expandedEdgeShoulderRadius * expandedScale : collapsedEdgeShoulderRadius), motionOptions);
+  let animatedShoulder = $state(untrack(() => mode === "expanded" ? expandedEdgeShoulderRadius * expandedScale : collapsedEdgeShoulderRadius));
   const unsubscribeShoulder = shoulderMotion.subscribe(value => animatedShoulder = value);
   let shapeSettled = $state(false);
   let compactShapeMotion = $state(untrack(() => mode === "compact" || mode === "hover"));
@@ -260,13 +268,52 @@
   let wasTimerFinished = $state(false);
   let menuScroll = $state(0);
   let pageRoot = $state<HTMLDivElement>();
-  const panelVisible = $derived(showCustomFunctionPanel && enabledTools.length > 0);
+  let editing = $state(false);
+  let savingLayout = $state(false);
+  let layoutError = $state(false);
+  let draftLayout = $state<IslandWidgets>({left: [], right: []});
+  const currentLayout = $derived(editing ? draftLayout : normalizeWidgets(islandWidgets));
+  const widgetCount = $derived(currentLayout.left.length + currentLayout.right.length);
+  let editRevision = 0;
+  function beginEditing() {
+    if (!interactive || !visible || editing) return;
+    cancelLongPress();
+    editRevision++;
+    draftLayout = normalizeWidgets(islandWidgets);
+    layoutError = false;
+    page = "music";
+    editing = true;
+    suppressBackgroundClick = true;
+    if (mode !== "expanded") onToggle?.();
+    void tick().then(() => pageRoot?.querySelector<HTMLButtonElement>(".catalog-item")?.focus({preventScroll: true}));
+  }
+  function cancelEditing() {
+    if (savingLayout) return;
+    editRevision++;
+    editing = false; layoutError = false;
+  }
+  async function saveLayout() {
+    if (savingLayout) return;
+    const revision = editRevision;
+    savingLayout = true; layoutError = false;
+    try {
+      await onWidgetsSave?.(normalizeWidgets(draftLayout));
+      if (revision === editRevision) editing = false;
+    } catch {
+      if (revision === editRevision) layoutError = true;
+    } finally { savingLayout = false; }
+  }
+  $effect(() => {
+    if ((!visible || mode === "hidden") && editing) { editing = false; untrack(() => editRevision++); }
+  });
+  $effect(() => { onLayoutPreview?.(currentLayout, editing); });
+  const panelVisible = $derived(!editing && showCustomFunctionPanel && enabledTools.length > 0);
   const toolOrder: IslandTool[] = ["timer", "volume", "floating", "settings", "hide", "clock", "weather"];
   const toolIcons = { timer: Timer, volume: Volume2, floating: GalleryHorizontalEnd, settings: Settings, hide: EyeOff, clock: Clock, weather: CloudSun };
   const toolLabels: Record<IslandTool, TranslationKey> = { timer: "timer", volume: "volume", floating: "floatingTool", settings: "settingsTool", hide: "hideTool", clock: "clock", weather: "weather" };
   const shortLabels: Record<IslandTool, TranslationKey> = {timer:"timer",volume:"menuVolume",floating:"menuFloating",settings:"menuSettings",hide:"menuHide",clock:"clock",weather:"weather"};
   const menuItems = $derived(toolOrder.filter(tool => enabledTools.includes(tool)).map(tool => ({ id: tool, label: t(toolLabels[tool]), shortLabel: t(shortLabels[tool]), icon: toolIcons[tool] })));
-  const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius, expandedLength));
+  const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius, expandedLength, widgetCount, editing));
   const expandedGeometry = $derived({
     ...scaleIslandGeometry(expandedBaseGeometry, expandedScale),
   });
@@ -368,7 +415,7 @@
       widthMotion.set(target.width, motion),
       heightMotion.set(target.height, motion),
       radiusMotion.set(target.radius, motion),
-      shoulderMotion.set(mode === "expanded" ? expandedEdgeShoulderRadius : collapsedEdgeShoulderRadius, motion),
+      shoulderMotion.set(mode === "expanded" ? expandedEdgeShoulderRadius * expandedScale : collapsedEdgeShoulderRadius, motion),
       styleMorph.set(islandStyle === "edge" ? 1 : 0, motion),
     ]).then(() => {
       if (revision === transitionRevision) {
@@ -383,11 +430,11 @@
   });
   $effect(() => {
     const finished = timerFinished;
-    if (finished && !wasTimerFinished && panelVisible && enabledTools.includes("timer")) void navigate("timer");
+    if (!editing && finished && !wasTimerFinished && panelVisible && enabledTools.includes("timer")) void navigate("timer");
     else if (!finished && wasTimerFinished && page === "timer") void navigate("music");
     wasTimerFinished = finished;
   });
-  $effect(() => { onPanelActivity?.(mode === "expanded" && page !== "music"); onPageChange?.(page); });
+  $effect(() => { onPanelActivity?.(editing || (mode === "expanded" && page !== "music")); onPageChange?.(page); });
   let renderedPage = $state<IslandPage>("music");
   let pageExiting = $state(false);
   $effect(() => {
@@ -476,20 +523,36 @@
   let gestureX = 0;
   let gestureY = 0;
   let suppressBackgroundClick = false;
+  let longPress: ReturnType<typeof setTimeout> | undefined;
+  let longPressPointer: number | null = null;
+  function cancelLongPress() {
+    clearTimeout(longPress); longPress = undefined; longPressPointer = null;
+  }
+  onDestroy(cancelLongPress);
   function startSurfaceGesture(event: PointerEvent) {
     gestureX = event.clientX; gestureY = event.clientY;
     suppressBackgroundClick = Boolean((event.target as HTMLElement).closest(controlSelector));
+    cancelLongPress();
+    if (suppressBackgroundClick || editing || !interactive || event.button !== 0 || !event.isPrimary) return;
+    longPressPointer = event.pointerId;
+    longPress = setTimeout(beginEditing, 2000);
   }
   function moveSurfaceGesture(event: PointerEvent) {
-    if (event.buttons && Math.hypot(event.clientX - gestureX, event.clientY - gestureY) > 5) suppressBackgroundClick = true;
+    if (Math.hypot(event.clientX - gestureX, event.clientY - gestureY) > 5) {
+      if (event.buttons) suppressBackgroundClick = true;
+      if (event.pointerId === longPressPointer) cancelLongPress();
+    }
   }
   function toggleFromSurface(event: MouseEvent | KeyboardEvent) {
     const target = event.target as HTMLElement;
-    if (!interactive || target.closest(controlSelector) || (event.detail > 0 && suppressBackgroundClick)) return;
+    if (editing || !interactive || target.closest(controlSelector) || (event.detail > 0 && suppressBackgroundClick)) return;
     onToggle?.();
   }
 
   function keyToggle(event: KeyboardEvent) {
+    if (event.key === "Escape" && editing) { event.preventDefault(); event.stopPropagation(); cancelEditing(); return; }
+    if (event.key === "F2" && interactive) { event.preventDefault(); beginEditing(); return; }
+    if (editing) return;
     if (event.key === "Escape" && mode === "expanded" && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); goBack(); return; }
     if ((event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) {
       event.preventDefault();
@@ -505,6 +568,8 @@
     }
   }
 </script>
+
+<svelte:window onpointerup={cancelLongPress} onpointercancel={cancelLongPress} onpointermove={moveSurfaceGesture} onblur={cancelLongPress} onkeydown={(event) => { if (editing && event.key === "Escape") { event.preventDefault(); cancelEditing(); } }} />
 
 <div
   class="island-frame"
@@ -527,6 +592,7 @@
   >
   <div
     class="island-surface"
+    class:editing-surface={editing}
     class:expanded-surface={mode === "expanded"}
     style:width={`${size.width}px`}
     style:height={`${size.height}px`}
@@ -617,13 +683,23 @@
       aria-hidden={mode !== "expanded" || expandedOpacity <= .5}
       inert={mode !== "expanded"}
     >
-      <div class="expanded-shell" bind:this={pageRoot} class:reduce-page-motion={reduceAnimations || !enableAnimations || prefersReducedMotion} style={`--page-width:${expandedBaseGeometry.width}px;--page-height:${expandedBaseGeometry.height}px;--content-scale:${expandedScale};--shoulder-content-inset:${expandedInset}px`}>
+      <div class="expanded-shell" class:composed={widgetCount > 0 || editing} bind:this={pageRoot} class:reduce-page-motion={reduceAnimations || !enableAnimations || prefersReducedMotion} style={`--widget-vertical-inset:${islandStyle === "edge" && (edge === "left" || edge === "right") && (widgetCount > 0 || editing) ? expandedInset : 0}px;--widget-edge-inset:${islandStyle === "edge" && (edge === "top" || edge === "bottom") && widgetCount > 0 ? expandedInset : 0}px;--editor-edge-inset:${islandStyle === "edge" && (edge === "top" || edge === "bottom") ? expandedInset : 0}px;--page-width:${expandedBaseGeometry.width}px;--page-height:${expandedBaseGeometry.height}px;--content-scale:${expandedScale};--shoulder-content-inset:${expandedInset}px`}>
         {#if panelVisible}
           <div class="top-tools"><FeatureMenu items={menuItems} toolbar activeId={page} scrollPosition={menuScroll} onScroll={(value) => menuScroll = value} onSelect={selectTool} /></div>
         {/if}
         <div class="page-body" class:exiting={pageExiting} class:with-toolbar={panelVisible} inert={pageExiting}>
         {#if renderedPage === "music"}
-        <section class="music-pane">
+        <WidgetLayout layout={currentLayout} {editing} busy={savingLayout} error={layoutError} musicWidth={expandedLength} onChange={(layout) => draftLayout = layout} onSave={() => void saveLayout()} onCancel={cancelEditing}>
+          {#snippet widget(kind)}
+            {#if kind === "timer"}
+              <TimerPanel status={timerStatus} remainingMs={timerRemainingMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
+            {:else if kind === "volume"}
+              <VolumePanel volume={systemAudio?.volumePercent ?? 0} muted={systemAudio?.muted ?? false} deviceId={systemAudio?.deviceId ?? ""} devices={audioDevices} switchingDevice={audioDeviceSwitching} reduceMotion={reduceAnimations || !enableAnimations} onVolume={onAudioVolume} onDevice={onAudioDevice} />
+            {:else}
+              <InfoPanel page={kind} time={clockText} timeZone={clockTimeZone} city={weatherCity} temperature={idleWeatherTemperature} code={idleWeatherCode} forecast={idleWeatherForecast} updatedAt={weatherUpdatedAt} loading={weatherLoading} failed={weatherFailed} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onSettings={onSettingsToggle} />
+            {/if}
+          {/snippet}
+          <section class="music-pane">
             <div class="top-row">
             <button class="cover expanded-cover" class:shared-cover-source={movingCover} type="button" aria-label={t("openPlayer")} disabled={idle} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
               {#if (idle ? lastPlayedMedia?.albumArt : media.albumArt)}<CoverArt src={(idle ? lastPlayedMedia?.albumArt : media.albumArt) || ""} />{:else}<Music2 size={30} />{/if}
@@ -668,6 +744,7 @@
               </div>
             </div>
         </section>
+        </WidgetLayout>
 
         {:else}
           <section class="navigation-page">
@@ -757,7 +834,7 @@
   .progress-block{width:100%;margin-bottom:10px}
   .control-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;width:100%;height:58px}.cover:active{transform:scale(.94)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .compact-timer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:0;color:#f28b31;background:transparent;cursor:pointer;font-family:var(--app-font);user-select:none}.compact-timer span{min-width:42px;font-size:12px;font-weight:600;line-height:1;letter-spacing:.015em;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}.compact-timer.finished span{min-width:0;font-size:11px}.compact-timer.paused{color:rgba(242,139,49,.62)}.timer-pause{width:7px;height:8px;display:flex;align-items:center;justify-content:center;gap:2px}.timer-pause b{display:block;width:2px;height:7px;border-radius:1px;background:currentColor}.compact-timer.urgent{color:#ff765f}
-  .compact-timer{position:absolute;inset:0;display:block;overflow:hidden;padding:0;border-radius:inherit;color:#f4f7ff;background:transparent;box-shadow:inset 1px 0 0 rgba(82,151,255,.46),inset -1px 0 0 rgba(82,151,255,.46),inset 0 0 12px rgba(28,91,190,.08)}.compact-timer:hover{background:rgba(40,100,190,.055)}.compact-timer .timer-summary{position:absolute;inset:0 14px 4px;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}.compact-timer .timer-leading{display:flex;align-items:center;gap:7px;min-width:0;color:rgba(245,248,255,.9)}.compact-timer .timer-leading :global(svg){flex:none;color:#70aaff}.compact-timer .timer-time{min-width:0;overflow:hidden;color:#f5f7fb;font-size:13px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em;text-align:right;text-overflow:ellipsis;white-space:nowrap}.compact-timer .timer-progress-track{position:absolute;right:14px;bottom:5px;left:14px;height:2px;overflow:hidden;border-radius:999px;background:rgba(115,143,183,.2)}.compact-timer .timer-progress-fill{display:block;height:100%;max-width:100%;border-radius:inherit;background:linear-gradient(90deg,#2688ff,#60b5ff);box-shadow:0 0 7px rgba(57,145,255,.68);transition:width 350ms linear,background-color 180ms ease}.compact-timer .timer-progress-fill.paused{background:linear-gradient(90deg,#6d8fb9,#a7c5ed);box-shadow:none}.compact-timer .timer-progress-fill.finished{background:linear-gradient(90deg,#42d99a,#8af0c0)}.compact-timer.paused{color:#f4f7ff}.compact-timer.urgent{box-shadow:inset 1px 0 0 rgba(255,111,102,.58),inset -1px 0 0 rgba(255,111,102,.58),inset 0 0 12px rgba(255,74,60,.09)}.compact-timer.urgent .timer-leading :global(svg){color:#ff8c7c}.compact-timer .timer-pause{flex:none;width:7px;height:8px;gap:2px;color:#a8c5e9}.compact-timer .timer-pause b{width:2px;height:7px;border-radius:1px;background:currentColor}
+  .compact-timer{position:absolute;inset:0;display:block;overflow:hidden;padding:0;border-radius:inherit;color:#f4f7ff;background:transparent;box-shadow:none}.compact-timer:hover{background:rgba(40,100,190,.055)}.compact-timer .timer-summary{position:absolute;inset:0 14px 4px;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}.compact-timer .timer-leading{display:flex;align-items:center;gap:7px;min-width:0;color:rgba(245,248,255,.9)}.compact-timer .timer-leading :global(svg){flex:none;color:#70aaff}.compact-timer .timer-time{min-width:0;overflow:hidden;color:#f5f7fb;font-size:13px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em;text-align:right;text-overflow:ellipsis;white-space:nowrap}.compact-timer .timer-progress-track{position:absolute;right:14px;bottom:5px;left:14px;height:2px;overflow:hidden;border-radius:999px;background:rgba(115,143,183,.2)}.compact-timer .timer-progress-fill{display:block;height:100%;max-width:100%;border-radius:inherit;background:linear-gradient(90deg,#2688ff,#60b5ff);box-shadow:0 0 7px rgba(57,145,255,.68);transition:width 350ms linear,background-color 180ms ease}.compact-timer .timer-progress-fill.paused{background:linear-gradient(90deg,#6d8fb9,#a7c5ed);box-shadow:none}.compact-timer .timer-progress-fill.finished{background:linear-gradient(90deg,#42d99a,#8af0c0)}.compact-timer.paused{color:#f4f7ff}.compact-timer.urgent{box-shadow:inset 1px 0 0 rgba(255,111,102,.58),inset -1px 0 0 rgba(255,111,102,.58),inset 0 0 12px rgba(255,74,60,.09)}.compact-timer.urgent .timer-leading :global(svg){color:#ff8c7c}.compact-timer .timer-pause{flex:none;width:7px;height:8px;gap:2px;color:#a8c5e9}.compact-timer .timer-pause b{width:2px;height:7px;border-radius:1px;background:currentColor}
   .compact-layer.vertical .compact-timer .timer-summary{inset:14px 4px;flex-direction:column;justify-content:center;gap:10px}.compact-layer.vertical .compact-timer .timer-leading{flex-direction:column;gap:5px}.compact-layer.vertical .compact-timer .timer-time{max-width:100%;font-size:11px;text-align:center}.compact-layer.vertical .compact-timer .timer-progress-track{top:14px;right:auto;bottom:14px;left:5px;width:2px;height:auto}.compact-layer.vertical .timer-progress-fill{width:100%!important;height:var(--timer-progress-height,0%)}
   .edge-top .music-pane,.edge-bottom .music-pane{padding-left:calc(40px + var(--shoulder-content-inset,0px));padding-right:calc(40px + var(--shoulder-content-inset,0px))}
   .music-pane{padding-top:14px;padding-bottom:10px}
@@ -825,5 +902,29 @@
   .control-row .play{color:#fff}
   .trailing-controls button:last-child{color:rgba(225,234,249,.62)}
   @media (hover:hover) and (pointer:fine){.control-row button:hover:not(:disabled){color:#fff}.control-row button:hover:not(:disabled)::before{opacity:1}}
+  .attached-style.edge-left .composed .page-body .music-pane,.attached-style.edge-right .composed .page-body .music-pane{padding-top:20px;padding-bottom:14px}
+  .floating-style .island-surface.editing-surface:active{transform:none}
+  /* Respond to the music pane's usable width, including attached shoulders. */
+  .music-pane{container-type:inline-size;container-name:island-music}
+  @container island-music (max-width:500px){
+    .control-row{grid-template-columns:auto minmax(0,1fr) auto;column-gap:12px}
+    .utility-controls{gap:8px}
+    .transport-controls{justify-self:stretch;justify-content:space-evenly;min-width:0;gap:8px}
+    .control-row :global(.utility-controls button),.control-row .control-mark,
+    .control-row :global(.like-wrap),.control-row :global(.mode-control-wrap){width:40px;height:40px}
+    .transport-controls button{width:48px;height:48px}
+    .control-row :global(svg){width:30px;height:30px}
+    .control-row :global(.play-pause-icon),.transport-controls .play :global(svg){width:42px;height:42px}
+  }
+  @container island-music (max-width:330px){
+    .control-row{column-gap:8px}
+    .utility-controls{gap:4px}
+    .control-row :global(.utility-controls button),.control-row .control-mark,
+    .control-row :global(.like-wrap),.control-row :global(.mode-control-wrap){width:36px;height:36px}
+    .transport-controls{gap:4px}
+    .transport-controls button{width:40px;height:40px}
+    .control-row :global(svg){width:26px;height:26px}
+    .control-row :global(.play-pause-icon),.transport-controls .play :global(svg){width:34px;height:34px}
+  }
 </style>
 

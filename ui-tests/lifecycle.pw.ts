@@ -1,5 +1,35 @@
 import { expect, test } from "@playwright/test";
 
+test("NetEase Settings configure ordinary launch entries without starting or restarting the player", async ({page}) => {
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(() => { (window as any).settingsOverrides = {language:'zh-CN'}; (window as any).mountStudio(); });
+  const configure = page.getByRole('button',{name:'配置普通启动入口',exact:true});
+  await expect(configure).toBeEnabled();
+  await configure.click();
+  await expect(page.locator('.netease-progress-section .message[role="status"]')).toContainText('已配置 16 个普通启动入口');
+  expect(await page.evaluate(() => (window as any).neteaseSetupCalls)).toEqual([{restart:false,bind:true,configureOnly:true}]);
+});
+
+test("NetEase idle play uses the native configured player-open path before SMTC playback", async ({page}) => {
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(() => {
+    const saved = {title:'Remembered Song',artist:'Artist',source:'netease',albumArt:'',sourceDisplay:'网易云音乐',positionMs:0,durationMs:180000};
+    localStorage.setItem('isle:last-played-media:v1',JSON.stringify(saved));
+    (window as any).reopenedMedia = {...saved,isPlaying:false,nativeEpoch:'reopen-epoch',nativeRevision:1,nativeTrackGeneration:1};
+    (window as any).mountApp();
+    (window as any).expand();
+  });
+  const play = page.locator('.transport-controls button.play');
+  await expect(play).toBeEnabled();
+  await play.click();
+  await expect.poll(() => page.evaluate(() => (window as any).openApplicationCalls)).toEqual([{name:'NeteaseCloudMusic'}]);
+  await expect.poll(() => page.evaluate(() => (window as any).calls.includes('control_media'))).toBe(true);
+  const order = await page.evaluate(() => (window as any).calls);
+  expect(order.indexOf('open_application')).toBeLessThan(order.indexOf('control_media'));
+});
+
 test("NetEase heart reads state, likes, unlikes and keeps failed writes unconfirmed", async ({page}) => {
   await page.goto("/ui-tests/lifecycle-fixture.html");
   await page.waitForFunction(() => (window as any).ready);
@@ -212,6 +242,7 @@ test("transport diagnostics count actual volume dispatches after queue dedupe", 
 });
 
 test("App ignores a delayed manual hide after re-expansion and still applies a normal hide", async ({page}) => {
+  await page.emulateMedia({reducedMotion:"no-preference"});
   await page.goto("/ui-tests/lifecycle-fixture.html");
   await page.waitForFunction(() => (window as any).ready);
   await page.evaluate(() => {
@@ -423,6 +454,7 @@ test("FloatingWindow gates MV playback and progress work while capture-hidden", 
 });
 
 test("FloatingWindow pauses circular artwork motion while capture-hidden", async ({page}) => {
+  await page.emulateMedia({reducedMotion:"no-preference"});
   await page.goto("/ui-tests/lifecycle-fixture.html");
   await page.waitForFunction(() => (window as any).ready);
   await page.evaluate(() => (window as any).mountFloating({floatingCircularAlbum:true,enableMvPlayback:false}));
@@ -1085,21 +1117,21 @@ test("App refreshes clock text by minute and ticks media progress only while vis
   await expect.poll(() => page.evaluate(() => (window as any).islandSnapshot())).toMatchObject({expanded:true,hovering:true});
   await expect.poll(() => page.evaluate(() => (window as any).liveTimeoutDelays().includes(250))).toBe(true);
   await page.clock.runFor(2_500);
-  await expect(page.locator(".progress-block .time.elapsed .rolling-number-sr")).toHaveText("0:02");
+  await expect(page.locator(".progress-block .time.elapsed")).toHaveText("0:02");
   expect(await page.evaluate(() => (window as any).clockFormatterCalls())).toBe(formatterCalls+2);
 
   await page.evaluate(() => (window as any).captureMode(true));
   await expect.poll(() => page.evaluate(() => (window as any).liveTimeoutDelays().includes(250))).toBe(false);
   await page.clock.runFor(5_000);
   await page.evaluate(() => (window as any).captureMode(false));
-  await expect.poll(() => page.locator(".progress-block .time.elapsed .rolling-number-sr").textContent()).toBe("0:07");
+  await expect.poll(() => page.locator(".progress-block .time.elapsed").textContent()).toBe("0:07");
   await expect.poll(() => page.evaluate(() => (window as any).liveTimeoutDelays().includes(250))).toBe(true);
 
   await page.evaluate(() => (window as any).setVisibility("hidden"));
   await expect.poll(() => page.evaluate(() => (window as any).liveTimeoutDelays().includes(250))).toBe(false);
   await page.clock.runFor(5_000);
   await page.evaluate(() => (window as any).setVisibility("visible"));
-  await expect(page.locator(".progress-block .time.elapsed .rolling-number-sr")).toHaveText("0:12");
+  await expect(page.locator(".progress-block .time.elapsed")).toHaveText("0:12");
   await expect.poll(() => page.evaluate(() => (window as any).liveTimeoutDelays().includes(250))).toBe(true);
   await page.evaluate((payload) => (window as any).media(payload),media(false));
   await expect.poll(() => page.evaluate(() => (window as any).liveTimeoutDelays().includes(250))).toBe(false);
@@ -1181,7 +1213,7 @@ test("Studio polls media sessions only while Players is visible and serializes s
   await players.scrollIntoViewIfNeeded();
   await expect.poll(() => page.evaluate(() => (window as any).calls.filter((command:string)=>command==="list_media_sessions").length)).toBe(3);
   await page.evaluate(() => (window as any).resolveMediaSessions(2,[{id:"fresh-session",displayName:"Fresh session",source:"generic",isPlaying:false}]));
-  await expect(players.getByText("Fresh session")).toBeVisible();
+  await expect(players.locator("strong").filter({hasText:"Fresh session"})).toBeVisible();
   await page.evaluate(() => { (window as any).holdMediaSessions=false; });
   await players.locator(".icon-button").click();
   await expect.poll(() => page.evaluate(() => (window as any).calls.filter((command:string)=>command==="list_media_sessions").length)).toBe(4);

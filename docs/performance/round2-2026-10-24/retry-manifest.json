@@ -1,0 +1,9 @@
+{
+  "rootPid": 34868,
+  "executable": "D:\\Wind0ws_Dynamic_island-main\\src-tauri\\target\\release\\isle.exe",
+  "sha256": "E44EA0D4E70E979700D487E706B887FCAD2B82D34D9E16D6DA0A89B5F6CA88F3",
+  "warmupSeconds": 45,
+  "sampleSeconds": 15,
+  "scene": "Startup retry with retained settings; no computer use or playback input",
+  "scope": "Readiness requires WebView2 browser and renderer in every sampled process tree"
+}

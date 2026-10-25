@@ -11,6 +11,7 @@
     "bundle:windows": "tauri build --bundles nsis",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
+    "test:netease": "node --test scripts/netease-capture-expression.test.mjs scripts/netease-like-expression.test.mjs scripts/netease-seek-expression.test.mjs",
     "perf:build": "node scripts/build-performance.mjs",
     "perf:fixture": "node scripts/measure-performance.mjs",
     "perf:retained": "node scripts/measure-retained-memory.mjs",

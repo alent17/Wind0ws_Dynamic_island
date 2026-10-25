@@ -1,0 +1,16 @@
+{
+  "createdUtc": "2026-10-24T13:03:59.5283104Z",
+  "firstRunLog": [
+    "2026-10-24T12:56:18.195211Z  WARN isle_lib: [Setup] 配置灵动岛窗口可见性失败: 窗口操作失败: the underlying handle is not available",
+    "2026-10-24T12:56:18.197240Z  WARN isle_lib: [Setup] 灵动岛点击穿透初始化失败: 窗口操作失败: the underlying handle is not available",
+    "2026-10-24T12:56:18.214190Z  WARN isle_lib::commands::window: [Work area] 获取主窗口句柄失败，保留5分钟布局兜底: the underlying handle is not available",
+    "2026-10-24T12:56:18.353195Z  WARN isle_lib: [Setup] 刷新灵动岛任务切换器样式失败: 窗口操作失败: the underlying handle is not available"
+  ],
+  "retryLog": [
+    "2026-10-24T13:00:26.593928Z  WARN isle_lib: [Setup] 配置灵动岛窗口可见性失败: 窗口操作失败: the underlying handle is not available",
+    "2026-10-24T13:00:26.594529Z  WARN isle_lib: [Setup] 灵动岛点击穿透初始化失败: 窗口操作失败: the underlying handle is not available",
+    "2026-10-24T13:00:26.607954Z  WARN isle_lib::commands::window: [Work area] 获取主窗口句柄失败，保留5分钟布局兜底: the underlying handle is not available",
+    "2026-10-24T13:00:26.747106Z  WARN isle_lib: [Setup] 刷新灵动岛任务切换器样式失败: 窗口操作失败: the underlying handle is not available"
+  ],
+  "conclusion": "Both native samples invalid: no WebView2 browser/renderer; window handle unavailable. Cause not attributed to image changes. No whole-app budget or native animation acceptance."
+}

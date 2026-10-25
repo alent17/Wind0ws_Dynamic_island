@@ -14,12 +14,16 @@ const capture = rawConstant("CLOUD_MUSIC_CAPTURE_TOOL");
 const progress = rawConstant("CLOUD_MUSIC_PROGRESS_EXPRESSION");
 const seek = rawConstant("CLOUD_MUSIC_SEEK_EXPRESSION");
 
-function fixture({ video = false, loading = false, restore = false, changeTrack = false } = {}) {
+function fixture({ video = false, loading = false, restore = false, changeTrack = false, collaboration = false } = {}) {
   const store = { playing: {
     playId: "play-1", onlineResourceId: "song-1", resourceDuration: 180,
     resourceName: "Song One", resourceArtist: "Artist One", curPlaying: { track: { name: "Song One", artists: [{ name: "Artist One" }] } },
     isPlayingVideo: video, isLoadingFirst: loading, restoreResource: restore,
   } };
+  if (collaboration) {
+    store.playing.resourceArtist = 'Artist One, Guest Artist';
+    store.playing.curPlaying.track.artists.push({name:'Guest Artist'});
+  }
   const progress = { playId: "play-1", current: 12 };
   let action;
   let dispatchCount = 0;
@@ -74,7 +78,7 @@ test("production progress expression returns current identity and live position"
   const fx = fixture();
   const first = await readProgress(fx);
   assert.deepEqual(JSON.parse(JSON.stringify(first)), {
-    ready: true, trackId: "song-1", playId: "play-1", title: "Song One", artist: "Artist One",
+    ready: true, trackId: "song-1", playId: "play-1", title: "Song One", artist: "Artist One", primaryArtist: "Artist One",
     positionMs: 12_000, durationMs: 180_000,
   });
   // Model an external NetEase seek after the previous read; the next expression
@@ -113,4 +117,14 @@ test("rejects a mismatched expected UI identity before dispatch", async () => {
   const result = await execute(fx, 35.5, "Song Two", "Artist One");
   assert.equal(result.identityMismatch, true);
   assert.equal(fx.dispatchCount, 0);
+});
+
+test("collaboration progress carries a complete primary artist and seeking keeps canonical identity", async () => {
+  const fx = fixture({collaboration:true});
+  const progress = await readProgress(fx);
+  assert.equal(progress.primaryArtist, 'Artist One');
+  assert.equal(progress.artist, 'Artist One, Guest Artist');
+  const result = await execute(fx, 30, 'Song One', progress.artist);
+  assert.equal(result.verified, true);
+  assert.equal(result.artist, progress.artist);
 });

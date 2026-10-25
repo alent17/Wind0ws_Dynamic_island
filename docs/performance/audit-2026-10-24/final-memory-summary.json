@@ -1,0 +1,18 @@
+{
+  "rootPid": 4012,
+  "sampleCount": 29,
+  "limitBytes": 100000000,
+  "scope": "Application and all sampled descendants; decimal MB. Passing this scene does not qualify untested scenes.",
+  "privateWorkingSet": {
+    "meanBytes": 180640379.58620688,
+    "p95Bytes": 183332864,
+    "peakBytes": 184147968
+  },
+  "privateCommit": {
+    "meanBytes": 287461517.2413793,
+    "p95Bytes": 290504704,
+    "peakBytes": 291803136
+  },
+  "passed": false,
+  "commitPassed": false
+}

@@ -1,7 +1,7 @@
 //! 通用工具函数模块
 
 use crate::error::{AppError, AppResult};
-use crate::services::image_budget::{read_limited, MAX_IMAGE_BYTES, MAX_IMAGE_URI_CHARS};
+use crate::services::image_budget::{read_file_limited, MAX_IMAGE_BYTES, MAX_IMAGE_URI_CHARS};
 use base64::{engine::general_purpose, Engine as _};
 
 /// 校验路径安全性
@@ -79,11 +79,7 @@ pub fn load_image_data(image_path: &str) -> AppResult<Vec<u8>> {
 }
 
 fn read_image_file(path: &std::path::Path) -> AppResult<Vec<u8>> {
-    let file = std::fs::File::open(path)?;
-    if file.metadata()?.len() > MAX_IMAGE_BYTES as u64 {
-        return Err(AppError::business(3004, "图片文件超过预算"));
-    }
-    read_limited(file) // Also bounds a file that grows after the metadata check.
+    read_file_limited(path)
 }
 
 #[cfg(test)]

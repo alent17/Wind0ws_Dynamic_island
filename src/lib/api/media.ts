@@ -3,7 +3,7 @@ import type { MediaSessionInfo, MediaState, NeteaseSong, ResolvedCover } from ".
 
 export const mediaApi = {
   neteaseSongLike: (title: string, artist: string, expected?: NeteaseLikeState, liked?: boolean) => invoke<NeteaseLikeState>("netease_song_like", { title, artist, trackId: expected?.trackId, playId: expected?.playId, liked }),
-  setupNeteaseConnection: (restart = false, bind = false) => invoke<{ connected: boolean; configured: boolean; executablePath: string; shortcutPath: string; boundSessionId: string | null; bindingFailed: boolean }>("setup_netease_connection", { restart, bind: restart || bind }),
+  setupNeteaseConnection: (restart = false, bind = false, configureOnly = false) => invoke<{ connected: boolean; configured: boolean; executablePath: string; shortcutPath: string; boundSessionId: string | null; bindingFailed: boolean; launchEntries: number }>("setup_netease_connection", { restart, bind: restart || bind, configureOnly }),
   async getMediaInfo(): Promise<MediaState> {
     return invoke<MediaState>("get_media_info_cmd");
   },

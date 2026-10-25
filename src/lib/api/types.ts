@@ -1,3 +1,4 @@
+import { normalizeWidgets, type IslandWidgets } from "$lib/widgetLayout";
 export type IslandStyle = "floating" | "edge";
 export type IslandEdge = "top" | "right" | "bottom" | "left";
 export type SpectrumMode = "realtime" | "random";
@@ -5,6 +6,7 @@ export type NeteaseProgressMode = "real" | "estimate";
 export type AppLanguage = "system" | "zh-CN" | "en" | "ja";
 
 export interface AppSettings {
+  islandWidgets: IslandWidgets;
   neteaseProgressMode: NeteaseProgressMode;
   neteaseAutoConnect: boolean;
   neteaseExecutablePath: string | null;
@@ -191,6 +193,7 @@ export interface AppError {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  islandWidgets: { left: [], right: [] },
   neteaseProgressMode: "real",
   neteaseAutoConnect: false,
   neteaseExecutablePath: null,
@@ -275,6 +278,7 @@ export function normalizeAppSettings(value: Partial<AppSettings>): AppSettings {
   const legacyCompactLength = Number(legacy.compactLength ?? 80);
   const legacyExpandedRadius = Number(legacy.expandedCornerRadius ?? 45);
   const merged = { ...DEFAULT_SETTINGS, ...value } as AppSettings;
+  merged.islandWidgets = normalizeWidgets(value.islandWidgets);
   merged.playerSourceOverrides = Object.fromEntries(Object.entries(value.playerSourceOverrides ?? {}).filter(([id, source]) => id.trim().length > 0 && id.length <= 1024 && source === "netease"));
   for (const key of ["floatingExpandedLength", "edgeExpandedLength"] as const) {
     const length = Number(value[key] ?? 600);

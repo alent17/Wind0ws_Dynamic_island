@@ -147,7 +147,7 @@ test("the full App cycles the verified NetEase mode and shows failures without o
   await page.evaluate(() => (window as any).destroy());
 });
 
-test("the full App disables repeat clicks while a mode read-back is pending and refreshes after track change", async ({ page }) => {
+test("the full App disables repeat clicks while a mode read-back is pending and retains mode within a connection", async ({ page }) => {
   await page.goto("/ui-tests/lifecycle-fixture.html", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => (window as any).ready);
   await page.evaluate(() => {
@@ -194,7 +194,7 @@ test("the full App disables repeat clicks while a mode read-back is pending and 
     fixture.mockMode = "shuffle";
     await fixture.media({ ...media, title: "Next fixture track", nativeRevision: 2, nativeTrackGeneration: 2 });
   }, track);
-  await expect(page.getByRole("button", { name: "切换网易云播放模式（当前：随机播放）" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "切换网易云播放模式（当前：列表循环）" })).toBeVisible();
   await page.evaluate(() => (window as any).destroy());
 });
 
@@ -229,7 +229,7 @@ test("the full App removes 15-second buttons and keeps the slider when progress 
   await page.evaluate(() => (window as any).destroy());
 });
 
-test("the full App shows unknown time and preserves its warning instead of displaying a valid zero timeline", async ({ page }) => {
+test("the full App shows unknown time without the removed pending-progress message or a valid zero timeline", async ({ page }) => {
   await page.goto("/ui-tests/lifecycle-fixture.html", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => (window as any).ready);
   await page.evaluate(() => {
@@ -249,8 +249,8 @@ test("the full App shows unknown time and preserves its warning instead of displ
 
   await expect(page.getByRole("button", { name: /后退 15 秒|前进 15 秒|Back 15 seconds|Forward 15 seconds/ })).toHaveCount(0);
   await expect(page.locator('.expanded-layer input[type="range"]')).toHaveCount(0);
-  await expect(page.locator(".expanded-layer .progress-block.with-times .time.elapsed .rolling-number-sr")).toHaveText("--:--");
-  await expect(page.locator(".expanded-layer [role=status]")).toContainText("网易云当前曲目的进度锚点尚未确认。");
+  await expect(page.locator(".expanded-layer .progress-block.with-times .time.elapsed")).toHaveText("--:--");
+  await expect(page.locator(".expanded-layer [role=status]")).toHaveCount(0);
   await page.evaluate(() => (window as any).destroy());
 });
 

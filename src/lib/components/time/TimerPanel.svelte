@@ -6,6 +6,7 @@
   import { locale, translate, type TranslationKey } from "$lib/i18n";
 
   let {
+    compact = false,
     status = "idle",
     remainingMs = 0,
     finished = false,
@@ -16,6 +17,7 @@
     onReset,
     onFinishedDismiss,
   } = $props<{
+    compact?: boolean;
     status?: CountdownStatus;
     remainingMs?: number;
     finished?: boolean;
@@ -115,7 +117,7 @@
   }
 </script>
 
-<div class="timer-panel" class:active={active} class:complete={finished}>
+<div class="timer-panel" class:compact class:active={active} class:complete={finished}>
   {#if finished}
     <div class="timer-complete-card" role="status" aria-live="assertive">
       <span class="timer-complete-mark"><Check size={17} strokeWidth={2.4} /></span>
@@ -302,20 +304,28 @@
   .timer-readout { display: flex; flex: 1; flex-direction: column; align-items: flex-end; min-width: 0; line-height: 1; }
   .timer-readout strong { display: block; box-sizing: border-box; width: 100%; max-width: 100%; padding-right: 6px; color: #eaf4ff; font: 700 clamp(20px, 6vw, 24px)/.9 var(--app-font); letter-spacing: -.035em; text-align: right; white-space: nowrap; }
   .timer-readout small { margin-top: 3px; color: rgba(138, 190, 245, .58); font: 500 8px/1 var(--app-font); letter-spacing: .04em; }
-  .timer-reset { flex: none; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 12px; color: rgba(255,255,255,.9); background: transparent; cursor: pointer; transition: color 150ms ease, background 150ms ease, transform 150ms cubic-bezier(.23,1,.32,1); }
+  .timer-reset { flex: none; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 12px; color: #ff6b6b; background: transparent; cursor: pointer; transition: color 150ms ease, background 150ms ease, transform 150ms cubic-bezier(.23,1,.32,1); }
   .timer-reset:active { transform: scale(.95); }
 
   @media (hover: hover) and (pointer: fine) {
     .timer-actions.timer-active .timer-main-button:hover { color: #fff; background: rgba(255,255,255,.1); }
-    .timer-reset:hover { color: #fff; background: rgba(255,255,255,.1); }
+    .timer-reset:hover { color: #ff8585; background: rgba(255,107,107,.14); }
   }
 
   .timer-actions.timer-active .timer-main-button:focus-visible { color: #fff; background: rgba(255,255,255,.1); }
-  .timer-reset:focus-visible { color: #fff; background: rgba(255,255,255,.1); }
+  .timer-reset:focus-visible { color: #ff8585; background: rgba(255,107,107,.14); }
 
   button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
   @media (prefers-reduced-motion: reduce) {
     .ruler-track, .tick, .timer-main-button, .timer-reset { transition: none; }
   }
+  .compact{justify-content:center}
+  .compact .timer-footer{flex-direction:column-reverse;align-items:stretch;gap:12px}
+  .compact .timer-readout{align-items:center;text-align:center}
+  .compact .timer-readout strong{font-size:30px;text-align:center;padding-right:0}
+  .compact .ruler-track{left:50%;transform:translateX(calc(-5px - var(--active-index) * 10px))}
+  .compact .timer-actions{justify-content:center;gap:8px}
+  .compact .timer-main-button{min-width:0;font-size:11px;padding:8px 10px}
+  .compact .timer-complete-card{display:flex;flex-wrap:wrap;padding:8px;gap:6px}
 </style>

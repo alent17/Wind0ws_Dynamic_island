@@ -10,8 +10,9 @@ for (const remembered of [false, true]) test(`long ${remembered ? "remembered" :
     title:longTitle,
     rememberedTitle:remembered ? longTitle : "",
   }), {remembered,longTitle});
-  const marquee = page.locator(remembered ? ".idle-player .marquee-title span" : ".music-pane .marquee-title span");
+  const marquee = page.locator(".music-pane .marquee-title span");
   await expect(marquee).toHaveCount(1);
+  await expect(marquee).toHaveText(longTitle);
   await expect.poll(() => marquee.evaluate(element => element.getAnimations().some(animation => animation.playState === "running"))).toBe(false);
   await page.evaluate(() => (window as any).configureIsland({mode:"expanded"}));
   await expect.poll(() => marquee.evaluate(element => element.getAnimations().some(animation => animation.playState === "running"))).toBe(true);
@@ -24,11 +25,11 @@ for (const remembered of [false, true]) test(`long ${remembered ? "remembered" :
   await page.evaluate(() => (window as any).configureIsland({visible:false}));
   await expect(page.locator(".expanded-layer")).toHaveCount(0);
   await page.evaluate(() => (window as any).configureIsland({visible:true,mode:"expanded"}));
-  await expect.poll(() => page.locator(remembered ? ".idle-player .marquee-title span" : ".music-pane .marquee-title span").evaluate(element => element.getAnimations().some(animation => animation.playState === "running"))).toBe(true);
+  await expect.poll(() => page.locator(".music-pane .marquee-title span").evaluate(element => element.getAnimations().some(animation => animation.playState === "running"))).toBe(true);
   await page.evaluate((selector) => {
     (window as any).marqueeNode = document.querySelector(selector);
     (window as any).unmountIsland();
-  }, remembered ? ".idle-player .marquee-title span" : ".music-pane .marquee-title span");
+  }, ".music-pane .marquee-title span");
   expect(await page.evaluate(() => (window as any).marqueeNode.getAnimations().some((animation: Animation) => animation.playState === "running"))).toBe(false);
 });
 
@@ -299,7 +300,7 @@ test("neutral control fills preserve existing island button proportions", async 
   });
   expect(initial.transport.width).toBeCloseTo(58, 0);
   expect(initial.transport.height).toBeCloseTo(58, 0);
-  expect(initial.transport.background).toBe("rgba(255, 255, 255, 0.043)");
+  expect(initial.transport.background).toBe("rgba(0, 0, 0, 0)");
   expect(initial.tool.width).toBeCloseTo(28, 0);
   expect(initial.tool.height).toBeCloseTo(28, 0);
   expect(initial.tool.background).toBe("rgba(255, 255, 255, 0.1)");

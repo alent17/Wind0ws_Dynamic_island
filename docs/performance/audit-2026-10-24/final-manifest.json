@@ -1,0 +1,10 @@
+{
+  "commit": "309b86187b496fd35c849039b60e392fe1c8e6be",
+  "sha256": "561D565A2AF7B9BD35EACABE60AFA7986CE449049723F6AA4AB19C19DF43B23F",
+  "executable": "D:\\Wind0ws_Dynamic_island-main\\src-tauri\\target\\release\\isle.exe",
+  "scene": "Startup with retained settings; compact main window expected from first run, not independently UI-verified in this run",
+  "warmupSeconds": 10,
+  "sampleSeconds": 30,
+  "constraints": "No computer use; no playback state changed; working tree has concurrent UI edits",
+  "rootPid": 4012
+}

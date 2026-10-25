@@ -5,6 +5,7 @@
   import RollingNumber from "$lib/components/time/RollingNumber.svelte";
 
   let {
+    compact = false,
     volume = 50,
     muted = false,
     deviceId = "",
@@ -14,6 +15,7 @@
     onVolume,
     onDevice,
   } = $props<{
+    compact?: boolean;
     volume?: number;
     muted?: boolean;
     deviceId?: string;
@@ -105,7 +107,7 @@
 
 </script>
 
-<div class="panel-volume" class:reduce-motion={reduceMotion}>
+<div class="panel-volume" class:compact class:reduce-motion={reduceMotion}>
   <div class="volume-ruler" class:dragging bind:this={rulerElement}
     role="slider" tabindex="0" aria-label={t("volume")}
     aria-valuemin={0} aria-valuemax={100} aria-valuenow={draftVolume} aria-valuetext={`${draftVolume}%`}
@@ -208,4 +210,10 @@
   @keyframes device-menu-in{from{opacity:.45;transform:translateY(-4px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
   @keyframes device-spin{to{transform:rotate(360deg)}}
   @media (prefers-reduced-motion:reduce){.ruler-track,.device-trigger{transition:none}.device-trigger :global(.device-chevron){transition:none}.device-menu,.device-trigger :global(.device-spinner){animation:none}}
+  .compact .volume-footer{flex-direction:column-reverse;align-items:stretch;gap:12px}
+  .compact .volume-readout{align-items:center;text-align:center}
+  .compact .volume-readout strong{font-size:30px}
+  .compact .device-row{min-width:0;width:100%}
+  .compact .device-trigger{max-width:100%;width:100%;box-sizing:border-box}
+  .compact .device-menu{max-height:120px;overflow-y:auto;min-width:0;width:100%;box-sizing:border-box}
 </style>

@@ -12,6 +12,7 @@ pub struct NeteaseConnection {
     shortcut_path: String,
     bound_session_id: Option<String>,
     binding_failed: bool,
+    launch_entries: u64,
 }
 
 fn configure(
@@ -107,6 +108,7 @@ fn configure(
         shortcut_path: data["shortcutPath"].as_str().unwrap_or_default().into(),
         bound_session_id: None,
         binding_failed: false,
+        launch_entries: data["launchEntries"].as_u64().unwrap_or(0),
     })
 }
 
@@ -116,15 +118,28 @@ pub async fn setup_netease_connection(
     state: tauri::State<'_, crate::state::AppState>,
     restart: bool,
     bind: Option<bool>,
+    configure_only: Option<bool>,
 ) -> Result<NeteaseConnection, String> {
     let _permit = SETUP.try_acquire().map_err(|_| "NETEASE_SETUP_BUSY")?;
+    let configure_only = configure_only.unwrap_or(false);
+    setup_connection(app, state, restart, bind, configure_only, configure_only).await
+}
+
+async fn setup_connection(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::state::AppState>,
+    restart: bool,
+    bind: Option<bool>,
+    configure_only: bool,
+    preserve_preferences: bool,
+) -> Result<NeteaseConnection, String> {
     let preferred_path = state
         .settings
         .lock()
         .ok()
         .and_then(|settings| settings.netease_executable_path.clone());
     let mut result = super::native_task::run_background(move || {
-        configure(if restart { "Connect" } else { "Check" }, preferred_path)
+        configure(if configure_only { "Restore" } else if restart { "Connect" } else { "Check" }, preferred_path)
     })
     .await
     .map_err(|_| "NETEASE_SETUP_BUSY".to_string())??;
@@ -133,7 +148,7 @@ pub async fn setup_netease_connection(
             app.clone(),
             &state,
             result.executable_path.clone(),
-            true,
+            !preserve_preferences,
         )
         .await
         .map_err(|_| "NETEASE_SETUP_FAILED".to_string())?;
@@ -153,10 +168,12 @@ pub async fn setup_netease_connection(
         .await
         .map_err(|_| "NETEASE_SETUP_BUSY".to_string())?;
         if let Some(id) = session_id {
-            if super::settings::bind_netease_player(app, &state, id.clone())
-                .await
-                .is_ok()
-            {
+            let binding = if preserve_preferences {
+                super::settings::restore_netease_player(app, &state, id.clone()).await
+            } else {
+                super::settings::bind_netease_player(app, &state, id.clone()).await
+            };
+            if binding.is_ok() {
                 result.bound_session_id = Some(id);
             } else {
                 result.binding_failed = true;
@@ -164,6 +181,18 @@ pub async fn setup_netease_connection(
         }
     }
     Ok(result)
+}
+
+/// All Isle player-open paths use the same persistent configuration and verified
+/// binding as Settings. Opening an already connected player never restarts it.
+pub(crate) async fn open_netease_player(app: tauri::AppHandle) -> Result<(), String> {
+    let _permit = SETUP.acquire().await.map_err(|_| "NETEASE_SETUP_BUSY")?;
+    let result = setup_connection(app.clone(), app.state::<crate::state::AppState>(), true, Some(true), false, true).await?;
+    if !result.connected { return Err("NETEASE_CONNECTION_PENDING".into()); }
+    if let Ok(actor) = app.state::<crate::state::AppState>().media_actor() {
+        actor.wake_for_player_identity_change();
+    }
+    Ok(())
 }
 
 pub(crate) fn start_netease_auto_restore(app: tauri::AppHandle) {

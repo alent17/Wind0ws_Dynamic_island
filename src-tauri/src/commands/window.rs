@@ -1480,16 +1480,14 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
             .skip_taskbar(true)
             .always_on_top(always_on_top);
 
-            if let (Some(x), Some(y), Some(w), Some(h)) = saved_position {
-                builder = builder.inner_size(w.max(200) as f64, h.max(200) as f64);
-                builder = builder.position(x as f64, y as f64);
-            } else {
-                builder = builder.inner_size(
-                    DEFAULT_FLOATING_WINDOW_WIDTH as f64,
-                    DEFAULT_FLOATING_WINDOW_HEIGHT as f64,
-                );
-                builder = builder.center();
-            }
+            // Builder sizes and positions are logical pixels. Persisted bounds
+            // come from outer_position()/inner_size() and are physical pixels,
+            // so restore them explicitly after creating the hidden window.
+            builder = builder.inner_size(
+                DEFAULT_FLOATING_WINDOW_WIDTH as f64,
+                DEFAULT_FLOATING_WINDOW_HEIGHT as f64,
+            );
+            builder = builder.center();
 
             builder
                 .visible(false)
@@ -1498,6 +1496,17 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
         },
     )
     .await?;
+
+    if created {
+        if let (Some(x), Some(y), Some(w), Some(h)) = saved_position {
+            window
+                .set_size(tauri::PhysicalSize::new(w.max(200), h.max(200)))
+                .map_err(|e| AppError::window(e.to_string()))?;
+            window
+                .set_position(tauri::PhysicalPosition::new(x, y))
+                .map_err(|e| AppError::window(e.to_string()))?;
+        }
+    }
 
     if !created {
         window
@@ -1758,6 +1767,15 @@ pub fn hide_main_window_from_task_switcher(window: &tauri::WebviewWindow) -> App
     Ok(())
 }
 
+// SetWindowPos moves the HWND, but its WebView controller can still retain the
+// previous client bounds. Commit both sizes through Tauri after native motion.
+fn sync_main_viewport_size(window: &tauri::WebviewWindow, width: i32, height: i32) -> AppResult<()> {
+    let size = tauri::PhysicalSize::new(width.max(1) as u32, height.max(1) as u32);
+    window.set_size(size).map_err(|error| AppError::window(error.to_string()))?;
+    let webview: &tauri::Webview = window.as_ref();
+    webview.set_size(size).map_err(|error| AppError::window(error.to_string()))
+}
+
 #[tauri::command]
 pub fn animate_window_bounds(
     app: AppHandle,
@@ -1799,6 +1817,7 @@ pub fn animate_window_bounds(
                 SWP_NOZORDER | SWP_NOACTIVATE,
             );
         }
+        sync_main_viewport_size(&window, width, height)?;
         return Ok(());
     }
 
@@ -1844,6 +1863,7 @@ pub fn animate_window_bounds(
 
     let revision = WINDOW_MOTION_REVISION.fetch_add(1, Ordering::AcqRel) + 1;
     // Send the raw handle as an integer; HWND itself is deliberately not Send.
+    let viewport_window = window.clone();
     std::thread::spawn(move || {
         let mut previous_tick = std::time::Instant::now();
         loop {
@@ -1904,6 +1924,11 @@ pub fn animate_window_bounds(
                 );
             }
             if values.1 {
+                if WINDOW_MOTION_REVISION.load(Ordering::Acquire) == revision {
+                    if let Err(error) = sync_main_viewport_size(&viewport_window, values.0[2].round() as i32, values.0[3].round() as i32) {
+                        tracing::warn!("[Window] Failed to synchronize the settled WebView size: {}", error);
+                    }
+                }
                 return;
             }
             std::thread::sleep(std::time::Duration::from_millis(16));
@@ -1923,7 +1948,16 @@ pub fn set_floating_window_resizable(app: AppHandle, resizable: bool) -> AppResu
 }
 
 #[tauri::command]
-pub fn open_application(name: String) -> AppResult<()> {
+pub async fn open_application(app: AppHandle, name: String) -> AppResult<()> {
+    if name == "NeteaseCloudMusic" {
+        super::netease_setup::open_netease_player(app).await.map_err(AppError::media)?;
+    }
+    super::native_task::run_background(move || open_application_window(name))
+        .await
+        .map_err(|error| AppError::window(format!("打开播放器任务失败：{error}")))?
+}
+
+fn open_application_window(name: String) -> AppResult<()> {
     use std::process::Command;
 
     let protocol = match name.as_str() {

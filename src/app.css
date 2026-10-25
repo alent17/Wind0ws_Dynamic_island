@@ -29,7 +29,7 @@ body {
 button, input, select, textarea { font: inherit; }
 
 /* Keep every Island action consistent with the floating player's buttons. */
-.island-frame button:not(.cover) {
+.island-frame button:not(.cover):not([data-layout-edit-control]) {
   background: transparent !important;
   border-radius: 12px;
 }
@@ -44,13 +44,13 @@ button, input, select, textarea { font: inherit; }
   background: transparent !important;
 }
 
-.island-frame button:not(.cover):focus-visible:not(:disabled) {
+.island-frame button:not(.cover):not([data-layout-edit-control]):focus-visible:not(:disabled) {
   background: rgba(255,255,255,.1) !important;
   box-shadow: 0 0 0 1px rgba(255,255,255,.1) !important;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .island-frame button:not(.cover):hover:not(:disabled) {
+  .island-frame button:not(.cover):not([data-layout-edit-control]):hover:not(:disabled) {
     background: rgba(255,255,255,.1) !important;
     box-shadow: 0 0 0 1px rgba(255,255,255,.1) !important;
   }

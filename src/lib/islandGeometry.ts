@@ -1,3 +1,4 @@
+import { widgetExtraWidth, EDITOR_HEIGHT, EDITOR_TOP_SPACE } from "$lib/widgetLayout";
 import { FEATURE_RAIL_GAP, FEATURE_RAIL_HEIGHT, FEATURE_RAIL_WIDTH } from "$lib/featureRail";
 
 export type IslandMode = "compact" | "hover" | "expanded" | "hidden";
@@ -319,14 +320,14 @@ export function hiddenPlacementFor(
 export type IslandPage = "music" | "timer" | "volume" | "clock" | "weather";
 
 export function navigationGeometry(page: IslandPage, toolCount: number, radius = 45,
-  style: IslandStyle = "floating", edge: IslandEdge = "top", shoulder = 32, expandedLength = 600): IslandGeometry {
+  style: IslandStyle = "floating", edge: IslandEdge = "top", shoulder = 32, expandedLength = 600, widgetCount = 0, editing = false): IslandGeometry {
   const inset = style === "edge" ? clampShoulderRadius(shoulder) : 0;
   const vertical = isVerticalEdge(edge);
   const toolbar = toolCount > 0 ? 40 : 0;
   const height = page === "music" ? 249.1 : page === "weather" ? 240 : 188;
   const length = clampExpandedLength(expandedLength);
   const width = page === "music" ? length : Math.max(300, length / 2) + (vertical ? 0 : inset * 2);
-  return { width, height: height + toolbar + (vertical ? inset * 2 : 0), radius: clampExpandedRadius(radius) };
+  return { width: width + (page === "music" ? widgetExtraWidth(widgetCount, expandedLength) + (widgetCount > 0 && !vertical ? inset * 2 : 0) : 0), height: height + toolbar + (vertical ? inset * 2 : 0) + (editing ? EDITOR_HEIGHT + EDITOR_TOP_SPACE : 0), radius: clampExpandedRadius(radius) };
 }
 
 const NAVIGATION_REFERENCE_WORK_AREA = { width: 2100, height: 1180 };
@@ -347,17 +348,36 @@ export function islandContentScaleForWorkArea(workWidth: number, workHeight: num
 }
 
 // Reserve the largest page once; only the visible silhouette and hit region morph.
-export function navigationHostFor(style: IslandStyle, edge: IslandEdge, compactLength = 80, scale = 1, expandedLength = 600): HostGeometry {
+export function navigationHostFor(style: IslandStyle, edge: IslandEdge, compactLength = 80, scale = 1, expandedLength = 600, widgetCount = 0): HostGeometry {
   const base = hostFor(style, edge, compactLength, clampExpandedLength(expandedLength) - 600);
-  // Keep the existing .62 minimum native envelope. It stabilizes the largest
-  // page's host bounds; it must not be reused as the visual/content scale.
-  const safeScale = Math.min(1, Math.max(0.62, scale));
+  // Keep the legacy envelope for a single page. Composed layouts must follow
+  // their fitted scale or the native window can extend beyond the monitor.
+  const safeScale = widgetCount > 0 ? normalizedContentScale(scale) : Math.min(1, Math.max(0.62, scale));
   // Expanded content remains horizontal on side edges. A floating island needs
   // its outer gap inside the native host on those edges, just as top/bottom
   // layouts reserve the gap in host height.
   const horizontalGap = style === "floating" && isVerticalEdge(edge) ? ISLAND_GAP : 0;
   return {
-    width: Math.ceil(Math.max(base.width + horizontalGap, 448 + ISLAND_GAP) * safeScale),
-    height: Math.ceil(Math.max(base.height, 440 + ISLAND_GAP + ISLAND_OVERSHOOT) * safeScale),
+    width: Math.max(Math.ceil((isVerticalEdge(edge) ? 28 : clampCompactLength(compactLength)) + horizontalGap * scale), Math.ceil(Math.max(base.width + widgetExtraWidth(widgetCount, expandedLength) + (style === "edge" && !isVerticalEdge(edge) && widgetCount > 0 ? 128 : 0) + horizontalGap, 448 + ISLAND_GAP) * safeScale)),
+    height: Math.max(Math.ceil((isVerticalEdge(edge) ? clampCompactLength(compactLength) : 28) + ISLAND_GAP * scale), Math.ceil(Math.max(base.height, 440 + ISLAND_GAP + ISLAND_OVERSHOOT, style === "edge" && isVerticalEdge(edge) ? 249.1 + 128 + EDITOR_HEIGHT + EDITOR_TOP_SPACE + ISLAND_OVERSHOOT : 0) * safeScale)),
   };
+}
+
+/** Fit the composed native envelope, not just the visible panel, inside the work area. */
+export function islandLayoutScaleForWorkArea(workWidth: number, workHeight: number, scaleFactor: number,
+  style: IslandStyle, edge: IslandEdge, expandedLength: number, widgetCount: number) {
+  const base = islandContentScaleForWorkArea(workWidth, workHeight, scaleFactor);
+  if (widgetCount === 0) return base;
+  const dpr = Number.isFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1;
+  const envelope = navigationHostFor(style, edge, 80, 1, expandedLength, widgetCount);
+  return Math.min(base, Math.max(1, workWidth / dpr - 24) / envelope.width,
+    Math.max(1, workHeight / dpr - 24) / envelope.height);
+}
+
+/** Bound rendering to the actual WebView while native window resizing is pending. */
+export function fitIslandViewport(host: HostGeometry, contentScale: number, viewport: HostGeometry) {
+  const width = Math.max(1, Math.min(host.width, viewport.width));
+  const height = Math.max(1, Math.min(host.height, viewport.height));
+  const fit = Math.min(1, width / host.width, height / host.height);
+  return { host: {width, height}, scale: contentScale * fit };
 }

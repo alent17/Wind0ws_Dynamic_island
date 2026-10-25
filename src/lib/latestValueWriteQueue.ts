@@ -13,6 +13,8 @@ export class LatestValueWriteQueue<T> {
     private readonly onError: (error: unknown, pendingWillRetry: boolean) => void,
   ) {}
 
+  get busy(): boolean { return this.running !== null || this.pending !== null; }
+
   submit(value: T, key: string): Promise<void> {
     if (this.latestKey === key) {
       if (isTransportDiagnosticsEnabled()) recordTransportCounter("volume", "deduped");

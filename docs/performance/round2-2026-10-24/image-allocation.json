@@ -1,0 +1,137 @@
+{
+  "createdUtc": "2026-10-24T12:55:39.4351126Z",
+  "scope": "Isolated Rust requested heap allocations; production optimized image/budget/utils modules, prior algorithm as reference; no WebView, Windows working set or GPU. Same deterministic 1280x1280 RGBA PNG; three fresh-process repetitions.",
+  "sourceHashes": [
+    {
+      "path": "src-tauri/src/services/image.rs",
+      "sha256": "72CB946C3776FC336296FFE3667B02D76E9AF038E9239A97EA838652F91E0015"
+    },
+    {
+      "path": "src-tauri/src/services/image_budget.rs",
+      "sha256": "0CFDC6AB43351AA456AD52F17329B8D6C9544519103992C4FC2284356E46768F"
+    },
+    {
+      "path": "src-tauri/src/utils.rs",
+      "sha256": "B0D4F05FF604DA369020C3D4DF4CC02F3AEF5F13D704D243172263FFC8A7486B"
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "sha256": "C19A6B9079E51BF5475BC9DB55E81475988162B8AB2C1056B0F00F9F263C7D6F"
+    },
+    {
+      "path": "scripts/benchmark-image-memory.rs",
+      "sha256": "9A50BAD3018EEEA81EB6C92C665612B50EB062BC458A29F61793FBF2CDBC4944"
+    }
+  ],
+  "fixtureSha256": "046244B41B57EB96031A22A56E13D8C7C6FCDE556F8FCB7C230A5CF778A547BE",
+  "rows": [
+    {
+      "mode": "legacy-normal",
+      "elapsedMs": 98.3253,
+      "peakRequestedBytes": 39348353,
+      "totalAllocatedBytes": 109840480,
+      "outputBytes": 8740622,
+      "outputHash": "17210b46ade6b7b3",
+      "round": 1
+    },
+    {
+      "mode": "optimized-normal",
+      "elapsedMs": 91.7009,
+      "peakRequestedBytes": 37515193,
+      "totalAllocatedBytes": 90878265,
+      "outputBytes": 8740622,
+      "outputHash": "17210b46ade6b7b3",
+      "round": 1
+    },
+    {
+      "mode": "legacy-pixel",
+      "elapsedMs": 89.7004,
+      "peakRequestedBytes": 35438554,
+      "totalAllocatedBytes": 64160943,
+      "outputBytes": 4660542,
+      "outputHash": "997967684402cd13",
+      "round": 1
+    },
+    {
+      "mode": "optimized-pixel",
+      "elapsedMs": 81.27080000000001,
+      "peakRequestedBytes": 27051794,
+      "totalAllocatedBytes": 42725208,
+      "outputBytes": 4660542,
+      "outputHash": "997967684402cd13",
+      "round": 1
+    },
+    {
+      "mode": "optimized-pixel",
+      "elapsedMs": 78.55850000000001,
+      "peakRequestedBytes": 27051794,
+      "totalAllocatedBytes": 42725208,
+      "outputBytes": 4660542,
+      "outputHash": "997967684402cd13",
+      "round": 2
+    },
+    {
+      "mode": "legacy-pixel",
+      "elapsedMs": 87.4176,
+      "peakRequestedBytes": 35438554,
+      "totalAllocatedBytes": 64160943,
+      "outputBytes": 4660542,
+      "outputHash": "997967684402cd13",
+      "round": 2
+    },
+    {
+      "mode": "optimized-normal",
+      "elapsedMs": 89.2524,
+      "peakRequestedBytes": 37515193,
+      "totalAllocatedBytes": 90878265,
+      "outputBytes": 8740622,
+      "outputHash": "17210b46ade6b7b3",
+      "round": 2
+    },
+    {
+      "mode": "legacy-normal",
+      "elapsedMs": 94.7651,
+      "peakRequestedBytes": 39348353,
+      "totalAllocatedBytes": 109840480,
+      "outputBytes": 8740622,
+      "outputHash": "17210b46ade6b7b3",
+      "round": 2
+    },
+    {
+      "mode": "legacy-normal",
+      "elapsedMs": 93.0496,
+      "peakRequestedBytes": 39348353,
+      "totalAllocatedBytes": 109840480,
+      "outputBytes": 8740622,
+      "outputHash": "17210b46ade6b7b3",
+      "round": 3
+    },
+    {
+      "mode": "optimized-normal",
+      "elapsedMs": 97.05709999999999,
+      "peakRequestedBytes": 37515193,
+      "totalAllocatedBytes": 90878265,
+      "outputBytes": 8740622,
+      "outputHash": "17210b46ade6b7b3",
+      "round": 3
+    },
+    {
+      "mode": "legacy-pixel",
+      "elapsedMs": 90.3058,
+      "peakRequestedBytes": 35438554,
+      "totalAllocatedBytes": 64160943,
+      "outputBytes": 4660542,
+      "outputHash": "997967684402cd13",
+      "round": 3
+    },
+    {
+      "mode": "optimized-pixel",
+      "elapsedMs": 77.8395,
+      "peakRequestedBytes": 27051794,
+      "totalAllocatedBytes": 42725208,
+      "outputBytes": 4660542,
+      "outputHash": "997967684402cd13",
+      "round": 3
+    }
+  ]
+}

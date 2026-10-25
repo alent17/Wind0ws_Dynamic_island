@@ -167,6 +167,10 @@ impl Default for LocalCdpClient {
 }
 
 impl LocalCdpClient {
+    pub(crate) fn player_identity(self) -> Result<Value, CdpError> {
+        let (_, value) = self.initialized_page_using(Instant::now() + OPERATION_TIMEOUT, CLOUD_MUSIC_IDENTITY_EXPRESSION, "ready")?;
+        Ok(value)
+    }
     pub fn song_like(
         self,
         title: &str,
@@ -290,15 +294,14 @@ impl LocalCdpClient {
         let deadline = Instant::now() + Duration::from_secs(6);
         let (mut connection, initial) =
             self.initialized_page_using(deadline, CLOUD_MUSIC_PROGRESS_EXPRESSION, "ready")?;
-        let initial_progress = parse_netease_progress(&initial)?;
-        validate_expected_identity(&initial_progress, expected_title, expected_artist)?;
+        let initial_progress = parse_bound_netease_progress(&initial, expected_title, expected_artist)?;
         if position_ms >= initial_progress.duration_ms {
             return Err(CdpError::InvalidPosition);
         }
         let expression = cloud_music_seek_expression(
             position_ms as f64 / 1000.0,
             expected_title,
-            expected_artist,
+            required_string(&initial, "artist")?,
         );
         let response = connection.request(
             "Runtime.evaluate",
@@ -329,7 +332,10 @@ impl LocalCdpClient {
             }
             return Err(CdpError::VerificationFailed);
         }
-        parse_netease_progress(value)
+        let mut progress = parse_netease_progress(value)?;
+        validate_expected_identity(&progress, expected_title, required_string(&initial, "artist")?)?;
+        progress.artist = expected_artist.to_string();
+        Ok(progress)
     }
 
     /// Reads an identity-bound progress sample from the initialized player page.
@@ -338,9 +344,8 @@ impl LocalCdpClient {
         expected_title: &str,
         expected_artist: &str,
     ) -> Result<NeteaseProgress, CdpError> {
-        let progress = self.read_progress_before(Instant::now() + PROGRESS_READ_TIMEOUT)?;
-        validate_expected_identity(&progress, expected_title, expected_artist)?;
-        Ok(progress)
+        let (_, value) = self.initialized_page_using(Instant::now() + PROGRESS_READ_TIMEOUT, CLOUD_MUSIC_PROGRESS_EXPRESSION, "ready")?;
+        parse_bound_netease_progress(&value, expected_title, expected_artist)
     }
 
     /// Read-only identity used by explicit setup to match a Windows session.
@@ -697,10 +702,11 @@ const CLOUD_MUSIC_CAPTURE_TOOL: &str = r#"function captureTool(withProgress = fa
   const queue = globalThis.webpackJsonp;
   if (!Array.isArray(queue) || queue.push === Array.prototype.push) return {};
   const main = queue.find(chunk => chunk && chunk[1] && chunk[1][8] &&
-    chunk[2] && chunk[2].some(entry => entry[0] === 1424));
-  if (!main || !String(main[1][8]).includes('this.app._store.getState()')) return {};
+    String(chunk[1][8]).includes('this.app._store.getState()'));
+  if (!main) return {};
   const entries = queue.flatMap(chunk => chunk && Array.isArray(chunk[2]) ? chunk[2] : []);
-  const previousEntry = entries.length ? entries[entries.length - 1][0] : 1424;
+  if (!entries.length) return {};
+  const previousEntry = entries[entries.length - 1][0];
   const id = '__isle_mode_read_' + Date.now() + '_' + Math.random().toString(36).slice(2);
   let req;
   const chunk = [[], { [id]: (_module, _exports, runtime) => { req = runtime; } }, [[id]]];
@@ -720,6 +726,17 @@ const CLOUD_MUSIC_CAPTURE_TOOL: &str = r#"function captureTool(withProgress = fa
     if (index >= 0) queue.splice(index, 1);
   }
 }"#;
+
+const CLOUD_MUSIC_IDENTITY_EXPRESSION: &str = r#"(() => {
+  const { tool } = (__CAPTURE_TOOL__)();
+  const p = tool && tool.getStore().playing;
+  const track = p && p.curPlaying && p.curPlaying.track;
+  if (!track || p.resourceType !== 'track' || p.isLoadingFirst || p.isPlayingVideo) return {};
+  const artists = track.artists || track.ar;
+  const title = String(p.resourceName || track.name || '');
+  if (!title || title.length > 1024) return {};
+  return { ready: true, title, artist: String(p.resourceArtist || (Array.isArray(artists) ? artists.map(a => a && a.name || '').filter(Boolean).join(', ') : '')), primaryArtist: String(Array.isArray(artists) && artists[0] && artists[0].name || '') };
+})()"#;
 
 const CLOUD_MUSIC_LIKE_READ_EXPRESSION: &str = r#"(() => {
   const { tool } = (__CAPTURE_TOOL__)();
@@ -772,7 +789,7 @@ const CLOUD_MUSIC_PROGRESS_EXPRESSION: &str = r#"(() => {
   const duration = Number(playing.resourceDuration);
   const trackId = String(playing.onlineResourceId || '');
   if (!native || native.playId !== playing.playId || !trackId || !title || !Number.isFinite(position) || !Number.isFinite(duration) || position < 0 || duration <= 0 || position > duration) return {};
-  return { ready: true, trackId, playId: String(playing.playId), title, artist, positionMs: Math.round(position * 1000), durationMs: Math.round(duration * 1000) };
+  return { ready: true, trackId, playId: String(playing.playId), title, artist, primaryArtist: String(Array.isArray(artists) && artists[0] && artists[0].name || ''), positionMs: Math.round(position * 1000), durationMs: Math.round(duration * 1000) };
 })()"#;
 
 const CLOUD_MUSIC_SEEK_EXPRESSION: &str = r#"(async () => {
@@ -877,6 +894,15 @@ fn validate_like_identity(value: &Value, title: &str, artist: &str) -> Result<()
         return Err(CdpError::TrackChanged);
     }
     Ok(())
+}
+
+fn parse_bound_netease_progress(value: &Value, title: &str, artist: &str) -> Result<NeteaseProgress, CdpError> {
+    validate_like_identity(value, title, artist)?;
+    let mut progress = parse_netease_progress(value)?;
+    // The actor retains its exact SMTC identity fences. Only reconcile the
+    // artist label after matching a complete provider artist or primary artist.
+    progress.artist = artist.to_string();
+    Ok(progress)
 }
 
 fn validate_expected_identity(
@@ -1223,5 +1249,19 @@ mod tests {
             "trackId": "track-17", "positionMs": 10, "durationMs": 180_000,
         }))
         .is_err());
+    }
+
+    #[test]
+    fn progress_accepts_exact_primary_artist_and_preserves_actor_identity_fences() {
+        let value = json!({"trackId":"song-1","playId":"play-1","title":"Novocaine 2","artist":"Cloke, Shiloh Dynasty","primaryArtist":"Cloke","positionMs":2590,"durationMs":147000});
+        let progress = parse_bound_netease_progress(&value, "Novocaine 2", "Cloke").unwrap();
+        assert_eq!(progress.artist, "Cloke");
+        assert_eq!(progress.track_id, "song-1");
+        assert_eq!(progress.play_id, "play-1");
+        assert!(validate_expected_identity(&progress, "Novocaine 2", "Cloke").is_ok());
+        assert!(parse_bound_netease_progress(&value, "Novocaine 2", "Cloke, Shiloh Dynasty").is_ok());
+        assert!(parse_bound_netease_progress(&value, "Other song", "Cloke").is_err());
+        assert!(parse_bound_netease_progress(&value, "Novocaine 2", "Clo").is_err());
+        assert!(parse_bound_netease_progress(&value, "Novocaine 2", "Other artist").is_err());
     }
 }

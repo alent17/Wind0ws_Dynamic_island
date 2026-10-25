@@ -69,8 +69,7 @@ pub async fn request_artwork(
             let result = jobs::registry()
                 .run(window.label(), &slot, revision, key, async move {
                     jobs::blocking(move || {
-                        let bytes = crate::utils::load_image_data(&path)?;
-                        color::extract_dominant_color_bytes(&bytes)
+                        color::extract_dominant_color(&path)
                     })
                     .await
                 })
@@ -80,8 +79,7 @@ pub async fn request_artwork(
             let result = jobs::registry()
                 .run(window.label(), &slot, revision, key, async move {
                     jobs::blocking(move || {
-                        let bytes = crate::utils::load_image_data(&path)?;
-                        image::process_image_bytes(&bytes, pixel)
+                        image::process_image(&path, pixel)
                     })
                     .await
                 })

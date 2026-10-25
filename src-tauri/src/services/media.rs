@@ -5,7 +5,6 @@
 use crate::error::{AppError, AppResult};
 use crate::models::{MediaCapabilities, MediaSessionInfo, MediaState, NeteaseSong, ResolvedCover};
 use crate::state::AppState;
-use base64::{engine::general_purpose, Engine};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Mutex, OnceLock};
@@ -141,13 +140,9 @@ async fn download_cover_as_data_url(client: &reqwest::Client, url: &str) -> AppR
         super::image_budget::MAX_IMAGE_BYTES as u64,
     )
     .await?;
-    let bytes = super::image_budget::read_limited(std::fs::File::open(&downloaded.path)?)?;
+    let bytes = super::image_budget::read_file_limited(&downloaded.path)?;
     let prepared = super::image_budget::prepare_artwork(&bytes)?;
-    Ok(format!(
-        "data:{};base64,{}",
-        prepared.content_type,
-        general_purpose::STANDARD.encode(&prepared.bytes)
-    ))
+    Ok(super::image_budget::artwork_data_uri(&prepared.bytes, prepared.content_type))
 }
 
 fn allow_apple_request() -> bool {
@@ -539,10 +534,20 @@ fn session_source(app: &AppHandle, raw_id: &str) -> &'static str {
     )
 }
 
+#[cfg(test)]
 fn unique_netease_binding(
     candidates: &[(String, String, String, String)],
     title: &str,
     artist: &str,
+) -> Option<String> {
+    unique_netease_binding_with_primary(candidates, title, artist, "")
+}
+
+fn unique_netease_binding_with_primary(
+    candidates: &[(String, String, String, String)],
+    title: &str,
+    artist: &str,
+    primary_artist: &str,
 ) -> Option<String> {
     let matches: Vec<_> = candidates
         .iter()
@@ -551,7 +556,7 @@ fn unique_netease_binding(
                 || (source == "generic"
                     && !title.is_empty()
                     && candidate_title == title
-                    && candidate_artist == artist)
+                    && (candidate_artist == artist || (!primary_artist.is_empty() && candidate_artist == primary_artist)))
         })
         .collect();
     if matches.len() == 1 {
@@ -564,8 +569,8 @@ fn unique_netease_binding(
 /// Invoked only by explicit connection setup, never in periodic media sampling.
 pub(crate) fn verified_netease_binding() -> Option<String> {
     let _apartment = super::apartment::Apartment::enter().ok()?;
-    let progress = super::netease_cdp::LocalCdpClient::default()
-        .read_progress_snapshot()
+    let identity = super::netease_cdp::LocalCdpClient::default()
+        .player_identity()
         .ok()?;
     let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
         .ok()?
@@ -592,7 +597,12 @@ pub(crate) fn verified_netease_binding() -> Option<String> {
             properties.Artist().ok()?.to_string(),
         ));
     }
-    unique_netease_binding(&candidates, &progress.title, &progress.artist)
+    unique_netease_binding_with_primary(
+        &candidates,
+        identity.get("title")?.as_str()?,
+        identity.get("artist")?.as_str()?,
+        identity.get("primaryArtist").and_then(serde_json::Value::as_str).unwrap_or(""),
+    )
 }
 
 fn source_display(source: &str, raw_id: &str) -> String {
@@ -1067,10 +1077,8 @@ fn read_media_metadata(
                                 } else if let Ok(prepared) =
                                     super::image_budget::prepare_artwork(&bytes)
                                 {
-                                    album_art = format!(
-                                        "data:{};base64,{}",
-                                        prepared.content_type,
-                                        general_purpose::STANDARD.encode(&prepared.bytes)
+                                    album_art = super::image_budget::artwork_data_uri(
+                                        &prepared.bytes, prepared.content_type,
                                     );
                                     cache.track_id = identity;
                                     cache.base64_img = album_art.clone();
@@ -1523,6 +1531,9 @@ mod control_tests {
         let spotify = session("Spotify.exe", "spotify", "Track", "Artist");
         assert_eq!(unique_netease_binding(&[spotify], "Track", "Artist"), None);
         assert_eq!(unique_netease_binding(&[], "", ""), None);
+        assert_eq!(unique_netease_binding_with_primary(&[generated.clone()], "Track", "Artist, Guest", "Artist"), Some(generated.0.clone()));
+        assert_eq!(unique_netease_binding_with_primary(&[generated.clone()], "Other track", "Artist, Guest", "Artist"), None);
+        assert_eq!(unique_netease_binding_with_primary(&[generated], "Track", "Artist, Guest", "Art"), None);
     }
 
     #[test]

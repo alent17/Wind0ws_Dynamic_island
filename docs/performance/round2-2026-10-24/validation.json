@@ -1,0 +1,21 @@
+{
+  "rust": {
+    "command": "cargo test --lib --manifest-path src-tauri/Cargo.toml -- --test-threads=1",
+    "passed": 153,
+    "ignored": 1,
+    "failed": 0,
+    "parallelRunNote": "One pre-existing STA cleanup test failed once; isolated and serialized reruns passed"
+  },
+  "playwright": {
+    "command": "npm run test:ui -- ui-tests/canvas-artwork.pw.ts ui-tests/cover-lifecycle.pw.ts ui-tests/lifecycle.pw.ts --output dist/performance/round2-ui-results",
+    "passed": 57,
+    "failed": 0
+  },
+  "memoryGateTests": {
+    "command": "node --test scripts/check-memory-budget.test.mjs",
+    "passed": 5,
+    "failed": 0
+  },
+  "releaseBuild": "passed; existing unused-method/field warnings",
+  "wholeAppMemoryAcceptance": "invalid samples, no WebView2; target not verified"
+}

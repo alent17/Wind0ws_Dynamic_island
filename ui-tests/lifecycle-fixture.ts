@@ -25,6 +25,9 @@ fixture.likeState = { trackId: "123", playId: "123_play", title: "Like Song", ar
 fixture.likeActions = [];
 fixture.likeWriteFail = false;
 fixture.likeReadFailures = 0;
+fixture.neteaseSetupCalls = [];
+fixture.openApplicationCalls = [];
+fixture.reopenedMedia = undefined;
 let likeComponent: ReturnType<typeof mount> | undefined;
 fixture.mountLike = () => { likeComponent = mount(NeteaseLikeControl, { target: document.body, props: { title: "Like Song", artist: "Artist" } }); };
 fixture.unmountLike = async () => { if (likeComponent) await unmount(likeComponent); likeComponent = undefined; };
@@ -118,7 +121,7 @@ window.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: any[]) =
   const row = { delay: Number(timeout ?? 0), active: true, fired: 0 };
   if (row.delay === 5_000) {
     const imageRow = [...fixture.spectrumImageRows].reverse().find((item:{pendingSource:boolean;loadAttempt:boolean}) => item.pendingSource);
-    if (imageRow) imageRow.loadAttempt = true;
+    if (imageRow && !imageRow.visualOnly) imageRow.loadAttempt = true;
   }
   const wrapped = typeof handler === "function" ? (...callbackArgs: any[]) => {
     row.active = false;
@@ -171,6 +174,15 @@ mockWindows("main");
 mockConvertFileSrc("windows");
 mockIPC((command, args) => {
   fixture.calls.push(command);
+  if (command === "setup_netease_connection") {
+    fixture.neteaseSetupCalls.push(args);
+    return {connected:false,configured:true,executablePath:"C:\\NetEase\\cloudmusic.exe",shortcutPath:"",boundSessionId:null,bindingFailed:false,launchEntries:16};
+  }
+  if (command === "open_application") {
+    fixture.openApplicationCalls.push(args);
+    if (fixture.reopenedMedia) fixture.mediaInfoSnapshot = fixture.reopenedMedia;
+    return null;
+  }
   if (command === "get_netease_playback_mode") return "repeat_list";
   if (command === "netease_song_like") {
     if (typeof args?.liked !== "boolean" && fixture.likeReadFailures > 0) {
@@ -384,7 +396,10 @@ fixture.trackSpectrumExtraction = () => {
   const NativeImage = window.Image;
   window.Image = function(this: unknown) {
     const image = new NativeImage();
-    const row: {image:HTMLImageElement;src:string;pendingSource:boolean;loadAttempt:boolean} = {image,src:"",pendingSource:true,loadAttempt:false};
+    // CoverArt now shares the bounded loader. Its visual preload is not a
+    // palette extraction; counting every 5s timeout conflates those owners.
+    const visualOnly = /CoverArt\.svelte/.test(new Error().stack ?? "");
+    const row = {image,src:"",pendingSource:true,loadAttempt:false,visualOnly};
     Object.defineProperty(image,"src",{
       configurable:true,
       get:()=>row.src,

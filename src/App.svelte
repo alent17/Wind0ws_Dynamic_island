@@ -39,6 +39,7 @@ import { createMediaSyncSender, type MediaSyncSnapshot } from "$lib/mediaSyncSen
   import { refreshSpectrumDevice } from "$lib/spectrumStore";
   import { windowApi } from "$lib/api/window";
   import { settingsApi } from "$lib/api/settings";
+  import { normalizeWidgets, type IslandWidgets } from "$lib/widgetLayout";
   import IslandSurface from "$lib/components/island/IslandSurface.svelte";
   import { extractSpectrumColorsFromImage } from "$lib/spectrumColors";
   import {
@@ -47,7 +48,8 @@ import { createMediaSyncSender, type MediaSyncSnapshot } from "$lib/mediaSyncSen
     clampShoulderRadius,
     geometryFor,
     hiddenPlacementFor,
-    islandContentScaleForWorkArea,
+    islandLayoutScaleForWorkArea,
+    fitIslandViewport,
     interactionSurfaceOffsetFor,
     navigationHostFor as hostFor,
     overlapAttachedEdge,
@@ -299,6 +301,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     return {
       ...DEFAULT_SETTINGS,
       ...value,
+      islandWidgets: normalizeWidgets(value.islandWidgets),
       floatingExpandedLength: normalizeExpandedLength(value.floatingExpandedLength),
       edgeExpandedLength: normalizeExpandedLength(value.edgeExpandedLength),
       islandStyle: normalizedStyle(value.islandStyle ?? DEFAULT_SETTINGS.islandStyle),
@@ -347,9 +350,12 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   });
   onDestroy(() => interactionRegionSender.dispose());
 
-  function applyIslandRegion({ geometry, radii, polygon, extraRects, anchorGap }: IslandRegionChange) {
-    const host = hostFor(renderedIslandStyle, renderedIslandEdge, compactLengthFor(renderedIslandStyle, $appSettings), expandedScale, expandedLengthFor(renderedIslandStyle, $appSettings));
-    const offset = interactionSurfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge, expandedScale, anchorGap);
+  let lastIslandRegion: IslandRegionChange | null = null;
+  function applyIslandRegion(change: IslandRegionChange) {
+    lastIslandRegion = change;
+    const { geometry, radii, polygon, extraRects, anchorGap } = change;
+    const host = renderedViewport.host;
+    const offset = interactionSurfaceOffsetFor(host, geometry, renderedIslandStyle, renderedIslandEdge, renderedViewport.scale, anchorGap);
     const translatedExtraRects = (extraRects ?? []).map((rect) => ({
       ...rect,
       x: offset.x + rect.x,
@@ -366,6 +372,11 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     } satisfies InteractionRegionPayload;
     interactionRegionSender.offer(region, JSON.stringify(region));
   }
+  $effect(() => {
+    // Host resizing also moves the surface even when its compact shape is unchanged.
+    renderedViewport; renderedIslandStyle; renderedIslandEdge;
+    if (lastIslandRegion) untrack(() => applyIslandRegion(lastIslandRegion!));
+  });
 
   let currentTime = $state("");
   let lastClockMinute = "";
@@ -574,6 +585,17 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
 
   // ===== 应用设置 =====
   const appSettings = settingsStore;
+  let layoutPreview = $state<IslandWidgets | null>(null);
+  let layoutEditing = $state(false);
+  const shownWidgets = $derived(layoutPreview ?? normalizeWidgets($appSettings.islandWidgets));
+  const hostWidgetCount = $derived(layoutEditing ? 2 : shownWidgets.left.length + shownWidgets.right.length);
+  const weatherWidgetVisible = $derived(expanded && activeIslandPage === "music" && [...shownWidgets.left, ...shownWidgets.right].includes("weather"));
+  const volumeWidgetVisible = $derived(expanded && activeIslandPage === "music" && [...shownWidgets.left, ...shownWidgets.right].includes("volume"));
+  async function saveWidgets(layout: IslandWidgets) {
+    await settingsApi.updateSettings({islandWidgets: normalizeWidgets(layout)});
+    appSettings.update(settings => ({...settings, islandWidgets: normalizeWidgets(layout)}));
+  }
+
   let enabledFeatureTools = $derived.by<IslandTool[]>(() => {
     const tools: IslandTool[] = [];
     if ($appSettings.showSettingsTool) tools.push("settings");
@@ -592,6 +614,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   let systemAudio = $state<SystemAudioState | null>(null);
   let audioDevices = $state<AudioDeviceInfo[]>([]);
   let audioDeviceSwitching = $state(false);
+  let audioChangeRevision = 0;
   let audioStateRequest: Promise<SystemAudioState | null> | null = null;
   const volumeWriteQueue = new LatestValueWriteQueue<number>(
     (value) => isTransportDiagnosticsEnabled()
@@ -607,6 +630,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     if (!(window as any).__TAURI_INTERNALS__) return null;
     if (audioStateRequest) return audioStateRequest;
 
+    const revision = audioChangeRevision;
     const request = (async () => {
       try {
         const [nextState, nextDevices] = await Promise.all([
@@ -616,6 +640,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
             return [] as AudioDeviceInfo[];
           }),
         ]);
+        if (lifetime.disposed || revision !== audioChangeRevision || volumeWriteQueue.busy || audioDeviceSwitching) return systemAudio;
         volumeWriteQueue.invalidate();
         systemAudio = nextState;
         audioDevices = nextDevices;
@@ -632,12 +657,20 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     return request;
   }
 
+  $effect(() => {
+    if (!pageVisible || isHidden || !volumeWidgetVisible || layoutEditing) return;
+    void handleAudioOpen();
+    const refresh = setInterval(() => { if (!volumeWriteQueue.busy && !audioDeviceSwitching) void handleAudioOpen(); }, 5000);
+    return () => clearInterval(refresh);
+  });
+
   async function handleAudioVolume(volumePercent: number) {
     if (audioDeviceSwitching || lifetime.disposed) return;
     const nextVolume = Math.max(0, Math.min(100, Math.round(volumePercent)));
     const currentAudio = systemAudio ?? await handleAudioOpen();
     if (!currentAudio || audioDeviceSwitching || lifetime.disposed) return;
 
+    audioChangeRevision++;
     systemAudio = {
       ...currentAudio,
       volumePercent: nextVolume,
@@ -651,6 +684,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
 
   async function handleAudioDevice(deviceId: string) {
     if (audioDeviceSwitching || !deviceId || deviceId === systemAudio?.deviceId) return;
+    audioChangeRevision++;
     audioDeviceSwitching = true;
     volumeWriteQueue.cancelPending();
     try {
@@ -805,7 +839,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
       lastWeatherLocation = locationKey;
       weatherSnapshot = { weatherTemperature: null, weatherCode: null, weatherForecast: [], weatherUpdatedAt: null };
     }
-    if (!pageVisible || isHidden || (!showIdle && (!expanded || activeIslandPage !== "weather"))) return;
+    if (!pageVisible || isHidden || (!showIdle && (!expanded || (activeIslandPage !== "weather" && !weatherWidgetVisible)))) return;
     let pending = false;
     let disposed = false;
     const refresh = () => {
@@ -835,7 +869,24 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     compactLengthFor(renderedIslandStyle, $appSettings),
     expandedScale,
     expandedLengthFor(renderedIslandStyle, $appSettings),
+    hostWidgetCount,
   ));
+
+  let viewportWidth = $state(window.innerWidth);
+  let viewportHeight = $state(window.innerHeight);
+  const renderedViewport = $derived(fitIslandViewport(currentHost, expandedScale, {width:viewportWidth,height:viewportHeight}));
+  onMount(() => {
+    const resize = () => { viewportWidth = window.innerWidth; viewportHeight = window.innerHeight; };
+    resize();
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  });
+  $effect(() => {
+    if (!windowReady || (viewportWidth >= currentHost.width - 2 && viewportHeight >= currentHost.height - 2)) return;
+    // Wait for normal native resize animation first; recover a stuck/superseded request once.
+    const timer = setTimeout(scheduleResumeRecovery, 600);
+    return () => clearTimeout(timer);
+  });
 
   let captureSnapshot = $state<CaptureSnapshot>({ ...EMPTY_CAPTURE_SNAPSHOT });
   let isFullscreenApp = $derived(captureSnapshot.fullscreen);
@@ -897,6 +948,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
       compactLength: compactLengthFor(style, $appSettings),
       expandedRadius: expandedRadiusFor(style, $appSettings),
       expandedLength: expandedLengthFor(style, $appSettings),
+      hostWidgetCount,
     });
     if (
       placementInput === lastPlacementInput
@@ -918,11 +970,12 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     const safeIndex = Math.min(Math.max(0, monitorIndex), allMonitors.length - 1);
     const monitor = allMonitors[safeIndex];
     const dpr = monitor.scaleFactor || window.devicePixelRatio || 1;
-    expandedScale = islandContentScaleForWorkArea(monitor.workWidth, monitor.workHeight, dpr);
+    expandedScale = islandLayoutScaleForWorkArea(monitor.workWidth, monitor.workHeight, dpr,
+      style, edge, expandedLengthFor(style, $appSettings), hostWidgetCount);
     // Monitor work area and native window bounds are physical pixels. The
     // IslandSurface, host and interaction region remain CSS-logical pixels.
     const compactLength = compactLengthFor(style, $appSettings);
-    const host = hostFor(style, edge, compactLength, expandedScale, expandedLengthFor(style, $appSettings));
+    const host = hostFor(style, edge, compactLength, expandedScale, expandedLengthFor(style, $appSettings), hostWidgetCount);
     const physicalHost = physicalHostSizeFor(host, dpr);
     const baseShown = placementFor(
       { x: monitor.workX, y: monitor.workY, width: monitor.workWidth, height: monitor.workHeight },
@@ -1061,7 +1114,12 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     if (!shouldAutoClose) return;
 
     const timeout = setTimeout(() => {
-      if (expanded && !hovering && !panelInteracting && !timerFinished) {
+      const pointerStillInside = document.querySelector(".island-frame:hover") !== null;
+      if (pointerStillInside && !hovering) {
+        transitionIsland({ type: "hover-enter" });
+        return;
+      }
+      if (expanded && !hovering && !pointerStillInside && !panelInteracting && !timerFinished) {
         transitionIsland({ type: "collapse" });
         showMonitorMenu = false;
       }
@@ -2024,7 +2082,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
 <div
   bind:this={fixedHostElement}
   class="fixed-host"
-  style={`width:${currentHost.width}px;height:${currentHost.height}px`}
+  style={`width:${renderedViewport.host.width}px;height:${renderedViewport.host.height}px`}
 >
   <IslandSurface
     media={islandMedia}
@@ -2038,20 +2096,23 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     expandedRadius={expandedRadiusFor(renderedIslandStyle, $appSettings)}
     collapsedEdgeShoulderRadius={$appSettings.collapsedEdgeShoulderRadius ?? 8}
     expandedEdgeShoulderRadius={$appSettings.expandedEdgeShoulderRadius ?? 32}
-    {expandedScale}
+    expandedScale={renderedViewport.scale}
     compactLength={compactLengthFor(renderedIslandStyle, $appSettings)}
     idle={showIdle}
     idleTime={currentTime}
     idleWeatherTemperature={weatherSnapshot.weatherTemperature}
     idleWeatherCode={weatherSnapshot.weatherCode}
     idleWeatherForecast={weatherSnapshot.weatherForecast}
+    islandWidgets={$appSettings.islandWidgets}
+    onWidgetsSave={saveWidgets}
+    onLayoutPreview={(layout, editing) => { layoutPreview = layout; layoutEditing = editing; }}
     {lastPlayedMedia}
     canResumeLastTrack={Boolean(lastPlayedMedia && playerApps[lastPlayedMedia.source])}
     {resumingLastTrack}
     showSpectrum={$appSettings.showSpectrum}
     spectrumMode={$appSettings.spectrumMode}
     enableAnimations={$appSettings.enableAnimations}
-    reduceAnimations={$appSettings.reduceAnimations}
+    reduceAnimations={$appSettings.reduceAnimations || renderedViewport.scale < expandedScale - 0.0001}
     {spectrumTopColor}
     {spectrumBottomColor}
     showTime={false}

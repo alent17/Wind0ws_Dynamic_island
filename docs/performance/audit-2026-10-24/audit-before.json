@@ -1,0 +1,50 @@
+{
+  "runtime": "Chrome headless production fixture; playback scenes animate a synthetic random spectrum. Each scene uses a fresh browser context. Renderer TaskDuration and JS heap only; not native WebView process CPU or total memory. No forced GC in ordinary samples.",
+  "results": [
+    {
+      "scene": "paused-compact",
+      "sampleSeconds": 15,
+      "rendererTaskCpuPercent": 0.015340040766158443,
+      "startHeap": 2306412,
+      "endHeap": 2306412,
+      "domNodes": 407,
+      "listeners": 30
+    },
+    {
+      "scene": "playing-compact",
+      "sampleSeconds": 15,
+      "rendererTaskCpuPercent": 1.1550686117148936,
+      "startHeap": 2424944,
+      "endHeap": 2832260,
+      "domNodes": 414,
+      "listeners": 30
+    },
+    {
+      "scene": "music-expanded",
+      "sampleSeconds": 15,
+      "rendererTaskCpuPercent": 1.1900494431653446,
+      "startHeap": 3169272,
+      "endHeap": 2830208,
+      "domNodes": 414,
+      "listeners": 30
+    },
+    {
+      "scene": "volume-detail",
+      "sampleSeconds": 15,
+      "rendererTaskCpuPercent": 0.017046515787279514,
+      "startHeap": 4696984,
+      "endHeap": 4696984,
+      "domNodes": 1171,
+      "listeners": 51
+    },
+    {
+      "scene": "unmounted",
+      "sampleSeconds": 15,
+      "rendererTaskCpuPercent": 0.018043599127427836,
+      "startHeap": 2420568,
+      "endHeap": 2420568,
+      "domNodes": 407,
+      "listeners": 49
+    }
+  ]
+}

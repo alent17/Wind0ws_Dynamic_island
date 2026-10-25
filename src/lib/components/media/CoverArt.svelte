@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
+  import { loadImage } from "$lib/imageLoad";
 
   let { src = "", alt = "", className = "" } = $props<{
     src?: string;
@@ -25,9 +26,11 @@
     }
     if (requestedSrc === untrack(() => activeSlot === "a" ? sourceA : sourceB)) return;
 
-    const image = new Image();
-    image.onload = () => {
-      if (currentGeneration !== generation) return;
+    const controller = new AbortController();
+    void loadImage(requestedSrc, controller.signal).then(image => {
+      // The DOM slots own the displayed pixels, not the preloader.
+      image.removeAttribute("src");
+      if (destroyed || currentGeneration !== generation) return;
       if (cleanupTimer) clearTimeout(cleanupTimer);
       const outgoingSlot = activeSlot;
       const incomingSlot = outgoingSlot === "a" ? "b" : "a";
@@ -39,15 +42,12 @@
         if (outgoingSlot === "a") sourceA = "";
         else sourceB = "";
       }, 220);
-    };
-    image.onerror = () => {
+    }).catch(() => {
       // Keep the last successfully rendered cover if a new URL is unavailable.
-    };
-    image.src = requestedSrc;
+    });
 
     return () => {
-      image.onload = null;
-      image.onerror = null;
+      controller.abort();
       if (cleanupTimer) clearTimeout(cleanupTimer);
       if (!destroyed && currentGeneration === generation) {
         if (untrack(() => activeSlot) === "a") sourceB = "";
