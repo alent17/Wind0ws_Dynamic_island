@@ -111,12 +111,16 @@ fn best_cover_candidate(
     } else {
         COVER_MATCH_THRESHOLD
     };
-    candidates
-        .into_iter()
-        .map(|candidate| (candidate_score(title, artist, &candidate), candidate))
-        .filter(|(score, _)| *score >= threshold)
-        .max_by_key(|(score, _)| *score)
-        .map(|(_, candidate)| candidate)
+    let mut best: Option<(u8, CoverCandidate)> = None;
+    for candidate in candidates {
+        let score = candidate_score(title, artist, &candidate);
+        if score >= threshold && best.as_ref().map_or(true, |(best_score, _)| score > *best_score) {
+            // Preserve the first NetEase-ranked release when several albums
+            // have the same title and artist score.
+            best = Some((score, candidate));
+        }
+    }
+    best.map(|(_, candidate)| candidate)
 }
 
 fn netease_hd_url(url: &str) -> String {
@@ -167,11 +171,11 @@ fn allow_apple_request() -> bool {
     true
 }
 
-fn cover_provider_order(source: &str) -> [&'static str; 2] {
-    if matches!(source.to_lowercase().as_str(), "apple" | "apple_music") {
-        ["apple", "netease"]
-    } else {
-        ["netease", "apple"]
+fn cover_provider_order(source: &str) -> &'static [&'static str] {
+    match source.to_lowercase().as_str() {
+        "netease" | "neteasecloudmusic" => &["netease"],
+        "apple" | "apple_music" => &["apple", "netease"],
+        _ => &["netease", "apple"],
     }
 }
 
@@ -397,11 +401,14 @@ pub async fn resolve_hd_cover_versioned(
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
         .user_agent("Isle/0.1 album-art resolver")
+        // NetEase works over a direct connection on networks where VPN proxy
+        // settings are unavailable or have just been turned off.
+        .no_proxy()
         .build()
         .map_err(|error| AppError::network(format!("Cover client failed: {error}")))?;
     let mut resolved = None;
     let mut failed = false;
-    for provider in cover_provider_order(source) {
+    for &provider in cover_provider_order(source) {
         let attempt = match provider {
             "apple" => cover_from_apple(&client, title, artist).await,
             _ => cover_from_netease(&client, title, artist).await,
@@ -1702,10 +1709,11 @@ mod cover_tests {
     }
 
     #[test]
-    fn orders_cover_providers_by_media_source() {
+    fn resolves_netease_source_without_apple_fallback() {
         assert_eq!(cover_provider_order("apple"), ["apple", "netease"]);
         assert_eq!(cover_provider_order("apple_music"), ["apple", "netease"]);
-        assert_eq!(cover_provider_order("netease"), ["netease", "apple"]);
+        assert_eq!(cover_provider_order("netease"), &["netease"]);
+        assert_eq!(cover_provider_order("NeteaseCloudMusic"), &["netease"]);
         assert_eq!(cover_provider_order("spotify"), ["netease", "apple"]);
     }
 

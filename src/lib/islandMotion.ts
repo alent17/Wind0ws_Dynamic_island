@@ -75,6 +75,10 @@ export function islandShapeMotion(from: IslandMode, to: IslandMode, instant = fa
   return { duration: ISLAND_MOTION.layoutDuration, easing: islandSettleEasing };
 }
 
+export function widgetLayoutMotion(expanding: boolean, instant = false) {
+  return islandShapeMotion(expanding ? "compact" : "expanded", expanding ? "expanded" : "compact", instant);
+}
+
 // Keep both layouts attached to the same edge while their shared elements move.
 export function anchoredLayoutOffset(
   surface: { width: number; height: number },

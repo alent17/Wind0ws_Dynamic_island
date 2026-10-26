@@ -62,7 +62,7 @@
 
   function rebuildPalette() {
     if (!ctx) return;
-    // Use only two solid colors, each shared by one half of the six bars.
+    // Use the existing two-color palette as a vertical ramp on every bar.
     barColors = createSpectrumPalette(topColor, bottomColor, 2);
     paintedHeights.fill(Number.NaN);
   }
@@ -96,20 +96,18 @@
     }
     if (!changed) return;
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-    ctx.beginPath();
-    ctx.fillStyle = barColors[0] ?? "#ffffff";
     for (let index = 0; index < NUM_BARS; index += 1) {
-      if (index === NUM_BARS / 2) {
-        ctx.fill();
-        ctx.beginPath();
-        ctx.fillStyle = barColors[1] ?? "#ffffff";
-      }
       const height = heights[index];
       const x = index * (barWidth + barGap);
       const y = (canvasHeight - height) / 2;
+      const gradient = ctx.createLinearGradient(0, y + height, 0, y);
+      gradient.addColorStop(0, barColors[0] ?? "#888888");
+      gradient.addColorStop(1, barColors[1] ?? "#ffffff");
+      ctx.beginPath();
+      ctx.fillStyle = gradient;
       ctx.roundRect(x, y, barWidth, height, cornerRadius);
+      ctx.fill();
     }
-    ctx.fill();
     paintedHeights.set(heights);
     ctx.globalAlpha = 1;
   }

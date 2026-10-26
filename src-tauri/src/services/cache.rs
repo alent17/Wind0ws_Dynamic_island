@@ -385,8 +385,16 @@ async fn download_and_cache_inner(url: &str, content_type: &str) -> AppResult<St
         .map_err(|_| AppError::lock("缓存目录锁失败"))?
         .clone()
         .ok_or_else(|| AppError::cache("缓存系统未初始化"))?;
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
+    let client_builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(30));
+    let client_builder = if parsed
+        .host_str()
+        .is_some_and(|host| host.ends_with(".music.126.net"))
+    {
+        client_builder.no_proxy()
+    } else {
+        client_builder
+    };
+    let client = client_builder
         .build()
         .map_err(|e| AppError::network(format!("创建下载客户端失败：{e}")))?;
     let limit = if is_image(content_type) {

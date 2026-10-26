@@ -52,6 +52,7 @@ pub fn get_preferences(state: State<'_, AppState>) -> AppResult<AppPreferences> 
 
 fn normalize_settings(settings: &mut AppPreferences) {
     settings.island_widgets.normalize();
+    settings.volume_protection_limit = settings.volume_protection_limit.clamp(40, 100);
     settings.floating_expanded_length = settings.floating_expanded_length.clamp(480, 900);
     settings.edge_expanded_length = settings.edge_expanded_length.clamp(480, 900);
     settings.floating_compact_length = settings.floating_compact_length.clamp(80, 300);

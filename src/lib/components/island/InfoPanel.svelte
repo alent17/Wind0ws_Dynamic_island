@@ -1,10 +1,12 @@
 <script lang="ts">
+  import WidgetClock from "$lib/components/time/WidgetClock.svelte";
+  import WidgetWeather from "$lib/components/island/WidgetWeather.svelte";
   import ComicClock from "$lib/components/time/ComicClock.svelte";
   import WeatherIcon from "$lib/components/media/WeatherIcon.svelte";
   import { locale, translate } from "$lib/i18n";
   import type { WeatherForecastDay } from "$lib/api/types";
-  let { compact=false, page, time, timeZone="system", city="", temperature=null, code=null, forecast=[], updatedAt=null, loading=false, failed=false, reduceMotion=false, onSettings } = $props<{
-    compact?:boolean;page:"clock"|"weather";time:string;timeZone?:string;city?:string;temperature?:number|null;code?:number|null;
+  let { compact=false, widget=false, page, time, timeZone="system", city="", temperature=null, code=null, forecast=[], updatedAt=null, loading=false, failed=false, reduceMotion=false, onSettings } = $props<{
+    compact?:boolean;widget?:boolean;page:"clock"|"weather";time:string;timeZone?:string;city?:string;temperature?:number|null;code?:number|null;
     forecast?:WeatherForecastDay[];updatedAt?:number|null;loading?:boolean;failed?:boolean;reduceMotion?:boolean;onSettings?:()=>void;
   }>();
   const t = (key: Parameters<typeof translate>[0]) => translate(key,{},$locale);
@@ -12,9 +14,11 @@
   const date = $derived.by(() => { time; return new Intl.DateTimeFormat($locale,{...options,year:"numeric",month:"long",day:"numeric",weekday:"short"}).format(new Date()); });
   const updated = $derived(updatedAt ? new Intl.DateTimeFormat($locale,{hour:"2-digit",minute:"2-digit"}).format(new Date(updatedAt < 1e12 ? updatedAt*1000 : updatedAt)) : "");
 </script>
-<section class="info-panel" class:compact class:weather={page === "weather"}>
+<section class="info-panel" class:compact class:weather={page === "weather"} class:widget-panel={widget}>
   {#if page === "clock"}
-    <ComicClock {compact} {time} {date} {reduceMotion} />
+    {#if widget}<WidgetClock {timeZone} {reduceMotion} />{:else}<ComicClock {compact} {time} {date} {reduceMotion} />{/if}
+  {:else if widget}
+    <WidgetWeather {city} {temperature} {code} {forecast} {updatedAt} {loading} {failed} {onSettings} />
   {:else if !city}
     <p>{t("weatherChooseCity")}</p><button onclick={onSettings}>{t("settingsTool")}</button>
   {:else}
@@ -28,6 +32,7 @@
 </section>
 <style>
   .info-panel{width:100%;min-width:0;color:#f3f6fa;display:flex;flex-direction:column;justify-content:center;gap:12px;font-family:var(--app-font,system-ui)}
+  .widget-panel{height:100%}
   .current-weather{display:flex;align-items:center;justify-content:space-between;gap:12px}.current-weather>div{min-width:0;display:flex;align-items:baseline;gap:12px}.current-weather strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.current-weather span{font-size:30px;font-weight:700}
   .forecast{display:flex;justify-content:space-between;gap:16px}.forecast>div{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:11px}.forecast small,.updated,p{color:rgba(255,255,255,.5);font-size:10px}p{margin:0;line-height:1.5}button{align-self:flex-start;border:0;border-radius:12px;background:transparent;color:#fff;padding:10px;cursor:pointer}button:hover,button:focus-visible{background:rgba(255,255,255,.1)}
   .compact .current-weather{flex-direction:column-reverse;align-items:flex-start;gap:6px}

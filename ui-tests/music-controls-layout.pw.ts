@@ -21,7 +21,7 @@ for (const source of ["netease", "spotify"]) test(`short music panes keep ${sour
             return {label:button.getAttribute("aria-label"),left:r.left,right:r.right};
           }).sort((a,b)=>a.left-b.left)};
         });
-        expect(boxes).toHaveLength(6);
+        expect(boxes).toHaveLength(7);
         for(let i=0;i<boxes.length;i++){
           expect(boxes[i].left,JSON.stringify({source,expandedLength,edge,shoulder,boxes})).toBeGreaterThanOrEqual(bounds!.x-1);
           expect(boxes[i].right).toBeLessThanOrEqual(bounds!.x+bounds!.width+1);

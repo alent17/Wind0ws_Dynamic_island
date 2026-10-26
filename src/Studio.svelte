@@ -19,10 +19,11 @@
   import { moveSelectedPlayer } from "$lib/playerOrder";
   import { idleApi } from "$lib/api/idle";
   import { applyAppFont } from "$lib/font";
-  import { locale, setLocale, translate, type TranslationKey } from "$lib/i18n";
+  import { locale, resolveLocale, setLocale, translate, type TranslationKey } from "$lib/i18n";
   import { DEFAULT_SETTINGS, normalizeAppSettings, type AppLanguage, type AppPreferences, type MediaSessionInfo, type MediaState, type MonitorInfo, type WeatherForecastDay, type WeatherLocationCandidate, type WeatherSnapshot } from "$lib/api/types";
   import type { IslandTool } from "$lib/featureRail";
   import { formatClock } from "$lib/countdown";
+  import { CLOCK_TIME_ZONES, clockTimeZoneOption } from "$lib/timeZones";
   let previewNow = $state(Date.now());
 
   type Scenario="playing"|"paused"|"no-art"|"long-title";
@@ -147,12 +148,12 @@
   let previewExpandedLength=$derived(appearanceDraft.islandStyle==="edge"?appearanceDraft.edgeExpandedLength:appearanceDraft.floatingExpandedLength);
   let previewLayout=$state<IslandWidgets|null>(null);
   let previewEditing=$state(false);
-  const previewWidgets=$derived(previewLayout ?? normalizeWidgets(settings.islandWidgets));
-  const previewWidgetCount=$derived(previewEditing ? 2 : previewWidgets.left.length + previewWidgets.right.length);
+  const previewWidgets=$derived(previewLayout ?? (settings.islandWidgetsEnabled ? normalizeWidgets(settings.islandWidgets) : {left:[],right:[]}));
+  const previewWidgetCount=$derived(previewEditing ? 2 : Math.max(previewWidgets.left.length + previewWidgets.right.length, normalizeWidgets(settings.islandWidgets).left.length + normalizeWidgets(settings.islandWidgets).right.length));
   async function savePreviewWidgets(layout:IslandWidgets){
     const islandWidgets=normalizeWidgets(layout);
-    if(nativeRuntime)await settingsApi.updateSettings({islandWidgets});
-    settings={...settings,islandWidgets};
+    if(nativeRuntime)await settingsApi.updateSettings({islandWidgets,islandWidgetsEnabled:true});
+    settings={...settings,islandWidgets,islandWidgetsEnabled:true};
   }
   let previewHost=$derived(hostFor(appearanceDraft.islandStyle,appearanceDraft.islandEdge,previewCompactLength,1,previewExpandedLength,previewWidgetCount));
   let currentGeometry=$state(geometryFor("expanded"));
@@ -192,6 +193,7 @@
     try{const snapshot=await idleApi.getWeatherSnapshot(locationKey);if(!studioDisposed&&locationKey===JSON.stringify(settings.weatherLocation))weatherSnapshot=snapshot}catch{}
   }
   const t=(key:TranslationKey,values:Record<string,string|number>={})=>translate(key,values,$locale);
+  const clockTimeZoneOptions=$derived([{value:"system",label:t("systemTimeZone")},...CLOCK_TIME_ZONES.map((timeZone)=>clockTimeZoneOption(timeZone.value,resolveLocale(settings.language)))]);
   const enumLabel=(value:string)=>t(value as TranslationKey);
   const previewTargetLabel=(target:PreviewTarget)=>target? t(({shape:"shape",compactLength:"compactLength",shoulder:"shoulder",radius:"expandedRadius",spectrum:"spectrum"} as const)[target]):t("previewReady");
   const appearanceKeys=(Object.keys(createAppearanceDraft(DEFAULT_SETTINGS)) as (keyof AppearanceDraft)[]);
@@ -447,7 +449,7 @@
       <div class="stage-topline"><span><i aria-hidden="true"></i>{t("previewLabel")}</span><small>{nativeRuntime&&followingLive?t("currentMusic"):nativeRuntime?t("previewReady"):t("browserDemo")}</small></div>
       <div class="preview-host" style={`width:${previewHost.width}px;height:${previewHost.height}px;${previewPositionStyle}`}>
         {#if previewReady}
-        <IslandSurface islandWidgets={settings.islandWidgets} onLayoutPreview={(layout,editing)=>{previewLayout=layout;previewEditing=editing}} onWidgetsSave={savePreviewWidgets} weatherCity={nativeRuntime ? settings.weatherLocation?.name ?? "" : "Shanghai"} weatherUpdatedAt={weatherSnapshot?.weatherUpdatedAt ?? null} onRegionChange={({geometry}) => currentGeometry = geometry} onPageChange={(page)=>previewPage=page} media={sample} clockText={previewClock} clockTimeZone={settings.clockTimeZone} idle={nativeRuntime && followingLive && !sample.title} idleTime={previewClock} idleWeatherTemperature={weatherSnapshot?.weatherTemperature ?? null} idleWeatherCode={weatherSnapshot?.weatherCode ?? null} idleWeatherForecast={previewForecast} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedLength={previewExpandedLength} expandedRadius={previewExpandedRadius} collapsedEdgeShoulderRadius={appearanceDraft.collapsedEdgeShoulderRadius} expandedEdgeShoulderRadius={appearanceDraft.expandedEdgeShoulderRadius} compactLength={previewCompactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} spectrumTopColor={previewSpectrumTopColor} spectrumBottomColor={previewSpectrumBottomColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={!nativeRuntime&&appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} showCustomFunctionPanel={settings.showCustomFunctionPanel} systemAudio={{volumePercent:42,muted:false,deviceId:"studio-speakers",deviceName:"Speakers"}} audioDevices={[{id:"studio-speakers",name:"Speakers (Realtek Audio)",isDefault:true},{id:"studio-headphones",name:"Headphones",isDefault:false}]} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.showStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{if(nativeRuntime&&followingLive){if(action==="cycle_netease_mode"){void mediaApi.cycleNeteasePlaybackMode();return}void mediaApi.controlMedia(action);return}if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
+        <IslandSurface widgetsEnabled={settings.islandWidgetsEnabled} onWidgetsToggle={async enabled=>{if(nativeRuntime)await settingsApi.updateSettings({islandWidgetsEnabled:enabled});settings={...settings,islandWidgetsEnabled:enabled};}} islandWidgets={settings.islandWidgets} onLayoutPreview={(layout,editing)=>{previewLayout=layout;previewEditing=editing}} onWidgetsSave={savePreviewWidgets} weatherCity={nativeRuntime ? settings.weatherLocation?.name ?? "" : "Shanghai"} weatherUpdatedAt={weatherSnapshot?.weatherUpdatedAt ?? null} onRegionChange={({geometry}) => currentGeometry = geometry} onPageChange={(page)=>previewPage=page} media={sample} clockText={previewClock} clockTimeZone={settings.clockTimeZone} idle={nativeRuntime && followingLive && !sample.title} idleTime={previewClock} idleWeatherTemperature={weatherSnapshot?.weatherTemperature ?? null} idleWeatherCode={weatherSnapshot?.weatherCode ?? null} idleWeatherForecast={previewForecast} {mode} islandStyle={appearanceDraft.islandStyle} edge={appearanceDraft.islandEdge} position={sample.positionMs} expandedLength={previewExpandedLength} expandedRadius={previewExpandedRadius} collapsedEdgeShoulderRadius={appearanceDraft.collapsedEdgeShoulderRadius} expandedEdgeShoulderRadius={appearanceDraft.expandedEdgeShoulderRadius} compactLength={previewCompactLength} showSpectrum={appearanceDraft.showSpectrum} spectrumMode={appearanceDraft.spectrumMode} spectrumTopColor={previewSpectrumTopColor} spectrumBottomColor={previewSpectrumBottomColor} enableAnimations={settings.enableAnimations} reduceAnimations={settings.reduceAnimations} previewSpectrum={!nativeRuntime&&appearanceDraft.spectrumMode==="realtime"?previewBars:undefined} previewHighlight={previewTarget} previewEdgePosition={appearanceDraft.islandEdgePosition} interactive simulateHidden enabledTools={previewTools} showCustomFunctionPanel={settings.showCustomFunctionPanel} systemAudio={{volumePercent:42,muted:false,deviceId:"studio-speakers",deviceName:"Speakers"}} audioDevices={[{id:"studio-speakers",name:"Speakers (Realtek Audio)",isDefault:true},{id:"studio-headphones",name:"Headphones",isDefault:false}]} onSettingsToggle={()=>{if(nativeRuntime)void windowApi.showStudioWindow()}} onToggle={()=>mode=mode==="expanded"?"compact":"expanded"} onMediaAction={(action)=>{if(nativeRuntime&&followingLive){if(action==="cycle_netease_mode"){void mediaApi.cycleNeteasePlaybackMode();return}void mediaApi.controlMedia(action);return}if(action==="play_pause")scenario=scenario==="paused"?"playing":"paused"}} />
         {/if}
       </div>
       <div class="stage-caption" class:editing={previewTarget!==null} aria-live="polite">
@@ -488,11 +490,7 @@
             {value:"system",label:t("systemLanguage")},{value:"zh-CN",label:t("chinese")},
             {value:"en",label:t("english")},{value:"ja",label:t("japanese")}
           ]} onSelect={(value)=>setLanguage(value as AppLanguage)}/></div>
-          <div class="compact-select-row"><span>{t("clock")}</span><StudioSelect label={t("clock")} value={settings.clockTimeZone} options={[
-            {value:"system",label:t("systemLanguage")},{value:"Asia/Taipei",label:"Asia/Taipei"},
-            {value:"Asia/Tokyo",label:"Asia/Tokyo"},{value:"America/New_York",label:"America/New_York"},
-            {value:"Europe/London",label:"Europe/London"},{value:"UTC",label:"UTC"}
-          ]} onSelect={(value)=>updatePreference({clockTimeZone:value})}/></div>
+          <div class="compact-select-row"><span>{t("timeZone")}</span><StudioSelect label={t("timeZone")} value={settings.clockTimeZone} options={clockTimeZoneOptions} onSelect={(value)=>updatePreference({clockTimeZone:value})}/></div>
         </div>
       </section>
       <section class="netease-progress-section">
@@ -544,6 +542,8 @@
         <button type="button" class="setting-choice" class:active={settings.enableMvPlayback&&!settings.floatingCircularAlbum} aria-pressed={settings.enableMvPlayback&&!settings.floatingCircularAlbum} disabled={settings.floatingCircularAlbum} title={settings.floatingCircularAlbum?t("mvUnavailableInCircular"):undefined} onclick={()=>updatePreference({enableMvPlayback:!settings.enableMvPlayback})}><span class="choice-mark" aria-hidden="true">{settings.enableMvPlayback&&!settings.floatingCircularAlbum?"✓":""}</span><span class="choice-copy"><strong>{t("mvPlayback")}</strong><small>{settings.floatingCircularAlbum?t("mvUnavailableInCircular"):t("mvPlaybackHint")}</small></span></button>
       </div></section>
       <section class="app-behavior-section"><h2>{t("appBehavior")}</h2>
+        <div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.wheelVolumeControl} aria-pressed={settings.wheelVolumeControl} onclick={()=>updatePreference({wheelVolumeControl:!settings.wheelVolumeControl})}><span class="choice-mark" aria-hidden="true">{settings.wheelVolumeControl?"✓":""}</span><span class="choice-copy"><strong>{t("wheelVolumeControl")}</strong><small>{t("wheelVolumeControlHint")}</small></span></button></div>
+        {#if settings.wheelVolumeControl}<div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.volumeProtectionEnabled} aria-pressed={settings.volumeProtectionEnabled} onclick={()=>updatePreference({volumeProtectionEnabled:!settings.volumeProtectionEnabled})}><span class="choice-mark" aria-hidden="true">{settings.volumeProtectionEnabled?"✓":""}</span><span class="choice-copy"><strong>{t("volumeProtection")}</strong><small>{t("volumeProtectionHint")}</small></span></button></div>{#if settings.volumeProtectionEnabled}<StudioSlider label={t("volumeProtectionLimit")} min={40} max={100} unit="%" value={settings.volumeProtectionLimit} onPreviewMove={(value)=>updatePreference({volumeProtectionLimit:value})}/>{/if}{/if}
         <div class="setting-grid"><button type="button" class="setting-choice" class:active={settings.alwaysOnTop} aria-pressed={settings.alwaysOnTop} disabled={!nativeRuntime} onclick={()=>setAlwaysOnTop(!settings.alwaysOnTop)}><span class="choice-mark" aria-hidden="true">{settings.alwaysOnTop?"✓":""}</span><span class="choice-copy"><strong>{t("alwaysOnTop")}</strong><small>{t("alwaysOnTopHint")}</small></span></button><button type="button" class="setting-choice" class:active={settings.autoStart} aria-pressed={settings.autoStart} disabled={!nativeRuntime} onclick={()=>setAutoStart(!settings.autoStart)}><span class="choice-mark" aria-hidden="true">{settings.autoStart?"✓":""}</span><span class="choice-copy"><strong>{t("autoStart")}</strong><small>{t("autoStartHint")}</small></span></button></div>
         <div class="select-row"><span><Monitor size={17}/>{t("monitor")}</span><StudioSelect label={t("monitor")} value={String(settings.monitorIndex)} disabled={!nativeRuntime} options={monitors.length?monitors.map((monitor)=>({value:String(monitor.index),label:monitor.name})):[{value:String(settings.monitorIndex),label:t("primaryMonitor") }]} onSelect={(value)=>updatePreference({monitorIndex:Number(value)})}/></div>
       </section>

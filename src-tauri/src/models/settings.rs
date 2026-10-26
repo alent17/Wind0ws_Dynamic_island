@@ -72,7 +72,7 @@ impl IslandWidgets {
         for items in [&mut self.left, &mut self.right] {
             items.retain(|kind| {
                 seen.len() < 2
-                    && matches!(kind.as_str(), "timer" | "weather" | "clock" | "volume")
+                    && matches!(kind.as_str(), "timer" | "weather" | "clock" | "volume" | "system")
                     && seen.insert(kind.clone())
             });
         }
@@ -86,6 +86,7 @@ impl IslandWidgets {
 #[serde(default, rename_all = "camelCase")]
 pub struct AppPreferences {
     pub island_widgets: IslandWidgets,
+    pub island_widgets_enabled: bool,
     pub netease_progress_mode: NeteaseProgressMode,
     pub netease_auto_connect: bool,
     pub netease_executable_path: Option<String>,
@@ -111,7 +112,11 @@ pub struct AppPreferences {
     pub enable_animations: bool,
     pub window_opacity: u8,
     pub always_on_top: bool,
+    pub keep_island_expanded: bool,
     pub floating_window_always_on_top: bool,
+    pub wheel_volume_control: bool,
+    pub volume_protection_enabled: bool,
+    pub volume_protection_limit: u8,
     pub reduce_animations: bool,
     pub show_debug_info: bool,
     pub log_level: String,
@@ -167,6 +172,7 @@ impl Default for AppPreferences {
 
         Self {
             island_widgets: IslandWidgets::default(),
+            island_widgets_enabled: true,
             netease_progress_mode: NeteaseProgressMode::Real,
             netease_auto_connect: false,
             netease_executable_path: None,
@@ -190,7 +196,11 @@ impl Default for AppPreferences {
             enable_animations: true,
             window_opacity: 255,
             always_on_top: true,
+            keep_island_expanded: false,
             floating_window_always_on_top: true,
+            wheel_volume_control: false,
+            volume_protection_enabled: false,
+            volume_protection_limit: 80,
             reduce_animations: false,
             show_debug_info: false,
             log_level: "Info".to_string(),
@@ -254,17 +264,20 @@ mod tests {
     #[test]
     fn widget_layout_defaults_normalizes_and_roundtrips() {
         let old: AppPreferences = serde_json::from_str("{}").unwrap();
+        assert!(old.island_widgets_enabled);
         assert!(old.island_widgets.left.is_empty());
         assert!(old.island_widgets.right.is_empty());
         let mut loaded: AppPreferences = serde_json::from_str(
             r#"{"islandWidgets":{"left":["bad","timer","timer"],"right":["volume","clock"]}}"#,
         ).unwrap();
         loaded.island_widgets.normalize();
+        loaded.island_widgets_enabled = false;
         assert_eq!(loaded.island_widgets.left, vec!["timer"]);
         assert_eq!(loaded.island_widgets.right, vec!["volume"]);
         let encoded = serde_json::to_string(&loaded).unwrap();
         let restored: AppPreferences = serde_json::from_str(&encoded).unwrap();
         assert_eq!(loaded.island_widgets, restored.island_widgets);
+        assert!(!restored.island_widgets_enabled);
     }
 
     #[test]

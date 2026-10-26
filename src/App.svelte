@@ -17,6 +17,7 @@ import { createSeekHandler, createSeekRequestGate, formatSeekError, formatUserFa
 import { createMediaSyncSender, type MediaSyncSnapshot } from "$lib/mediaSyncSender";
   import { isTransportDiagnosticsEnabled, recordTransportCounter, runTimedTransportCommand, runTransportEvent } from "$lib/transportDiagnostics";
   import { loadImage } from "$lib/imageLoad";
+  import { isHighResolutionSmtcCover } from "$lib/smtcArtworkQuality";
   const lifetime = createAsyncCleanup();
   const appMediaSessionId = crypto.randomUUID();
   let activeFloatingInstanceToken: string | undefined;
@@ -239,9 +240,13 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
 
   const mainCoverOwner = createArtworkOwner("cover");
   let hdArtworkResolved = $state(false);
+  let mainCoverLookupTrackKey: string | null = null;
+  let smtcCoverProbe: AbortController | undefined;
   let pendingHdImage: AbortController | undefined;
   function cancelMainCover() {
     mainCoverOwner.cancel();
+    mainCoverLookupTrackKey = null;
+    smtcCoverProbe?.abort(); smtcCoverProbe = undefined;
     pendingHdImage?.abort(); pendingHdImage = undefined;
   }
   $effect(() => { if (!$appSettings.enableHdCover) cancelMainCover(); });
@@ -587,13 +592,13 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   const appSettings = settingsStore;
   let layoutPreview = $state<IslandWidgets | null>(null);
   let layoutEditing = $state(false);
-  const shownWidgets = $derived(layoutPreview ?? normalizeWidgets($appSettings.islandWidgets));
-  const hostWidgetCount = $derived(layoutEditing ? 2 : shownWidgets.left.length + shownWidgets.right.length);
+  const shownWidgets = $derived(layoutPreview ?? ($appSettings.islandWidgetsEnabled ? normalizeWidgets($appSettings.islandWidgets) : {left:[],right:[]}));
+  const hostWidgetCount = $derived(layoutEditing ? 2 : Math.max(shownWidgets.left.length + shownWidgets.right.length, normalizeWidgets($appSettings.islandWidgets).left.length + normalizeWidgets($appSettings.islandWidgets).right.length));
   const weatherWidgetVisible = $derived(expanded && activeIslandPage === "music" && [...shownWidgets.left, ...shownWidgets.right].includes("weather"));
   const volumeWidgetVisible = $derived(expanded && activeIslandPage === "music" && [...shownWidgets.left, ...shownWidgets.right].includes("volume"));
   async function saveWidgets(layout: IslandWidgets) {
-    await settingsApi.updateSettings({islandWidgets: normalizeWidgets(layout)});
-    appSettings.update(settings => ({...settings, islandWidgets: normalizeWidgets(layout)}));
+    await settingsApi.updateSettings({islandWidgets: normalizeWidgets(layout),islandWidgetsEnabled:true});
+    appSettings.update(settings => ({...settings, islandWidgets: normalizeWidgets(layout),islandWidgetsEnabled:true}));
   }
 
   let enabledFeatureTools = $derived.by<IslandTool[]>(() => {
@@ -663,6 +668,77 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     const refresh = setInterval(() => { if (!volumeWriteQueue.busy && !audioDeviceSwitching) void handleAudioOpen(); }, 5000);
     return () => clearInterval(refresh);
   });
+
+  let wheelVolumeDisplay = $state<number | null>(null);
+  let volumeProtectionPrompt = $state(false);
+  let volumeProtectionBypassUntil = 0;
+  let volumeHudTimer: ReturnType<typeof setTimeout> | undefined;
+  let wheelVolumePending = 0;
+  let wheelVolumeRunning = false;
+  let lastVolumeWheelAt = 0;
+  async function handleWheelVolume(delta: number) {
+    if (!$appSettings.wheelVolumeControl || audioDeviceSwitching || lifetime.disposed || volumeProtectionPrompt) return;
+    wheelVolumePending += delta;
+    if (wheelVolumeRunning) return;
+    wheelVolumeRunning = true;
+    try {
+      // Refresh after an idle pause so external volume changes are respected.
+      if (Date.now() - lastVolumeWheelAt > 1000 && !volumeWriteQueue.busy) await handleAudioOpen();
+      while (wheelVolumePending && $appSettings.wheelVolumeControl && !audioDeviceSwitching && !lifetime.disposed) {
+        const change = wheelVolumePending;
+        wheelVolumePending = 0;
+        if (!systemAudio) break;
+        lastVolumeWheelAt = Date.now();
+        const current = systemAudio.volumePercent;
+        let target = Math.max(0, Math.min(100, current + change));
+        let requestConfirmation = false;
+        if ($appSettings.volumeProtectionEnabled && Date.now() >= volumeProtectionBypassUntil && change > 0) {
+          const limit = $appSettings.volumeProtectionLimit;
+          if (current >= limit) {
+            wheelVolumePending = 0;
+            transitionIsland({ type: "expand" });
+            volumeProtectionPrompt = true;
+            showWheelVolume(current);
+            break;
+          }
+          if (target >= limit) {
+            target = limit;
+            requestConfirmation = true;
+          }
+        }
+        await handleAudioVolume(target);
+        showWheelVolume(target);
+        if (requestConfirmation) {
+          wheelVolumePending = 0;
+          transitionIsland({ type: "expand" });
+          volumeProtectionPrompt = true;
+          break;
+        }
+      }
+    } catch (error) {
+      logger.warn("滚轮调节音量失败", error);
+    } finally {
+      wheelVolumePending = 0;
+      wheelVolumeRunning = false;
+    }
+  }
+
+  function showWheelVolume(value: number) {
+    wheelVolumeDisplay = value;
+    if (volumeHudTimer) clearTimeout(volumeHudTimer);
+    volumeHudTimer = setTimeout(() => wheelVolumeDisplay = null, 1300);
+  }
+
+  function confirmVolumeIncrease() {
+    volumeProtectionBypassUntil = Date.now() + 10_000;
+    volumeProtectionPrompt = false;
+  }
+
+  function cancelVolumeIncrease() {
+    volumeProtectionPrompt = false;
+    volumeProtectionBypassUntil = 0;
+    wheelVolumePending = 0;
+  }
 
   async function handleAudioVolume(volumePercent: number) {
     if (audioDeviceSwitching || lifetime.disposed) return;
@@ -1110,7 +1186,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   $effect(() => {
     const panelActive = panelInteracting;
     const pointerInside = hovering;
-    const shouldAutoClose = expanded && !pointerInside && !panelActive && !timerFinished;
+    const shouldAutoClose = expanded && !$appSettings.keepIslandExpanded && !pointerInside && !panelActive && !timerFinished;
     if (!shouldAutoClose) return;
 
     const timeout = setTimeout(() => {
@@ -1896,6 +1972,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
         const newCover = artworkValue(data) ?? (songChanged ? "" : rawCoverUrl);
 
         const coverChanged = songChanged || newCover !== rawCoverUrl;
+        const coverAlreadyHandledForTrack = !songChanged && mainCoverLookupTrackKey === currentSongKey;
 
         if (titleChanged || artistChanged || coverChanged) {
           if (titleChanged) {
@@ -1906,7 +1983,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
             artistName = data.artist || "未知艺术家";
           }
 
-          if (coverChanged) {
+          if (coverChanged && !coverAlreadyHandledForTrack) {
             metadataImage?.abort(); metadataImage = undefined;
             cancelMainCover(); hdArtworkResolved=false;
             rawCoverUrl = newCover;
@@ -1931,16 +2008,31 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
 
           if (
             coverChanged &&
+            !coverAlreadyHandledForTrack &&
             (newCover || songChanged) &&
             $appSettings.enableHdCover &&
             data.title
           ) {
             const requestedTrackKey = currentSongKey;
             const requestedCover = newCover;
-            void mainCoverOwner
-              .request<import("$lib/api/types").ResolvedCover | null>({ title:data.title, artist:data.artist || "", source:data.source || currentSource },newCover)
-              .then(async (resolved) => {
-                if (lifetime.disposed || !resolved || lastSongKey !== requestedTrackKey || rawCoverUrl !== requestedCover || !$appSettings.enableHdCover) return;
+            mainCoverLookupTrackKey = requestedTrackKey;
+            const probe = new AbortController();
+            smtcCoverProbe = probe;
+            void (async () => {
+              let resolvedForTrack = false;
+              try {
+                const smtcAlreadyHighResolution = await isHighResolutionSmtcCover(requestedCover, probe.signal);
+                if (lifetime.disposed || probe.signal.aborted || lastSongKey !== requestedTrackKey || !$appSettings.enableHdCover) return;
+                if (smtcAlreadyHighResolution) {
+                  hdArtworkResolved = true;
+                  resolvedForTrack = true;
+                  void syncFloatingMediaClock();
+                  return;
+                }
+
+                const resolved = await mainCoverOwner
+                  .request<import("$lib/api/types").ResolvedCover | null>({ title:data.title, artist:data.artist || "", source:data.source || currentSource },requestedCover);
+                if (lifetime.disposed || probe.signal.aborted || !resolved || lastSongKey !== requestedTrackKey || !$appSettings.enableHdCover) return;
                 const resolvedUrl = /^[a-z]:[\\/]/i.test(resolved.url)
                   ? convertFileSrc(resolved.url)
                   : resolved.url;
@@ -1949,16 +2041,24 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
                 let image: HTMLImageElement | undefined;
                 try {
                   image = await loadImage(resolvedUrl, controller.signal);
-                  if (lifetime.disposed || controller.signal.aborted || lastSongKey !== requestedTrackKey || rawCoverUrl !== requestedCover || !$appSettings.enableHdCover) return;
+                  if (lifetime.disposed || controller.signal.aborted || probe.signal.aborted || lastSongKey !== requestedTrackKey || !$appSettings.enableHdCover) return;
                   hdArtworkResolved = true;
+                  resolvedForTrack = true;
                   artworkUrl = resolvedUrl;
                   void syncFloatingMediaClock();
                 } finally {
                   image?.removeAttribute("src");
                   if (pendingHdImage === controller) pendingHdImage = undefined;
                 }
-              })
-              .catch(() => undefined);
+              } catch {
+                // The SMTC cover remains visible if quality probing or lookup fails.
+              } finally {
+                if (smtcCoverProbe === probe) {
+                  smtcCoverProbe = undefined;
+                  if (!resolvedForTrack && mainCoverLookupTrackKey === requestedTrackKey) mainCoverLookupTrackKey = null;
+                }
+              }
+            })();
           }
         }
 
@@ -2103,6 +2203,8 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     idleWeatherTemperature={weatherSnapshot.weatherTemperature}
     idleWeatherCode={weatherSnapshot.weatherCode}
     idleWeatherForecast={weatherSnapshot.weatherForecast}
+    widgetsEnabled={$appSettings.islandWidgetsEnabled}
+    onWidgetsToggle={async enabled => {await settingsApi.updateSettings({islandWidgetsEnabled:enabled});appSettings.update(settings=>({...settings,islandWidgetsEnabled:enabled}));}}
     islandWidgets={$appSettings.islandWidgets}
     onWidgetsSave={saveWidgets}
     onLayoutPreview={(layout, editing) => { layoutPreview = layout; layoutEditing = editing; }}
@@ -2128,6 +2230,12 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     seekError={seekErrorMessage}
     onToggleFloating={toggleFloatingWindow}
     onHideForTenSeconds={hideForTenSeconds}
+    keepIslandExpanded={$appSettings.keepIslandExpanded}
+    onToggleKeepIslandExpanded={async () => {
+      const keepIslandExpanded = !$appSettings.keepIslandExpanded;
+      await settingsApi.updateSettings({ keepIslandExpanded });
+      appSettings.update(settings => ({ ...settings, keepIslandExpanded }));
+    }}
     onSettingsToggle={showSettingsWindow}
     enabledTools={enabledFeatureTools}
     showCustomFunctionPanel={$appSettings.showCustomFunctionPanel}
@@ -2144,6 +2252,13 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     {audioDevices}
     {audioDeviceSwitching}
     onAudioOpen={() => { void handleAudioOpen(); }}
+    wheelVolumeControl={$appSettings.wheelVolumeControl}
+    wheelVolumeDisplay={wheelVolumeDisplay}
+    volumeProtectionPrompt={volumeProtectionPrompt}
+    volumeProtectionLimit={$appSettings.volumeProtectionLimit}
+    onConfirmVolumeIncrease={confirmVolumeIncrease}
+    onCancelVolumeIncrease={cancelVolumeIncrease}
+    onWheelVolume={(delta) => { void handleWheelVolume(delta); }}
     onAudioVolume={handleAudioVolume}
     onAudioDevice={handleAudioDevice}
     timerStatus={countdown.status}

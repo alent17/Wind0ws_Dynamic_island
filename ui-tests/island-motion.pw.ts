@@ -2,6 +2,36 @@ import { test, expect } from "@playwright/test";
 
 test.use({ reducedMotion: "no-preference" });
 
+for (const edge of ["top", "right", "bottom", "left"]) {
+  test(`spectrum moves with artwork on expansion and collapse at ${edge}`, async ({ page }) => {
+    await page.goto("/ui-tests/island-fixture.html");
+    await page.evaluate(edge => (window as any).configureIsland({ edge, animate: true, scale: .8, toolbar: true }), edge);
+    await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true");
+    for (const mode of ["expanded", "compact"]) {
+      const sample = await page.evaluate(async mode => {
+        (window as any).configureIsland({ mode });
+        for (let frame = 0; frame < 24; frame++) {
+          await new Promise(requestAnimationFrame);
+          const moving = document.querySelector(".moving-spectrum.in-motion");
+          if (!moving) continue;
+          const rect = moving.getBoundingClientRect();
+          const endpoints = [...document.querySelectorAll(".spectrum-endpoint")];
+          return { width: rect.width, height: rect.height, coverMoving: !!document.querySelector(".moving-cover.in-motion"), hidden: endpoints.every(el => getComputedStyle(el).visibility === "hidden") };
+        }
+        return null;
+      }, mode);
+      expect(sample).not.toBeNull();
+      expect(sample!.width).toBeGreaterThan(0);
+      expect(sample!.height).toBeGreaterThan(0);
+      expect(sample!.coverMoving).toBe(true);
+      expect(sample!.hidden).toBe(true);
+      await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true");
+      await expect(page.locator(".moving-spectrum.in-motion")).toHaveCount(0);
+      await expect(page.locator(`${mode === "expanded" ? ".top-row" : ".compact-layer"} .spectrum-endpoint`)).toBeVisible();
+    }
+  });
+}
+
 for (const remembered of [false, true]) test(`long ${remembered ? "remembered" : "current"} title animates only while the music panel is visible`, async ({ page }) => {
   await page.goto("/ui-tests/island-fixture.html");
   const longTitle = "A deliberately long fixture title that must scroll across the visible music panel";

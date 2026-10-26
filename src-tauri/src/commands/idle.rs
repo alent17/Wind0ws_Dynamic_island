@@ -8,6 +8,11 @@ pub async fn get_idle_snapshot(app: AppHandle) -> AppResult<IdleSnapshot> {
 }
 
 #[tauri::command]
+pub async fn get_system_snapshot() -> AppResult<IdleSnapshot> {
+    crate::services::idle::get_system_snapshot().await
+}
+
+#[tauri::command]
 pub async fn get_weather_snapshot(app: AppHandle) -> AppResult<WeatherSnapshot> {
     crate::services::get_weather_snapshot(&app).await
 }

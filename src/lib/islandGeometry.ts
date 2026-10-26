@@ -35,7 +35,7 @@ export type IslandRegionChange = {
 
 export const ISLAND_GEOMETRY = {
   compact: { width: 80, height: 28, radius: 14 },
-  hover: { width: 90, height: 30, radius: 15 },
+  hover: { width: 80, height: 28, radius: 14 },
   expanded: { width: 600, height: 210, radius: 45 },
   hidden: { width: 80, height: 28, radius: 14 },
 } as const;
@@ -79,7 +79,7 @@ export function geometryFor(
   const geometry = mode === "expanded"
     ? { ...ISLAND_GEOMETRY.expanded, width: Math.max(200, ISLAND_GEOMETRY.expanded.width + expandedExtraWidth) }
     : mode === "hover"
-      ? { ...ISLAND_GEOMETRY.hover, width: Math.min(300, length + 10) }
+      ? { ...ISLAND_GEOMETRY.compact, width: length }
       : { ...ISLAND_GEOMETRY[mode], width: length };
   const vertical = isVerticalEdge(edge) && mode !== "expanded";
   return {
@@ -317,16 +317,16 @@ export function hiddenPlacementFor(
   return hidden;
 }
 
-export type IslandPage = "music" | "timer" | "volume" | "clock" | "weather";
+export type IslandPage = "music" | "timer" | "volume" | "clock" | "weather" | "system";
 
 export function navigationGeometry(page: IslandPage, toolCount: number, radius = 45,
   style: IslandStyle = "floating", edge: IslandEdge = "top", shoulder = 32, expandedLength = 600, widgetCount = 0, editing = false): IslandGeometry {
   const inset = style === "edge" ? clampShoulderRadius(shoulder) : 0;
   const vertical = isVerticalEdge(edge);
   const toolbar = toolCount > 0 ? 40 : 0;
-  const height = page === "music" ? 249.1 : page === "weather" ? 240 : 188;
+  const height = page === "music" ? 249.1 : page === "system" ? 280 : page === "weather" ? 240 : 188;
   const length = clampExpandedLength(expandedLength);
-  const width = page === "music" ? length : Math.max(300, length / 2) + (vertical ? 0 : inset * 2);
+  const width = page === "music" ? length : Math.max(page === "system" ? 380 : 300, length / 2) + (vertical ? 0 : inset * 2);
   return { width: width + (page === "music" ? widgetExtraWidth(widgetCount, expandedLength) + (widgetCount > 0 && !vertical ? inset * 2 : 0) : 0), height: height + toolbar + (vertical ? inset * 2 : 0) + (editing ? EDITOR_HEIGHT + EDITOR_TOP_SPACE : 0), radius: clampExpandedRadius(radius) };
 }
 

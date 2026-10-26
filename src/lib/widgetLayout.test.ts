@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { normalizeWidgets, placeWidget, widgetExtraWidth, widgetPanelWidth } from "./widgetLayout";
+import { normalizeWidgets, placeWidget, widgetExtraWidth, widgetPanelWidth, widgetPanelOrder, widgetsFromPanelOrder, moveLayoutPanel } from "./widgetLayout";
 import { navigationGeometry, navigationHostFor, islandLayoutScaleForWorkArea, physicalHostSizeFor, placementFor, fitIslandViewport } from "./islandGeometry";
 
 describe("widget layout", () => {
+  it("repartitions side panels when music itself moves",()=>{
+    const order=widgetPanelOrder({left:["clock"],right:["system"]});
+    expect(widgetsFromPanelOrder(moveLayoutPanel(order,"music",2))).toEqual({left:["clock","system"],right:[]});
+    expect(widgetsFromPanelOrder(moveLayoutPanel(order,"music",0))).toEqual({left:[],right:["clock","system"]});
+  });
   it("fits the real WebView while preserving its edge anchor and restores full size after resize", () => {
     const host={width:949,height:237};
     const cramped=fitIslandViewport(host,0.508,{width:600,height:200});

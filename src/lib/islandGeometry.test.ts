@@ -27,9 +27,9 @@ describe("island geometry", () => {
     expect(navigationGeometry("timer", 5, 45, "floating", "top", 32, 480).width).toBeGreaterThanOrEqual(300);
   });
 
-  it("keeps the restored compact, hover and expanded dimensions", () => {
+  it("keeps compact dimensions unchanged on hover", () => {
     expect(geometryFor("compact")).toEqual({ width: 80, height: 28, radius: 14 });
-    expect(geometryFor("hover")).toEqual({ width: 90, height: 30, radius: 15 });
+    expect(geometryFor("hover")).toEqual({ width: 80, height: 28, radius: 14 });
     expect(geometryFor("expanded", 38)).toEqual({ width: 600, height: 210, radius: 38 });
     expect(geometryFor("expanded", 0)).toEqual({ width: 600, height: 210, radius: 0 });
     expect(geometryFor("hidden")).toEqual({ width: 80, height: 28, radius: 14 });
@@ -38,7 +38,7 @@ describe("island geometry", () => {
 
   it("rotates compact geometry on side edges but keeps expanded content horizontal", () => {
     expect(geometryFor("compact", 45, "left")).toEqual({ width: 28, height: 80, radius: 14 });
-    expect(geometryFor("hover", 45, "right")).toEqual({ width: 30, height: 90, radius: 15 });
+    expect(geometryFor("hover", 45, "right")).toEqual({ width: 28, height: 80, radius: 14 });
     expect(geometryFor("expanded", 32, "left")).toEqual({ width: 600, height: 210, radius: 32 });
   });
 
@@ -69,10 +69,10 @@ describe("island geometry", () => {
     expect(geometryFor("expanded").width).toBe(600);
   });
 
-  it("supports an adjustable compact long axis and caps hover at expanded width", () => {
+  it("keeps the hover geometry equal to the adjustable compact size", () => {
     expect(geometryFor("compact", 45, "top", 200)).toEqual({ width: 200, height: 28, radius: 14 });
-    expect(geometryFor("hover", 45, "top", 200)).toEqual({ width: 210, height: 30, radius: 15 });
-    expect(geometryFor("hover", 45, "top", 300)).toEqual({ width: 300, height: 30, radius: 15 });
+    expect(geometryFor("hover", 45, "top", 200)).toEqual({ width: 200, height: 28, radius: 14 });
+    expect(geometryFor("hover", 45, "top", 300)).toEqual({ width: 300, height: 28, radius: 14 });
     expect(geometryFor("compact", 45, "left", 300)).toEqual({ width: 28, height: 300, radius: 14 });
     expect(hostFor("edge", "left", 300)).toEqual({ width: 600, height: 300 });
   });

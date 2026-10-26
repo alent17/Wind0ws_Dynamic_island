@@ -2132,6 +2132,7 @@ pub fn run() {
             commands::get_media_info_cmd,
             commands::list_media_sessions,
             commands::get_idle_snapshot,
+            commands::get_system_snapshot,
             commands::get_weather_snapshot,
             commands::search_weather_locations,
             commands::get_netease_song_info_cmd,

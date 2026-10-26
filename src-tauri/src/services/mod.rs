@@ -9,6 +9,7 @@ pub mod cache;
 pub mod color;
 pub(crate) mod http_budget;
 pub mod idle;
+mod gpu_usage;
 pub mod image;
 pub(crate) mod image_budget;
 pub mod media;

@@ -14,6 +14,8 @@ struct SystemCollector {
     system: System,
     networks: Networks,
     last_refresh: Instant,
+    last_snapshot: Option<IdleSnapshot>,
+    gpu: Option<super::gpu_usage::GpuUsage>,
 }
 
 impl Default for SystemCollector {
@@ -24,6 +26,8 @@ impl Default for SystemCollector {
             system: System::new(),
             networks: Networks::new_with_refreshed_list(),
             last_refresh: Instant::now(),
+            last_snapshot: None,
+            gpu: super::gpu_usage::GpuUsage::new(),
         }
     }
 }
@@ -58,6 +62,9 @@ fn system_snapshot() -> AppResult<IdleSnapshot> {
         .get_or_init(|| Mutex::new(SystemCollector::default()))
         .lock()
         .map_err(|_| AppError::lock("Failed to lock idle system collector"))?;
+    if collector.last_refresh.elapsed() < Duration::from_millis(750) {
+        if let Some(snapshot) = &collector.last_snapshot { return Ok(snapshot.clone()); }
+    }
     let elapsed = collector.last_refresh.elapsed().as_secs_f64().max(0.1);
     collector.system.refresh_cpu();
     collector.system.refresh_memory();
@@ -76,19 +83,24 @@ fn system_snapshot() -> AppResult<IdleSnapshot> {
                 )
             });
     let (battery_percent, battery_charging) = battery_status();
-    Ok(IdleSnapshot {
+    let snapshot = IdleSnapshot {
         cpu_percent: collector.system.global_cpu_info().cpu_usage(),
         memory_percent: if total > 0 {
             used as f32 / total as f32 * 100.0
         } else {
             0.0
         },
+        memory_used_bytes: used,
+        memory_total_bytes: total,
+        gpu_percent: collector.gpu.as_mut().and_then(|gpu| gpu.sample()),
         upload_bytes_per_second: (upload as f64 / elapsed) as u64,
         download_bytes_per_second: (download as f64 / elapsed) as u64,
         battery_percent,
         battery_charging,
         ..IdleSnapshot::default()
-    })
+    };
+    collector.last_snapshot = Some(snapshot.clone());
+    Ok(snapshot)
 }
 
 #[derive(Deserialize)]
@@ -321,6 +333,11 @@ async fn weather_for_or_cached(location: &WeatherLocation) -> AppResult<WeatherC
             Ok(cached_weather_for_location(&cache, location))
         }
     }
+}
+
+pub async fn get_system_snapshot() -> AppResult<IdleSnapshot> {
+    tauri::async_runtime::spawn_blocking(system_snapshot).await
+        .map_err(|e| AppError::business(3005, format!("System snapshot task failed: {e}")))?
 }
 
 pub async fn get_idle_snapshot(app: &AppHandle) -> AppResult<IdleSnapshot> {

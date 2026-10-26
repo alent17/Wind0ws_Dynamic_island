@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { loadImage } from "$lib/imageLoad";
+  import { isHighResolutionSmtcCover } from "$lib/smtcArtworkQuality";
   import { artworkFillFromImage } from "$lib/artworkFill";
   import { appOverlayDecision, artworkValue, mergeProgressAnchorFields, nativeStampDecision, readNativeMediaStamp, snapshotDecision, withoutArtwork, type ArtworkSnapshotToken, type NativeMediaStamp } from "$lib/mediaArtwork";
   import { createCanvasArtworkRenderer, type CanvasArtworkRequest } from "$lib/canvasArtwork";
@@ -91,6 +92,7 @@
   let pendingResolvedCover = "";
   let albumFill = $state("#000000");
   let isHovered = $state(false);
+  let isWindowFullscreen = $state(false);
   let hoverLeaveTimeout: ReturnType<typeof setTimeout> | null = null;
   let captureSnapshot = $state<CaptureSnapshot>({ ...EMPTY_CAPTURE_SNAPSHOT });
   const capturePreferences = settingsStore;
@@ -202,7 +204,18 @@
     }, 80);
   }
 
+  async function refreshFullscreenState(appWindow = getCurrentWindow()) {
+    try {
+      isWindowFullscreen = await appWindow.isFullscreen();
+    } catch (error) {
+      console.error("[悬浮窗] 读取全屏状态失败:", error);
+      isWindowFullscreen = false;
+    }
+  }
+
   let coverPreload: AbortController | undefined;
+  let smtcCoverProbe: AbortController | undefined;
+  let coverLookupTrackKey = "";
   function cancelCoverPreload() { coverPreload?.abort(); coverPreload = undefined; pendingResolvedCover = ""; }
   async function preloadCover(url: string): Promise<boolean> {
     cancelCoverPreload();
@@ -224,6 +237,15 @@
     fallbackCover: string,
     alreadyResolved = false,
   ) {
+    if (!alreadyResolved && resolvedTrackKey === trackKey && resolvedTrackCover) {
+      systemCover = fallbackCover || systemCover;
+      transitionCover(resolvedTrackCover, "left");
+      return;
+    }
+    if (!alreadyResolved && smtcCoverProbe && coverLookupTrackKey === trackKey) return;
+
+    smtcCoverProbe?.abort(); smtcCoverProbe = undefined;
+    coverLookupTrackKey = "";
     coverOwner.cancel(); cancelCoverPreload();
     const requestId = ++coverRequestId;
 
@@ -243,10 +265,30 @@
     transitionCover(systemCover, "left");
     if (!enableHDCover || !title) return;
 
+    const probe = new AbortController();
+    smtcCoverProbe = probe;
+    coverLookupTrackKey = trackKey;
     try {
+      const smtcAlreadyHighResolution = await isHighResolutionSmtcCover(fallbackCover, probe.signal);
+      if (
+        disposed ||
+        probe.signal.aborted ||
+        requestId !== coverRequestId ||
+        trackKey !== currentTrackKey ||
+        !enableHDCover
+      ) {
+        return;
+      }
+      if (smtcAlreadyHighResolution) {
+        resolvedTrackCover = fallbackCover;
+        resolvedTrackKey = trackKey;
+        return;
+      }
+
       const resolved = await coverOwner.request<import("$lib/api/types").ResolvedCover | null>({ title, artist, source: source || "generic" }, fallbackCover);
       if (
         !resolved?.url ||
+        probe.signal.aborted ||
         requestId !== coverRequestId ||
         trackKey !== currentTrackKey ||
         !enableHDCover
@@ -259,8 +301,13 @@
         : resolved.url;
       await acceptResolvedCover(trackKey, resolvedUrl, requestId);
     } catch (error) {
-      if (!disposed && requestId === coverRequestId && trackKey === currentTrackKey) {
+      if (!(error instanceof DOMException && error.name === "AbortError") && !disposed && requestId === coverRequestId && trackKey === currentTrackKey) {
         console.warn("[高清封面] 获取失败，继续使用系统封面:", error);
+      }
+    } finally {
+      if (smtcCoverProbe === probe) {
+        smtcCoverProbe = undefined;
+        if (resolvedTrackKey !== trackKey && coverLookupTrackKey === trackKey) coverLookupTrackKey = "";
       }
     }
   }
@@ -286,6 +333,8 @@
   function setHighDefinitionCover(enabled: boolean) {
     if (enableHDCover === enabled) return;
     enableHDCover = enabled;
+    smtcCoverProbe?.abort(); smtcCoverProbe = undefined;
+    coverLookupTrackKey = "";
     coverRequestId++; coverOwner.cancel(); cancelCoverPreload();
     if (!currentTrackKey) return;
     if (enabled) {
@@ -622,10 +671,12 @@
     trackListener(unlistenCaptureMode);
 
     const appWindow = getCurrentWindow();
+    await refreshFullscreenState(appWindow);
     windowSize = { width: window.innerWidth, height: window.innerHeight };
 
     // 监听窗口大小变化
     unlistenResize = await appWindow.onResized(({ payload }) => {
+      void refreshFullscreenState(appWindow);
       // 锁定时忽略大小变化
       if (isFloatingWindowLocked) {
         return;
@@ -744,7 +795,14 @@
       if (cover === undefined) return;
       if (payload.artworkResolved && cover) {
         if (!enableHDCover) return;
-        if (displayCover === cover || pendingResolvedCover === cover) return;
+        if (pendingResolvedCover === cover) return;
+        smtcCoverProbe?.abort(); smtcCoverProbe = undefined;
+        coverLookupTrackKey = "";
+        if (displayCover === cover) {
+          coverOwner.cancel(); coverRequestId++;
+          resolvedTrackCover = cover; resolvedTrackKey = currentTrackKey;
+          return;
+        }
         coverOwner.cancel(); cancelCoverPreload(); coverRequestId++;
         if (displayCover !== cover) void acceptResolvedCover(currentTrackKey, cover, coverRequestId);
         return;
@@ -754,6 +812,8 @@
       mediaState.albumArt = cover;
       if (!cover) {
         systemCover = ""; resolvedTrackCover = ""; resolvedTrackKey = "";
+        smtcCoverProbe?.abort(); smtcCoverProbe = undefined;
+        coverLookupTrackKey = "";
         coverRequestId++; coverOwner.cancel(); cancelCoverPreload(); pixelOwner.cancel();
         transitionCover("");
       } else {
@@ -876,6 +936,8 @@
         lastReportedPosition = undefined;
         pendingSeekUntil = 0;
         mvRequestId += 1;
+        smtcCoverProbe?.abort(); smtcCoverProbe = undefined;
+        coverLookupTrackKey = "";
         coverRequestId += 1; coverOwner.cancel(); cancelCoverPreload(); pixelOwner.cancel();
         durationRequestId += 1;
         mediaState = {
@@ -1057,6 +1119,8 @@
     mvPlaybackRevision += 1;
     mvPendingPlayRevision = undefined;
     mvVideo?.pause();
+    smtcCoverProbe?.abort(); smtcCoverProbe = undefined;
+    coverLookupTrackKey = "";
     coverOwner.cancel(); cancelCoverPreload(); pixelOwner.cancel();
     pageRequests.abort();
     coverRequestId++; mvRequestId++; durationRequestId++;
@@ -1548,6 +1612,7 @@
 <div
   class="player"
   class:hovered={isHovered}
+  class:fullscreen={isWindowFullscreen}
   class:locked={isFloatingWindowLocked}
   class:pixelated={enablePixelArt}
   class:circular-album={floatingCircularAlbum}
@@ -1898,11 +1963,20 @@
     --toolbar-height: 29px;
   }
 
+  .player.fullscreen {
+    --toolbar-height: 29px;
+  }
+
   .player.hovered .bg-solid {
     border-radius: var(--floating-radius);
   }
 
   .player.hovered .drag-bar {
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .player.fullscreen .drag-bar {
     visibility: visible;
     transform: translateY(0);
   }
@@ -2195,6 +2269,10 @@
     display: none;
   }
 
+  .player.compact-cover.fullscreen .drag-bar {
+    display: flex;
+  }
+
   .compact-controls {
     position: absolute;
     inset: 0;
@@ -2449,12 +2527,12 @@
   .corner-resize {
     position: absolute;
     z-index: 400;
-    width: 14px;
-    height: 14px;
+    width: 8px;
+    height: 8px;
     pointer-events: auto;
   }
 
-  /* Broad edge hit areas make resizing easier on the borderless window. */
+  /* Keep edge hit areas narrow so they don't intercept nearby controls. */
   .edge-resize {
     position: absolute;
     z-index: 399;
@@ -2467,18 +2545,18 @@
   .edge-resize-s {
     right: 40px;
     left: 40px;
-    height: 18px;
+    height: 8px;
     cursor: ns-resize;
   }
 
   .edge-resize-n { top: 0; }
-  .edge-resize-s { bottom: 0; height: 12px; }
+  .edge-resize-s { bottom: 0; }
 
   .edge-resize-e,
   .edge-resize-w {
     top: 40px;
     bottom: 40px;
-    width: 18px;
+    width: 8px;
     cursor: ew-resize;
   }
 
@@ -2506,8 +2584,8 @@
   .corner-resize-se {
     right: 0;
     bottom: 0;
-    width: 18px;
-    height: 18px;
+    width: 8px;
+    height: 8px;
     cursor: nwse-resize;
     touch-action: none;
     user-select: none;

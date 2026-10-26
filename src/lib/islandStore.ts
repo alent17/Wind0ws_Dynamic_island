@@ -15,6 +15,7 @@ export type IslandViewState =
   | { type: "volume" }
   | { type: "clock" }
   | { type: "weather" }
+  | { type: "system" }
   | { type: "expanded"; page: IslandPage };
 
 export type IslandEvent =
@@ -35,8 +36,8 @@ const initialState: IslandState = {
 
 export const islandState = writable<IslandState>(initialState);
 
-export const islandMode = derived(islandState, ({ expanded, hovering }): IslandMode =>
-  expanded ? "expanded" : hovering ? "hover" : "compact",
+export const islandMode = derived(islandState, ({ expanded }): IslandMode =>
+  expanded ? "expanded" : "compact",
 );
 
 export const islandView = derived(islandState, ({ expanded, activePage, hasMediaSession }): IslandViewState => {

@@ -28,6 +28,25 @@ body {
 
 button, input, select, textarea { font: inherit; }
 
+/* Display text stays unselectable, including progress labels in every window. */
+body, body * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Settings fields still support normal text editing and copying. */
+body input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+body textarea,
+body [contenteditable="true"],
+body [contenteditable="true"] * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+img {
+  -webkit-user-drag: none;
+}
+
 /* Keep every Island action consistent with the floating player's buttons. */
 .island-frame button:not(.cover):not([data-layout-edit-control]) {
   background: transparent !important;

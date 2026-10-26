@@ -7,6 +7,7 @@ export type AppLanguage = "system" | "zh-CN" | "en" | "ja";
 
 export interface AppSettings {
   islandWidgets: IslandWidgets;
+  islandWidgetsEnabled: boolean;
   neteaseProgressMode: NeteaseProgressMode;
   neteaseAutoConnect: boolean;
   neteaseExecutablePath: string | null;
@@ -30,7 +31,11 @@ export interface AppSettings {
   enableAnimations: boolean;
   windowOpacity: number;
   alwaysOnTop: boolean;
+  keepIslandExpanded: boolean;
   floatingWindowAlwaysOnTop: boolean;
+  wheelVolumeControl: boolean;
+  volumeProtectionEnabled: boolean;
+  volumeProtectionLimit: number;
   reduceAnimations: boolean;
   showDebugInfo: boolean;
   logLevel: string;
@@ -194,6 +199,7 @@ export interface AppError {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   islandWidgets: { left: [], right: [] },
+  islandWidgetsEnabled: true,
   neteaseProgressMode: "real",
   neteaseAutoConnect: false,
   neteaseExecutablePath: null,
@@ -217,7 +223,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   enableAnimations: true,
   windowOpacity: 255,
   alwaysOnTop: true,
+  keepIslandExpanded: false,
   floatingWindowAlwaysOnTop: true,
+  wheelVolumeControl: false,
+  volumeProtectionEnabled: false,
+  volumeProtectionLimit: 80,
   reduceAnimations: false,
   showDebugInfo: false,
   logLevel: "Info",
@@ -280,6 +290,7 @@ export function normalizeAppSettings(value: Partial<AppSettings>): AppSettings {
   const merged = { ...DEFAULT_SETTINGS, ...value } as AppSettings;
   merged.islandWidgets = normalizeWidgets(value.islandWidgets);
   merged.playerSourceOverrides = Object.fromEntries(Object.entries(value.playerSourceOverrides ?? {}).filter(([id, source]) => id.trim().length > 0 && id.length <= 1024 && source === "netease"));
+  merged.volumeProtectionLimit = Math.min(100, Math.max(40, Number.isFinite(Number(value.volumeProtectionLimit)) ? Math.round(Number(value.volumeProtectionLimit)) : 80));
   for (const key of ["floatingExpandedLength", "edgeExpandedLength"] as const) {
     const length = Number(value[key] ?? 600);
     merged[key] = Math.min(900, Math.max(480, Number.isFinite(length) ? Math.round(length) : 600));

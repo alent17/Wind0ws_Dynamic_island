@@ -36,6 +36,9 @@ pub struct ResolvedCover {
 pub struct IdleSnapshot {
     pub cpu_percent: f32,
     pub memory_percent: f32,
+    pub memory_used_bytes: u64,
+    pub memory_total_bytes: u64,
+    pub gpu_percent: Option<f32>,
     pub upload_bytes_per_second: u64,
     pub download_bytes_per_second: u64,
     pub battery_percent: Option<u8>,

@@ -13,6 +13,7 @@ use tauri::{AppHandle, Emitter, Manager};
 const DEFAULT_FLOATING_WINDOW_WIDTH: u32 = 260;
 const DEFAULT_FLOATING_WINDOW_HEIGHT: u32 = 360;
 const FLOATING_WINDOW_TRANSITION_MS: u64 = 260;
+const FLOATING_WINDOW_TRANSITION_OFFSET_PX: i32 = 32;
 static FLOATING_WINDOW_MOTION_REVISION: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
@@ -410,23 +411,23 @@ fn floating_window_animations_enabled(app: &AppHandle) -> bool {
         .unwrap_or(true)
 }
 
-fn monitor_left_edge_for_position(
+fn floating_window_transition_offset(
     window: &tauri::WebviewWindow,
     x: i32,
     y: i32,
     width: u32,
     height: u32,
-) -> i32 {
+) -> (i32, i32) {
     let Ok(monitors) = window.available_monitors() else {
-        return 0;
+        return (-FLOATING_WINDOW_TRANSITION_OFFSET_PX, 0);
     };
     if monitors.is_empty() {
-        return 0;
+        return (-FLOATING_WINDOW_TRANSITION_OFFSET_PX, 0);
     }
 
     let center_x = x as i64 + width as i64 / 2;
     let center_y = y as i64 + height as i64 / 2;
-    let nearest = monitors
+    let monitor = monitors
         .iter()
         .find(|monitor| {
             let position = monitor.position();
@@ -458,7 +459,32 @@ fn monitor_left_edge_for_position(
             })
         });
 
-    nearest.map(|monitor| monitor.position().x).unwrap_or(0)
+    let Some(monitor) = monitor else {
+        return (-FLOATING_WINDOW_TRANSITION_OFFSET_PX, 0);
+    };
+    let monitor_position = monitor.position();
+    let monitor_size = monitor.size();
+    let left = monitor_position.x as i64;
+    let top = monitor_position.y as i64;
+    let right = left + monitor_size.width as i64;
+    let bottom = top + monitor_size.height as i64;
+    let distances = [
+        ((x as i64 - left).abs(), (-FLOATING_WINDOW_TRANSITION_OFFSET_PX, 0)),
+        (
+            (right - (x as i64 + width as i64)).abs(),
+            (FLOATING_WINDOW_TRANSITION_OFFSET_PX, 0),
+        ),
+        ((y as i64 - top).abs(), (0, -FLOATING_WINDOW_TRANSITION_OFFSET_PX)),
+        (
+            (bottom - (y as i64 + height as i64)).abs(),
+            (0, FLOATING_WINDOW_TRANSITION_OFFSET_PX),
+        ),
+    ];
+    distances
+        .into_iter()
+        .min_by_key(|(distance, _)| *distance)
+        .map(|(_, offset)| offset)
+        .unwrap_or((-FLOATING_WINDOW_TRANSITION_OFFSET_PX, 0))
 }
 
 fn cubic_bezier_component(t: f64, first: f64, second: f64) -> f64 {
@@ -1529,12 +1555,13 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
         let size = window
             .outer_size()
             .map_err(|e| AppError::window(e.to_string()))?;
-        let start_x =
-            monitor_left_edge_for_position(&window, target.x, target.y, size.width, size.height)
-                - size.width as i32;
+        let (offset_x, offset_y) =
+            floating_window_transition_offset(&window, target.x, target.y, size.width, size.height);
+        let start_x = target.x.saturating_add(offset_x);
+        let start_y = target.y.saturating_add(offset_y);
         if animate {
             window
-                .set_position(tauri::PhysicalPosition::new(start_x, target.y))
+                .set_position(tauri::PhysicalPosition::new(start_x, start_y))
                 .map_err(|e| AppError::window(e.to_string()))?;
         }
         window.show().map_err(|e| AppError::window(e.to_string()))?;
@@ -1552,12 +1579,13 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
     let size = window
         .outer_size()
         .map_err(|e| AppError::window(e.to_string()))?;
-    let start_x =
-        monitor_left_edge_for_position(&window, target.x, target.y, size.width, size.height)
-            - size.width as i32;
+    let (offset_x, offset_y) =
+        floating_window_transition_offset(&window, target.x, target.y, size.width, size.height);
+    let start_x = target.x.saturating_add(offset_x);
+    let start_y = target.y.saturating_add(offset_y);
     if animate {
         window
-            .set_position(tauri::PhysicalPosition::new(start_x, target.y))
+            .set_position(tauri::PhysicalPosition::new(start_x, start_y))
             .map_err(|e| AppError::window(e.to_string()))?;
     }
     window.show().map_err(|e| AppError::window(e.to_string()))?;
@@ -1633,18 +1661,26 @@ pub async fn close_floating_window(
             let position = window
                 .outer_position()
                 .map_err(|e| AppError::window(e.to_string()))?;
-            let size = window
-                .outer_size()
-                .map_err(|e| AppError::window(e.to_string()))?;
-            let target_x = monitor_left_edge_for_position(
-                &window,
-                position.x,
-                position.y,
-                size.width,
-                size.height,
-            ) - size.width as i32;
+            let target = if animate {
+                let size = window
+                    .outer_size()
+                    .map_err(|e| AppError::window(e.to_string()))?;
+                let (offset_x, offset_y) = floating_window_transition_offset(
+                    &window,
+                    position.x,
+                    position.y,
+                    size.width,
+                    size.height,
+                );
+                tauri::PhysicalPosition::new(
+                    position.x.saturating_add(offset_x),
+                    position.y.saturating_add(offset_y),
+                )
+            } else {
+                position
+            };
             let completed =
-                animate_floating_window_position(window.clone(), target_x, position.y, animate)
+                animate_floating_window_position(window.clone(), target.x, target.y, animate)
                     .await?;
             if !completed {
                 return Ok(());

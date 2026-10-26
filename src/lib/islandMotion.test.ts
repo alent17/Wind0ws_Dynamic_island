@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { anchoredLayoutOffset, cubicBezierEasing, islandMorphEasing } from "./islandMotion";
+import { anchoredLayoutOffset, cubicBezierEasing, islandMorphEasing, islandShapeMotion, widgetLayoutMotion } from "./islandMotion";
 
 describe("island motion", () => {
+  it("shares island expansion and collapse timing with widget layout changes", () => {
+    expect(widgetLayoutMotion(true)).toEqual(islandShapeMotion("compact","expanded"));
+    expect(widgetLayoutMotion(false)).toEqual(islandShapeMotion("expanded","compact"));
+    expect(widgetLayoutMotion(true,true).duration).toBe(0);
+    expect(widgetLayoutMotion(false,true).duration).toBe(0);
+  });
   it("keeps target layouts on their attachment edge as surface dimensions change", () => {
     const surface = { width: 420, height: 180 };
     const compact = { width: 170, height: 28 };

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 test.use({ viewport: {width:1800,height:900} });
 
-test("larger editing controls keep a red circular remove button under production styles", async ({page}) => {
+test("editing controls use the neutral island button scheme under production styles", async ({page}) => {
   await openEditor(page);
   await page.addStyleTag({content:readFileSync("src/app.css", "utf8").replace(/^@import[^\n]*\n/, "")});
   await page.evaluate(() => (window as any).configureIsland({widgets:{left:["timer"],right:[]}}));
@@ -13,18 +13,30 @@ test("larger editing controls keep a red circular remove button under production
   const remove = page.locator(".remove");
   await expect(remove).toHaveCSS("width", "36px");
   await expect(remove).toHaveCSS("height", "36px");
-  await expect(remove).toHaveCSS("border-top-left-radius", "50%");
-  await expect(remove).toHaveCSS("background-color", "rgb(197, 59, 59)");
+  await expect(remove).toHaveCSS("border-top-left-radius", "12px");
+  await expect(remove).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(remove).toHaveCSS("border-top-style", "none");
+  await expect(remove).toHaveCSS("color", "rgb(255, 69, 58)");
   await remove.hover();
-  await expect(remove).toHaveCSS("background-color", "rgb(226, 75, 69)");
+  await expect(remove).toHaveCSS("background-color", "rgba(255, 255, 255, 0.1)");
+  await expect(remove).toHaveCSS("color", "rgb(255, 69, 58)");
   await remove.focus();
-  await expect(remove).toHaveCSS("background-color", "rgb(226, 75, 69)");
+  await expect(remove).toHaveCSS("background-color", "rgba(255, 255, 255, 0.1)");
   await expect(page.locator(".edit-actions .done")).toHaveCSS("width", "52px");
   await expect(page.locator(".app-icon").first()).toHaveCSS("width", "52px");
-  await expect(page.locator(".grip")).toHaveCSS("min-height", "44px");
-  await expect(page.locator(".drop-slot").first()).toHaveCSS("width", "36px");
+  await expect(page.locator(".app-icon").first()).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(page.locator(".edit-actions .done")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(page.locator(".edit-actions .done")).toHaveCSS("border-top-style", "none");
+  await expect(page.locator(".edit-actions .cancel")).toHaveCSS("color", "rgb(255, 69, 58)");
+  await expect(page.locator(".app-icon").first()).toHaveCSS("border-top-style", "none");
+  await expect(page.locator(".edit-actions .done")).toHaveCSS("border-top-left-radius", "12px");
+  await expect(page.locator(".widget-card")).toHaveCSS("outline-style", "solid");
+  await expect(page.locator(".widget-card")).toHaveCSS("outline-width", "2px");
+  await expect(page.locator(".drop-slot")).toHaveCount(0);
+  await expect(page.locator(".grip").first()).toHaveCSS("min-height", "44px");
+  await expect(page.locator(".music-slot .drag-dots i")).toHaveCount(3);
   await expect(page.locator(".editor-bar")).toHaveCSS("background-color", "rgb(0, 0, 0)");
-  const tools = await page.locator(".card-tools").boundingBox();
+  const tools = await page.locator('[data-widget-kind="timer"] .card-tools').boundingBox();
   const content = await page.locator('[data-widget-kind="timer"] .widget-content').boundingBox();
   expect(tools!.y + tools!.height).toBeLessThanOrEqual(content!.y);
   await page.screenshot({path:"build/widget-editor-large-controls.png"});
@@ -60,7 +72,7 @@ async function openEditor(page: Page) {
 }
 async function add(page: Page, kind: string, side: string) {
   await page.locator(`.catalog-item`).filter({has: page.locator(`.app-icon.${kind}`)}).click();
-  await page.locator(`.side[data-widget-side="${side}"] .drop-slot.last`).click();
+  if(side === "left") await page.locator(`[data-widget-kind="${kind}"] .card-tools button`).first().click();
 }
 
 test("two same-side widgets, limit, reordering, save and cancel with a black toolbar", async ({page}) => {
@@ -85,10 +97,10 @@ test("two same-side widgets, limit, reordering, save and cancel with a black too
 test("drag across music and keep draft after save failure", async ({page}) => {
   await openEditor(page);
   const source = await page.locator('.catalog-item').filter({has: page.locator('.app-icon.timer')}).boundingBox();
-  const target = await page.locator('.side[data-widget-side="right"] .drop-slot').boundingBox();
+  const target = await page.locator(".music-slot").boundingBox();
   if (!source || !target) throw new Error("Missing drag bounds");
   await page.mouse.move(source.x + source.width / 2, source.y + 15); await page.mouse.down();
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, {steps: 12}); await page.mouse.up();
+  await page.mouse.move(target.x + target.width - 20, target.y + 90, {steps: 12}); await page.mouse.up();
   await expect(page.locator('.side[data-widget-side="right"] .widget-card')).toHaveCount(1);
   await page.evaluate(() => (window as any).configureIsland({saveFails: true}));
   await page.locator(".edit-actions .done").click();
@@ -99,24 +111,20 @@ test("drag across music and keep draft after save failure", async ({page}) => {
   await expect(page.locator(".editor-bar")).toHaveCount(0);
 });
 
-test("long press enters after two seconds; early release, movement and controls do not", async ({page}) => {
+test("right-click opens the island menu and long press no longer edits", async ({page}) => {
   await page.goto("/ui-tests/island-fixture.html");
-  await page.evaluate(() => (window as any).configureIsland({mode: "expanded"}));
+  await page.evaluate(() => (window as any).configureIsland({mode:"expanded"}));
   const pane = await page.locator(".music-pane").boundingBox();
-  if (!pane) throw new Error("Missing music pane");
-  const x = pane.x + pane.width / 2, y = pane.y + 8;
-  await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(200); await page.mouse.up();
-  await expect(page.locator(".editor-bar")).toHaveCount(0);
-  await page.evaluate(() => (window as any).configureIsland({mode: "expanded"}));
-  await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + 12, y); await page.waitForTimeout(2100); await page.mouse.up();
-  await expect(page.locator(".editor-bar")).toHaveCount(0);
-  const play = await page.locator(".transport-controls .play").boundingBox();
-  if (!play) throw new Error("Missing play control");
-  await page.mouse.move(play.x + 20, play.y + 20); await page.mouse.down(); await page.waitForTimeout(2100); await page.mouse.up();
-  await expect(page.locator(".editor-bar")).toHaveCount(0);
-  await page.mouse.move(x, y); await page.mouse.down();
-  await expect(page.locator(".editor-bar")).toBeVisible({timeout: 4000}); await page.mouse.up();
+  const x = pane!.x + pane!.width / 2, y = pane!.y + 8;
+  await page.mouse.move(x,y); await page.mouse.down(); await page.waitForTimeout(2200);
+  await expect(page.locator(".editor-bar")).toHaveCount(0); await page.mouse.up();
+  await page.evaluate(() => (window as any).configureIsland({mode:"expanded"}));
+  await page.mouse.click(x,y,{button:"right"});
+  await expect(page.getByRole("menu")).toBeVisible();
+  expect(await page.getByRole("menuitem").count()).toBeGreaterThanOrEqual(2);
+  await page.getByRole("menuitem").first().click();
   await expect(page.locator(".editor-bar")).toBeVisible();
+  await expect(page.getByRole("menu")).toHaveCount(0);
 });
 
 test("composed panels fit all edges, restore after collapse, and discard hidden drafts", async ({page}) => {
@@ -124,7 +132,7 @@ test("composed panels fit all edges, restore after collapse, and discard hidden 
   await page.locator('.edit-actions button').first().click();
   await page.evaluate(() => (window as any).configureIsland({style:"edge",scale:.625}));
   await page.locator(".island-surface").focus(); await page.keyboard.press("F2");
-  for (const selector of ['.catalog-item:has(.app-icon.timer)', '.side[data-widget-side="left"] .drop-slot.last']) {
+  for (const selector of ['.catalog-item:has(.app-icon.timer)']) {
     const box = await page.locator(selector).boundingBox();
     if (!box) throw new Error("Missing empty-layout editor control");
     await page.mouse.click(box.x + box.width/2, box.y + box.height/2);

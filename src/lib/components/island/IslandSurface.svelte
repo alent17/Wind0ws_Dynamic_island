@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack, tick } from "svelte";
   import { spring, tweened } from "svelte/motion";
-  import { Airplay, ArrowLeft, Clock, CloudSun, EyeOff, GalleryHorizontalEnd, Music2, Settings, Shuffle, SkipBack, SkipForward, Timer, Volume2 } from "lucide-svelte";
+  import { Activity, Airplay, ArrowLeft, Clock, CloudSun, EyeOff, GalleryHorizontalEnd, Music2, PanelsTopLeft, Pencil, Settings, Shuffle, SkipBack, SkipForward, Timer, Volume2 } from "lucide-svelte";
   import MediaProgress from "$lib/components/media/MediaProgress.svelte";
   import PlayPauseIcon from "$lib/components/media/PlayPauseIcon.svelte";
   import RollingNumber from "$lib/components/time/RollingNumber.svelte";
@@ -12,6 +12,8 @@
   import SmtcModeControls from "$lib/components/media/SmtcModeControls.svelte";
   import TimerPanel from "$lib/components/time/TimerPanel.svelte";
   import MarqueeTitle from "$lib/components/media/MarqueeTitle.svelte";
+  import SystemMonitor from "$lib/components/island/SystemMonitor.svelte";
+  import type { SystemSnapshot } from "$lib/systemMonitor";
   import WidgetLayout from "$lib/components/island/WidgetLayout.svelte";
   import { normalizeWidgets, type IslandWidgets } from "$lib/widgetLayout";
   import InfoPanel from "$lib/components/island/InfoPanel.svelte";
@@ -20,7 +22,7 @@
   import WeatherIcon from "$lib/components/media/WeatherIcon.svelte";
   import type { IslandTool } from "$lib/featureRail";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
-  import { ISLAND_MOTION, islandSettleEasing, islandShapeMotion, anchoredLayoutOffset } from "$lib/islandMotion";
+  import { ISLAND_MOTION, widgetLayoutMotion, islandSettleEasing, islandShapeMotion, anchoredLayoutOffset } from "$lib/islandMotion";
   import type { AudioDeviceInfo, MediaState, SpectrumMode, SystemAudioState, WeatherForecastDay } from "$lib/api/types";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
   import {
@@ -40,6 +42,18 @@
     type IslandStyle,
   } from "$lib/islandGeometry";
 
+  function volumeWheel(node: HTMLElement) {
+    const handleWheel = (event: WheelEvent) => {
+      if (!wheelVolumeControl || !onWheelVolume || !interactive || !visible || mode === "hidden" || editing || event.defaultPrevented || event.ctrlKey || event.deltaY === 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (volumeProtectionPrompt) return;
+      onWheelVolume(event.deltaY < 0 ? 2 : -2);
+    };
+    node.addEventListener("wheel", handleWheel, { passive: false });
+    return { destroy: () => node.removeEventListener("wheel", handleWheel) };
+  }
+
   function animateSkip(event: MouseEvent, direction: -1 | 1) {
     if (!enableAnimations || reduceAnimations || prefersReducedMotion) return;
     const icon = (event.currentTarget as HTMLButtonElement).querySelector("svg");
@@ -57,7 +71,10 @@
 
   let {
     media,
+    monitorSnapshot,
     islandWidgets = { left: [], right: [] },
+    widgetsEnabled = true,
+    onWidgetsToggle,
     onWidgetsSave,
     onLayoutPreview,
     mode = "compact",
@@ -108,12 +125,21 @@
     seekError = "",
     onToggleFloating,
     onHideForTenSeconds,
+    keepIslandExpanded = false,
+    onToggleKeepIslandExpanded,
     onHoverChange,
     onRegionChange,
     systemAudio,
     onSettingsToggle,
     onAudioOpen,
     onAudioVolume,
+    wheelVolumeControl = false,
+    onWheelVolume,
+    wheelVolumeDisplay = null,
+    volumeProtectionPrompt = false,
+    volumeProtectionLimit = 80,
+    onConfirmVolumeIncrease,
+    onCancelVolumeIncrease,
     audioDevices = [],
     audioDeviceSwitching = false,
     onAudioDevice,
@@ -140,7 +166,10 @@
     enabledTools = ["settings", "floating", "volume", "timer", "hide"],
   } = $props<{
     media: MediaState;
+    monitorSnapshot?: SystemSnapshot | null;
     islandWidgets?: IslandWidgets;
+    widgetsEnabled?: boolean;
+    onWidgetsToggle?: (enabled: boolean) => Promise<void>;
     onWidgetsSave?: (layout: IslandWidgets) => Promise<void>;
     onLayoutPreview?: (layout: IslandWidgets, editing: boolean) => void;
     mode?: IslandMode;
@@ -191,12 +220,21 @@
     seekError?: string;
     onToggleFloating?: () => void;
     onHideForTenSeconds?: () => void;
+    keepIslandExpanded?: boolean;
+    onToggleKeepIslandExpanded?: () => void | Promise<void>;
     onSettingsToggle?: () => void;
     onHoverChange?: (hovering: boolean) => void;
     onRegionChange?: (change: IslandRegionChange) => void;
     systemAudio?: SystemAudioState | null;
     onAudioOpen?: () => void | Promise<void>;
     onAudioVolume?: (volumePercent: number) => void | Promise<void>;
+    wheelVolumeControl?: boolean;
+    onWheelVolume?: (delta: number) => void;
+    wheelVolumeDisplay?: number | null;
+    volumeProtectionPrompt?: boolean;
+    volumeProtectionLimit?: number;
+    onConfirmVolumeIncrease?: () => void;
+    onCancelVolumeIncrease?: () => void;
     audioDevices?: AudioDeviceInfo[];
     audioDeviceSwitching?: boolean;
     onAudioDevice?: (deviceId: string) => void | Promise<void>;
@@ -238,7 +276,9 @@
     0,
   ));
   const motionOptions = { duration: ISLAND_MOTION.layoutDuration, easing: islandSettleEasing };
+  const volumeHudMarks = Array.from({ length: 21 }, (_, index) => index * 5);
   let previousMotionMode = untrack(() => mode);
+  let expandedLayoutMotion = $state(untrack(() => mode === "expanded"));
   const widthMotion = tweened(initial.width, motionOptions);
   const heightMotion = tweened(initial.height, motionOptions);
   const radiusMotion = tweened(initial.radius, motionOptions);
@@ -269,15 +309,39 @@
   let menuScroll = $state(0);
   let pageRoot = $state<HTMLDivElement>();
   let editing = $state(false);
+  let contextMenuOpen = $state(false);
+  let contextMenuRoot = $state<HTMLDivElement>();
+  let surfaceRoot = $state<HTMLDivElement>();
+  let contextMenuRect = $state({x:0,y:0,width:224,height:216});
   let savingLayout = $state(false);
   let layoutError = $state(false);
   let draftLayout = $state<IslandWidgets>({left: [], right: []});
-  const currentLayout = $derived(editing ? draftLayout : normalizeWidgets(islandWidgets));
+  const configuredLayout = $derived(normalizeWidgets(islandWidgets));
+  const layoutActive = $derived(widgetsEnabled && configuredLayout.left.length + configuredLayout.right.length > 0);
+  let togglingWidgets = $state(false);
+  let widgetToggleError = $state(false);
+  const widgetReveal = tweened(untrack(() => widgetsEnabled ? 1 : 0));
+  let widgetRevealValue = $state(untrack(() => widgetsEnabled ? 1 : 0));
+  const unsubscribeWidgetReveal = widgetReveal.subscribe(value => widgetRevealValue = value);
+  onDestroy(unsubscribeWidgetReveal);
+  let previousWidgetsEnabled = untrack(() => widgetsEnabled);
+  const currentLayout = $derived(editing ? draftLayout : widgetsEnabled ? configuredLayout : {left:[],right:[]});
+  async function toggleWidgets() {
+    if (togglingWidgets || editing) return;
+    widgetToggleError = false;
+    if (!configuredLayout.left.length && !configuredLayout.right.length) {beginEditing();return;}
+    const next = !widgetsEnabled;
+    togglingWidgets = true;
+    try {await onWidgetsToggle?.(next);widgetsEnabled = next;}
+    catch {widgetToggleError = true;}
+    finally {togglingWidgets = false;}
+  }
   const widgetCount = $derived(currentLayout.left.length + currentLayout.right.length);
+  let previousWidgetCount = untrack(() => widgetCount);
   let editRevision = 0;
   function beginEditing() {
     if (!interactive || !visible || editing) return;
-    cancelLongPress();
+    contextMenuOpen = false;
     editRevision++;
     draftLayout = normalizeWidgets(islandWidgets);
     layoutError = false;
@@ -298,30 +362,33 @@
     savingLayout = true; layoutError = false;
     try {
       await onWidgetsSave?.(normalizeWidgets(draftLayout));
+      widgetsEnabled = true;
       if (revision === editRevision) editing = false;
     } catch {
       if (revision === editRevision) layoutError = true;
     } finally { savingLayout = false; }
   }
   $effect(() => {
+    if (!visible || mode === "hidden") contextMenuOpen = false;
     if ((!visible || mode === "hidden") && editing) { editing = false; untrack(() => editRevision++); }
   });
   $effect(() => { onLayoutPreview?.(currentLayout, editing); });
   const panelVisible = $derived(!editing && showCustomFunctionPanel && enabledTools.length > 0);
-  const toolOrder: IslandTool[] = ["timer", "volume", "floating", "settings", "hide", "clock", "weather"];
-  const toolIcons = { timer: Timer, volume: Volume2, floating: GalleryHorizontalEnd, settings: Settings, hide: EyeOff, clock: Clock, weather: CloudSun };
-  const toolLabels: Record<IslandTool, TranslationKey> = { timer: "timer", volume: "volume", floating: "floatingTool", settings: "settingsTool", hide: "hideTool", clock: "clock", weather: "weather" };
-  const shortLabels: Record<IslandTool, TranslationKey> = {timer:"timer",volume:"menuVolume",floating:"menuFloating",settings:"menuSettings",hide:"menuHide",clock:"clock",weather:"weather"};
-  const menuItems = $derived(toolOrder.filter(tool => enabledTools.includes(tool)).map(tool => ({ id: tool, label: t(toolLabels[tool]), shortLabel: t(shortLabels[tool]), icon: toolIcons[tool] })));
+  const toolOrder: IslandTool[] = ["timer", "volume", "floating", "settings", "hide", "clock", "weather", "system"];
+  const toolIcons = { timer: Timer, volume: Volume2, floating: GalleryHorizontalEnd, settings: Settings, hide: EyeOff, clock: Clock, weather: CloudSun, system: Activity };
+  const toolLabels: Record<IslandTool, TranslationKey> = { timer: "timer", volume: "volume", floating: "floatingTool", settings: "settingsTool", hide: "hideTool", clock: "clock", weather: "weather", system: "systemMonitor" };
+  const shortLabels: Record<IslandTool, TranslationKey> = {timer:"timer",volume:"menuVolume",floating:"menuFloating",settings:"menuSettings",hide:"menuHide",clock:"clock",weather:"weather",system:"systemMonitor"};
+  const menuItems = $derived(toolOrder.filter(tool => tool === "system" || enabledTools.includes(tool)).map(tool => ({ id: tool, label: t(toolLabels[tool]), shortLabel: t(shortLabels[tool]), icon: toolIcons[tool] })));
   const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius, expandedLength, widgetCount, editing));
   const expandedGeometry = $derived({
     ...scaleIslandGeometry(expandedBaseGeometry, expandedScale),
   });
 
   let compactRoot = $state<HTMLDivElement>();
-  let compactMode = $state<"compact" | "hover">(untrack(() => mode === "hover" ? "hover" : "compact"));
+  type SpectrumBox = { x: number; y: number; width: number; height: number };
+  let spectrumLayouts = $state<{ compact: SpectrumBox; expanded: SpectrumBox } | null>(null);
+  const compactMode = "compact" as const;
   let coverLayouts = $state<{ compact: { x: number; y: number; width: number }; expanded: { x: number; y: number; width: number } } | null>(null);
-  $effect(() => { if (mode === "compact" || mode === "hover") compactMode = mode; });
   const compactGeometry = $derived(geometryFor(compactMode, expandedRadius, edge, effectiveCompactLength));
   const compactInset = $derived(islandStyle === "edge" ? Math.min(collapsedEdgeShoulderRadius, Math.max(compactGeometry.width, compactGeometry.height) / 4, Math.min(compactGeometry.width, compactGeometry.height) / 2) : 0);
   const expandedInset = $derived(islandStyle === "edge" ? Math.min(expandedEdgeShoulderRadius, Math.max(expandedGeometry.width, expandedGeometry.height) / 4, Math.min(expandedGeometry.width, expandedGeometry.height) / 2) : 0);
@@ -365,6 +432,34 @@
     return () => { disposed = true; observer.disconnect(); };
   });
 
+  // Match the artwork's shared-element path instead of fading two spectra.
+  $effect(() => {
+    const compact = compactRoot, expanded = pageRoot;
+    compactGeometry; expandedGeometry; compactInset; expandedInset; panelVisible; renderedPage; idle; showTime; timerActive; showSpectrum;
+    if (!compact || !expanded) { spectrumLayouts = null; return; }
+    if (compactShapeMotion && !shapeSettled) return;
+    let disposed = false;
+    const measure = () => {
+      if (disposed) return;
+      const small = compact.querySelector<HTMLElement>(".spectrum-endpoint");
+      const large = expanded.querySelector<HTMLElement>(".spectrum-endpoint");
+      if (!small || !large) { spectrumLayouts = null; return; }
+      const c = compact.getBoundingClientRect(), d = expanded.getBoundingClientRect();
+      const css = getComputedStyle(compact);
+      const sx = c.width / parseFloat(css.width) || 1, sy = c.height / parseFloat(css.height) || 1;
+      const box = (element: HTMLElement, root: DOMRect): SpectrumBox => {
+        const rect = element.getBoundingClientRect();
+        return { x: (rect.left - root.left) / sx, y: (rect.top - root.top) / sy, width: rect.width / sx, height: rect.height / sy };
+      };
+      const next = { compact: box(small, c), expanded: box(large, d) };
+      if (JSON.stringify(next) !== JSON.stringify(untrack(() => spectrumLayouts))) spectrumLayouts = next;
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(compact); observer.observe(expanded);
+    void tick().then(measure);
+    return () => { disposed = true; observer.disconnect(); };
+  });
+
   let surfaceDisposed = false;
   onDestroy(() => { surfaceDisposed = true; });
   async function navigate(next: IslandPage) {
@@ -379,7 +474,7 @@
     void navigate("music");
   }
   function selectTool(id: string) {
-    if (id === "timer" || id === "volume" || id === "clock" || id === "weather") {
+    if (id === "timer" || id === "volume" || id === "clock" || id === "weather" || id === "system") {
       void navigate(id);
       if (id === "volume") void onAudioOpen?.();
     } else if (id === "floating") onToggleFloating?.();
@@ -407,11 +502,17 @@
     const hard = !enableAnimations || reduceAnimations || prefersReducedMotion;
     compactShapeMotion = (previousMotionMode === "compact" || previousMotionMode === "hover")
       && (mode === "compact" || mode === "hover");
-    const motion = islandShapeMotion(previousMotionMode, mode, hard);
+    const widgetToggle = previousWidgetsEnabled !== widgetsEnabled && previousMotionMode === "expanded" && mode === "expanded";
+    const widgetChange = previousWidgetCount !== widgetCount && previousMotionMode === "expanded" && mode === "expanded";
+    expandedLayoutMotion = previousMotionMode === "expanded" && mode === "expanded";
+    const motion = widgetToggle || widgetChange ? widgetLayoutMotion(widgetToggle ? widgetsEnabled : widgetCount > previousWidgetCount, hard) : islandShapeMotion(previousMotionMode, mode, hard);
+    previousWidgetCount = widgetCount;
+    previousWidgetsEnabled = widgetsEnabled;
     previousMotionMode = mode;
     const revision = ++transitionRevision;
     shapeSettled = false;
     void Promise.all([
+      widgetReveal.set(editing || widgetsEnabled ? 1 : 0, editing || hard ? {duration:0} : motion),
       widthMotion.set(target.width, motion),
       heightMotion.set(target.height, motion),
       radiusMotion.set(target.radius, motion),
@@ -426,7 +527,7 @@
   });
   $effect(() => {
     if (mode !== "expanded" || !panelVisible) { page = "music"; menuScroll = 0; }
-    else if (page !== "music" && !enabledTools.includes(page)) page = "music";
+    else if (page !== "music" && page !== "system" && !enabledTools.includes(page)) page = "music";
   });
   $effect(() => {
     const finished = timerFinished;
@@ -434,7 +535,7 @@
     else if (!finished && wasTimerFinished && page === "timer") void navigate("music");
     wasTimerFinished = finished;
   });
-  $effect(() => { onPanelActivity?.(editing || (mode === "expanded" && page !== "music")); onPageChange?.(page); });
+  $effect(() => { onPanelActivity?.(contextMenuOpen || editing || (mode === "expanded" && page !== "music")); onPageChange?.(page); });
   let renderedPage = $state<IslandPage>("music");
   let pageExiting = $state(false);
   $effect(() => {
@@ -470,6 +571,7 @@
     return `translateY(-50%) translateX(${mix(gap, 2 - size.width)}px)`;
   });
   const outwardProgress = $derived.by(() => {
+    if (expandedLayoutMotion && mode === "expanded") return 1;
     if (compactShapeMotion) return 0;
     const horizontalEdge = edge === "top" || edge === "bottom";
     const compact = compactGeometry;
@@ -502,7 +604,7 @@
   const surfaceClipPath = $derived(polygonCss(currentPolygon));
   const resolvedClipPath = $derived(styleProgress > 0 || islandStyle === "edge" ? surfaceClipPath : "none");
   $effect(() => {
-    notifyRegionChange({ geometry: size, radii: currentRadii, polygon: currentPolygon, extraRects: [], anchorGap: islandAnchorGap(expandedScale, styleProgress), settled: shapeSettled });
+    notifyRegionChange({ geometry: size, radii: currentRadii, polygon: currentPolygon, extraRects: contextMenuOpen ? [{...contextMenuRect,radius:20}] : [], anchorGap: islandAnchorGap(expandedScale, styleProgress), settled: shapeSettled });
   });
   const expandedOpacity = $derived(outwardProgress);
   const musicTitleActive = $derived(visible && mode === "expanded" && page === "music" && expandedOpacity > .5);
@@ -516,31 +618,34 @@
       dx: (from.x - to.x) * (1 - p), dy: (from.y - to.y) * (1 - p), radius: 42 + (20 - 42) * p };
   });
   const movingCover = $derived(Boolean(sharedCover && !shapeSettled && outwardProgress > 0 && outwardProgress < 1 && renderedPage === "music" && !idle && !timerActive && !showTime && enableAnimations && !reduceAnimations && !prefersReducedMotion));
+  const sharedSpectrum = $derived.by(() => {
+    if (!spectrumLayouts) return null;
+    const a = spectrumLayouts.compact, b = spectrumLayouts.expanded, p = outwardProgress;
+    return {
+      x: (compactOffset.x + a.x) * (1 - p) + (expandedOffset.x + b.x) * p,
+      y: (compactOffset.y + a.y) * (1 - p) + (expandedOffset.y + b.y) * p,
+      width: a.width + (b.width - a.width) * p,
+      height: a.height + (b.height - a.height) * p,
+    };
+  });
+  const movingSpectrum = $derived(Boolean(showSpectrum && sharedSpectrum && movingCover));
   const compactOpacity = $derived(Math.min(1, Math.max(0, (0.08 - outwardProgress) / 0.08)));
   const surfaceBackground = $derived(mode === "expanded" ? background : "#000");
   const surfaceBorder = $derived(mode === "expanded" ? border : "1px solid transparent");
   const controlSelector = 'button,input,select,textarea,a,[role="slider"],[role="listbox"],[data-stop-toggle]';
+  let backgroundPressed = $state(false);
   let gestureX = 0;
   let gestureY = 0;
   let suppressBackgroundClick = false;
-  let longPress: ReturnType<typeof setTimeout> | undefined;
-  let longPressPointer: number | null = null;
-  function cancelLongPress() {
-    clearTimeout(longPress); longPress = undefined; longPressPointer = null;
-  }
-  onDestroy(cancelLongPress);
   function startSurfaceGesture(event: PointerEvent) {
     gestureX = event.clientX; gestureY = event.clientY;
     suppressBackgroundClick = Boolean((event.target as HTMLElement).closest(controlSelector));
-    cancelLongPress();
-    if (suppressBackgroundClick || editing || !interactive || event.button !== 0 || !event.isPrimary) return;
-    longPressPointer = event.pointerId;
-    longPress = setTimeout(beginEditing, 2000);
+    backgroundPressed = !suppressBackgroundClick && !editing && interactive && event.button === 0 && event.isPrimary;
   }
   function moveSurfaceGesture(event: PointerEvent) {
     if (Math.hypot(event.clientX - gestureX, event.clientY - gestureY) > 5) {
+      backgroundPressed = false;
       if (event.buttons) suppressBackgroundClick = true;
-      if (event.pointerId === longPressPointer) cancelLongPress();
     }
   }
   function toggleFromSurface(event: MouseEvent | KeyboardEvent) {
@@ -550,6 +655,7 @@
   }
 
   function keyToggle(event: KeyboardEvent) {
+    if ((event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) && interactive) { event.preventDefault(); void openContextMenu(); return; }
     if (event.key === "Escape" && editing) { event.preventDefault(); event.stopPropagation(); cancelEditing(); return; }
     if (event.key === "F2" && interactive) { event.preventDefault(); beginEditing(); return; }
     if (editing) return;
@@ -560,6 +666,49 @@
     }
   }
 
+  function closeContextMenu(restoreFocus = false) {
+    contextMenuOpen = false;
+    if (restoreFocus) surfaceRoot?.focus({preventScroll:true});
+  }
+  async function openContextMenu(event?: MouseEvent) {
+    event?.preventDefault(); event?.stopPropagation();
+    if (!interactive || !visible || mode === "hidden") return;
+    const surface = surfaceRoot;
+    const frame = surface?.closest<HTMLElement>(".island-frame");
+    if (!surface || !frame) return;
+    const a = surface.getBoundingClientRect(), f = frame.getBoundingClientRect();
+    const sx = a.width / surface.offsetWidth || 1, sy = a.height / surface.offsetHeight || 1;
+    const width = Math.min(224,(f.width - 16) / sx), height = 216;
+    const x = Math.max((f.left-a.left)/sx + 8, Math.min(event ? (event.clientX-a.left)/sx : (size.width-width)/2,(f.right-a.left)/sx-width-8));
+    let y = size.height + 8;
+    if (a.top + (y+height)*sy > f.bottom-4) y = -height-8;
+    y = Math.max((f.top-a.top)/sy+4,Math.min(y,(f.bottom-a.top)/sy-height-4));
+    contextMenuRect = {x,y,width,height};
+    contextMenuOpen = true;
+    suppressBackgroundClick = true;
+    await tick();
+    contextMenuRoot?.querySelector<HTMLButtonElement>("button")?.focus({preventScroll:true});
+  }
+  function contextMenuKey(event: KeyboardEvent) {
+    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeContextMenu(true); }
+    if (event.key === "Tab") closeContextMenu();
+    if (["ArrowDown","ArrowUp","Home","End"].includes(event.key)) {
+      event.preventDefault();
+      const items = Array.from(contextMenuRoot?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+      const index = items.indexOf(document.activeElement as HTMLButtonElement);
+      items[event.key === "Home" ? 0 : event.key === "End" ? items.length-1 : (index + (event.key === "ArrowUp" ? -1 : 1) + items.length)%items.length]?.focus();
+    }
+  }
+  onMount(() => {
+    const dismiss = (event: PointerEvent) => {
+      if (!contextMenuOpen || contextMenuRoot?.contains(event.target as Node) || event.button === 2) return;
+      closeContextMenu();
+      event.preventDefault(); event.stopPropagation();
+    };
+    document.addEventListener("pointerdown",dismiss,true);
+    return () => document.removeEventListener("pointerdown",dismiss,true);
+  });
+
   function handleAnchorFocusOut(event: FocusEvent) {
     const anchor = event.currentTarget;
     const nextTarget = event.relatedTarget;
@@ -569,7 +718,7 @@
   }
 </script>
 
-<svelte:window onpointerup={cancelLongPress} onpointercancel={cancelLongPress} onpointermove={moveSurfaceGesture} onblur={cancelLongPress} onkeydown={(event) => { if (editing && event.key === "Escape") { event.preventDefault(); cancelEditing(); } }} />
+<svelte:window onpointerup={() => backgroundPressed = false} onpointercancel={() => backgroundPressed = false} onpointermove={moveSurfaceGesture} onblur={() => {backgroundPressed = false;closeContextMenu();}} onkeydown={(event) => { if (editing && event.key === "Escape") { event.preventDefault(); cancelEditing(); } }} />
 
 <div
   class="island-frame"
@@ -586,12 +735,15 @@
     style:transform={anchorTransform}
     role="group"
     onmouseenter={() => onHoverChange?.(true)}
-    onmouseleave={() => onHoverChange?.(false)}
+    onmouseleave={() => {if (!contextMenuOpen) onHoverChange?.(false)}}
     onfocusin={() => onHoverChange?.(true)}
     onfocusout={handleAnchorFocusOut}
   >
   <div
     class="island-surface"
+    use:volumeWheel
+    class:background-press={backgroundPressed}
+    bind:this={surfaceRoot}
     class:editing-surface={editing}
     class:expanded-surface={mode === "expanded"}
     style:width={`${size.width}px`}
@@ -610,7 +762,24 @@
     onpointercancelcapture={() => suppressBackgroundClick = true}
     onclick={toggleFromSurface}
     onkeydown={keyToggle}
+    oncontextmenu={openContextMenu}
   >
+    {#if wheelVolumeDisplay !== null && visible && mode !== "hidden"}
+      <div class="volume-indicator" class:compact-mode={mode !== "expanded"} class:vertical={edge === "left" || edge === "right"} role="meter" aria-label={t("currentVolume", { value: wheelVolumeDisplay })} aria-valuemin="0" aria-valuemax="100" aria-valuenow={wheelVolumeDisplay}>
+        <div class="volume-meter" aria-hidden="true">
+          <span class="volume-meter-fill" style:width={edge === "left" || edge === "right" ? undefined : `${wheelVolumeDisplay}%`} style:height={edge === "left" || edge === "right" ? `${wheelVolumeDisplay}%` : undefined}></span>
+          {#each volumeHudMarks as mark}
+            <i class:passed={mark <= wheelVolumeDisplay} style:left={edge === "left" || edge === "right" ? "50%" : `${mark}%`} style:bottom={edge === "left" || edge === "right" ? `calc(${mark}% - 26px)` : undefined}></i>
+          {/each}
+        </div>
+      </div>
+    {/if}
+    {#if volumeProtectionPrompt && visible && mode !== "hidden"}
+      <div class="volume-protection-prompt" role="dialog" aria-modal="true" aria-label={t("volumeProtection")} tabindex="-1" onkeydown={(event)=>event.stopPropagation()} onpointerdown={(event)=>event.stopPropagation()} onclick={(event)=>event.stopPropagation()}>
+        <strong>{t("volumeProtectionReached", { value: volumeProtectionLimit })}</strong>
+        <div><button type="button" onclick={(event)=>{event.stopPropagation();onCancelVolumeIncrease?.()}}>{t("volumeProtectionStop")}</button><button type="button" onclick={(event)=>{event.stopPropagation();onConfirmVolumeIncrease?.()}}>{t("volumeProtectionContinue")}</button></div>
+      </div>
+    {/if}
     {#if showDebugInfo}
       <div class="debug-overlay" aria-hidden="true">
         {#each debugLines as line}<span>{line}</span>{/each}
@@ -663,7 +832,9 @@
           {/if}
         </button>
         {#if showSpectrum}
-          <Spectrum active={compactOpacity > .05} playing={media.isPlaying} mode={spectrumMode} reduceMotion={reduceAnimations} topColor={spectrumTopColor} bottomColor={spectrumBottomColor} values={previewSpectrum} />
+          <div class="spectrum-endpoint" class:shared-spectrum-source={movingSpectrum}>
+            <Spectrum active={!movingSpectrum && compactOpacity > .05} playing={media.isPlaying} mode={spectrumMode} reduceMotion={reduceAnimations} topColor={spectrumTopColor} bottomColor={spectrumBottomColor} values={previewSpectrum} />
+          </div>
         {:else if media.isPlaying}
           <i class="playing-dot" style:background={spectrumTopColor}></i>
         {/if}
@@ -689,14 +860,16 @@
         {/if}
         <div class="page-body" class:exiting={pageExiting} class:with-toolbar={panelVisible} inert={pageExiting}>
         {#if renderedPage === "music"}
-        <WidgetLayout layout={currentLayout} {editing} busy={savingLayout} error={layoutError} musicWidth={expandedLength} onChange={(layout) => draftLayout = layout} onSave={() => void saveLayout()} onCancel={cancelEditing}>
+        <WidgetLayout layout={editing ? draftLayout : configuredLayout} enabled={widgetsEnabled} reveal={widgetRevealValue} animate={enableAnimations && !reduceAnimations && !prefersReducedMotion} {editing} busy={savingLayout} error={layoutError} musicWidth={expandedLength} onChange={(layout) => draftLayout = layout} onSave={() => void saveLayout()} onCancel={cancelEditing}>
           {#snippet widget(kind)}
             {#if kind === "timer"}
-              <TimerPanel status={timerStatus} remainingMs={timerRemainingMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
+              <TimerPanel status={timerStatus} remainingMs={timerRemainingMs} durationMs={timerDurationMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
             {:else if kind === "volume"}
               <VolumePanel volume={systemAudio?.volumePercent ?? 0} muted={systemAudio?.muted ?? false} deviceId={systemAudio?.deviceId ?? ""} devices={audioDevices} switchingDevice={audioDeviceSwitching} reduceMotion={reduceAnimations || !enableAnimations} onVolume={onAudioVolume} onDevice={onAudioDevice} />
+            {:else if kind === "system"}
+              <SystemMonitor active={visible && mode === "expanded" && !editing} snapshot={monitorSnapshot} />
             {:else}
-              <InfoPanel page={kind} time={clockText} timeZone={clockTimeZone} city={weatherCity} temperature={idleWeatherTemperature} code={idleWeatherCode} forecast={idleWeatherForecast} updatedAt={weatherUpdatedAt} loading={weatherLoading} failed={weatherFailed} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onSettings={onSettingsToggle} />
+              <InfoPanel widget page={kind} time={clockText} timeZone={clockTimeZone} city={weatherCity} temperature={idleWeatherTemperature} code={idleWeatherCode} forecast={idleWeatherForecast} updatedAt={weatherUpdatedAt} loading={weatherLoading} failed={weatherFailed} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onSettings={onSettingsToggle} />
             {/if}
           {/snippet}
           <section class="music-pane">
@@ -709,7 +882,9 @@
               <span title={idle ? lastPlayedMedia?.artist : media.artist}>{(idle ? lastPlayedMedia?.artist || lastPlayedMedia?.sourceDisplay : media.artist) || t("unknownArtist")}</span>
             </div>
             {#if showSpectrum}
-              <Spectrum active={expandedOpacity > .05} playing={!idle && media.isPlaying} mode={spectrumMode} reduceMotion={reduceAnimations} topColor={spectrumTopColor} bottomColor={spectrumBottomColor} scale={2.5} values={previewSpectrum} />
+              <div class="spectrum-endpoint" class:shared-spectrum-source={movingSpectrum}>
+                <Spectrum active={!movingSpectrum && expandedOpacity > .05} playing={!idle && media.isPlaying} mode={spectrumMode} reduceMotion={reduceAnimations} topColor={spectrumTopColor} bottomColor={spectrumBottomColor} scale={2.5} values={previewSpectrum} />
+              </div>
             {/if}
             </div>
 
@@ -740,6 +915,8 @@
                 <button type="button" aria-label={t("next")} disabled={idle || media.capabilities?.next === false} onclick={(e) => { e.stopPropagation(); animateSkip(e, 1); onMediaAction?.("next"); }}><SkipForward size={36} fill="currentColor" /></button>
               </div>
               <div class="utility-controls trailing-controls">
+                <button class="layout-toggle" class:layout-active={layoutActive} type="button" aria-label={t(layoutActive ? "disableWidgetLayout" : "enableWidgetLayout")} title={t(layoutActive ? "disableWidgetLayout" : "enableWidgetLayout")} aria-pressed={layoutActive} disabled={togglingWidgets || editing} onclick={(e) => {e.stopPropagation();void toggleWidgets();}}><PanelsTopLeft size={34} strokeWidth={1.8}/></button>
+                {#if widgetToggleError}<span class="layout-toggle-error" role="status">{t("settingsSaveFailed")}</span>{/if}
                 <button type="button" aria-label={t("toggleFloating")} onclick={(e) => { e.stopPropagation(); onToggleFloating?.(); }}><Airplay size={34} strokeWidth={1.8} /></button>
               </div>
             </div>
@@ -755,9 +932,11 @@
             {#key renderedPage}
               <div class="page-content">
                 {#if renderedPage === "timer"}
-                  <TimerPanel status={timerStatus} remainingMs={timerRemainingMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
+                  <TimerPanel status={timerStatus} remainingMs={timerRemainingMs} durationMs={timerDurationMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
                 {:else if renderedPage === "volume"}
                   <VolumePanel volume={systemAudio?.volumePercent ?? 0} muted={systemAudio?.muted ?? false} deviceId={systemAudio?.deviceId ?? ""} devices={audioDevices} switchingDevice={audioDeviceSwitching} reduceMotion={reduceAnimations || !enableAnimations} onVolume={onAudioVolume} onDevice={onAudioDevice} />
+                {:else if renderedPage === "system"}
+                  <SystemMonitor active={visible && mode === "expanded"} snapshot={monitorSnapshot} />
                 {:else if renderedPage === "clock" || renderedPage === "weather"}
                   <InfoPanel page={renderedPage} time={clockText} timeZone={clockTimeZone} city={weatherCity} temperature={idleWeatherTemperature} code={idleWeatherCode} forecast={idleWeatherForecast} updatedAt={weatherUpdatedAt} loading={weatherLoading} failed={weatherFailed} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onSettings={onSettingsToggle} />
                 {/if}
@@ -773,6 +952,11 @@
     {#if visible && mode !== "hidden" && sharedCover}
       <div class="cover moving-cover" class:in-motion={movingCover} aria-hidden="true" style:transform={`translate(${sharedCover.x}px,${sharedCover.y}px) scale(${sharedCover.width / 84})`} style:border-radius={`${sharedCover.radius}px`}>
         {#if media.albumArt}<CoverArt src={media.albumArt} />{:else}<Music2 size={30} />{/if}
+      </div>
+    {/if}
+    {#if visible && mode !== "hidden" && sharedSpectrum}
+      <div class="moving-spectrum" class:in-motion={movingSpectrum} aria-hidden="true" style:transform={`translate(${sharedSpectrum.x}px,${sharedSpectrum.y}px) scale(${sharedSpectrum.width / 42},${sharedSpectrum.height / 45})`}>
+        <Spectrum active={movingSpectrum} playing={media.isPlaying} mode={spectrumMode} reduceMotion={reduceAnimations} topColor={spectrumTopColor} bottomColor={spectrumBottomColor} scale={2.5} values={previewSpectrum} />
       </div>
     {/if}
     {#if previewHighlight}
@@ -815,17 +999,54 @@
     {/if}
   </div>
 
+  {#if contextMenuOpen}
+    <div class="island-context-menu" bind:this={contextMenuRoot} role="menu" aria-label={t("dynamicIsland")} tabindex="-1" data-stop-toggle style:left={`${contextMenuRect.x}px`} style:top={`${contextMenuRect.y}px`} style:width={`${contextMenuRect.width}px`} onkeydown={contextMenuKey} oncontextmenu={(event) => event.preventDefault()}>
+      <button data-layout-edit-control role="menuitem" onclick={beginEditing}><Pencil size={19}/><span>{t("widgetEdit")}</span></button>
+      <button data-layout-edit-control role="menuitem" onclick={() => {closeContextMenu();onSettingsToggle?.()}}><Settings size={19}/><span>{t("settingsTool")}</span></button>
+      <button data-layout-edit-control role="menuitemcheckbox" aria-checked={keepIslandExpanded} onclick={() => {void onToggleKeepIslandExpanded?.()}}><span class="menu-check" aria-hidden="true">{keepIslandExpanded ? "✓" : ""}</span><span>{t("keepIslandExpanded")}</span></button>
+      <button data-layout-edit-control role="menuitem" onclick={() => {closeContextMenu();onHideForTenSeconds?.()}}><EyeOff size={19}/><span>{t("hideTool")}</span></button>
+    </div>
+  {/if}
   </div>
 </div>
 
 <style>
+  .layout-toggle{color:#747d89}.layout-toggle.layout-active{color:#f5f5f7}.layout-toggle-error{position:absolute;right:0;bottom:100%;padding:8px 12px;border-radius:12px;background:#161616;color:#eee;font:12px/1.4 var(--app-font);white-space:nowrap;z-index:5}
+  .island-context-menu{pointer-events:auto}
+  .island-context-menu{position:absolute;z-index:30;height:216px;box-sizing:border-box;padding:7px;background:#080808;color:#f5f5f7;border:1px solid #ffffff24;border-radius:20px;box-shadow:0 12px 32px #0006;font:500 14px/1.2 var(--app-font,system-ui);animation:menu-reveal 140ms ease-out;transform-origin:top center}
+  .island-context-menu button{display:flex;align-items:center;gap:12px;width:100%;height:48px;box-sizing:border-box;padding:0 14px;background:transparent;border:0;border-radius:13px;color:inherit;font:inherit;text-align:left;cursor:pointer}.island-context-menu button:hover,.island-context-menu button:focus-visible{background:#ffffff14;outline:0}.island-context-menu button:active{background:#ffffff20}.island-context-menu button :global(svg){flex:none;color:#b5b5bd}
+  .island-context-menu .menu-check{display:flex;align-items:center;justify-content:center;flex:none;width:19px;height:19px;color:#b5b5bd;font-size:16px}
+  @keyframes menu-reveal{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+  @media(prefers-reduced-motion:reduce){.island-context-menu{animation:none}}
+  .spectrum-endpoint{display:flex;align-items:center;flex:none}
+  .shared-spectrum-source{visibility:hidden}
+  .moving-spectrum{position:absolute;left:0;top:0;z-index:3;visibility:hidden;transform-origin:top left;pointer-events:none}
+  .moving-spectrum.in-motion{visibility:visible;will-change:transform}
   .cover.moving-cover{position:absolute;left:0;top:0;z-index:3;width:84px;height:84px;visibility:hidden;transform-origin:top left;pointer-events:none}
   .cover.moving-cover.in-motion{visibility:visible;will-change:transform}
   .cover.shared-cover-source{visibility:hidden}
   .island-frame{position:relative;width:100%;height:100%;flex:none;overflow:visible;box-sizing:border-box}.island-frame.simulate-hidden{overflow:hidden}.surface-anchor{position:absolute;z-index:1}.edge-top .surface-anchor{top:0;left:50%}.edge-right .surface-anchor{top:50%;right:0}.edge-bottom .surface-anchor{bottom:0;left:50%}.edge-left .surface-anchor{top:50%;left:0}
   .island-surface{position:relative;z-index:1;overflow:hidden;flex:none;box-sizing:border-box;color:#fff;font-family:var(--app-font);text-rendering:optimizeLegibility;font-synthesis:none;contain:layout style;transition:transform 140ms cubic-bezier(.23,1,.32,1),box-shadow 180ms cubic-bezier(.23,1,.32,1)}
   .island-surface:focus-visible{outline:none}
-  .floating-style .island-surface:active{transform:scale(.97) translateZ(0)}.compact-layer,.expanded-layer{position:absolute;z-index:1;box-sizing:border-box;pointer-events:none}
+  .volume-indicator{position:absolute;z-index:40;top:12px;left:50%;display:flex;align-items:center;width:min(320px,calc(100% - 32px));height:48px;padding:0 12px;box-sizing:border-box;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(14,15,18,.96);transform:translateX(-50%);pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.28)}
+  .volume-indicator.compact-mode{inset:0;display:grid;width:100%;height:100%;padding:3px 18px;border:0;border-radius:inherit;background:rgba(0,0,0,.97);transform:none;box-shadow:none}
+  .volume-meter{position:relative;width:100%;height:24px;overflow:hidden;border-radius:2px}
+  .volume-meter-fill{position:absolute;top:0;bottom:0;left:0;max-width:100%;background:#4169f5;transition:width 90ms linear,height 90ms linear}
+  .volume-meter i{position:absolute;top:0;bottom:0;display:block;width:3px;transform:translateX(-50%);background:#4169f5}
+  .volume-meter i::after{position:absolute;top:0;bottom:0;left:0;width:3px;border-radius:1px;background:#4169f5;content:""}
+  .volume-meter i.passed{opacity:0}
+  .volume-indicator.compact-mode .volume-meter{height:100%}
+  .volume-indicator.vertical.compact-mode{padding:3px 0}
+  .volume-indicator.vertical.compact-mode .volume-meter{width:56px;height:100%}
+  .volume-indicator.vertical.compact-mode .volume-meter-fill{top:auto;right:0;bottom:0;left:0;width:100%;max-height:100%}
+  .volume-indicator.vertical.compact-mode .volume-meter i{top:auto;right:0;bottom:0;left:50%;width:3px;height:52px;transform:translateX(-50%)}
+  .volume-indicator.vertical.compact-mode .volume-meter i::after{top:0;right:0;bottom:0;left:0;width:3px;height:100%}
+  .volume-protection-prompt{position:absolute;z-index:41;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;box-sizing:border-box;border-radius:inherit;background:rgba(18,19,22,.96);color:#fff;text-align:center;font:500 13px/1.4 var(--app-font)}
+  .volume-protection-prompt>div{display:flex;gap:8px}
+  .volume-protection-prompt button{padding:7px 12px;border:1px solid rgba(255,255,255,.2);border-radius:9px;background:#292b31;color:#fff;font:600 12px/1.2 var(--app-font);cursor:pointer}
+  .volume-protection-prompt button:last-child{background:#f2f3f5;color:#111}
+
+  .floating-style .island-surface.background-press:active{transform:scale(.97) translateZ(0)}.compact-layer,.expanded-layer{position:absolute;z-index:1;box-sizing:border-box;pointer-events:none}
   .compact-layer{inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 4px}.compact-layer.edge-inset:not(.vertical){padding-left:calc(4px + var(--shoulder-inset));padding-right:calc(8px + var(--shoulder-inset))}.compact-layer.vertical{flex-direction:column;padding:4px 0 8px}.compact-layer.edge-inset.vertical{padding-top:calc(4px + var(--shoulder-inset));padding-bottom:calc(8px + var(--shoulder-inset))}.compact-layer button,.compact-layer :global(canvas){pointer-events:auto}.time-display{width:100%;text-align:center;color:rgba(255,255,255,.8);font:500 12px/1 var(--app-font);letter-spacing:.05em;font-variant-numeric:tabular-nums;user-select:none}.cover{position:relative;display:grid;place-items:center;flex:none;padding:0;overflow:hidden;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);border:0;cursor:pointer;user-select:none}.compact-cover{width:20px;height:20px;border-radius:50%;top:-1px}.expanded-cover{width:84px;height:84px;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.35);outline:1px solid rgba(255,255,255,.1)}.playing-dot{width:3px;height:3px;border-radius:50%}
   .compact-disc{position:relative;display:block;width:100%;height:100%;transform-origin:center}
   .idle-compact-dashboard{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0 7px;color:rgba(255,255,255,.92);user-select:none}.idle-clock{display:flex;align-items:center;height:1em;font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums;letter-spacing:.02em}.idle-weather{display:flex;align-items:center;gap:4px;font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums}.idle-weather strong{display:flex;align-items:center;height:1em;font:inherit}.idle-weather :global(svg){flex:none;color:rgba(255,255,255,.82)}.idle-compact-dashboard.vertical{flex-direction:column;padding:7px 0;gap:10px}.idle-compact-dashboard.vertical .idle-weather{flex-direction:column}
@@ -836,7 +1057,7 @@
   .compact-timer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:0;color:#f28b31;background:transparent;cursor:pointer;font-family:var(--app-font);user-select:none}.compact-timer span{min-width:42px;font-size:12px;font-weight:600;line-height:1;letter-spacing:.015em;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}.compact-timer.finished span{min-width:0;font-size:11px}.compact-timer.paused{color:rgba(242,139,49,.62)}.timer-pause{width:7px;height:8px;display:flex;align-items:center;justify-content:center;gap:2px}.timer-pause b{display:block;width:2px;height:7px;border-radius:1px;background:currentColor}.compact-timer.urgent{color:#ff765f}
   .compact-timer{position:absolute;inset:0;display:block;overflow:hidden;padding:0;border-radius:inherit;color:#f4f7ff;background:transparent;box-shadow:none}.compact-timer:hover{background:rgba(40,100,190,.055)}.compact-timer .timer-summary{position:absolute;inset:0 14px 4px;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}.compact-timer .timer-leading{display:flex;align-items:center;gap:7px;min-width:0;color:rgba(245,248,255,.9)}.compact-timer .timer-leading :global(svg){flex:none;color:#70aaff}.compact-timer .timer-time{min-width:0;overflow:hidden;color:#f5f7fb;font-size:13px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em;text-align:right;text-overflow:ellipsis;white-space:nowrap}.compact-timer .timer-progress-track{position:absolute;right:14px;bottom:5px;left:14px;height:2px;overflow:hidden;border-radius:999px;background:rgba(115,143,183,.2)}.compact-timer .timer-progress-fill{display:block;height:100%;max-width:100%;border-radius:inherit;background:linear-gradient(90deg,#2688ff,#60b5ff);box-shadow:0 0 7px rgba(57,145,255,.68);transition:width 350ms linear,background-color 180ms ease}.compact-timer .timer-progress-fill.paused{background:linear-gradient(90deg,#6d8fb9,#a7c5ed);box-shadow:none}.compact-timer .timer-progress-fill.finished{background:linear-gradient(90deg,#42d99a,#8af0c0)}.compact-timer.paused{color:#f4f7ff}.compact-timer.urgent{box-shadow:inset 1px 0 0 rgba(255,111,102,.58),inset -1px 0 0 rgba(255,111,102,.58),inset 0 0 12px rgba(255,74,60,.09)}.compact-timer.urgent .timer-leading :global(svg){color:#ff8c7c}.compact-timer .timer-pause{flex:none;width:7px;height:8px;gap:2px;color:#a8c5e9}.compact-timer .timer-pause b{width:2px;height:7px;border-radius:1px;background:currentColor}
   .compact-layer.vertical .compact-timer .timer-summary{inset:14px 4px;flex-direction:column;justify-content:center;gap:10px}.compact-layer.vertical .compact-timer .timer-leading{flex-direction:column;gap:5px}.compact-layer.vertical .compact-timer .timer-time{max-width:100%;font-size:11px;text-align:center}.compact-layer.vertical .compact-timer .timer-progress-track{top:14px;right:auto;bottom:14px;left:5px;width:2px;height:auto}.compact-layer.vertical .timer-progress-fill{width:100%!important;height:var(--timer-progress-height,0%)}
-  .edge-top .music-pane,.edge-bottom .music-pane{padding-left:calc(40px + var(--shoulder-content-inset,0px));padding-right:calc(40px + var(--shoulder-content-inset,0px))}
+  .attached-style.edge-top .music-pane,.attached-style.edge-bottom .music-pane{--music-inline-inset:calc(40px + var(--shoulder-content-inset,0px))}
   .music-pane{padding-top:14px;padding-bottom:10px}
   .top-row{gap:16px;margin-bottom:8px}
   @media (hover:hover) and (pointer:fine){}
@@ -881,7 +1102,7 @@
   .top-row{gap:20px;margin-bottom:0}
   .music-pane :global(.metadata .marquee-title){font-size:24px;line-height:1.12;margin-bottom:5px}
   .music-pane .metadata>span{font-size:18px;line-height:1.15}
-  .music-pane{padding:20px 40px 14px}
+  .music-pane{padding:20px var(--music-inline-inset,40px) 14px}
   .music-pane :global(.progress-block .time){font-size:20px}
   .music-pane :global(.progress-block.with-times){grid-template-columns:max-content minmax(0,1fr) max-content;column-gap:12px}
   .music-pane :global(.progress-block .track){height:10px}
@@ -900,16 +1121,16 @@
   .control-row button:active:not(:disabled){transform:scale(.92)}
   .control-row button:disabled{opacity:.45;cursor:default;background:transparent}
   .control-row .play{color:#fff}
-  .trailing-controls button:last-child{color:rgba(225,234,249,.62)}
+  .trailing-controls button:last-child{color:rgba(255,255,255,.95)}
   @media (hover:hover) and (pointer:fine){.control-row button:hover:not(:disabled){color:#fff}.control-row button:hover:not(:disabled)::before{opacity:1}}
   .attached-style.edge-left .composed .page-body .music-pane,.attached-style.edge-right .composed .page-body .music-pane{padding-top:20px;padding-bottom:14px}
   .floating-style .island-surface.editing-surface:active{transform:none}
   /* Respond to the music pane's usable width, including attached shoulders. */
   .music-pane{container-type:inline-size;container-name:island-music}
   @container island-music (max-width:500px){
-    .control-row{grid-template-columns:auto minmax(0,1fr) auto;column-gap:12px}
+    .control-row{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);column-gap:12px}
     .utility-controls{gap:8px}
-    .transport-controls{justify-self:stretch;justify-content:space-evenly;min-width:0;gap:8px}
+    .transport-controls{justify-self:center;justify-content:center;min-width:0;gap:8px}
     .control-row :global(.utility-controls button),.control-row .control-mark,
     .control-row :global(.like-wrap),.control-row :global(.mode-control-wrap){width:40px;height:40px}
     .transport-controls button{width:48px;height:48px}
@@ -917,14 +1138,13 @@
     .control-row :global(.play-pause-icon),.transport-controls .play :global(svg){width:42px;height:42px}
   }
   @container island-music (max-width:330px){
-    .control-row{column-gap:8px}
+    .control-row{column-gap:6px}
     .utility-controls{gap:4px}
     .control-row :global(.utility-controls button),.control-row .control-mark,
-    .control-row :global(.like-wrap),.control-row :global(.mode-control-wrap){width:36px;height:36px}
+    .control-row :global(.like-wrap),.control-row :global(.mode-control-wrap){width:32px;height:32px}
     .transport-controls{gap:4px}
-    .transport-controls button{width:40px;height:40px}
+    .transport-controls button{width:36px;height:36px}
     .control-row :global(svg){width:26px;height:26px}
     .control-row :global(.play-pause-icon),.transport-controls .play :global(svg){width:34px;height:34px}
   }
 </style>
-

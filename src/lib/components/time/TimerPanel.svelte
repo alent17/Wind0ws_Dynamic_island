@@ -9,6 +9,7 @@
     compact = false,
     status = "idle",
     remainingMs = 0,
+    durationMs = 0,
     finished = false,
     reduceMotion = false,
     onStart,
@@ -20,6 +21,7 @@
     compact?: boolean;
     status?: CountdownStatus;
     remainingMs?: number;
+    durationMs?: number;
     finished?: boolean;
     reduceMotion?: boolean;
     onStart?: (durationMs: number) => void;
@@ -47,6 +49,8 @@
   });
   let activeIndex = $derived(Math.max(0, rulerValues.findIndex((value) => value === centerMinutes)));
   let previewMs = $derived(active ? remainingMs : selectedMinutes * 60_000);
+  let elapsedMs = $derived(Math.max(0, durationMs - remainingMs));
+  let progress = $derived(durationMs > 0 ? Math.min(1, Math.max(0, remainingMs / durationMs)) : 0);
   let mainLabel = $derived(status === "running" ? t("pauseTimer") : status === "paused" ? t("resumeTimer") : t("startTimer"));
 
   function chooseMinutes(minutes: number) {
@@ -170,6 +174,31 @@
     </div>
   {/if}
 
+  {#if active}
+  <div class="timer-active-layout" class:paused={status === "paused"}>
+    <div class="timer-active-controls">
+      <button class="timer-main-button" type="button" aria-label={mainLabel} onclick={(event) => { event.stopPropagation(); handleMainAction(); }}>
+        <PlayPauseIcon playing={status === "running"} size={20} {reduceMotion} />
+      </button>
+      <button class="timer-reset" type="button" aria-label={t("cancelTimer")} onclick={(event) => { event.stopPropagation(); onReset?.(); }}>
+        <X size={18} strokeWidth={2.2} />
+      </button>
+    </div>
+    <div class="timer-active-info">
+      <div class="timer-readout" aria-live="polite">
+        <strong><RollingNumber value={formatCountdown(remainingMs)} {reduceMotion} /></strong>
+        <small>{status === "paused" ? t("timerPaused") : t("timerRunning")}</small>
+      </div>
+      <div class="timer-detail-line">
+        <span>{t("timerElapsed", { elapsed: formatCountdown(elapsedMs), duration: formatCountdown(durationMs) })}</span>
+        <span>{Math.round((1 - progress) * 100)}%</span>
+      </div>
+      <div class="timer-detail-track" role="progressbar" aria-label={t("timerElapsed", { elapsed: formatCountdown(elapsedMs), duration: formatCountdown(durationMs) })} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round((1 - progress) * 100)}>
+        <span class:paused={status === "paused"} style={`width:${(1 - progress) * 100}%`}></span>
+      </div>
+    </div>
+  </div>
+  {:else}
   <div class="timer-footer">
     <div class="timer-actions" class:timer-active={active}>
       <button class="timer-main-button" type="button" aria-label={mainLabel} onclick={(event) => { event.stopPropagation(); handleMainAction(); }}>
@@ -187,6 +216,7 @@
       <small>{active ? (status === "paused" ? t("timerPaused") : t("timerRunning")) : t("timerReady")}</small>
     </div>
   </div>
+  {/if}
   {/if}
 
 </div>
@@ -206,7 +236,19 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .timer-panel.active .timer-footer { flex: 1; margin-top: 0; }
+  .timer-panel.active { justify-content: center; }
+  .timer-active-layout { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; }
+  .timer-active-controls { display: flex; flex: none; align-items: center; gap: 2px; }
+  .timer-active-info { display: flex; flex: 1; flex-direction: column; justify-content: center; min-width: 0; gap: 5px; }
+  .timer-active-info .timer-readout { align-items: flex-end; }
+  .timer-active-info .timer-readout strong { padding: 0; font-size: clamp(34px, 7.5cqw, 54px); line-height: .92; }
+  .timer-active-info .timer-readout small { margin-top: 4px; font-size: 11px; }
+  .timer-detail-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; color: rgba(216,228,245,.62); font: 500 10px/1.1 var(--app-font); font-variant-numeric: tabular-nums; }
+  .timer-detail-line span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .timer-detail-line span:last-child { flex: none; color: rgba(216,228,245,.8); }
+  .timer-detail-track { height: 3px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.14); }
+  .timer-detail-track span { display: block; height: 100%; border-radius: inherit; background: #73b8ff; transition: width 300ms linear, background-color 180ms ease; }
+  .timer-detail-track span.paused { background: #96a8bc; }
   .timer-panel.complete{justify-content:center}
   .timer-complete-card{position:relative;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:9px;width:100%;min-height:70px;padding:10px 11px;border:1px solid rgba(255,255,255,.085);border-radius:13px;background:linear-gradient(110deg,rgba(255,255,255,.045),rgba(255,255,255,.015));box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
   .timer-complete-mark{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;color:#8ac6ff;background:rgba(67,155,255,.14);box-shadow:inset 0 0 0 1px rgba(92,174,255,.17)}
@@ -277,7 +319,6 @@
 
   .timer-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 0; margin-top: 5px; }
   .timer-actions { display: flex; align-items: center; gap: 5px; min-width: 0; }
-  .timer-actions.timer-active { gap: 12px; }
   .timer-main-button {
     display: inline-flex;
     align-items: center;
@@ -299,20 +340,20 @@
   .timer-main-button { padding: 0 10px; font-size: 10px; }
   .timer-main-button:hover { color: #d2eaff; background: rgba(65, 145, 235, .22); }
   .timer-main-button:active { transform: scale(.95); }
-  .timer-actions.timer-active .timer-main-button { flex: none; width: 48px; height: 48px; padding: 0; border-radius: 12px; color: rgba(255,255,255,.9); background: transparent; box-shadow: none; }
+  .timer-active-controls .timer-main-button { flex: none; width: 44px; height: 44px; padding: 0; border-radius: 12px; color: rgba(255,255,255,.9); background: transparent; box-shadow: none; }
 
   .timer-readout { display: flex; flex: 1; flex-direction: column; align-items: flex-end; min-width: 0; line-height: 1; }
   .timer-readout strong { display: block; box-sizing: border-box; width: 100%; max-width: 100%; padding-right: 6px; color: #eaf4ff; font: 700 clamp(20px, 6vw, 24px)/.9 var(--app-font); letter-spacing: -.035em; text-align: right; white-space: nowrap; }
   .timer-readout small { margin-top: 3px; color: rgba(138, 190, 245, .58); font: 500 8px/1 var(--app-font); letter-spacing: .04em; }
-  .timer-reset { flex: none; display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 12px; color: #ff6b6b; background: transparent; cursor: pointer; transition: color 150ms ease, background 150ms ease, transform 150ms cubic-bezier(.23,1,.32,1); }
+  .timer-reset { flex: none; display: grid; place-items: center; width: 30px; height: 38px; padding: 0; border: 0; border-radius: 10px; color: #ff6b6b; background: transparent; cursor: pointer; transition: color 150ms ease, background 150ms ease, transform 150ms cubic-bezier(.23,1,.32,1); }
   .timer-reset:active { transform: scale(.95); }
 
   @media (hover: hover) and (pointer: fine) {
-    .timer-actions.timer-active .timer-main-button:hover { color: #fff; background: rgba(255,255,255,.1); }
+    .timer-active-controls .timer-main-button:hover { color: #fff; background: rgba(255,255,255,.1); }
     .timer-reset:hover { color: #ff8585; background: rgba(255,107,107,.14); }
   }
 
-  .timer-actions.timer-active .timer-main-button:focus-visible { color: #fff; background: rgba(255,255,255,.1); }
+  .timer-active-controls .timer-main-button:focus-visible { color: #fff; background: rgba(255,255,255,.1); }
   .timer-reset:focus-visible { color: #ff8585; background: rgba(255,107,107,.14); }
 
   button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
