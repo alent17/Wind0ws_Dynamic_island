@@ -8,6 +8,8 @@ export type NeteaseProgressMode = "real" | "estimate";
 export type AppLanguage = "system" | "zh-CN" | "en" | "ja";
 
 export interface AppSettings {
+  fileSortDirectory: string | null;
+  fileSortDate: "none" | "year" | "month";
   islandWidgets: IslandWidgets;
   islandWidgetsEnabled: boolean;
   neteaseProgressMode: NeteaseProgressMode;
@@ -204,6 +206,8 @@ export interface AppError {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  fileSortDirectory: null,
+  fileSortDate: "none",
   islandWidgets: { left: [], right: [] },
   islandWidgetsEnabled: true,
   neteaseProgressMode: "real",

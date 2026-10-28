@@ -16,6 +16,7 @@ export type IslandViewState =
   | { type: "clock" }
   | { type: "weather" }
   | { type: "system" }
+  | { type: "files" }
   | { type: "expanded"; page: IslandPage };
 
 export type IslandEvent =

@@ -52,6 +52,7 @@ pub fn get_preferences(state: State<'_, AppState>) -> AppResult<AppPreferences> 
 
 fn normalize_settings(settings: &mut AppPreferences) {
     settings.island_widgets.normalize();
+    if !matches!(settings.file_sort_date.as_str(), "none" | "year" | "month") { settings.file_sort_date = "none".to_string(); }
     settings.volume_protection_limit = settings.volume_protection_limit.clamp(40, 100);
     settings.floating_expanded_length = settings.floating_expanded_length.clamp(480, 900);
     settings.edge_expanded_length = settings.edge_expanded_length.clamp(480, 900);

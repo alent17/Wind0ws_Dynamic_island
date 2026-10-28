@@ -93,6 +93,8 @@ impl IslandWidgets {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppPreferences {
+    pub file_sort_directory: Option<String>,
+    pub file_sort_date: String,
     pub island_widgets: IslandWidgets,
     pub island_widgets_enabled: bool,
     pub netease_progress_mode: NeteaseProgressMode,
@@ -180,6 +182,8 @@ impl Default for AppPreferences {
         player_weights.insert("generic".to_string(), 10);
 
         Self {
+            file_sort_directory: None,
+            file_sort_date: "none".to_string(),
             island_widgets: IslandWidgets::default(),
             island_widgets_enabled: true,
             netease_progress_mode: NeteaseProgressMode::Real,

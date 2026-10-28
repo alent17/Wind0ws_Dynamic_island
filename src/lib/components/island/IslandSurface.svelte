@@ -2,7 +2,12 @@
   import { onMount, onDestroy, untrack, tick } from "svelte";
   import { spring, tweened } from "svelte/motion";
   import { slide } from "svelte/transition";
-  import { Activity, Airplay, ArrowLeft, Clock, CloudSun, EyeOff, GalleryHorizontalEnd, Music2, PanelsTopLeft, Pencil, Settings, Shuffle, SkipBack, SkipForward, Timer, Volume2 } from "lucide-svelte";
+  import { FolderOpen, Activity, Airplay, ArrowLeft, Clock, CloudSun, EyeOff, GalleryHorizontalEnd, Music2, PanelsTopLeft, Pencil, Settings, Shuffle, SkipBack, SkipForward, Timer, Volume2 } from "lucide-svelte";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { invoke, isTauri } from "@tauri-apps/api/core";
+  import { listen } from "@tauri-apps/api/event";
+  import { settingsStore } from "$lib/settingsStore";
+  import { settingsApi } from "$lib/api/settings";
   import MediaProgress from "$lib/components/media/MediaProgress.svelte";
   import PlayPauseIcon from "$lib/components/media/PlayPauseIcon.svelte";
   import RollingNumber from "$lib/components/time/RollingNumber.svelte";
@@ -428,12 +433,12 @@
     if ((!visible || mode !== "expanded") && (featureExpanded || stackPreparing)) closeFeature();
   });
   $effect(() => { onLayoutPreview?.(currentLayout, editing); });
-  const panelVisible = $derived(!editing && showCustomFunctionPanel && enabledTools.length > 0);
-  const toolOrder: IslandTool[] = ["timer", "volume", "floating", "settings", "hide", "clock", "weather", "system"];
-  const toolIcons = { timer: Timer, volume: Volume2, floating: GalleryHorizontalEnd, settings: Settings, hide: EyeOff, clock: Clock, weather: CloudSun, system: Activity };
-  const toolLabels: Record<IslandTool, TranslationKey> = { timer: "timer", volume: "volume", floating: "floatingTool", settings: "settingsTool", hide: "hideTool", clock: "clock", weather: "weather", system: "systemMonitor" };
-  const shortLabels: Record<IslandTool, TranslationKey> = {timer:"timer",volume:"menuVolume",floating:"menuFloating",settings:"menuSettings",hide:"menuHide",clock:"clock",weather:"weather",system:"systemMonitor"};
-  const menuItems = $derived(toolOrder.filter(tool => tool === "system" || enabledTools.includes(tool)).map(tool => ({ id: tool, label: t(toolLabels[tool]), shortLabel: t(shortLabels[tool]), icon: toolIcons[tool] })));
+  const panelVisible = $derived(!editing && showCustomFunctionPanel);
+  const toolOrder: IslandTool[] = ["files", "timer", "volume", "floating", "settings", "hide", "clock", "weather", "system"];
+  const toolIcons = { files: FolderOpen, timer: Timer, volume: Volume2, floating: GalleryHorizontalEnd, settings: Settings, hide: EyeOff, clock: Clock, weather: CloudSun, system: Activity };
+  const toolLabels: Record<IslandTool, TranslationKey> = { files: "fileSort", timer: "timer", volume: "volume", floating: "floatingTool", settings: "settingsTool", hide: "hideTool", clock: "clock", weather: "weather", system: "systemMonitor" };
+  const shortLabels: Record<IslandTool, TranslationKey> = {files:"fileSort",timer:"timer",volume:"menuVolume",floating:"menuFloating",settings:"menuSettings",hide:"menuHide",clock:"clock",weather:"weather",system:"systemMonitor"};
+  const menuItems = $derived(toolOrder.filter(tool => (tool === "system" || tool === "files") || enabledTools.includes(tool)).map(tool => ({ id: tool, label: t(toolLabels[tool]), shortLabel: t(shortLabels[tool]), icon: toolIcons[tool] })));
   const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius, expandedLength, stackPreparing ? 0 : widgetCount, editing));
   const expandedGeometry = $derived({
     ...scaleIslandGeometry(expandedBaseGeometry, expandedScale),
@@ -534,17 +539,93 @@
     pageRoot?.querySelector<HTMLButtonElement>(next === "music" ? ".feature-menu button" : ".page-back")?.focus({ preventScroll: true });
   }
   function goBack() {
+    if (pendingSort) { cancelPendingSort(); return; }
     if (page === "music") { onToggle?.(); return; }
     void navigate("music");
   }
   function selectTool(id: string) {
-    if (id === "timer" || id === "volume" || id === "clock" || id === "weather" || id === "system") {
+    if (id === "files" || id === "timer" || id === "volume" || id === "clock" || id === "weather" || id === "system") {
       void navigate(id);
       if (id === "volume") void onAudioOpen?.();
     } else if (id === "floating") onToggleFloating?.();
     else if (id === "settings") onSettingsToggle?.();
     else if (id === "hide") onHideForTenSeconds?.();
   }
+
+  type SortResult = { source: string; status: "moved" | "skipped" | "failed"; destination: string | null; message: string };
+  let sortResults = $state<SortResult[]>([]);
+  let sortError = $state("");
+  let sortBusy = $state(false);
+  let sortProgress = $state({ completed: 0, total: 0 });
+  let checkingSortInputs = $state(false);
+  let pendingSort = $state<{ paths: string[]; folders: string[] } | null>(null);
+  let fileDragActive = $state(false);
+  let pendingFilePage = $state(false);
+  $effect(() => { if (pendingFilePage && mode === "expanded") { pendingFilePage = false; void navigate("files"); } });
+  function showFilePage() {
+    if (mode === "expanded") void navigate("files");
+    else { pendingFilePage = true; onToggle?.(); }
+  }
+  async function chooseSortDirectory() {
+    try {
+      const directory = await invoke<string | null>("choose_sort_directory");
+      if (directory) await settingsApi.updateSettings({ fileSortDirectory: directory });
+    } catch (error) { sortError = String(error); }
+  }
+  async function setSortDate(value: "none" | "year" | "month") {
+    try { await settingsApi.updateSettings({ fileSortDate: value }); }
+    catch (error) { sortError = String(error); }
+  }
+  async function runFileSort(paths: string[], confirmedFolders: string[]) {
+    sortBusy = true; sortError = ""; sortResults = []; pendingSort = null;
+    sortProgress = { completed: 0, total: 0 };
+    const batchId = crypto.randomUUID();
+    let stopProgress: (() => void) | undefined;
+    try {
+      try {
+        stopProgress = await listen<{ batchId: string; completed: number; total: number }>("file-sort-progress", ({ payload: progress }) => {
+          if (progress.batchId === batchId) sortProgress = { completed: progress.completed, total: progress.total };
+        });
+      } catch (error) { console.warn("Failed to subscribe to file sorting progress", error); }
+      sortResults = await invoke<SortResult[]>("sort_dropped_files", { paths, batchId, confirmedFolders });
+      sortProgress = { completed: sortResults.length, total: sortResults.length };
+    } catch (error) { sortError = String(error); }
+    finally { stopProgress?.(); sortBusy = false; }
+  }
+  function cancelPendingSort() { pendingSort = null; }
+  function confirmPendingSort() {
+    if (!pendingSort) return;
+    const { paths, folders } = pendingSort;
+    void runFileSort(paths, folders);
+  }
+  onMount(() => {
+    if (!interactive || !isTauri() || getCurrentWindow().label !== "main") return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void getCurrentWindow().onDragDropEvent(async ({ payload }) => {
+      if (payload.type === "enter") { fileDragActive = true; return; }
+      if (payload.type === "leave") { fileDragActive = false; return; }
+      if (payload.type !== "drop") return;
+      fileDragActive = false;
+      showFilePage();
+      if (sortBusy || checkingSortInputs || pendingSort) { sortError = "请先完成当前操作，再拖入其他文件"; return; }
+      if (!$settingsStore.fileSortDirectory) { sortError = "请先选择目标文件夹，然后重新拖入文件"; return; }
+      checkingSortInputs = true; sortError = "";
+      try {
+        const folders = await invoke<string[]>("inspect_sort_inputs", { paths: payload.paths });
+        if (disposed) return;
+        if (folders.length) {
+          pendingSort = { paths: payload.paths, folders };
+          await tick();
+          pageRoot?.querySelector<HTMLButtonElement>(".file-confirm-cancel")?.focus({ preventScroll: true });
+        } else {
+          void runFileSort(payload.paths, []);
+        }
+      } catch (error) { sortError = String(error); }
+      finally { checkingSortInputs = false; }
+    }).then(stop => { if (disposed) stop(); else unlisten = stop; }).catch(error => { sortError = String(error); });
+    return () => { disposed = true; unlisten?.(); };
+  });
 
   onMount(() => {
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -610,8 +691,8 @@
     });
   });
   $effect(() => {
-    if (mode !== "expanded" || !panelVisible) { page = "music"; menuScroll = 0; }
-    else if (page !== "music" && page !== "system" && !enabledTools.includes(page)) page = "music";
+    if (mode !== "expanded" || (!panelVisible && page !== "files")) { page = "music"; menuScroll = 0; }
+    else if (page !== "music" && page !== "system" && page !== "files" && !enabledTools.includes(page)) page = "music";
   });
   $effect(() => {
     const finished = timerFinished;
@@ -861,6 +942,9 @@
     onkeydown={keyToggle}
     oncontextmenu={openContextMenu}
   >
+    {#if fileDragActive}
+      <div class="file-drop-feedback" aria-live="polite">{mode === "expanded" ? "松开以分类文件" : "分类文件"}</div>
+    {/if}
     {#if wheelVolumeDisplay !== null && visible && mode !== "hidden"}
       <div class="volume-indicator" class:compact-mode={mode !== "expanded"} class:vertical={edge === "left" || edge === "right"} role="meter" aria-label={t("currentVolume", { value: wheelVolumeDisplay })} aria-valuemin="0" aria-valuemax="100" aria-valuenow={wheelVolumeDisplay}>
         <div class="volume-meter" aria-hidden="true">
@@ -1024,14 +1108,68 @@
         </WidgetLayout>
 
         {:else}
-          <section class="navigation-page">
+          <section class="navigation-page" class:file-sort-page={renderedPage === "files"}>
             <header class="page-header">
               <button type="button" class="page-back" aria-label={t("back")} onclick={goBack}><ArrowLeft size={17} /></button>
               <span>{t(toolLabels[renderedPage])}</span>
             </header>
             {#key renderedPage}
               <div class="page-content">
-                {#if renderedPage === "timer"}
+                {#if renderedPage === "files"}
+                  <div class="file-sort-panel" role="group" aria-label={t("fileSort")}>
+                    {#if pendingSort}
+                      <div class="file-confirm" role="group" aria-label="确认分类文件夹">
+                        <strong>确认分类文件夹？</strong>
+                        <p>文件夹及其子文件夹中的文件将被移动到所选位置，同批拖入的文件也会一起分类。原文件夹会保留。</p>
+                        <div class="file-confirm-paths" title={pendingSort.folders.join("\n")}>
+                          {#each pendingSort.folders as folder}<div>{folder}</div>{/each}
+                        </div>
+                        <div class="file-confirm-target" title={$settingsStore.fileSortDirectory ?? ""}>保存到：{$settingsStore.fileSortDirectory}</div>
+                        <div class="file-confirm-actions">
+                          <button type="button" class="file-confirm-cancel" onclick={cancelPendingSort}>取消</button>
+                          <button type="button" class="file-confirm-accept" onclick={confirmPendingSort}>确认分类</button>
+                        </div>
+                      </div>
+                    {:else}
+                    <div class="file-field">
+                      <span class="file-field-label">保存位置</span>
+                      <button class="file-directory" type="button" onclick={chooseSortDirectory} title={$settingsStore.fileSortDirectory ?? "选择目标文件夹"}>
+                        <FolderOpen size={24}/><span>{$settingsStore.fileSortDirectory || "选择目标文件夹"}</span><span class="file-directory-action">更改</span>
+                      </button>
+                    </div>
+                    <div class="file-field">
+                      <span class="file-field-label">日期分类</span>
+                      <div class="file-date" role="group" aria-label="日期分类">
+                        {#each [["none", "不按日期"], ["year", "按年份"], ["month", "年 / 月"]] as [value, label]}
+                          <button type="button" class:active={$settingsStore.fileSortDate === value} aria-pressed={$settingsStore.fileSortDate === value} onclick={() => setSortDate(value as "none" | "year" | "month")}>{label}</button>
+                        {/each}
+                      </div>
+                    </div>
+                    {#if sortBusy && sortProgress.total > 1}
+                      <div class="file-progress">
+                        <div class="file-progress-label"><span>正在分类</span><span>{sortProgress.completed} / {sortProgress.total}</span></div>
+                        <div class="file-progress-track" role="progressbar" aria-label="文件分类进度" aria-valuemin="0" aria-valuemax={sortProgress.total} aria-valuenow={sortProgress.completed}>
+                          <div class="file-progress-fill" style:width={`${sortProgress.completed / sortProgress.total * 100}%`}></div>
+                        </div>
+                      </div>
+                    {/if}
+                    <!-- svelte-ignore a11y_no_noninteractive_tabindex: scrollable results need keyboard access -->
+                    <div class="file-results" role="region" aria-label="分类结果" aria-live="polite" tabindex="0">
+                      {#if sortError}<span class="file-error">{sortError}</span>
+                      {:else if checkingSortInputs}<span>正在检查拖入的项目…</span>
+                      {:else if sortBusy}<span>{sortProgress.total === 0 ? "正在扫描文件夹…" : "正在分类文件…"}</span>
+                      {:else if sortResults.length}
+                        {#each sortResults as item}
+                          <div class="file-result" title={`${item.source}${item.destination ? ` → ${item.destination}` : `：${item.message}`}`}>
+                            <span class="file-result-status" class:failed={item.status === "failed"}>{item.status === "moved" ? "已移动" : item.status === "skipped" ? "已跳过" : "失败"}</span>
+                            <span class="file-result-detail">{item.source.split(/[\\/]/).pop()}{item.message ? `：${item.message}` : ""}</span>
+                          </div>
+                        {/each}
+                      {:else}<span>将文件或文件夹拖到灵动岛即可自动分类</span>{/if}
+                    </div>
+                    {/if}
+                  </div>
+                {:else if renderedPage === "timer"}
                   <TimerPanel status={timerStatus} remainingMs={timerRemainingMs} durationMs={timerDurationMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
                 {:else if renderedPage === "volume"}
                   <VolumePanel volume={systemAudio?.volumePercent ?? 0} muted={systemAudio?.muted ?? false} deviceId={systemAudio?.deviceId ?? ""} devices={audioDevices} switchingDevice={audioDeviceSwitching} reduceMotion={reduceAnimations || !enableAnimations} onVolume={onAudioVolume} onDevice={onAudioDevice} onExpand={() => openFeature("volume")} />
@@ -1134,6 +1272,40 @@
   .cover.moving-cover.in-motion{visibility:visible;will-change:transform}
   .cover.shared-cover-source{visibility:hidden}
   .island-frame{position:relative;width:100%;height:100%;flex:none;overflow:visible;box-sizing:border-box}.island-frame.simulate-hidden{overflow:hidden}.surface-anchor{position:absolute;z-index:1}.edge-top .surface-anchor{top:0;left:50%}.edge-right .surface-anchor{top:50%;right:0}.edge-bottom .surface-anchor{bottom:0;left:50%}.edge-left .surface-anchor{top:50%;left:0}
+  .file-drop-feedback{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:#000;color:#91caff;font:600 12px var(--app-font);pointer-events:none;outline:1px solid #91caff;outline-offset:-2px}
+  .file-confirm{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;height:100%;font-size:18px;line-height:1.35}
+  .file-confirm strong{font-size:21px;color:#fff}.file-confirm p{margin:0;color:rgba(255,255,255,.78)}
+  .file-confirm-paths{min-height:0;max-height:65px;overflow:auto;color:#fff;overflow-wrap:anywhere;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.32) transparent}
+  .file-confirm-target{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:rgba(255,255,255,.65);font-size:16px}
+  .file-confirm-actions{display:flex;gap:10px;margin-top:auto}.file-confirm-actions button{flex:1;min-height:42px;border-radius:12px;background:rgba(255,255,255,.1)}
+  .file-sort-panel{display:flex;flex-direction:column;gap:16px;width:100%;height:100%;min-width:0;min-height:0;color:#fff;font:500 19px/1.35 var(--app-font,system-ui)}
+  .file-field{display:flex;flex-direction:column;gap:7px;min-width:0;flex:none}
+  .file-field-label{font-size:16px;color:rgba(255,255,255,.62)}
+  .file-sort-panel button{font:inherit;color:inherit;border:0;cursor:pointer}
+  .file-directory{display:flex;align-items:center;gap:12px;width:100%;min-width:0;min-height:52px;text-align:left;background:rgba(255,255,255,.08);border-radius:12px;padding:10px 14px}
+  .file-directory :global(svg){flex:none;color:rgba(255,255,255,.8)}
+  .file-directory span:not(.file-directory-action){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+  .file-directory .file-directory-action{flex:none;color:#91caff;font-size:17px}
+  .file-date{display:flex;gap:8px}
+  .file-date button{flex:1;min-width:0;min-height:44px;border-radius:12px;padding:8px 6px;background:rgba(255,255,255,.07);white-space:nowrap}
+  .file-date button.active,.file-date button.active:hover,.file-date button.active:focus-visible{color:#fff;background:hsl(223 70% 33%)}
+  .file-sort-panel button:hover,.file-sort-panel button:focus-visible{background:rgba(255,255,255,.16)}
+  .file-sort-panel button:focus-visible,.file-results:focus-visible{outline:2px solid #91caff;outline-offset:2px}
+  .file-progress{flex:none;display:flex;flex-direction:column;gap:7px}
+  .file-progress-label{display:flex;justify-content:space-between;color:rgba(255,255,255,.72);font-size:16px;font-variant-numeric:tabular-nums}
+  .file-progress-track{height:7px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.19)}
+  .file-progress-fill{height:100%;border-radius:inherit;background:#fff;transition:width 240ms cubic-bezier(.23,1,.32,1)}
+  .reduce-page-motion .file-progress-fill{transition:none}
+  .file-results{flex:1;min-height:44px;overflow:auto;color:rgba(255,255,255,.72);font-size:17px;line-height:1.45;overflow-wrap:anywhere;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.32) transparent}
+  .file-results::-webkit-scrollbar{width:6px;height:6px}
+  .file-results::-webkit-scrollbar-track{background:transparent}
+  .file-results::-webkit-scrollbar-thumb{border-radius:999px;background:rgba(255,255,255,.32)}
+  .file-results::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.55)}
+  .file-results::-webkit-scrollbar-button{display:none;width:0;height:0}
+  .file-result{display:flex;align-items:flex-start;gap:10px;padding:3px 0}.file-result-status{flex:none;color:#91caff}.file-result-status.failed,.file-error{color:#ffb4ab}.file-result-detail{min-width:0;overflow-wrap:anywhere}
+  .file-sort-page .page-header{height:36px;margin-bottom:16px;font-size:20px;font-weight:600;color:#fff}
+  .file-sort-page .page-back{width:36px;height:36px}
+  .file-sort-page .page-content{align-items:stretch}
   .island-surface{position:relative;z-index:1;overflow:hidden;flex:none;box-sizing:border-box;color:#fff;font-family:var(--app-font);text-rendering:optimizeLegibility;font-synthesis:none;contain:layout style;transition:transform 140ms cubic-bezier(.23,1,.32,1),box-shadow 180ms cubic-bezier(.23,1,.32,1)}
   .shadow-filter{position:absolute;pointer-events:none}
   .island-shadow{position:absolute;inset:0;z-index:0;filter:url(#island-upper-shadow);pointer-events:none;transition:transform 140ms cubic-bezier(.23,1,.32,1)}

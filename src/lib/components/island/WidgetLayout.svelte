@@ -121,11 +121,12 @@
     const item=drag,add=item.fromCatalog && !moved && item.kind!=="music";
     if(event.type!=="pointerup" || (moved && !valid)) {cancelDrag();return;}
     cleanup();
-    if(add)addFromCatalog(item.kind as IslandWidgetKind);
+    if(add)toggleFromCatalog(item.kind as IslandWidgetKind);
   }
-  function addFromCatalog(kind:IslandWidgetKind) {
-    selected=kind;
-    if(!order.includes(kind) && count<2 && !busy)void updateOrder([...order,kind]);
+  function toggleFromCatalog(kind:IslandWidgetKind) {
+    if(busy)return;
+    if(order.includes(kind)) {selected=null;void updateOrder(order.filter(item=>item!==kind));}
+    else if(count<2) {selected=kind;void updateOrder([...order,kind]);}
   }
   function nudge(kind:IslandPanelKind,direction:-1|1) {
     const index=order.indexOf(kind);
@@ -183,7 +184,7 @@
       <div class="catalog" onwheel={event=>{const el=event.currentTarget;if(el.scrollWidth>el.clientWidth){event.preventDefault();el.scrollLeft+=Math.abs(event.deltaX)>Math.abs(event.deltaY)?event.deltaX:event.deltaY;}}}>
         {#each WIDGET_KINDS as kind}
           {@const added=order.includes(kind)}
-          <button data-layout-edit-control type="button" class="catalog-item" class:selected={selected===kind} class:added disabled={busy || (!added && count>=2)} aria-label={`${t("widgetChoose")} ${t(kind)}`} aria-pressed={selected===kind} onpointerdown={event=>start(event,kind,true)} onclick={event=>{if(event.detail===0)addFromCatalog(kind);}}>
+          <button data-layout-edit-control type="button" class="catalog-item" class:selected={selected===kind} class:added disabled={busy || (!added && count>=2)} aria-label={`${t("widgetChoose")} ${t(kind)}`} aria-pressed={added} onpointerdown={event=>start(event,kind,true)} onclick={event=>{if(event.detail===0)toggleFromCatalog(kind);}}>
             <span class="app-icon" class:timer={kind==="timer"} class:weather={kind==="weather"} class:clock={kind==="clock"} class:calendar={kind==="calendar"}><SolidIcon {kind} size={32}/>{#if added}<i><Check size={12}/></i>{/if}</span>
           </button>
         {/each}

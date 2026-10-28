@@ -87,6 +87,21 @@ img {
   box-shadow: none !important;
 }
 
+.island-frame .file-confirm button.file-confirm-accept:not(.cover):not([data-layout-edit-control]),
+.island-frame .file-confirm button.file-confirm-accept:not(.cover):not([data-layout-edit-control]):hover:not(:disabled),
+.island-frame .file-confirm button.file-confirm-accept:not(.cover):not([data-layout-edit-control]):focus-visible:not(:disabled) {
+  background: #193a8e !important;
+  color: #fff;
+}
+
+/* Keep the selected date grouping visible through shared button states. */
+.island-frame .file-date button.active:not(.cover):not([data-layout-edit-control]),
+.island-frame .file-date button.active:not(.cover):not([data-layout-edit-control]):hover:not(:disabled),
+.island-frame .file-date button.active:not(.cover):not([data-layout-edit-control]):focus-visible:not(:disabled) {
+  background: #193a8e !important;
+  color: #fff;
+}
+
 /* Calendar dates have persistent states that must survive the shared button
    hover and focus rules, including in the desktop WebView. */
 .island-frame .calendar-extension button.day.today:not(.cover):not([data-layout-edit-control]) {

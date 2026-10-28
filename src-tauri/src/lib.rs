@@ -2120,6 +2120,9 @@ pub fn run() {
         })
         // 注册 IPC 命令
         .invoke_handler(tauri::generate_handler![
+            commands::inspect_sort_inputs,
+            commands::choose_sort_directory,
+            commands::sort_dropped_files,
             // 设置相关命令
             commands::get_preferences,
             commands::save_preferences,

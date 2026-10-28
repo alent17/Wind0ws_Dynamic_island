@@ -17,6 +17,8 @@
     <path fill-rule="evenodd" d="M6 2h2v2h8V2h2v2h1a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V2ZM4 9v10c0 .6.4 1 1 1h14c.6 0 1-.4 1-1V9H4Zm2 2h3v3H6zm5 0h3v3h-3zm5 0h2v3h-2zm-10 5h3v2H6zm5 0h3v2h-3zm5 0h2v2h-2Z" clip-rule="evenodd"/>
   {:else if kind === 'volume'}
     <path d="M3 8h4l5-4v16l-5-4H3a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Zm12.2.1a1 1 0 0 1 1.4 0 5.5 5.5 0 0 1 0 7.8 1 1 0 1 1-1.4-1.4 3.5 3.5 0 0 0 0-5 1 1 0 0 1 0-1.4Zm2.8-2.8a1 1 0 0 1 1.4 0 9.5 9.5 0 0 1 0 13.4 1 1 0 0 1-1.4-1.4 7.5 7.5 0 0 0 0-10.6 1 1 0 0 1 0-1.4Z"/>
+  {:else if kind === 'files'}
+    <path d="M3 4h6l2 2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 5v9h18V9H3Z"/>
   {:else if kind === 'system'}
     <path d="M2 11h4.1l2.2-6.5a1 1 0 0 1 1.9 0l3.3 10 2-5a1 1 0 0 1 1.8-.1l1.3 2.6H22v2h-4a1 1 0 0 1-.9-.55l-.7-1.4-2.1 5.3a1 1 0 0 1-1.9-.05L9.2 8l-1.5 4.4a1 1 0 0 1-.95.6H2z"/>
   {:else if kind === 'floating'}<path d="M3 4h18a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm9 8v6h9v-6h-9Z" fill-rule="evenodd"/>

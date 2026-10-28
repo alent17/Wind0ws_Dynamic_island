@@ -221,3 +221,22 @@ for (const edge of ["top", "right", "bottom", "left"] as const) {
     });
   }
 }
+
+test("catalog toggles added functions with pointer and keyboard", async ({page}) => {
+  await page.goto("/ui-tests/island-fixture.html");
+  await page.evaluate(() => (window as any).configureIsland({mode:"expanded",offset:225,scale:.65}));
+  await page.locator(".island-surface").focus(); await page.keyboard.press("F2");
+  await expect(page.locator(".stage")).toHaveAttribute("data-settled","true");
+  const timer=page.locator(".catalog-item").first(), weather=page.locator(".catalog-item").nth(1), clock=page.locator(".catalog-item").nth(2);
+  await timer.click(); await expect(timer).toHaveAttribute("aria-pressed","true");
+  await weather.click(); await expect(clock).toBeDisabled();
+  await timer.click(); await expect(timer).toHaveAttribute("aria-pressed","false");
+  await expect(page.locator('[data-widget-kind="timer"]')).toHaveCount(0);
+  await expect(clock).toBeEnabled();
+  await weather.focus(); await page.keyboard.press("Enter");
+  await expect(weather).toHaveAttribute("aria-pressed","false");
+  await expect(page.locator('[data-widget-kind="weather"]')).toHaveCount(0);
+  await timer.focus(); await page.keyboard.press("Space");
+  await expect(timer).toHaveAttribute("aria-pressed","true");
+  await expect(page.locator('[data-widget-kind="timer"]')).toBeVisible();
+});
