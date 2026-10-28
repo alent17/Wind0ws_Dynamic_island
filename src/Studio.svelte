@@ -2,7 +2,7 @@
   import { onMount, untrack } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { spring } from "svelte/motion";
-  import { RotateCcw,Trash2,ExternalLink,Monitor,RefreshCw,ChevronUp,ChevronDown,CloudSun,Search } from "lucide-svelte";
+  import { RotateCcw,Trash2,ExternalLink,Monitor,RefreshCw,ChevronUp,ChevronDown,CloudSun,Search,SlidersHorizontal,Music2,Settings2 } from "lucide-svelte";
   import { normalizeWidgets, type IslandWidgets } from "$lib/widgetLayout";
   import IslandSurface from "$lib/components/island/IslandSurface.svelte";
   import StudioSlider from "$lib/components/settings/StudioSlider.svelte";
@@ -82,28 +82,41 @@
   let neteaseSetupBusy=$state(false);
   let neteaseSetupMessage=$state("");
   let neteaseShortcut=$state("");
-  async function setupNetease(restart:boolean,configureOnly=false){
-    if(neteaseSetupBusy||!nativeRuntime)return;
+  async function setupNetease(restart:boolean,configureOnly=false,repairStartMenu=false){
+    if(neteaseSetupBusy||!nativeRuntime||settings.neteaseConnectionMode!=="enhanced")return;
     neteaseSetupBusy=true;
-    neteaseSetupMessage="";
+    neteaseSetupMessage=t("neteaseStageSaving");
     neteaseShortcut="";
     try{
       await persist();
-      const result=await mediaApi.setupNeteaseConnection(restart,true,configureOnly);
+      const result=await mediaApi.setupNeteaseConnection(restart,true,configureOnly,stage=>{
+        if(studioDisposed)return;
+        const keys={waiting:"neteaseStageWaiting",detecting:"neteaseStageDetecting",configuring:"neteaseStageConfiguring",waitingPlayer:"neteaseStageWaitingPlayer",binding:"neteaseStageBinding",saving:"neteaseStageSaving"} as const;
+        if(stage in keys)neteaseSetupMessage=t(keys[stage]);
+      },repairStartMenu);
       if(studioDisposed)return;
       neteaseShortcut=result.configured?result.shortcutPath:"";
-      neteaseSetupMessage=configureOnly&&result.configured&&result.launchEntries>0?t("neteaseLaunchEntriesReady",{count:result.launchEntries}):t(result.bindingFailed?"neteaseBindFailed":result.boundSessionId?"neteaseBound":result.connected?"neteaseBindPending":result.configured?"neteaseConfigured":"neteaseDisconnected");
+      neteaseSetupMessage=result.restartRequired?t("neteaseRestartRequired"):configureOnly&&result.configured&&result.launchEntries>0?t("neteaseLaunchEntriesReady",{count:result.launchEntries}):t(result.bindingFailed?"neteaseBindFailed":result.boundSessionId?"neteaseBound":result.connected?"neteaseBindPending":result.configured?"neteaseConfigured":"neteaseDisconnected");
+      if((result.pendingStartMenuEntries??0)>0)neteaseSetupMessage+=" "+t("neteaseStartMenuPending",{count:result.pendingStartMenuEntries??0});
+      // Binding has already committed. A transient refresh failure must not
+      // replace that success with a misleading "setup failed" message.
+      const refreshed=await Promise.allSettled([settingsApi.getSettings()]);
+      if(studioDisposed)return;
+      if(refreshed[0].status==="fulfilled")applyExternalSettings(normalizeAppSettings(refreshed[0].value));
       if(result.boundSessionId){
-        applyExternalSettings(normalizeAppSettings(await settingsApi.getSettings()));
-        await refreshSessions();
-        await mediaApi.getMediaInfo();
+        await Promise.allSettled([refreshSessions(),mediaApi.getMediaInfo()]);
       }
     }catch(error){
       if(studioDisposed)return;
-      neteaseSetupMessage=t(String(error).includes("NETEASE_NOT_FOUND")?"neteaseNotFound":"neteaseSetupFailed");
+      const detail=String(error);
+      neteaseSetupMessage=t(detail.includes("NETEASE_NOT_FOUND")?"neteaseNotFound":detail.includes("NETEASE_SETUP_BUSY")?"neteaseSetupBusy":detail.includes("NETEASE_SETUP_TIMEOUT")?"neteaseSetupTimeout":detail.includes("NETEASE_RESTART_FAILED")?"neteaseRestartFailed":"neteaseSetupFailed");
     }finally{
       neteaseSetupBusy=false;
     }
+  }
+  async function setNeteaseAutoConnect(enabled:boolean){
+    updatePreference({neteaseAutoConnect:enabled});
+    if(enabled)await setupNetease(false,true,true);
   }
   const previewBars=[.45,.78,.58,.96,.7,.38];
   let scenarioMedia=$derived.by<MediaState>(()=>{const base={...DEMO_MEDIA,positionMs:244000*progress/100,lastUpdatedTimestamp:Date.now()};if(scenario==="paused")return{...base,isPlaying:false};if(scenario==="no-art")return{...base,albumArt:""};if(scenario==="long-title")return{...base,title:"宇宙尽头的浪漫主义与一场不会结束的午夜公路旅行",artist:"The Extremely Long Artist Name · 特别长的专辑名称"};return base});
@@ -457,8 +470,14 @@
         <span>{enumLabel(mode)} · {enumLabel(appearanceDraft.islandStyle)} · {enumLabel(appearanceDraft.islandEdge)} · {currentGeometry.width} × {currentGeometry.height} · r{currentGeometry.radius}</span>
       </div>
     </section>
-    <aside>
-      <section class="appearance-section">
+    <aside aria-label={t("preferences")}>
+      <nav class="settings-nav" aria-label={t("preferences")}>
+        <a href="#studio-layout"><SlidersHorizontal size={16}/><span>{t("settingsNavAppearance")}</span></a>
+        <a href="#studio-media"><Music2 size={16}/><span>{t("settingsNavMedia")}</span></a>
+        <a href="#studio-desktop"><CloudSun size={16}/><span>{t("settingsNavDesktop")}</span></a>
+        <a href="#studio-system"><Settings2 size={16}/><span>{t("settingsNavSystem")}</span></a>
+      </nav>
+      <section id="studio-layout" class="appearance-section">
         <div class="section-heading"><h2>{t("islandLayout")}</h2><span class="live-indicator"><i></i>{t("previewReady")}</span></div>
         <div class="preview-state"><div class="field-label"><span>{t("previewState")}</span><small>{t("previewReady")}</small></div><div class="segmented">{#each ["compact","hover","expanded","hidden"] as item}<button aria-pressed={mode===item} class:active={mode===item} onclick={()=>mode=item as IslandMode}>{enumLabel(item)}</button>{/each}</div></div>
         <div class="preview-setting" role="group" data-preview-target="shape" onmouseenter={()=>previewTarget="shape"} onfocusin={()=>previewTarget="shape"} onmouseleave={()=>previewTarget=null} onfocusout={()=>previewTarget=null}>
@@ -493,12 +512,18 @@
           <div class="compact-select-row"><span>{t("timeZone")}</span><StudioSelect label={t("timeZone")} value={settings.clockTimeZone} options={clockTimeZoneOptions} onSelect={(value)=>updatePreference({clockTimeZone:value})}/></div>
         </div>
       </section>
-      <section class="netease-progress-section">
+      <section id="studio-media" class="netease-progress-section">
         <h2>{t("neteaseConnection")}</h2>
-        <p class="hint">{t("neteasePersistentHint")}</p>
-        <div class="netease-auto-row">
-          <label><input type="checkbox" checked={settings.neteaseAutoConnect} disabled={!nativeRuntime} onchange={(event)=>updatePreference({neteaseAutoConnect:event.currentTarget.checked})}/><span>{t("neteaseAutoConnect")}</span></label>
+        <div class="segmented two progress-options" role="group" aria-label={t("neteaseConnection")}>
+          <button aria-pressed={settings.neteaseConnectionMode==="standard"} class:active={settings.neteaseConnectionMode==="standard"} disabled={neteaseSetupBusy} onclick={()=>updatePreference({neteaseConnectionMode:"standard"})}><span>{t("neteaseStandard")}</span><small>{t("neteaseStandardShort")}</small></button>
+          <button aria-pressed={settings.neteaseConnectionMode==="enhanced"} class:active={settings.neteaseConnectionMode==="enhanced"} disabled={neteaseSetupBusy} onclick={()=>updatePreference({neteaseConnectionMode:"enhanced"})}><span>{t("neteaseEnhanced")}</span><small>{t("neteaseEnhancedShort")}</small></button>
         </div>
+        <p class="hint">{t(settings.neteaseConnectionMode==="standard"?"neteaseStandardHint":"neteaseEnhancedHint")}</p>
+        {#if settings.neteaseConnectionMode==="enhanced"}
+        <div class="netease-auto-row">
+          <label><input type="checkbox" checked={settings.neteaseAutoConnect} disabled={!nativeRuntime||neteaseSetupBusy} onchange={(event)=>setNeteaseAutoConnect(event.currentTarget.checked)}/><span>{t("neteaseAutoConnect")}</span></label>
+        </div>
+        <p class="hint">{t("neteaseAutoConnectHint")}</p>
         <div class="netease-actions">
           <button type="button" class="netease-primary" title={t("neteaseBindHint")} disabled={!nativeRuntime||neteaseSetupBusy} onclick={()=>setupNetease(true)}><RefreshCw size={15}/>{t(neteaseSetupBusy?"neteaseConnecting":"neteaseBindAction")}</button>
           <button type="button" disabled={!nativeRuntime||neteaseSetupBusy} onclick={()=>setupNetease(false)}>{t("neteaseCheckBind")}</button>
@@ -507,10 +532,11 @@
           <summary>{t("neteaseMoreOptions")}</summary>
           <p class="hint">{t("neteaseSetupHint")}</p>
           <p class="hint">{t("neteasePlayButtonHint")}</p>
-          <button type="button" disabled={!nativeRuntime||neteaseSetupBusy} onclick={()=>setupNetease(false,true)}>{t(neteaseSetupBusy?"neteaseConnecting":"neteaseConfigureLaunchEntries")}</button>
+          <button type="button" disabled={!nativeRuntime||neteaseSetupBusy} onclick={()=>setupNetease(false,true,true)}>{t(neteaseSetupBusy?"neteaseConnecting":"neteaseConfigureLaunchEntries")}</button>
         </details>
-        {#if neteaseSetupMessage}<p class="message" role="status">{neteaseSetupMessage}</p>{/if}
+        {#if neteaseSetupMessage}<p class="message" role="status" aria-live="polite" aria-atomic="true">{neteaseSetupMessage}</p>{/if}
         {#if neteaseShortcut}<p class="hint netease-shortcut">{neteaseShortcut}</p>{/if}
+        {/if}
         <h2>{t("neteaseProgress")}</h2>
 
         <div class="segmented two progress-options" role="group" aria-label={t("neteaseProgress")}>
@@ -518,7 +544,7 @@
           <button aria-pressed={settings.neteaseProgressMode==="estimate"} class:active={settings.neteaseProgressMode==="estimate"} onclick={()=>updatePreference({neteaseProgressMode:"estimate"})}><span>{t("neteaseProgressEstimate")}</span><small>{t("neteaseProgressEstimateHint")}</small></button>
         </div>
 
-        {#if nativeRuntime && followingLive && liveMedia.source==="netease" && liveMedia.neteaseProgressAvailable===false}<p class="netease-progress-status" role="status">{t("neteaseProgressUnavailable")}</p>{/if}
+        {#if nativeRuntime && followingLive && liveMedia.source==="netease" && settings.neteaseConnectionMode==="enhanced" && liveMedia.neteaseProgressAvailable===false}<p class="netease-progress-status" role="status">{t("neteaseProgressUnavailable")}</p>{/if}
         {#if nativeRuntime && followingLive && liveMedia.source==="netease" && liveMedia.progressKnown===false && settings.neteaseProgressMode==="estimate"}<p class="netease-progress-status" role="status">{t("neteaseProgressPending")}</p>{/if}
       </section>
       <section class="spectrum-section"><h2>{t("spectrum")}</h2><div class="preview-setting" role="group" data-preview-target="spectrum" onmouseenter={()=>previewTarget="spectrum"} onfocusin={()=>previewTarget="spectrum"} onmouseleave={()=>previewTarget=null} onfocusout={()=>previewTarget=null}><div class="setting-grid single"><button type="button" class="setting-choice" class:active={appearanceDraft.showSpectrum} aria-pressed={appearanceDraft.showSpectrum} onclick={()=>{appearanceDraft.showSpectrum=!appearanceDraft.showSpectrum;previewTarget="spectrum"}}><span class="choice-mark" aria-hidden="true">{appearanceDraft.showSpectrum?"✓":""}</span><span class="choice-copy"><strong>{t("showSpectrum")}</strong><small>{t("showSpectrumHint")}</small></span></button></div>{#if appearanceDraft.showSpectrum}<div class="field-label"><span>{t("animationSource")}</span><small>{t("animationSourceHint")}</small></div><div class="segmented two"><button aria-pressed={appearanceDraft.spectrumMode==="realtime"} class:active={appearanceDraft.spectrumMode==="realtime"} onclick={()=>{appearanceDraft.spectrumMode="realtime";previewTarget="spectrum"}}>{t("realtime")}</button><button aria-pressed={appearanceDraft.spectrumMode==="random"} class:active={appearanceDraft.spectrumMode==="random"} onclick={()=>{appearanceDraft.spectrumMode="random";previewTarget="spectrum"}}>{t("random")}</button></div>{/if}</div></section>
@@ -531,7 +557,7 @@
         {/each}
         {#if sessionsLoading}<div class="ordered-list skeleton-list" aria-hidden="true">{#each [0,1,2] as row}<div class="ordered-row skeleton-row"><span><i></i><i></i></span></div>{/each}</div>{:else}<div class="ordered-list">{#each playerRows.selected as player,index (player.id)}<div class="ordered-row" class:offline={!sessions.some(item=>item.id===player.id)}><button type="button" class="player-selection" role="checkbox" aria-checked="true" aria-label={t("select",{name:player.displayName})} onclick={()=>togglePlayer(player.id,false)}><span class="choice-mark" aria-hidden="true">✓</span></button><span><strong>{player.displayName}</strong><small>{player.isPlaying?t("playingNow"):sessions.some(item=>item.id===player.id)?t("detected"):t("offline")}</small></span><button aria-label={t("moveUp")} disabled={index===0} onclick={()=>movePlayer(player.id,-1)}><ChevronUp size={14}/></button><button aria-label={t("moveDown")} disabled={index===playerRows.selected.length-1} onclick={()=>movePlayer(player.id,1)}><ChevronDown size={14}/></button></div>{/each}{#each playerRows.unselected as player (player.id)}<div class="ordered-row" class:offline={!sessions.some(item=>item.id===player.id)}><button type="button" class="player-selection" role="checkbox" aria-checked="false" aria-label={t("select",{name:player.displayName})} onclick={()=>togglePlayer(player.id,true)}><span class="choice-mark" aria-hidden="true"></span></button><span><strong>{player.displayName}</strong><small>{player.isPlaying?t("playingNow"):sessions.some(item=>item.id===player.id)?t("detected"):t("offline")}</small></span></div>{/each}{#if !playerRows.selected.length&&!playerRows.unselected.length}<p class="empty">{t("noSessions")}</p>{/if}</div>{/if}
       </section>
-      <section class="idle-section"><div class="section-title"><h2>{t("idleContent")}</h2><span class="section-note">{t("idleFixedLabel")}</span></div>
+      <section id="studio-desktop" class="idle-section"><div class="section-title"><h2>{t("idleContent")}</h2><span class="section-note">{t("idleFixedLabel")}</span></div>
         <p class="hint idle-fixed-hint">{t("idleFixedHint")}</p>
         <div class="idle-layout-preview" aria-hidden="true"><span>{t("clock")}</span><span><CloudSun size={14}/>{t("weather")}</span></div>
         <div class="weather-box"><label for="weather-city">{t("weatherCity")}</label><div class="search-row"><input id="weather-city" placeholder={t("cityExample")} bind:value={weatherQuery} onkeydown={(e)=>{if(e.key==="Enter")void searchWeather()}}/><button aria-label={t("searchCity")} onclick={searchWeather}><Search size={15}/></button></div>{#if settings.weatherLocation}<p class="selected-city">{t("currentCity",{name:settings.weatherLocation.name})}</p>{/if}{#if weatherMessage}<p class="message">{weatherMessage}</p>{/if}{#if weatherResults.length}<div class="weather-results">{#each weatherResults as item}<button onclick={()=>selectWeather(item)}><strong>{item.name}</strong><small>{weatherCandidateDetail(item)}</small></button>{/each}</div>{/if}<p class="hint">{t("weatherSource")}</p></div>
@@ -541,9 +567,16 @@
         <button type="button" class="setting-choice" class:active={settings.floatingCircularAlbum} aria-pressed={settings.floatingCircularAlbum} onclick={toggleCircularAlbum}><span class="choice-mark" aria-hidden="true">{settings.floatingCircularAlbum?"✓":""}</span><span class="choice-copy"><strong>{t("floatingCircularAlbum")}</strong><small>{t("floatingCircularAlbumHint")}</small></span></button>
         <button type="button" class="setting-choice" class:active={settings.enableMvPlayback&&!settings.floatingCircularAlbum} aria-pressed={settings.enableMvPlayback&&!settings.floatingCircularAlbum} disabled={settings.floatingCircularAlbum} title={settings.floatingCircularAlbum?t("mvUnavailableInCircular"):undefined} onclick={()=>updatePreference({enableMvPlayback:!settings.enableMvPlayback})}><span class="choice-mark" aria-hidden="true">{settings.enableMvPlayback&&!settings.floatingCircularAlbum?"✓":""}</span><span class="choice-copy"><strong>{t("mvPlayback")}</strong><small>{settings.floatingCircularAlbum?t("mvUnavailableInCircular"):t("mvPlaybackHint")}</small></span></button>
       </div></section>
-      <section class="app-behavior-section"><h2>{t("appBehavior")}</h2>
-        <div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.wheelVolumeControl} aria-pressed={settings.wheelVolumeControl} onclick={()=>updatePreference({wheelVolumeControl:!settings.wheelVolumeControl})}><span class="choice-mark" aria-hidden="true">{settings.wheelVolumeControl?"✓":""}</span><span class="choice-copy"><strong>{t("wheelVolumeControl")}</strong><small>{t("wheelVolumeControlHint")}</small></span></button></div>
-        {#if settings.wheelVolumeControl}<div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.volumeProtectionEnabled} aria-pressed={settings.volumeProtectionEnabled} onclick={()=>updatePreference({volumeProtectionEnabled:!settings.volumeProtectionEnabled})}><span class="choice-mark" aria-hidden="true">{settings.volumeProtectionEnabled?"✓":""}</span><span class="choice-copy"><strong>{t("volumeProtection")}</strong><small>{t("volumeProtectionHint")}</small></span></button></div>{#if settings.volumeProtectionEnabled}<StudioSlider label={t("volumeProtectionLimit")} min={40} max={100} unit="%" value={settings.volumeProtectionLimit} onPreviewMove={(value)=>updatePreference({volumeProtectionLimit:value})}/>{/if}{/if}
+      <section id="studio-system" class="app-behavior-section"><h2>{t("appBehavior")}</h2>
+        <div class="volume-settings">
+          <div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.wheelVolumeControl} aria-pressed={settings.wheelVolumeControl} onclick={()=>updatePreference({wheelVolumeControl:!settings.wheelVolumeControl})}><span class="choice-mark" aria-hidden="true">{settings.wheelVolumeControl?"✓":""}</span><span class="choice-copy"><strong>{t("wheelVolumeControl")}</strong><small>{t("wheelVolumeControlHint")}</small></span></button></div>
+          {#if settings.wheelVolumeControl}
+            <div class="volume-protection-options">
+              <div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.volumeProtectionEnabled} aria-pressed={settings.volumeProtectionEnabled} onclick={()=>updatePreference({volumeProtectionEnabled:!settings.volumeProtectionEnabled})}><span class="choice-mark" aria-hidden="true">{settings.volumeProtectionEnabled?"✓":""}</span><span class="choice-copy"><strong>{t("volumeProtection")}</strong><small>{t("volumeProtectionHint")}</small></span></button></div>
+              {#if settings.volumeProtectionEnabled}<div class="volume-protection-limit"><StudioSlider label={t("volumeProtectionLimit")} min={40} max={100} unit="%" value={settings.volumeProtectionLimit} onPreviewMove={(value)=>updatePreference({volumeProtectionLimit:value})}/></div>{/if}
+            </div>
+          {/if}
+        </div>
         <div class="setting-grid"><button type="button" class="setting-choice" class:active={settings.alwaysOnTop} aria-pressed={settings.alwaysOnTop} disabled={!nativeRuntime} onclick={()=>setAlwaysOnTop(!settings.alwaysOnTop)}><span class="choice-mark" aria-hidden="true">{settings.alwaysOnTop?"✓":""}</span><span class="choice-copy"><strong>{t("alwaysOnTop")}</strong><small>{t("alwaysOnTopHint")}</small></span></button><button type="button" class="setting-choice" class:active={settings.autoStart} aria-pressed={settings.autoStart} disabled={!nativeRuntime} onclick={()=>setAutoStart(!settings.autoStart)}><span class="choice-mark" aria-hidden="true">{settings.autoStart?"✓":""}</span><span class="choice-copy"><strong>{t("autoStart")}</strong><small>{t("autoStartHint")}</small></span></button></div>
         <div class="select-row"><span><Monitor size={17}/>{t("monitor")}</span><StudioSelect label={t("monitor")} value={String(settings.monitorIndex)} disabled={!nativeRuntime} options={monitors.length?monitors.map((monitor)=>({value:String(monitor.index),label:monitor.name})):[{value:String(settings.monitorIndex),label:t("primaryMonitor") }]} onSelect={(value)=>updatePreference({monitorIndex:Number(value)})}/></div>
       </section>
@@ -597,10 +630,10 @@
   .stage-caption.editing{color:var(--studio-accent)}.stage-caption.editing strong{color:#2449ac}
   aside>section{min-width:0;padding:17px;border:1px solid var(--studio-line);border-radius:16px;background:var(--studio-panel)}
   aside>.appearance-section,aside>.preferences-section,aside>.players-section,aside>.idle-section{grid-column:1/-1}
-  h2{margin:0 0 13px;color:var(--studio-ink);font-size:14px;letter-spacing:.01em;line-height:1.2}
-  .shape-settings{display:flex;flex-direction:column;gap:18px;min-width:0;margin:20px 0 0;padding:16px;border:1px solid #e5e5e9;border-radius:14px}
+  h2{margin:0 0 10px;color:var(--studio-ink);font-size:14px;letter-spacing:.01em;line-height:1.2}
+  .shape-settings{display:flex;flex-direction:column;gap:14px;min-width:0;margin:14px 0 0;padding:12px 13px;border:1px solid #e5e5e9;border-radius:14px}
   .appearance-section .shape-settings :global(.studio-slider){margin-top:0}
-  .shape-settings legend{padding:0 8px;font-size:13px;font-weight:650}
+  .shape-settings{border-color:#34373d;background:linear-gradient(160deg,#1c1e22,#151619);border-radius:16px}.shape-settings legend{padding:0 8px;font-size:13px;font-weight:650;color:#e6e8ed}
   .section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
   .section-heading h2{margin:0;font-size:16px;letter-spacing:-.01em}
   .live-indicator{display:flex;align-items:center;gap:6px;color:#777780;font-size:11px;white-space:nowrap}.live-indicator i{width:6px;height:6px;border-radius:50%;background:var(--studio-accent);box-shadow:0 0 0 4px rgba(49,88,200,.11)}
@@ -625,20 +658,25 @@
   button:disabled,input:disabled{cursor:not-allowed;opacity:.45}.message{margin:10px 0 0;color:#39724a;font-size:12px}.segmented button:focus-visible,.tool-list button:focus-visible,.icon-button:focus-visible,.ordered-row button:focus-visible,.weather-results button:focus-visible,input:focus-visible{outline:2px solid #111;outline-offset:2px}
   .setting-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.setting-grid.single{grid-template-columns:1fr}.setting-choice{min-width:0;min-height:66px;display:flex;align-items:flex-start;gap:8px;padding:11px;border:1px solid #e1e1e5;border-radius:11px;color:#36363d;background:#fff;text-align:left;cursor:pointer;transition:transform 120ms ease,background 140ms ease,border-color 140ms ease,color 140ms ease}.setting-choice:hover{border-color:#cfd1d8;background:#fcfcfd}.setting-choice.active{border-color:#111113;color:#fff;background:#111113}.setting-choice.active:hover{border-color:#111113;background:#202126}.setting-choice:active{transform:scale(.98)}.setting-choice:disabled{cursor:not-allowed}.setting-choice.unavailable{cursor:not-allowed;opacity:.7}.choice-mark{display:grid;place-items:center;flex:none;width:17px;height:17px;margin-top:1px;border:1px solid #bdbdc4;border-radius:5px;color:transparent;font-size:12px;font-weight:800;line-height:1}.setting-choice.active .choice-mark,.player-selection .choice-mark{border-color:#fff;color:#111113;background:#fff}.choice-copy{min-width:0;display:flex;flex-direction:column;gap:4px}.choice-copy strong{font-size:12px;line-height:1.2}.choice-copy small{color:#777780;font-size:11px;line-height:1.35}.setting-choice.active .choice-copy small{color:rgba(255,255,255,.68)}.player-selection{width:27px!important;height:27px!important;padding:0!important;border:0!important;background:transparent!important}.player-selection .choice-mark{width:17px;height:17px;margin:0}.setting-choice:focus-visible,.player-selection:focus-visible{outline:2px solid #111;outline-offset:2px}.player-selection:focus-visible{outline-color:#111}.setting-choice.active:focus-visible{outline-color:#fff}
   /* Studio rhythm: controls within a group stay close; groups and panels breathe. */
-  main{--studio-space-2:8px;--studio-space-3:12px;--studio-space-4:16px;--studio-space-5:20px}
-  .workspace aside{gap:var(--studio-space-4)}
-  aside>section{padding:var(--studio-space-5)}
-  .section-title{margin-bottom:var(--studio-space-3)}
+  main{--studio-space-2:7px;--studio-space-3:9px;--studio-space-4:12px;--studio-space-5:15px}
+  .workspace aside{gap:var(--studio-space-3)}
+  aside>section{padding:var(--studio-space-4)}
+  .section-title{margin-bottom:var(--studio-space-2)}
   .section-title+.hint{margin-top:0}
-  .preview-state{padding-bottom:var(--studio-space-4);margin-bottom:var(--studio-space-4)}
+  .preview-state{padding-bottom:var(--studio-space-3);margin-bottom:var(--studio-space-3)}
   .preview-state .field-label,.preview-setting .field-label{margin:0 0 var(--studio-space-2)}
-  .appearance-section>.preview-setting{margin-top:var(--studio-space-4)}
-  .appearance-section :global(.studio-slider){margin-top:var(--studio-space-4)}
-  .select-grid{gap:var(--studio-space-3)}
-  .setting-grid{gap:var(--studio-space-2)}
-  .setting-choice{min-height:70px;padding:var(--studio-space-3)}
-  .compact-select-row{min-height:48px}
-  .ordered-list{margin-top:var(--studio-space-3);gap:var(--studio-space-2)}
+  .appearance-section>.preview-setting{margin-top:var(--studio-space-3)}
+  .appearance-section :global(.studio-slider){margin-top:var(--studio-space-3)}
+  .select-grid{gap:var(--studio-space-2)}
+  .setting-grid{gap:7px}
+  .volume-settings{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+  .volume-protection-options{display:flex;flex-direction:column;gap:10px;padding:9px;border:1px solid #35383e;border-radius:14px;background:linear-gradient(160deg,#1b1d21,#141518)}
+  .volume-protection-limit{padding:2px 3px 0}
+  .volume-protection-limit :global(.studio-slider){gap:7px}
+  .volume-protection-limit :global(.range-label){font-size:12px}
+  .setting-choice{min-height:56px;padding:10px}
+  .compact-select-row{min-height:42px;padding:8px 10px}
+  .ordered-list{margin-top:var(--studio-space-2);gap:6px}
 
   /* Each control has a readable rest, hover, selected, focus, and disabled state. */
   .segmented button:hover:not(.active){background:rgba(255,255,255,.55)}
@@ -658,50 +696,97 @@
   .setting-choice:disabled .choice-mark{border-color:#a8acb5}
   .icon-button:disabled,.ordered-row button:disabled,.search-row button:disabled{background:#eff0f2;color:#a1a4ad}
 
-  /* Studio borrows the island's black shell and white active surfaces. */
-  :global(html),:global(body),:global(#app){background:#0b0c0e;color:#f5f6f7}
-  main{--studio-ink:#f5f6f7;--studio-muted:#afb2bc;--studio-line:#35373d;--studio-panel:#181a1e;--studio-surface:#22252a;--studio-accent:#84a8ff;--studio-control-ink:#f5f6f7;--studio-control-muted:#aeb1ba;--studio-range-accent:#f5f6f7;background:#0e0f12;color:var(--studio-ink)}
+  /* Match the island shell: deep black canvas, layered slate surfaces, quiet highlights. */
+  :global(html),:global(body),:global(#app){background:#08090b;color:#f4f5f7}
+  main{--studio-ink:#f4f5f7;--studio-muted:#aeb2bd;--studio-line:#35383e;--studio-panel:#17191d;--studio-surface:#22252a;--studio-accent:#91caff;--studio-control-ink:#f4f5f7;--studio-control-muted:#aeb2bd;--studio-range-accent:#91caff;background:#0b0c0e;color:var(--studio-ink)}
   .studio-wordmark{color:#a7aab4}
-  .studio-status{background:#1b1d22;border-color:#373a43;color:var(--studio-muted)}
+  .studio-status{background:#17191d;border-color:#34373e;color:var(--studio-muted);border-radius:14px}
   .studio-status.browser i{background:#9da1ab;box-shadow:0 0 0 4px rgba(157,161,171,.14)}
-  .stage{border-color:#383b43;box-shadow:0 20px 48px rgba(0,0,0,.23)}
-  .stage-caption,.stage-caption strong{color:#5d6069}
-  .stage-caption.editing,.stage-caption.editing strong{color:#3158c8}
-  aside>section,.preferences-section{background:var(--studio-panel);border-color:var(--studio-line)}
+  .stage{border-color:#363940;box-shadow:0 20px 48px rgba(0,0,0,.34)}
+  .stage-caption,.stage-caption strong{color:#777d88}
+  .stage-caption.editing,.stage-caption.editing strong{color:#91caff}
+  aside>section,.preferences-section{background:linear-gradient(160deg,#191b1f 0%,#141518 100%);border-color:var(--studio-line);box-shadow:inset 0 1px rgba(255,255,255,.025),0 10px 26px rgba(0,0,0,.12);border-radius:18px}
   .section-note,.live-indicator,.field-label small,.hint,.empty,.ordered-row small,.choice-copy small{color:var(--studio-muted)}
-  .preview-state,.select-row,.weather-box{border-color:#35373d}
-  .segmented{background:#0f1013}
-  .segmented button{color:#b8bbc4}
-  .segmented button:hover:not(.active){color:#fff;background:#303238}
-  .segmented button.active{color:#111216;background:#f5f6f7;box-shadow:0 2px 6px rgba(0,0,0,.23)}
-  .setting-choice,.tool-list button,.weather-results button,.ordered-row,.idle-layout-preview{color:#f1f2f4;background:#22252a;border-color:#3a3d45}
-  .setting-choice:hover:not(:disabled):not(.active),.tool-list button:hover:not(:disabled),.weather-results button:hover,.ordered-row:hover{color:#fff;background:#2b2e34;border-color:#666b76}
-  .setting-choice.active{color:#111216;background:#f5f6f7;border-color:#f5f6f7}
-  .setting-choice.active:hover:not(:disabled){background:#fff;border-color:#fff}
-  .setting-choice.active .choice-copy small{color:#51545d}
-  .choice-mark{border-color:#81858e}
-  .setting-choice.active .choice-mark,.player-selection .choice-mark{color:#fff;background:#141519;border-color:#141519}
+  .preview-state,.select-row,.weather-box{border-color:#34373d}
+  .segmented{background:#0b0c0e;border:1px solid #2b2e34}
+  .segmented button{color:#aeb2bd}
+  .segmented button:hover:not(.active){color:#fff;background:#292c32}
+  .segmented button.active{color:#f5f6f7;background:#30333a;box-shadow:inset 0 1px rgba(255,255,255,.08),0 2px 8px rgba(0,0,0,.24)}
+  .setting-choice,.tool-list button,.weather-results button,.ordered-row,.idle-layout-preview{color:#e9ebef;background:linear-gradient(160deg,#24272c,#1d1f23);border-color:#383b42}.setting-choice{border-radius:14px}
+  .setting-choice:hover:not(:disabled):not(.active),.tool-list button:hover:not(:disabled),.weather-results button:hover,.ordered-row:hover{color:#fff;background:#2a2d33;border-color:#555a64}
+  .setting-choice.active{color:#f5f6f7;background:linear-gradient(160deg,#30333a,#23262b);border-color:#626873;box-shadow:inset 0 1px rgba(255,255,255,.09),0 5px 14px rgba(0,0,0,.16)}
+  .setting-choice.active:hover:not(:disabled){background:linear-gradient(160deg,#383c44,#282b31);border-color:#7c8490}
+  .netease-actions .netease-primary{color:#f4f5f7;background:linear-gradient(160deg,#343840,#24272d);border-color:#555a64}
+  .setting-choice.active .choice-copy small{color:#b7bdc8}
+  .choice-mark{border-color:#737983}
+  .setting-choice.active .choice-mark,.player-selection .choice-mark{color:#111216;background:#91caff;border-color:#91caff}
   .player-selection[aria-checked="false"] .choice-mark{color:transparent;background:transparent;border-color:#81858e}
-  .setting-choice:disabled{color:#888c97;background:#202126;border-color:#303239}
-  .setting-choice.active:disabled{color:#c5c7ce;background:#303239;border-color:#41434a}
+  .setting-choice:disabled{color:#858a95;background:#1b1d21;border-color:#2d3036}
+  .setting-choice.active:disabled{color:#aeb2bd;background:#282b30;border-color:#3a3e46}
   .setting-choice:disabled .choice-copy small{color:#858995}
   .setting-choice:disabled .choice-mark{border-color:#777b85}
-  .compact-select-row{background:#22252a;border-color:#3a3d45}
-  .compact-select-row:hover:not(:focus-within){background:#2b2e34}
-  .compact-select-row:focus-within{background:#292c32;border-color:var(--studio-accent)}
-  .search-row input{color:#f2f3f5;background:#22252a;border:1px solid #484b53}
+  .compact-select-row{background:#202227;border-color:#373a41;border-radius:12px}
+  .compact-select-row:hover:not(:focus-within){background:#292c32}
+  .compact-select-row:focus-within{background:#24272d;border-color:var(--studio-accent)}
+  .search-row input{color:#f2f3f5;background:#1d1f23;border:1px solid #41444c;border-radius:11px}
   .preferences-section{position:relative;z-index:2}
   .search-row input::placeholder{color:#969aa5}
-  .icon-button,.ordered-row button,.search-row button{color:#edf0f4;background:#282b31;border:1px solid #42454e}
-  .icon-button:hover:not(:disabled),.ordered-row button:hover:not(:disabled),.search-row button:hover:not(:disabled){color:#fff;background:#343740;border-color:#6b707a}
-  .icon-button:disabled,.ordered-row button:disabled,.search-row button:disabled{color:#81858e;background:#202126;border-color:#303239}
+  .icon-button,.ordered-row button,.search-row button{color:#edf0f4;background:#22252a;border:1px solid #3b3e46}
+  .icon-button:hover:not(:disabled),.ordered-row button:hover:not(:disabled),.search-row button:hover:not(:disabled){color:#fff;background:#30343b;border-color:#626873}
+  .icon-button:disabled,.ordered-row button:disabled,.search-row button:disabled{color:#81858e;background:#1b1d21;border-color:#2d3036}
   .idle-layout-preview :global(svg){color:#84a8ff}
   .selected-city,.message{color:#9fd2ad}
   .skeleton-row i{background:linear-gradient(90deg,#2a2d33 25%,#393c43 50%,#2a2d33 75%);background-size:200% 100%}
 
+  /* Settings take the island's black surface, translucent controls and compact spacing. */
+  :global(html),:global(body),:global(#app){background:#111214;color:#fff}
+  main{--studio-ink:#fff;--studio-muted:rgba(255,255,255,.68);--studio-line:rgba(255,255,255,.10);--studio-panel:#000;--studio-surface:rgba(255,255,255,.06);--studio-accent:#91caff;--studio-control-ink:#fff;--studio-control-muted:rgba(255,255,255,.68);--studio-range-accent:#fff;background:#111214;padding-top:24px;font-family:var(--app-font);font-synthesis:none}
+  .studio-header{align-items:center;margin-bottom:24px}
+  .studio-brand h1{font-size:24px;font-weight:700;letter-spacing:-.03em}
+  .studio-wordmark{color:rgba(255,255,255,.50);font-weight:500;letter-spacing:.12em}
+  .studio-brand p{color:rgba(255,255,255,.55)}
+  .studio-status{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.10);border-radius:999px}
+  .workspace{gap:20px}
+  .stage{background:#202124;border-color:rgba(255,255,255,.10);border-radius:32px;box-shadow:none}
+  .stage::before{display:none}
+  .stage-topline,.stage-topline small,.stage-caption,.stage-caption strong{color:rgba(255,255,255,.68)}
+  .stage-caption.editing,.stage-caption.editing strong{color:#91caff}
+  .workspace aside{display:flex;flex-direction:column;gap:0;background:#000;border:1px solid rgba(255,255,255,.10);border-radius:32px;min-width:0}
+  .settings-nav{position:sticky;top:0;z-index:10;display:flex;gap:4px;align-items:center;overflow-x:auto;overscroll-behavior-x:contain;padding:14px 20px;background:#000;border-radius:31px 31px 0 0;border-bottom:1px solid rgba(255,255,255,.10);scrollbar-width:thin}
+  .settings-nav a{display:flex;flex:0 0 auto;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:0 12px;border-radius:12px;color:rgba(255,255,255,.68);text-decoration:none;font-size:12px;font-weight:500;white-space:nowrap;transition:background 140ms ease,color 140ms ease}
+  .settings-nav a:hover{color:#fff;background:rgba(255,255,255,.10)}
+  .settings-nav a:focus-visible{outline:2px solid #91caff;outline-offset:-2px;color:#fff;background:rgba(255,255,255,.10)}
+  aside>section,.preferences-section{scroll-margin-top:76px;width:100%;box-sizing:border-box;padding:24px;border:0;border-bottom:1px solid rgba(255,255,255,.10);border-radius:0;background:transparent;box-shadow:none}
+  aside>section:last-child{border-bottom:0}
+  aside h2,.section-heading h2{font-size:18px;font-weight:700;line-height:1.2;letter-spacing:0}
+  .section-heading{align-items:center;margin-bottom:20px}
+  .section-note,.live-indicator,.field-label small,.hint,.empty,.ordered-row small,.choice-copy small{color:rgba(255,255,255,.55)}
+  .shape-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px;padding:16px;border:1px solid rgba(255,255,255,.10);border-radius:20px;background:rgba(255,255,255,.035)}
+  .shape-settings legend{color:rgba(255,255,255,.68);font-weight:500}
+  .segmented{padding:4px;background:rgba(255,255,255,.06);border:0;border-radius:14px}
+  .segmented button{min-height:36px;border-radius:10px;color:rgba(255,255,255,.68)}
+  .segmented button:hover:not(.active){color:#fff;background:rgba(255,255,255,.10)}
+  .segmented button.active{color:#fff;background:rgba(255,255,255,.16);box-shadow:none}
+  .segmented button:active{transform:scale(.97)}
+  .setting-grid{gap:6px}
+  .setting-choice,.tool-list button,.weather-results button,.ordered-row,.idle-layout-preview{color:rgba(255,255,255,.95);background:transparent;border-color:rgba(255,255,255,.10);box-shadow:none}
+  .setting-choice{min-height:56px;border-radius:12px}
+  .setting-choice:hover:not(:disabled):not(.active),.tool-list button:hover:not(:disabled),.weather-results button:hover,.ordered-row:hover{color:#fff;background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.18)}
+  .setting-choice.active,.setting-choice.active:hover:not(:disabled){color:#fff;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22);box-shadow:none}
+  .setting-choice.active .choice-copy small{color:rgba(255,255,255,.68)}
+  .setting-choice.active .choice-mark,.player-selection .choice-mark{color:#000;background:#fff;border-color:#fff}
+  .setting-choice:disabled,.setting-choice.active:disabled{color:rgba(255,255,255,.45);background:rgba(255,255,255,.035);border-color:rgba(255,255,255,.07);box-shadow:none}
+  .setting-choice:disabled .choice-copy small{color:rgba(255,255,255,.45)}
+  .volume-protection-options{padding:0 0 0 12px;border:0;border-left:1px solid rgba(255,255,255,.19);border-radius:0;background:transparent}
+  .compact-select-row,.compact-select-row:hover:not(:focus-within),.compact-select-row:focus-within{background:rgba(255,255,255,.06);border-color:transparent;border-radius:12px}
+  .compact-select-row:focus-within{border-color:#91caff}
+  .netease-actions button,.netease-details button,.netease-actions .netease-primary,.icon-button,.ordered-row button,.search-row button{color:#fff;background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.10);border-radius:12px}
+  .netease-actions button:hover:not(:disabled),.netease-details button:hover:not(:disabled),.icon-button:hover:not(:disabled),.ordered-row button:hover:not(:disabled),.search-row button:hover:not(:disabled){background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.22)}
+  .search-row input{color:#fff;background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.19)}
+  .idle-layout-preview :global(svg){color:#91caff}
   @media(max-width:1040px){main{padding-inline:24px}.workspace{grid-template-columns:minmax(340px,.8fr) minmax(400px,1.2fr);gap:18px}}
-  @media(max-width:900px){:global(html),:global(body),:global(#app){min-width:0}main{padding:0 18px 36px}.studio-header{align-items:flex-start;flex-direction:column;gap:14px;margin-bottom:18px}.studio-status{align-self:stretch}.workspace{grid-template-columns:1fr}.stage{position:relative;top:0;height:340px}.workspace aside{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:620px){main{padding:0 12px 28px}.studio-brand h1{font-size:23px}.studio-brand p{font-size:12px}.stage{height:300px;border-radius:20px}.stage::before{inset:12px;border-radius:15px}.stage-topline{left:15px;right:15px;top:14px}.workspace aside{grid-template-columns:1fr;gap:12px}aside>section{padding:16px}aside>.appearance-section,aside>.preferences-section,aside>.players-section,aside>.idle-section{grid-column:auto}.select-grid{grid-template-columns:1fr}}
-  @media(prefers-reduced-motion:reduce){.skeleton-row i{animation:none}.setting-choice,.segmented button,.tool-list button,.ordered-row,.icon-button,.ordered-row button,.search-row button{transition:none}}
+  @media(max-width:900px){:global(html),:global(body),:global(#app){min-width:0}main{padding:20px 18px 36px}.studio-header{align-items:flex-start;flex-direction:column;gap:14px;margin-bottom:18px}.studio-status{align-self:stretch}.workspace{grid-template-columns:1fr}.stage{position:relative;top:0;height:340px}.workspace aside{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:620px){main{padding:16px 12px 28px}.shape-settings{grid-template-columns:1fr}.settings-nav{padding:10px 12px}.settings-nav a{padding:0 10px} .workspace aside{gap:0} .workspace aside>section{padding:20px 16px}.studio-brand h1{font-size:23px}.studio-brand p{font-size:12px}.stage{height:300px;border-radius:20px}.stage::before{inset:12px;border-radius:15px}.stage-topline{left:15px;right:15px;top:14px}.workspace aside{grid-template-columns:1fr;gap:0}aside>section{padding:16px}aside>.appearance-section,aside>.preferences-section,aside>.players-section,aside>.idle-section{grid-column:auto}.select-grid{grid-template-columns:1fr}}
+  @media(prefers-reduced-motion:reduce){.settings-nav a{transition:none}.skeleton-row i{animation:none}.setting-choice,.segmented button,.tool-list button,.ordered-row,.icon-button,.ordered-row button,.search-row button{transition:none}}
   @media(prefers-reduced-transparency:reduce){}
 </style>

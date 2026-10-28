@@ -306,6 +306,15 @@ fn normalize_windows_path(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn cdp_is_default_and_explicit_standard_choice_is_preserved() {
+        use crate::models::NeteaseConnectionMode::{Standard, Enhanced};
+        assert_eq!(super::parse_settings("{}").unwrap().netease_connection_mode, Enhanced);
+        assert_eq!(super::parse_settings(r#"{"neteaseExecutablePath":"C:/Music/cloudmusic.exe"}"#).unwrap().netease_connection_mode, Enhanced);
+        assert_eq!(super::parse_settings(r#"{"neteaseAutoConnect":true}"#).unwrap().netease_connection_mode, Enhanced);
+        assert_eq!(super::parse_settings(r#"{"neteaseConnectionMode":"standard","neteaseAutoConnect":true}"#).unwrap().netease_connection_mode, Standard);
+        assert_eq!(super::parse_settings(r#"{"neteaseAutoConnect":false,"playerSourceOverrides":{"player":"netease"}}"#).unwrap().netease_connection_mode, Enhanced);
+    }
+    #[test]
     fn old_netease_bindings_enable_restore_but_explicit_opt_out_is_preserved() {
         let old = super::parse_settings(r#"{"playerSourceOverrides":{"old-session":"netease"}}"#)
             .unwrap();

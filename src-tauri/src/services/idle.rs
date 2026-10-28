@@ -268,6 +268,15 @@ async fn weather_for(location: &WeatherLocation) -> AppResult<WeatherCache> {
             return Ok(cache.clone());
         }
     }
+    let next = fetch_weather(location).await?;
+    *WEATHER_CACHE
+        .get_or_init(|| Mutex::new(WeatherCache::default()))
+        .lock()
+        .map_err(|_| AppError::lock("Failed to lock weather cache"))? = next.clone();
+    Ok(next)
+}
+
+async fn fetch_weather(location: &WeatherLocation) -> AppResult<WeatherCache> {
     let url = format!("https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=4&timezone=auto", location.latitude, location.longitude);
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
@@ -297,11 +306,14 @@ async fn weather_for(location: &WeatherLocation) -> AppResult<WeatherCache> {
         ),
         fetched: Some(Instant::now()),
     };
-    *WEATHER_CACHE
-        .get_or_init(|| Mutex::new(WeatherCache::default()))
-        .lock()
-        .map_err(|_| AppError::lock("Failed to lock weather cache"))? = next.clone();
     Ok(next)
+}
+
+pub async fn get_weather_for_location(location: &WeatherLocation) -> AppResult<WeatherSnapshot> {
+    if !location.latitude.is_finite() || !location.longitude.is_finite() || location.latitude.abs() > 90.0 || location.longitude.abs() > 180.0 {
+        return Err(AppError::business(3005, "Invalid weather coordinates".to_string()));
+    }
+    Ok(weather_snapshot_from_cache(fetch_weather(location).await?))
 }
 
 fn cached_weather_for_location(cache: &WeatherCache, location: &WeatherLocation) -> WeatherCache {

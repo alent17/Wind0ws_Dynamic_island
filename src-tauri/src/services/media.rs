@@ -32,6 +32,7 @@ static COVER_CACHE: OnceLock<Mutex<HashMap<String, (Instant, Option<ResolvedCove
     OnceLock::new();
 static APPLE_REQUESTS: OnceLock<Mutex<VecDeque<Instant>>> = OnceLock::new();
 static LAST_AUTO_SESSION_ID: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+static NETEASE_TIMELINE_EVIDENCE: OnceLock<Mutex<HashMap<String, super::netease::TimelineEvidence>>> = OnceLock::new();
 static TIMELINE_CACHE: OnceLock<Mutex<HashMap<String, TimelineSnapshot>>> = OnceLock::new();
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -556,14 +557,19 @@ fn unique_netease_binding_with_primary(
     artist: &str,
     primary_artist: &str,
 ) -> Option<String> {
+    // A recognized Windows application identity is stronger evidence than
+    // metadata shared by browsers, and does not depend on a loaded track.
+    let known: Vec<_> = candidates.iter().filter(|(_, source, _, _)| source == "netease").collect();
+    if !known.is_empty() {
+        return (known.len() == 1).then(|| known[0].0.clone());
+    }
     let matches: Vec<_> = candidates
         .iter()
         .filter(|(_, source, candidate_title, candidate_artist)| {
-            source == "netease"
-                || (source == "generic"
+            source == "generic"
                     && !title.is_empty()
                     && candidate_title == title
-                    && (candidate_artist == artist || (!primary_artist.is_empty() && candidate_artist == primary_artist)))
+                    && (candidate_artist == artist || (!primary_artist.is_empty() && candidate_artist == primary_artist))
         })
         .collect();
     if matches.len() == 1 {
@@ -576,9 +582,6 @@ fn unique_netease_binding_with_primary(
 /// Invoked only by explicit connection setup, never in periodic media sampling.
 pub(crate) fn verified_netease_binding() -> Option<String> {
     let _apartment = super::apartment::Apartment::enter().ok()?;
-    let identity = super::netease_cdp::LocalCdpClient::default()
-        .player_identity()
-        .ok()?;
     let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
         .ok()?
         .get()
@@ -589,19 +592,36 @@ pub(crate) fn verified_netease_binding() -> Option<String> {
         return None;
     }
     let mut candidates = Vec::new();
+    let mut generic_sessions = Vec::new();
     for index in 0..size {
-        let session = sessions.GetAt(index).ok()?;
-        let id = session.SourceAppUserModelId().ok()?.to_string();
+        // A stale/disappearing session must not hide another healthy player.
+        let Ok(session) = sessions.GetAt(index) else { continue; };
+        let Ok(id) = session.SourceAppUserModelId() else { continue; };
+        let id = id.to_string();
         let source = source_for_id(&id);
         if !matches!(source, "generic" | "netease") {
             continue;
         }
-        let properties = session.TryGetMediaPropertiesAsync().ok()?.get().ok()?;
+        if source == "netease" {
+            candidates.push((id, source.to_string(), String::new(), String::new()));
+            continue;
+        }
+        generic_sessions.push((id, session));
+    }
+    if !candidates.is_empty() {
+        return unique_netease_binding_with_primary(&candidates, "", "", "");
+    }
+    // Read browser/unknown metadata only when no known NetEase identity exists.
+    // Their asynchronous property reads must not delay a direct application match.
+    let identity = super::netease_cdp::LocalCdpClient::default().player_identity().ok()?;
+    for (id, session) in generic_sessions {
+        let Some(properties) = session.TryGetMediaPropertiesAsync().ok().and_then(|operation| operation.get().ok()) else { continue; };
+        let (Ok(title), Ok(artist)) = (properties.Title(), properties.Artist()) else { continue; };
         candidates.push((
             id,
-            source.to_string(),
-            properties.Title().ok()?.to_string(),
-            properties.Artist().ok()?.to_string(),
+            "generic".to_string(),
+            title.to_string(),
+            artist.to_string(),
         ));
     }
     unique_netease_binding_with_primary(
@@ -959,7 +979,7 @@ pub(crate) fn get_media_info_from_manager(
     };
 
     let metadata = read_media_metadata(app, &session, &raw_id)?;
-    build_media_state(&session, source_type, raw_id, metadata)
+    build_media_state(app, &session, source_type, raw_id, metadata)
 }
 
 /// Listener-only snapshot path. The cache belongs to the caller's actor and
@@ -1035,7 +1055,7 @@ pub(crate) fn get_media_info_from_manager_for_listener(
     };
 
     MediaListenerSnapshot {
-        result: build_media_state(&session, source_type, raw_id, metadata),
+        result: build_media_state(app, &session, source_type, raw_id, metadata),
         metadata_read_attempted,
         metadata_updated,
         metadata_reused,
@@ -1106,6 +1126,7 @@ fn read_media_metadata(
 }
 
 fn build_media_state(
+    app: &AppHandle,
     session: &GlobalSystemMediaTransportControlsSession,
     source_type: String,
     raw_id: String,
@@ -1125,7 +1146,7 @@ fn build_media_state(
         .PlaybackStatus()
         .unwrap_or(GlobalSystemMediaTransportControlsSessionPlaybackStatus(0));
 
-    let capabilities = playback_info
+    let mut capabilities = playback_info
         .Controls()
         .map(|controls| MediaCapabilities {
             previous: controls.IsPreviousEnabled().unwrap_or(false),
@@ -1203,21 +1224,29 @@ fn build_media_state(
         if cache.len() >= 256 && !cache.contains_key(&timeline_key) {
             cache.clear();
         }
-        cache.insert(timeline_key, stabilized);
+        cache.insert(timeline_key.clone(), stabilized);
         stabilized
     } else {
         reported_timeline
     };
 
-    Ok(MediaState {
+    let progress_known = if source_type == "netease" {
+        NETEASE_TIMELINE_EVIDENCE.get_or_init(|| Mutex::new(HashMap::new())).lock().map(|mut cache| {
+            if cache.len() >= 64 && !cache.contains_key(&timeline_key) { cache.clear(); }
+            cache.entry(timeline_key.clone()).or_default().observe(snapshot_pos_ms, duration_ms, is_playing, Instant::now())
+        }).unwrap_or(false)
+    } else { true };
+    if source_type == "netease" { capabilities.seek &= progress_known; }
+    let mut state = MediaState {
         title,
         artist,
         album_art: thumbnail_base64,
         is_playing,
         position_ms: timeline.position_ms,
         duration_ms: timeline.duration_ms,
-        progress_known: true,
+        progress_known,
         netease_progress_available: None,
+        netease_features: None,
         last_updated_timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -1239,7 +1268,10 @@ fn build_media_state(
         native_epoch: String::new(),
         native_revision: 0,
         native_track_generation: 0,
-    })
+    };
+    let app_state = app.state::<AppState>();
+    super::netease::route(&mut state, app_state.netease_enhanced(), app_state.netease_cdp_available.load(std::sync::atomic::Ordering::Acquire), app_state.netease_progress_mode());
+    Ok(state)
 }
 
 /// 从网易云音乐 API 获取歌曲信息
@@ -1313,7 +1345,8 @@ fn require_control_session<T>(session: Option<T>) -> AppResult<T> {
 }
 
 fn seek_supported(source: &str, declared: bool) -> bool {
-    declared || source == "netease"
+    let _ = source;
+    declared
 }
 
 fn finish_media_request(action: &str, result: windows052::core::Result<bool>) -> AppResult<()> {
@@ -1384,17 +1417,26 @@ pub fn seek_media(
     position_ms: u64,
     expected_title: &str,
     expected_artist: &str,
+    expected_session: &str,
 ) -> AppResult<Option<super::netease_cdp::NeteaseProgress>> {
     let _apartment = super::apartment::Apartment::enter().map_err(|error| {
         AppError::media(format!("Media apartment initialization failed: {error}"))
     })?;
     let (session, source, raw_id) =
         require_control_session(selected_session_from_current_manager(app)?)?;
+    if raw_id != expected_session { return Err(AppError::media("媒体会话已变化")); }
     if source == "netease" {
-        return super::netease_cdp::LocalCdpClient::default()
+        validate_session_track(app, &session, &raw_id, expected_title, expected_artist)?;
+    }
+    let state = app.state::<AppState>();
+    if source == "netease" && state.netease_enhanced()
+        && state.netease_cdp_available.load(std::sync::atomic::Ordering::Acquire) {
+        let result = super::netease_cdp::LocalCdpClient::default()
             .seek_position(position_ms, expected_title, expected_artist)
             .map(Some)
             .map_err(|error| AppError::media(error.to_string()));
+        state.set_netease_cdp_available(result.is_ok());
+        return result;
     }
     let declared = session
         .GetPlaybackInfo()
@@ -1408,14 +1450,63 @@ pub fn seek_media(
             )
             .and_then(|op| op.get())
     })?;
+    if source == "netease" {
+        verify_smtc_change(app, &session, &raw_id, expected_title, expected_artist, || {
+            session.GetTimelineProperties().and_then(|value| value.Position())
+                .map(|value| (value.Duration.max(0) as u64 / 10_000).abs_diff(position_ms) <= 1500)
+        })?;
+    }
     Ok(None)
 }
 
-pub fn toggle_shuffle(app: &AppHandle) -> AppResult<()> {
+fn validate_session_track(app: &AppHandle, session: &GlobalSystemMediaTransportControlsSession,
+    id: &str, title: &str, artist: &str) -> AppResult<()> {
+    let (selected, _, selected_id) = require_control_session(selected_session_from_current_manager(app)?)?;
+    if selected_id != id {
+        return Err(AppError::media("媒体会话或曲目已变化"));
+    }
+    validate_independent_session_tracks(session, &selected, id, title, artist)
+}
+
+fn validate_independent_session_tracks(
+    original: &GlobalSystemMediaTransportControlsSession,
+    selected: &GlobalSystemMediaTransportControlsSession,
+    id: &str, title: &str, artist: &str,
+) -> AppResult<()> {
+    // Separate RequestAsync calls produce distinct COM wrappers even for the
+    // same live session. Pointer identity is only useful inside the listener's
+    // own manager/cache. Check both wrappers' current provider and track here.
+    for session in [original, selected] {
+        let session_id = session.SourceAppUserModelId().map_err(|error| AppError::media(format!("读取媒体来源失败 (0x{:08X})", error.code().0 as u32)))?.to_string();
+        let props = session.TryGetMediaPropertiesAsync().and_then(|op| op.get())
+            .map_err(|error| AppError::media(format!("读取媒体曲目失败 (0x{:08X})", error.code().0 as u32)))?;
+        if session_id != id || props.Title().map(|s| s.to_string()).unwrap_or_default() != title
+            || props.Artist().map(|s| s.to_string()).unwrap_or_default() != artist {
+            return Err(AppError::media("媒体会话或曲目已变化"));
+        }
+    }
+    Ok(())
+}
+
+fn verify_smtc_change<F>(app: &AppHandle, session: &GlobalSystemMediaTransportControlsSession,
+    id: &str, title: &str, artist: &str, mut observed: F) -> AppResult<()>
+where F: FnMut() -> windows052::core::Result<bool> {
+    let deadline = Instant::now() + Duration::from_millis(900);
+    loop {
+        validate_session_track(app, session, id, title, artist)?;
+        if observed().unwrap_or(false) { return Ok(()); }
+        if Instant::now() >= deadline { return Err(AppError::media("播放器操作读回确认失败")); }
+        std::thread::sleep(Duration::from_millis(75));
+    }
+}
+
+pub fn toggle_shuffle(app: &AppHandle, expected: &MediaState) -> AppResult<()> {
     let _apartment = super::apartment::Apartment::enter().map_err(|error| {
         AppError::media(format!("Media apartment initialization failed: {error}"))
     })?;
-    let (session, _, _) = require_control_session(selected_session_from_current_manager(app)?)?;
+    let (session, source, id) = require_control_session(selected_session_from_current_manager(app)?)?;
+    if id != expected.source_display || source != expected.source { return Err(AppError::media("媒体会话已变化")); }
+    if source == "netease" { validate_session_track(app, &session, &expected.source_display, &expected.title, &expected.artist)?; }
     let info = session
         .GetPlaybackInfo()
         .map_err(|error| AppError::media(error.to_string()))?;
@@ -1431,7 +1522,13 @@ pub fn toggle_shuffle(app: &AppHandle) -> AppResult<()> {
         session
             .TryChangeShuffleActiveAsync(!current)
             .and_then(|op| op.get())
-    })
+    })?;
+    if source == "netease" {
+        verify_smtc_change(app, &session, &id, &expected.title, &expected.artist, || {
+            session.GetPlaybackInfo()?.IsShuffleActive()?.Value().map(|value| value == !current)
+        })?;
+    }
+    Ok(())
 }
 
 fn request_smtc_mode<F>(action: &str, enabled: bool, request: F) -> AppResult<()>
@@ -1444,11 +1541,13 @@ where
     finish_media_request(action, request())
 }
 
-pub fn cycle_repeat(app: &AppHandle) -> AppResult<()> {
+pub fn cycle_repeat(app: &AppHandle, expected: &MediaState) -> AppResult<()> {
     let _apartment = super::apartment::Apartment::enter().map_err(|error| {
         AppError::media(format!("Media apartment initialization failed: {error}"))
     })?;
-    let (session, _, _) = require_control_session(selected_session_from_current_manager(app)?)?;
+    let (session, source, id) = require_control_session(selected_session_from_current_manager(app)?)?;
+    if id != expected.source_display || source != expected.source { return Err(AppError::media("媒体会话已变化")); }
+    if source == "netease" { validate_session_track(app, &session, &expected.source_display, &expected.title, &expected.artist)?; }
     let info = session
         .GetPlaybackInfo()
         .map_err(|error| AppError::media(error.to_string()))?;
@@ -1469,12 +1568,38 @@ pub fn cycle_repeat(app: &AppHandle) -> AppResult<()> {
         session
             .TryChangeAutoRepeatModeAsync(next)
             .and_then(|op| op.get())
-    })
+    })?;
+    if source == "netease" {
+        verify_smtc_change(app, &session, &id, &expected.title, &expected.artist, || {
+            session.GetPlaybackInfo()?.AutoRepeatMode()?.Value().map(|value| value == next)
+        })?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod control_tests {
     use super::*;
+    #[test]
+    #[ignore = "requires Apple Music; compares independently requested SMTC wrappers"]
+    fn live_independent_apple_session_identity() {
+        let _apartment = super::super::apartment::Apartment::enter().unwrap();
+        let find = || {
+            let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().unwrap().get().unwrap();
+            manager.GetSessions().unwrap().into_iter().find(|session| session.SourceAppUserModelId().unwrap().to_string().starts_with("AppleInc.AppleMusicWin_")).unwrap()
+        };
+        let a = find(); let b = find();
+        let pa = a.TryGetMediaPropertiesAsync().unwrap().get().unwrap();
+        let pb = b.TryGetMediaPropertiesAsync().unwrap().get().unwrap();
+        println!("same COM identity: {}; same title: {}; same artist: {}", media_sessions_have_same_identity(&a,&b), pa.Title().unwrap() == pb.Title().unwrap(), pa.Artist().unwrap() == pb.Artist().unwrap());
+        let id = a.SourceAppUserModelId().unwrap().to_string();
+        let title = pa.Title().unwrap().to_string();
+        let artist = pa.Artist().unwrap().to_string();
+        assert!(validate_independent_session_tracks(&a, &b, &id, &title, &artist).is_ok());
+        assert!(validate_independent_session_tracks(&a, &b, "another player", &title, &artist).is_err());
+        assert!(validate_independent_session_tracks(&a, &b, &id, "another track", &artist).is_err());
+        assert!(validate_independent_session_tracks(&a, &b, &id, &title, "another artist").is_err());
+    }
     use std::cell::Cell;
 
     #[test]
@@ -1500,6 +1625,26 @@ mod control_tests {
             .is_ok());
             assert_eq!(calls.get(), 2);
         }
+    }
+
+    #[test]
+    fn binding_prefers_known_application_identity_even_without_a_loaded_track() {
+        let known = ("cloudmusic.exe".into(), "netease".into(), "".into(), "".into());
+        let browser = ("chrome.exe".into(), "generic".into(), "Track".into(), "Artist".into());
+        assert_eq!(unique_netease_binding(&[known.clone(), browser], "Track", "Artist"), Some("cloudmusic.exe".into()));
+        assert_eq!(unique_netease_binding(&[known.clone()], "", ""), Some("cloudmusic.exe".into()));
+        let other = ("another-cloudmusic.exe".into(), "netease".into(), "".into(), "".into());
+        assert_eq!(unique_netease_binding(&[known, other], "Track", "Artist"), None);
+    }
+
+    #[test]
+    #[ignore = "requires a running NetEase player; read-only local integration probe"]
+    fn live_netease_binding_probe() {
+        let mode = super::super::netease_cdp::LocalCdpClient::default().playback_mode();
+        assert!(mode.is_ok(), "CDP probe failed: {mode:?}");
+        let id = verified_netease_binding();
+        assert!(id.is_some(), "No unique Windows session for the running NetEase player");
+        println!("Verified live NetEase binding: {}", id.unwrap());
     }
 
     #[test]
@@ -1558,7 +1703,7 @@ mod control_tests {
             "spotify"
         );
         assert_eq!(source_with_override("cloudmusic.exe", None), "netease");
-        assert!(seek_supported("netease", false));
+        assert!(!seek_supported("netease", false));
     }
 
     #[test]
@@ -1604,8 +1749,8 @@ mod control_tests {
     }
 
     #[test]
-    fn declared_seek_and_netease_compatibility_dispatch_once_and_check_result() {
-        for (source, declared) in [("apple", true), ("netease", false)] {
+    fn declared_system_seek_dispatches_once_and_checks_result() {
+        for (source, declared) in [("apple", true), ("netease", true)] {
             let calls = Cell::new(0);
             assert!(request_seek(source, "session", declared, || {
                 calls.set(calls.get() + 1);

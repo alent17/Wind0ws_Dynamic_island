@@ -221,6 +221,7 @@ pub(crate) async fn remember_netease_connection(
         settings.netease_executable_path = Some(path);
         if enable {
             settings.netease_auto_connect = true;
+            settings.netease_connection_mode = crate::models::NeteaseConnectionMode::Enhanced;
         }
         Ok(())
     })
@@ -320,6 +321,10 @@ where
         .lock()
         .map_err(|_| AppError::lock("Failed to lock settings"))? = next.clone();
     state.set_netease_progress_mode(next.netease_progress_mode);
+    if old.netease_connection_mode != next.netease_connection_mode {
+        state.set_netease_cdp_available(false);
+        if let Ok(actor) = state.media_actor() { actor.wake_for_player_identity_change(); }
+    }
     if old.netease_progress_mode != next.netease_progress_mode {
         if let Ok(actor) = state.media_actor() {
             actor.wake_for_netease_progress_mode_change();

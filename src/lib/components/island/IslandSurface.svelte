@@ -1,32 +1,42 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack, tick } from "svelte";
   import { spring, tweened } from "svelte/motion";
+  import { slide } from "svelte/transition";
   import { Activity, Airplay, ArrowLeft, Clock, CloudSun, EyeOff, GalleryHorizontalEnd, Music2, PanelsTopLeft, Pencil, Settings, Shuffle, SkipBack, SkipForward, Timer, Volume2 } from "lucide-svelte";
   import MediaProgress from "$lib/components/media/MediaProgress.svelte";
   import PlayPauseIcon from "$lib/components/media/PlayPauseIcon.svelte";
   import RollingNumber from "$lib/components/time/RollingNumber.svelte";
   import Spectrum from "$lib/components/media/Spectrum.svelte";
   import CoverArt from "$lib/components/media/CoverArt.svelte";
-  import NeteaseModeControl from "$lib/components/media/NeteaseModeControl.svelte";
+  import NeteaseConnectedModeControl from "$lib/components/media/NeteaseConnectedModeControl.svelte";
   import NeteaseLikeControl from "$lib/components/media/NeteaseLikeControl.svelte";
   import SmtcModeControls from "$lib/components/media/SmtcModeControls.svelte";
   import TimerPanel from "$lib/components/time/TimerPanel.svelte";
   import MarqueeTitle from "$lib/components/media/MarqueeTitle.svelte";
   import SystemMonitor from "$lib/components/island/SystemMonitor.svelte";
   import type { SystemSnapshot } from "$lib/systemMonitor";
+  import CalendarWidget from "$lib/components/time/CalendarWidget.svelte";
+  import CalendarExtension from "$lib/components/time/CalendarExtension.svelte";
+  import WorldClockExtension from "$lib/components/time/WorldClockExtension.svelte";
   import WidgetLayout from "$lib/components/island/WidgetLayout.svelte";
-  import { normalizeWidgets, type IslandWidgets } from "$lib/widgetLayout";
+  import FeatureStack from "$lib/components/island/FeatureStack.svelte";
+  import WeatherExtension from "$lib/components/island/WeatherExtension.svelte";
+  import { normalizeWidgets, type IslandWidgets, type IslandWidgetKind } from "$lib/widgetLayout";
   import InfoPanel from "$lib/components/island/InfoPanel.svelte";
   import FeatureMenu from "$lib/components/island/FeatureMenu.svelte";
   import VolumePanel from "$lib/components/volume/VolumePanel.svelte";
+  import AppVolumeMixer from "$lib/components/volume/AppVolumeMixer.svelte";
   import WeatherIcon from "$lib/components/media/WeatherIcon.svelte";
   import type { IslandTool } from "$lib/featureRail";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
-  import { ISLAND_MOTION, widgetLayoutMotion, islandSettleEasing, islandShapeMotion, anchoredLayoutOffset } from "$lib/islandMotion";
+  import { ISLAND_MOTION, widgetEditMotion, widgetLayoutMotion, islandMorphEasing, islandSettleEasing, islandShapeMotion, anchoredLayoutOffset } from "$lib/islandMotion";
   import type { AudioDeviceInfo, MediaState, SpectrumMode, SystemAudioState, WeatherForecastDay } from "$lib/api/types";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
   import {
     navigationGeometry,
+    featureExtensionGeometry,
+    worldClockExtensionGeometry,
+    volumeExtensionGeometry,
     islandAnchorGap,
     type IslandPage,
     borderRadiusCss,
@@ -44,7 +54,7 @@
 
   function volumeWheel(node: HTMLElement) {
     const handleWheel = (event: WheelEvent) => {
-      if (!wheelVolumeControl || !onWheelVolume || !interactive || !visible || mode === "hidden" || editing || event.defaultPrevented || event.ctrlKey || event.deltaY === 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      if (!wheelVolumeControl || !onWheelVolume || !interactive || !visible || mode === "hidden" || editing || featureExpanded || event.defaultPrevented || event.ctrlKey || event.deltaY === 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
       event.preventDefault();
       event.stopPropagation();
       if (volumeProtectionPrompt) return;
@@ -278,6 +288,7 @@
   const motionOptions = { duration: ISLAND_MOTION.layoutDuration, easing: islandSettleEasing };
   const volumeHudMarks = Array.from({ length: 21 }, (_, index) => index * 5);
   let previousMotionMode = untrack(() => mode);
+  let previousMotionStyle = untrack(() => islandStyle);
   let expandedLayoutMotion = $state(untrack(() => mode === "expanded"));
   const widthMotion = tweened(initial.width, motionOptions);
   const heightMotion = tweened(initial.height, motionOptions);
@@ -309,6 +320,49 @@
   let menuScroll = $state(0);
   let pageRoot = $state<HTMLDivElement>();
   let editing = $state(false);
+  let previousEditing = untrack(() => editing);
+  let editLayoutMotion = $state(false);
+  let featureExpanded = $state(false);
+  let featureKind = $state<"volume" | "calendar" | "clock" | "weather" | "stack">("volume");
+  let stackPreparing = $state(false);
+  let stackSelection = $state<IslandWidgetKind | undefined>();
+  let stackTimer: ReturnType<typeof setTimeout> | undefined;
+  function closeFeature() { clearTimeout(stackTimer); featureFromStack = false; featureExpanded = false; stackPreparing = false; }
+  function openStack() {
+    if (!interactive || !visible || mode !== "expanded" || editing || featureExpanded || stackPreparing) return;
+    stackSelection = configuredLayout.left[0] ?? configuredLayout.right[0];
+    stackPreparing = true;
+    const delay = enableAnimations && !reduceAnimations && !prefersReducedMotion && widgetCount > 0 ? ISLAND_MOTION.collapseDuration : 0;
+    stackTimer = setTimeout(() => { if (visible && mode === "expanded" && !editing) { featureKind = "stack"; featureExpanded = true; } else stackPreparing = false; }, delay);
+  }
+  onDestroy(() => clearTimeout(stackTimer));
+  function musicStackGesture(node:HTMLElement) {
+    let start:{id:number;x:number;y:number}|null = null;
+    const wheel = (event:WheelEvent) => { if (editing || featureExpanded || stackPreparing || event.ctrlKey || event.deltaY <= 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY) || (event.target as HTMLElement).closest("input,select,textarea,[role=slider]")) return; event.preventDefault(); event.stopPropagation(); openStack(); };
+    const down = (event:PointerEvent) => { if (editing || featureExpanded || stackPreparing || !event.isPrimary || event.button !== 0 || (event.target as HTMLElement).closest("button,input,select,textarea,[role=slider]")) return; start={id:event.pointerId,x:event.clientX,y:event.clientY}; };
+    const move = (event:PointerEvent) => { if (!start || start.id !== event.pointerId) return; const dx=event.clientX-start.x, dy=event.clientY-start.y; if (dy>28 && dy>Math.abs(dx)) {start=null;event.stopPropagation();openStack();} else if (Math.abs(dx)>28 || dy< -28) start=null; };
+    const end = () => {start=null;};
+    node.addEventListener("wheel",wheel,{passive:false});node.addEventListener("pointerdown",down);node.addEventListener("pointermove",move);node.addEventListener("pointerup",end);node.addEventListener("pointercancel",end);
+    return {destroy(){node.removeEventListener("wheel",wheel);node.removeEventListener("pointerdown",down);node.removeEventListener("pointermove",move);node.removeEventListener("pointerup",end);node.removeEventListener("pointercancel",end);}};
+  }
+  let featureFromStack = false;
+  let volumeFeatureMetrics = $state({rows:4,total:4});
+  function backFromFeature() { if (featureFromStack) { featureFromStack = false; featureKind = "stack"; } else closeFeature(); }
+  function openFeature(kind: "volume" | "calendar" | "clock" | "weather") {
+    featureFromStack = featureExpanded && featureKind === "stack";
+    if (kind === "volume") volumeFeatureMetrics = {rows:Math.min(5, volumeFeatureMetrics.total),total:volumeFeatureMetrics.total};
+    featureKind = kind; featureExpanded = true;
+  }
+  function updateVolumeFeatureMetrics(rows:number, total:number) {
+    if (volumeFeatureMetrics.rows !== rows || volumeFeatureMetrics.total !== total) volumeFeatureMetrics = {rows,total};
+  }
+  let previousFeatureExpanded = false;
+  let previousStackPreparing = false;
+  const featureOpacity = tweened(0);
+  let featureOpacityValue = $state(0);
+  const unsubscribeFeatureOpacity = featureOpacity.subscribe(value => featureOpacityValue = value);
+  onDestroy(unsubscribeFeatureOpacity);
+  let styleLayoutMotion = $state(false);
   let contextMenuOpen = $state(false);
   let contextMenuRoot = $state<HTMLDivElement>();
   let surfaceRoot = $state<HTMLDivElement>();
@@ -371,6 +425,7 @@
   $effect(() => {
     if (!visible || mode === "hidden") contextMenuOpen = false;
     if ((!visible || mode === "hidden") && editing) { editing = false; untrack(() => editRevision++); }
+    if ((!visible || mode !== "expanded") && (featureExpanded || stackPreparing)) closeFeature();
   });
   $effect(() => { onLayoutPreview?.(currentLayout, editing); });
   const panelVisible = $derived(!editing && showCustomFunctionPanel && enabledTools.length > 0);
@@ -379,7 +434,7 @@
   const toolLabels: Record<IslandTool, TranslationKey> = { timer: "timer", volume: "volume", floating: "floatingTool", settings: "settingsTool", hide: "hideTool", clock: "clock", weather: "weather", system: "systemMonitor" };
   const shortLabels: Record<IslandTool, TranslationKey> = {timer:"timer",volume:"menuVolume",floating:"menuFloating",settings:"menuSettings",hide:"menuHide",clock:"clock",weather:"weather",system:"systemMonitor"};
   const menuItems = $derived(toolOrder.filter(tool => tool === "system" || enabledTools.includes(tool)).map(tool => ({ id: tool, label: t(toolLabels[tool]), shortLabel: t(shortLabels[tool]), icon: toolIcons[tool] })));
-  const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius, expandedLength, widgetCount, editing));
+  const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius, expandedLength, stackPreparing ? 0 : widgetCount, editing));
   const expandedGeometry = $derived({
     ...scaleIslandGeometry(expandedBaseGeometry, expandedScale),
   });
@@ -390,14 +445,23 @@
   const compactMode = "compact" as const;
   let coverLayouts = $state<{ compact: { x: number; y: number; width: number }; expanded: { x: number; y: number; width: number } } | null>(null);
   const compactGeometry = $derived(geometryFor(compactMode, expandedRadius, edge, effectiveCompactLength));
-  const compactInset = $derived(islandStyle === "edge" ? Math.min(collapsedEdgeShoulderRadius, Math.max(compactGeometry.width, compactGeometry.height) / 4, Math.min(compactGeometry.width, compactGeometry.height) / 2) : 0);
-  const expandedInset = $derived(islandStyle === "edge" ? Math.min(expandedEdgeShoulderRadius, Math.max(expandedGeometry.width, expandedGeometry.height) / 4, Math.min(expandedGeometry.width, expandedGeometry.height) / 2) : 0);
+  const compactInset = $derived(styleProgress * Math.min(collapsedEdgeShoulderRadius, Math.max(compactGeometry.width, compactGeometry.height) / 4, Math.min(compactGeometry.width, compactGeometry.height) / 2));
+  const expandedInset = $derived(styleProgress * Math.min(expandedEdgeShoulderRadius, Math.max(expandedGeometry.width, expandedGeometry.height) / 4, Math.min(expandedGeometry.width, expandedGeometry.height) / 2));
+  const featureBaseGeometry = $derived(featureKind === "volume"
+    ? volumeExtensionGeometry(volumeFeatureMetrics.rows, volumeFeatureMetrics.total > 5, expandedRadius, edge === "left" || edge === "right" ? expandedInset : 0)
+    : featureKind === "stack" ? {...featureExtensionGeometry(expandedRadius), width:expandedLength + 48 + ((edge === "top" || edge === "bottom") ? expandedInset * 2 : 0), height:537 + ((edge === "left" || edge === "right") ? expandedInset * 2 : 0)} : featureKind === "clock" ? worldClockExtensionGeometry(expandedRadius) : featureExtensionGeometry(expandedRadius));
+  const featureGeometry = $derived(scaleIslandGeometry(featureBaseGeometry, expandedScale));
+  const featureOffset = $derived(anchoredLayoutOffset(size, featureGeometry, edge));
   const compactLayout = $derived(compactShapeMotion ? size : {
     width: Math.min(size.width, compactGeometry.width),
     height: Math.min(size.height, compactGeometry.height),
   });
   const compactOffset = $derived(anchoredLayoutOffset(size, compactLayout, edge));
-  const expandedOffset = $derived(anchoredLayoutOffset(size, expandedGeometry, edge));
+  const expandedLayoutGeometry = $derived(editLayoutMotion && mode === "expanded" ? {width:size.width,height:size.height} : expandedGeometry);
+  const expandedContentGeometry = $derived(editLayoutMotion && mode === "expanded"
+    ? {width:expandedLayoutGeometry.width / Math.max(.001, expandedScale),height:expandedLayoutGeometry.height / Math.max(.001, expandedScale)}
+    : expandedBaseGeometry);
+  const expandedOffset = $derived(anchoredLayoutOffset(size, expandedLayoutGeometry, edge));
 
   // Read the real layout boxes, including CSS zoom, toolbar and shoulder padding.
   // Translation cancels when subtracting the root, so measurements stay stable
@@ -498,21 +562,39 @@
   }
 
   $effect(() => {
-    const target = mode === "expanded" ? expandedGeometry : geometryFor(mode, expandedRadius, edge, effectiveCompactLength);
+    const target = mode === "expanded" ? (featureExpanded ? featureGeometry : expandedGeometry) : geometryFor(mode, expandedRadius, edge, effectiveCompactLength);
     const hard = !enableAnimations || reduceAnimations || prefersReducedMotion;
     compactShapeMotion = (previousMotionMode === "compact" || previousMotionMode === "hover")
       && (mode === "compact" || mode === "hover");
     const widgetToggle = previousWidgetsEnabled !== widgetsEnabled && previousMotionMode === "expanded" && mode === "expanded";
     const widgetChange = previousWidgetCount !== widgetCount && previousMotionMode === "expanded" && mode === "expanded";
+    const editingChanged = previousEditing !== editing && previousMotionMode === "expanded" && mode === "expanded";
+    const featureChanged = previousFeatureExpanded !== featureExpanded;
+    const stackChanged = previousStackPreparing !== stackPreparing;
+    const styleChanged = previousMotionStyle !== islandStyle;
+    if (styleChanged) styleLayoutMotion = !hard;
+    if ((styleChanged && mode === "expanded") || editingChanged || (widgetChange && editing)) editLayoutMotion = true;
+    else if (mode !== "expanded") editLayoutMotion = false;
     expandedLayoutMotion = previousMotionMode === "expanded" && mode === "expanded";
-    const motion = widgetToggle || widgetChange ? widgetLayoutMotion(widgetToggle ? widgetsEnabled : widgetCount > previousWidgetCount, hard) : islandShapeMotion(previousMotionMode, mode, hard);
+    const motion = featureChanged ? widgetLayoutMotion(featureExpanded, hard) : stackChanged ? widgetLayoutMotion(!stackPreparing, hard) : styleChanged && !hard
+      ? { duration: ISLAND_MOTION.outwardDuration, easing: islandMorphEasing }
+      : editingChanged || (widgetChange && editing)
+      ? widgetEditMotion(hard)
+      : widgetToggle || widgetChange
+        ? widgetLayoutMotion(widgetToggle ? widgetsEnabled : widgetCount > previousWidgetCount, hard)
+        : islandShapeMotion(previousMotionMode, mode, hard);
     previousWidgetCount = widgetCount;
     previousWidgetsEnabled = widgetsEnabled;
+    previousEditing = editing;
+    previousFeatureExpanded = featureExpanded;
+    previousStackPreparing = stackPreparing;
+    previousMotionStyle = islandStyle;
     previousMotionMode = mode;
     const revision = ++transitionRevision;
     shapeSettled = false;
     void Promise.all([
-      widgetReveal.set(editing || widgetsEnabled ? 1 : 0, editing || hard ? {duration:0} : motion),
+      widgetReveal.set(stackPreparing ? 0 : editing || widgetsEnabled ? 1 : 0, editing || hard ? {duration:0} : stackPreparing ? widgetLayoutMotion(false, hard) : motion),
+      featureOpacity.set(featureExpanded ? 1 : 0, motion),
       widthMotion.set(target.width, motion),
       heightMotion.set(target.height, motion),
       radiusMotion.set(target.radius, motion),
@@ -521,6 +603,8 @@
     ]).then(() => {
       if (revision === transitionRevision) {
         shapeSettled = true;
+        editLayoutMotion = false;
+        styleLayoutMotion = false;
         compactShapeMotion = mode === "compact" || mode === "hover";
       }
     });
@@ -535,7 +619,7 @@
     else if (!finished && wasTimerFinished && page === "timer") void navigate("music");
     wasTimerFinished = finished;
   });
-  $effect(() => { onPanelActivity?.(contextMenuOpen || editing || (mode === "expanded" && page !== "music")); onPageChange?.(page); });
+  $effect(() => { onPanelActivity?.(contextMenuOpen || editing || featureExpanded || stackPreparing || (mode === "expanded" && page !== "music")); onPageChange?.(page); });
   let renderedPage = $state<IslandPage>("music");
   let pageExiting = $state(false);
   $effect(() => {
@@ -651,10 +735,12 @@
   function toggleFromSurface(event: MouseEvent | KeyboardEvent) {
     const target = event.target as HTMLElement;
     if (editing || !interactive || target.closest(controlSelector) || (event.detail > 0 && suppressBackgroundClick)) return;
+    if (featureExpanded || stackPreparing) { closeFeature(); return; }
     onToggle?.();
   }
 
   function keyToggle(event: KeyboardEvent) {
+    if (featureExpanded) { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeFeature(); } return; }
     if ((event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) && interactive) { event.preventDefault(); void openContextMenu(); return; }
     if (event.key === "Escape" && editing) { event.preventDefault(); event.stopPropagation(); cancelEditing(); return; }
     if (event.key === "F2" && interactive) { event.preventDefault(); beginEditing(); return; }
@@ -718,7 +804,7 @@
   }
 </script>
 
-<svelte:window onpointerup={() => backgroundPressed = false} onpointercancel={() => backgroundPressed = false} onpointermove={moveSurfaceGesture} onblur={() => {backgroundPressed = false;closeContextMenu();}} onkeydown={(event) => { if (editing && event.key === "Escape") { event.preventDefault(); cancelEditing(); } }} />
+<svelte:window onpointerup={() => backgroundPressed = false} onpointercancel={() => backgroundPressed = false} onpointermove={moveSurfaceGesture} onblur={() => {backgroundPressed = false;closeContextMenu();}} onkeydown={(event) => { if (featureExpanded && event.key === "Escape") { event.preventDefault(); closeFeature(); } else if (editing && event.key === "Escape") { event.preventDefault(); cancelEditing(); } }} />
 
 <div
   class="island-frame"
@@ -739,6 +825,17 @@
     onfocusin={() => onHoverChange?.(true)}
     onfocusout={handleAnchorFocusOut}
   >
+  <svg class="shadow-filter" aria-hidden="true" width="0" height="0">
+    <filter id="island-upper-shadow" x="-50%" y="-100%" width="200%" height="300%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" result="blur" />
+      <feOffset in="blur" dy="-0.5" result="offset" />
+      <feFlood flood-color="#000" flood-opacity="0.85" result="color" />
+      <feComposite in="color" in2="offset" operator="in" />
+    </filter>
+  </svg>
+  <div class="island-shadow" class:background-press={backgroundPressed} class:editing-surface={editing} aria-hidden="true">
+    <div class="island-shadow-shape" style:width={`${size.width}px`} style:height={`${size.height}px`} style:border-radius={borderRadiusCss(currentRadii)} style:clip-path={resolvedClipPath}></div>
+  </div>
   <div
     class="island-surface"
     use:volumeWheel
@@ -787,7 +884,7 @@
     {/if}
 
     {#if visible && mode !== "hidden"}
-    <div class="compact-layer" bind:this={compactRoot} class:vertical={edge === "left" || edge === "right"} class:edge-inset={islandStyle === "edge"} style={`opacity:${compactOpacity};--shoulder-inset:${compactInset}px;width:${compactLayout.width}px;height:${compactLayout.height}px;left:${compactOffset.x}px;top:${compactOffset.y}px`} aria-hidden={mode === "expanded" || expandedOpacity > .5} inert={mode === "expanded"}>
+    <div class="compact-layer edge-inset" bind:this={compactRoot} class:vertical={edge === "left" || edge === "right"} style={`opacity:${compactOpacity};--shoulder-inset:${compactInset}px;width:${compactLayout.width}px;height:${compactLayout.height}px;left:${compactOffset.x}px;top:${compactOffset.y}px`} aria-hidden={mode === "expanded" || expandedOpacity > .5} inert={mode === "expanded"}>
       {#if timerActive}
         <button
           class="compact-timer"
@@ -842,37 +939,40 @@
     </div>
 
     {/if}
+          {#snippet stackWidget(kind: IslandWidgetKind)}
+            {#if kind === "timer"}
+              <TimerPanel status={timerStatus} remainingMs={timerRemainingMs} durationMs={timerDurationMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
+            {:else if kind === "volume"}
+              <VolumePanel volume={systemAudio?.volumePercent ?? 0} muted={systemAudio?.muted ?? false} deviceId={systemAudio?.deviceId ?? ""} devices={audioDevices} switchingDevice={audioDeviceSwitching} reduceMotion={reduceAnimations || !enableAnimations} onVolume={onAudioVolume} onDevice={onAudioDevice} onExpand={() => openFeature("volume")} />
+            {:else if kind === "system"}
+              <SystemMonitor active={visible && mode === "expanded" && !editing} snapshot={monitorSnapshot} />
+            {:else if kind === "calendar"}
+              <CalendarWidget timeZone={clockTimeZone} onExpand={() => openFeature("calendar")} />
+            {:else}
+              <InfoPanel widget page={kind} time={clockText} timeZone={clockTimeZone} city={weatherCity} temperature={idleWeatherTemperature} code={idleWeatherCode} forecast={idleWeatherForecast} updatedAt={weatherUpdatedAt} loading={weatherLoading} failed={weatherFailed} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onSettings={onSettingsToggle} onExpandClock={() => openFeature("clock")} onExpandWeather={() => openFeature("weather")} />
+            {/if}
+          {/snippet}
+
     {#if visible && mode !== "hidden"}
     <div
       class="expanded-layer" class:vertical={edge === "left" || edge === "right"}
-      style:opacity={expandedOpacity}
-      style:width={`${expandedGeometry.width}px`}
-      style:height={`${expandedGeometry.height}px`}
+      style:opacity={expandedOpacity * (1 - featureOpacityValue)}
+      style:width={`${expandedLayoutGeometry.width}px`}
+      style:height={`${expandedLayoutGeometry.height}px`}
       style:left={`${expandedOffset.x}px`}
       style:top={`${expandedOffset.y}px`}
       style:transform={sharedCover && !reduceAnimations && enableAnimations && !prefersReducedMotion ? `translate(${sharedCover.dx}px,${sharedCover.dy}px)` : "none"}
       aria-hidden={mode !== "expanded" || expandedOpacity <= .5}
-      inert={mode !== "expanded"}
+      inert={mode !== "expanded" || featureExpanded}
     >
-      <div class="expanded-shell" class:composed={widgetCount > 0 || editing} bind:this={pageRoot} class:reduce-page-motion={reduceAnimations || !enableAnimations || prefersReducedMotion} style={`--widget-vertical-inset:${islandStyle === "edge" && (edge === "left" || edge === "right") && (widgetCount > 0 || editing) ? expandedInset : 0}px;--widget-edge-inset:${islandStyle === "edge" && (edge === "top" || edge === "bottom") && widgetCount > 0 ? expandedInset : 0}px;--editor-edge-inset:${islandStyle === "edge" && (edge === "top" || edge === "bottom") ? expandedInset : 0}px;--page-width:${expandedBaseGeometry.width}px;--page-height:${expandedBaseGeometry.height}px;--content-scale:${expandedScale};--shoulder-content-inset:${expandedInset}px`}>
+      <div class="expanded-shell" class:composed={widgetCount > 0 || editing} bind:this={pageRoot} class:reduce-page-motion={reduceAnimations || !enableAnimations || prefersReducedMotion} style={`--widget-vertical-inset:${(edge === "left" || edge === "right") && (widgetCount > 0 || editing) ? expandedInset : 0}px;--widget-edge-inset:${(edge === "top" || edge === "bottom") && widgetCount > 0 ? expandedInset : 0}px;--editor-edge-inset:${edge === "top" || edge === "bottom" ? expandedInset : 0}px;--page-width:${expandedContentGeometry.width}px;--page-height:${expandedContentGeometry.height}px;--content-scale:${expandedScale};--shoulder-content-inset:${expandedInset}px`}>
         {#if panelVisible}
-          <div class="top-tools"><FeatureMenu items={menuItems} toolbar activeId={page} scrollPosition={menuScroll} onScroll={(value) => menuScroll = value} onSelect={selectTool} /></div>
+          <div class="top-tools" transition:slide={{duration:enableAnimations && !reduceAnimations && !prefersReducedMotion ? ISLAND_MOTION.outwardDuration : 0,easing:islandMorphEasing}}><FeatureMenu items={menuItems} toolbar activeId={page} scrollPosition={menuScroll} onScroll={(value) => menuScroll = value} onSelect={selectTool} /></div>
         {/if}
         <div class="page-body" class:exiting={pageExiting} class:with-toolbar={panelVisible} inert={pageExiting}>
         {#if renderedPage === "music"}
-        <WidgetLayout layout={editing ? draftLayout : configuredLayout} enabled={widgetsEnabled} reveal={widgetRevealValue} animate={enableAnimations && !reduceAnimations && !prefersReducedMotion} {editing} busy={savingLayout} error={layoutError} musicWidth={expandedLength} onChange={(layout) => draftLayout = layout} onSave={() => void saveLayout()} onCancel={cancelEditing}>
-          {#snippet widget(kind)}
-            {#if kind === "timer"}
-              <TimerPanel status={timerStatus} remainingMs={timerRemainingMs} durationMs={timerDurationMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
-            {:else if kind === "volume"}
-              <VolumePanel volume={systemAudio?.volumePercent ?? 0} muted={systemAudio?.muted ?? false} deviceId={systemAudio?.deviceId ?? ""} devices={audioDevices} switchingDevice={audioDeviceSwitching} reduceMotion={reduceAnimations || !enableAnimations} onVolume={onAudioVolume} onDevice={onAudioDevice} />
-            {:else if kind === "system"}
-              <SystemMonitor active={visible && mode === "expanded" && !editing} snapshot={monitorSnapshot} />
-            {:else}
-              <InfoPanel widget page={kind} time={clockText} timeZone={clockTimeZone} city={weatherCity} temperature={idleWeatherTemperature} code={idleWeatherCode} forecast={idleWeatherForecast} updatedAt={weatherUpdatedAt} loading={weatherLoading} failed={weatherFailed} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onSettings={onSettingsToggle} />
-            {/if}
-          {/snippet}
-          <section class="music-pane">
+        <WidgetLayout widget={stackWidget} layout={editing ? draftLayout : configuredLayout} enabled={widgetsEnabled} reveal={widgetRevealValue} animate={enableAnimations && !reduceAnimations && !prefersReducedMotion} styleMorphing={styleLayoutMotion} {editing} busy={savingLayout} error={layoutError} musicWidth={expandedLength} onChange={(layout) => draftLayout = layout} onSave={() => void saveLayout()} onCancel={cancelEditing}>
+          <section class="music-pane" use:musicStackGesture>
             <div class="top-row">
             <button class="cover expanded-cover" class:shared-cover-source={movingCover} type="button" aria-label={t("openPlayer")} disabled={idle} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
               {#if (idle ? lastPlayedMedia?.albumArt : media.albumArt)}<CoverArt src={(idle ? lastPlayedMedia?.albumArt : media.albumArt) || ""} />{:else}<Music2 size={30} />{/if}
@@ -889,21 +989,21 @@
             </div>
 
             <div class="progress-block">
-              <MediaProgress position={idle ? 0 : position} duration={idle ? 0 : media.durationMs} progressKnown={media.progressKnown !== false} seekable={!idle && Boolean(media.capabilities?.seek)} {seekBusy} {seekError} {onSeek} />
+              <MediaProgress position={idle ? 0 : position} duration={idle ? 0 : media.durationMs} progressKnown={media.progressKnown !== false} estimated={media.neteaseFeatures?.progress.source === "estimate"} seekable={!idle && Boolean(media.capabilities?.seek)} {seekBusy} {seekError} {onSeek} />
             </div>
 
-            <div class="control-row">
+            <div class="control-row" class:system-netease={media.source === "netease" && media.neteaseFeatures?.mode.source !== "cdp"}>
               <div class="utility-controls leading-controls" aria-label={t("playbackControls")}>
-                {#if !idle && media.source === "netease" && media.neteasePlaybackMode}
-                  <NeteaseModeControl mode={media.neteasePlaybackMode} disabled={neteaseModeBusy} error={neteaseModeError} onCycle={() => onMediaAction?.("cycle_netease_mode")} />
-                {:else if media.source !== "netease"}
+                {#if !idle && media.neteaseFeatures?.mode.source === "cdp"}
+                  {#key `${media.nativeEpoch}:${media.sourceDisplay}`}<NeteaseConnectedModeControl {media} live={Boolean(onMediaAction)}/>{/key}
+                {:else if media.capabilities?.shuffle || media.capabilities?.repeat}
                   {#key media.source}<SmtcModeControls {media} live={Boolean(onMediaAction)}/>{/key}
                 {:else}
                   <span class="control-mark" aria-hidden="true"><Shuffle size={34} strokeWidth={2} /></span>
                 {/if}
                 {#if !idle && media.source === "netease"}
                   {#key `${media.nativeEpoch}:${media.nativeTrackGeneration}:${media.title}:${media.artist}`}
-                    <NeteaseLikeControl title={media.title} artist={media.artist} cacheKey={`${media.nativeEpoch}:${media.nativeTrackGeneration}`} live={Boolean(onMediaAction)} />
+                    <NeteaseLikeControl title={media.title} artist={media.artist} cacheKey={`${media.nativeEpoch}:${media.nativeTrackGeneration}`} available={media.neteaseFeatures?.like.controllable === true} live={Boolean(onMediaAction)} />
                   {/key}
                 {/if}
               </div>
@@ -934,11 +1034,11 @@
                 {#if renderedPage === "timer"}
                   <TimerPanel status={timerStatus} remainingMs={timerRemainingMs} durationMs={timerDurationMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
                 {:else if renderedPage === "volume"}
-                  <VolumePanel volume={systemAudio?.volumePercent ?? 0} muted={systemAudio?.muted ?? false} deviceId={systemAudio?.deviceId ?? ""} devices={audioDevices} switchingDevice={audioDeviceSwitching} reduceMotion={reduceAnimations || !enableAnimations} onVolume={onAudioVolume} onDevice={onAudioDevice} />
+                  <VolumePanel volume={systemAudio?.volumePercent ?? 0} muted={systemAudio?.muted ?? false} deviceId={systemAudio?.deviceId ?? ""} devices={audioDevices} switchingDevice={audioDeviceSwitching} reduceMotion={reduceAnimations || !enableAnimations} onVolume={onAudioVolume} onDevice={onAudioDevice} onExpand={() => openFeature("volume")} />
                 {:else if renderedPage === "system"}
                   <SystemMonitor active={visible && mode === "expanded"} snapshot={monitorSnapshot} />
                 {:else if renderedPage === "clock" || renderedPage === "weather"}
-                  <InfoPanel page={renderedPage} time={clockText} timeZone={clockTimeZone} city={weatherCity} temperature={idleWeatherTemperature} code={idleWeatherCode} forecast={idleWeatherForecast} updatedAt={weatherUpdatedAt} loading={weatherLoading} failed={weatherFailed} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onSettings={onSettingsToggle} />
+                  <InfoPanel page={renderedPage} time={clockText} timeZone={clockTimeZone} city={weatherCity} temperature={idleWeatherTemperature} code={idleWeatherCode} forecast={idleWeatherForecast} updatedAt={weatherUpdatedAt} loading={weatherLoading} failed={weatherFailed} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onSettings={onSettingsToggle} onExpandClock={() => openFeature("clock")} onExpandWeather={() => openFeature("weather")} />
                 {/if}
               </div>
             {/key}
@@ -947,6 +1047,14 @@
         </div>
       </div>
     </div>
+    {/if}
+
+    {#if visible && mode === "expanded" && (featureExpanded || featureOpacityValue > 0)}
+      <div class="feature-extension" style:opacity={featureOpacityValue} style:width={`${featureGeometry.width}px`} style:height={`${featureGeometry.height}px`} style:left={`${featureOffset.x}px`} style:top={`${featureOffset.y}px`} inert={!featureExpanded}>
+        <div class="feature-extension-content" style={`zoom:${expandedScale};width:${featureBaseGeometry.width}px;height:${featureBaseGeometry.height}px;--extension-inline-inset:${edge === "top" || edge === "bottom" ? expandedInset : 0}px;--extension-block-inset:${edge === "left" || edge === "right" ? expandedInset : 0}px`}>
+          {#if featureKind === "volume"}<AppVolumeMixer onBack={backFromFeature} onMetrics={updateVolumeFeatureMetrics} />{:else if featureKind === "calendar"}<CalendarExtension timeZone={clockTimeZone} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onBack={backFromFeature} />{:else if featureKind === "clock"}<WorldClockExtension timeZone={clockTimeZone} onBack={backFromFeature} />{:else if featureKind === "weather"}<WeatherExtension onBack={backFromFeature} />{:else}<FeatureStack widget={stackWidget} initial={stackSelection} onSelect={(kind) => stackSelection = kind} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onBack={closeFeature} />{/if}
+        </div>
+      </div>
     {/if}
 
     {#if visible && mode !== "hidden" && sharedCover}
@@ -1027,13 +1135,17 @@
   .cover.shared-cover-source{visibility:hidden}
   .island-frame{position:relative;width:100%;height:100%;flex:none;overflow:visible;box-sizing:border-box}.island-frame.simulate-hidden{overflow:hidden}.surface-anchor{position:absolute;z-index:1}.edge-top .surface-anchor{top:0;left:50%}.edge-right .surface-anchor{top:50%;right:0}.edge-bottom .surface-anchor{bottom:0;left:50%}.edge-left .surface-anchor{top:50%;left:0}
   .island-surface{position:relative;z-index:1;overflow:hidden;flex:none;box-sizing:border-box;color:#fff;font-family:var(--app-font);text-rendering:optimizeLegibility;font-synthesis:none;contain:layout style;transition:transform 140ms cubic-bezier(.23,1,.32,1),box-shadow 180ms cubic-bezier(.23,1,.32,1)}
+  .shadow-filter{position:absolute;pointer-events:none}
+  .island-shadow{position:absolute;inset:0;z-index:0;filter:url(#island-upper-shadow);pointer-events:none;transition:transform 140ms cubic-bezier(.23,1,.32,1)}
+  .island-shadow-shape{background:#000}
+  .floating-style .surface-anchor:active .island-shadow.background-press:not(.editing-surface){transform:scale(.97) translateZ(0)}
   .island-surface:focus-visible{outline:none}
   .volume-indicator{position:absolute;z-index:40;top:12px;left:50%;display:flex;align-items:center;width:min(320px,calc(100% - 32px));height:48px;padding:0 12px;box-sizing:border-box;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(14,15,18,.96);transform:translateX(-50%);pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.28)}
   .volume-indicator.compact-mode{inset:0;display:grid;width:100%;height:100%;padding:3px 18px;border:0;border-radius:inherit;background:rgba(0,0,0,.97);transform:none;box-shadow:none}
   .volume-meter{position:relative;width:100%;height:24px;overflow:hidden;border-radius:2px}
-  .volume-meter-fill{position:absolute;top:0;bottom:0;left:0;max-width:100%;background:#4169f5;transition:width 90ms linear,height 90ms linear}
-  .volume-meter i{position:absolute;top:0;bottom:0;display:block;width:3px;transform:translateX(-50%);background:#4169f5}
-  .volume-meter i::after{position:absolute;top:0;bottom:0;left:0;width:3px;border-radius:1px;background:#4169f5;content:""}
+  .volume-meter-fill{position:absolute;top:0;bottom:0;left:0;max-width:100%;background:#193a8e;transition:width 90ms linear,height 90ms linear}
+  .volume-meter i{position:absolute;top:0;bottom:0;display:block;width:3px;transform:translateX(-50%);background:#fff}
+  .volume-meter i::after{position:absolute;top:0;bottom:0;left:0;width:3px;border-radius:1px;background:#fff;content:""}
   .volume-meter i.passed{opacity:0}
   .volume-indicator.compact-mode .volume-meter{height:100%}
   .volume-indicator.vertical.compact-mode{padding:3px 0}
@@ -1055,7 +1167,7 @@
   .progress-block{width:100%;margin-bottom:10px}
   .control-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;width:100%;height:58px}.cover:active{transform:scale(.94)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .compact-timer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:0;color:#f28b31;background:transparent;cursor:pointer;font-family:var(--app-font);user-select:none}.compact-timer span{min-width:42px;font-size:12px;font-weight:600;line-height:1;letter-spacing:.015em;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}.compact-timer.finished span{min-width:0;font-size:11px}.compact-timer.paused{color:rgba(242,139,49,.62)}.timer-pause{width:7px;height:8px;display:flex;align-items:center;justify-content:center;gap:2px}.timer-pause b{display:block;width:2px;height:7px;border-radius:1px;background:currentColor}.compact-timer.urgent{color:#ff765f}
-  .compact-timer{position:absolute;inset:0;display:block;overflow:hidden;padding:0;border-radius:inherit;color:#f4f7ff;background:transparent;box-shadow:none}.compact-timer:hover{background:rgba(40,100,190,.055)}.compact-timer .timer-summary{position:absolute;inset:0 14px 4px;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}.compact-timer .timer-leading{display:flex;align-items:center;gap:7px;min-width:0;color:rgba(245,248,255,.9)}.compact-timer .timer-leading :global(svg){flex:none;color:#70aaff}.compact-timer .timer-time{min-width:0;overflow:hidden;color:#f5f7fb;font-size:13px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em;text-align:right;text-overflow:ellipsis;white-space:nowrap}.compact-timer .timer-progress-track{position:absolute;right:14px;bottom:5px;left:14px;height:2px;overflow:hidden;border-radius:999px;background:rgba(115,143,183,.2)}.compact-timer .timer-progress-fill{display:block;height:100%;max-width:100%;border-radius:inherit;background:linear-gradient(90deg,#2688ff,#60b5ff);box-shadow:0 0 7px rgba(57,145,255,.68);transition:width 350ms linear,background-color 180ms ease}.compact-timer .timer-progress-fill.paused{background:linear-gradient(90deg,#6d8fb9,#a7c5ed);box-shadow:none}.compact-timer .timer-progress-fill.finished{background:linear-gradient(90deg,#42d99a,#8af0c0)}.compact-timer.paused{color:#f4f7ff}.compact-timer.urgent{box-shadow:inset 1px 0 0 rgba(255,111,102,.58),inset -1px 0 0 rgba(255,111,102,.58),inset 0 0 12px rgba(255,74,60,.09)}.compact-timer.urgent .timer-leading :global(svg){color:#ff8c7c}.compact-timer .timer-pause{flex:none;width:7px;height:8px;gap:2px;color:#a8c5e9}.compact-timer .timer-pause b{width:2px;height:7px;border-radius:1px;background:currentColor}
+  .compact-timer{position:absolute;inset:0;display:block;overflow:hidden;padding:0;border-radius:inherit;color:#f4f7ff;background:transparent;box-shadow:none;cursor:default!important}.compact-timer:hover,.compact-timer:focus-visible{background:transparent!important;box-shadow:none!important;outline:0!important}.compact-timer .timer-summary{position:absolute;inset:0 14px 4px;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}.compact-timer .timer-leading{display:flex;align-items:center;gap:7px;min-width:0;color:rgba(245,248,255,.9)}.compact-timer .timer-leading :global(svg){flex:none;color:#70aaff}.compact-timer .timer-time{min-width:0;overflow:hidden;color:#f5f7fb;font-size:13px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em;text-align:right;text-overflow:ellipsis;white-space:nowrap}.compact-timer .timer-progress-track{position:absolute;right:14px;bottom:5px;left:14px;height:2px;overflow:hidden;border-radius:999px;background:rgba(115,143,183,.2)}.compact-timer .timer-progress-fill{display:block;height:100%;max-width:100%;border-radius:inherit;background:#193a8e;box-shadow:0 0 7px rgba(25,58,142,.68);transition:width 350ms linear,background-color 180ms ease}.compact-timer .timer-progress-fill.paused{background:linear-gradient(90deg,#6d8fb9,#a7c5ed);box-shadow:none}.compact-timer .timer-progress-fill.finished{background:linear-gradient(90deg,#42d99a,#8af0c0)}.compact-timer.paused{color:#f4f7ff}.compact-timer.urgent{box-shadow:inset 1px 0 0 rgba(255,111,102,.58),inset -1px 0 0 rgba(255,111,102,.58),inset 0 0 12px rgba(255,74,60,.09)}.compact-timer.urgent .timer-leading :global(svg){color:#ff8c7c}.compact-timer .timer-pause{flex:none;width:7px;height:8px;gap:2px;color:#a8c5e9}.compact-timer .timer-pause b{width:2px;height:7px;border-radius:1px;background:currentColor}
   .compact-layer.vertical .compact-timer .timer-summary{inset:14px 4px;flex-direction:column;justify-content:center;gap:10px}.compact-layer.vertical .compact-timer .timer-leading{flex-direction:column;gap:5px}.compact-layer.vertical .compact-timer .timer-time{max-width:100%;font-size:11px;text-align:center}.compact-layer.vertical .compact-timer .timer-progress-track{top:14px;right:auto;bottom:14px;left:5px;width:2px;height:auto}.compact-layer.vertical .timer-progress-fill{width:100%!important;height:var(--timer-progress-height,0%)}
   .attached-style.edge-top .music-pane,.attached-style.edge-bottom .music-pane{--music-inline-inset:calc(40px + var(--shoulder-content-inset,0px))}
   .music-pane{padding-top:14px;padding-bottom:10px}
@@ -1064,9 +1176,10 @@
   @media (prefers-reduced-motion:reduce){}
   .studio-preview-highlight{position:absolute;z-index:20;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}.studio-preview-highlight::before,.studio-preview-highlight::after{content:"";position:absolute;pointer-events:none}.highlight-shape::after{inset:2px;border:2px solid rgba(167,139,250,.9);border-radius:inherit;box-shadow:0 0 12px rgba(167,139,250,.42),inset 0 0 7px rgba(167,139,250,.18)}.highlight-edge::before{background:#60a5fa;box-shadow:0 0 9px rgba(96,165,250,.8)}.edge-top .highlight-edge::before,.edge-bottom .highlight-edge::before{left:18px;right:18px;height:2px}.edge-top .highlight-edge::before{top:2px}.edge-bottom .highlight-edge::before{bottom:2px}.edge-left .highlight-edge::before,.edge-right .highlight-edge::before{top:18px;bottom:18px;width:2px}.edge-left .highlight-edge::before{left:2px}.edge-right .highlight-edge::before{right:2px}.highlight-position::after{width:8px;height:8px;border:2px solid #fff;border-radius:50%;background:#60a5fa;box-shadow:0 0 0 3px rgba(96,165,250,.2),0 0 10px rgba(96,165,250,.92)}.edge-top .highlight-position::after,.edge-bottom .highlight-position::after{left:calc(var(--preview-position) * 1% - 6px)}.edge-top .highlight-position::after{top:-3px}.edge-bottom .highlight-position::after{bottom:-3px}.edge-left .highlight-position::after,.edge-right .highlight-position::after{top:calc(var(--preview-position) * 1% - 6px)}.edge-left .highlight-position::after{left:-3px}.edge-right .highlight-position::after{right:-3px}.corner{position:absolute;width:calc(var(--preview-radius-tl) + 9px);height:calc(var(--preview-radius-tl) + 9px);max-width:48px;max-height:48px;opacity:.95}.corner.top-left{top:2px;left:2px;width:calc(var(--preview-radius-tl) + 9px);height:calc(var(--preview-radius-tl) + 9px);border:2px solid;border-color:#a78bfa transparent transparent #a78bfa;border-radius:var(--preview-radius-tl) 0 0 0}.corner.top-right{top:2px;right:2px;width:calc(var(--preview-radius-tr) + 9px);height:calc(var(--preview-radius-tr) + 9px);border:2px solid;border-color:#a78bfa #a78bfa transparent transparent;border-radius:0 var(--preview-radius-tr) 0 0}.corner.bottom-left{bottom:2px;left:2px;width:calc(var(--preview-radius-bl) + 9px);height:calc(var(--preview-radius-bl) + 9px);border:2px solid;border-color:transparent transparent #a78bfa #a78bfa;border-radius:0 0 0 var(--preview-radius-bl)}.corner.bottom-right{right:2px;bottom:2px;width:calc(var(--preview-radius-br) + 9px);height:calc(var(--preview-radius-br) + 9px);border:2px solid;border-color:transparent #a78bfa #a78bfa transparent;border-radius:0 0 var(--preview-radius-br) 0}.length-handle{position:absolute;width:3px;height:22px;border-radius:999px;background:#60a5fa;box-shadow:0 0 9px rgba(96,165,250,.8)}.length-handle.start{left:2px;top:50%;transform:translateY(-50%)}.length-handle.end{right:2px;top:50%;transform:translateY(-50%)}.length-vertical .length-handle{width:22px;height:3px;left:50%;transform:translateX(-50%)}.length-vertical .length-handle.start{top:2px}.length-vertical .length-handle.end{top:auto;right:auto;bottom:2px}.shoulder-handle{position:absolute;width:3px;height:18px;border-radius:999px;background:#a78bfa;box-shadow:0 0 8px rgba(167,139,250,.8)}.edge-top .shoulder-handle.start{top:2px;left:calc(var(--preview-shoulder) + 1px)}.edge-top .shoulder-handle.end{top:2px;right:calc(var(--preview-shoulder) + 1px)}.edge-bottom .shoulder-handle.start{bottom:2px;left:calc(var(--preview-shoulder) + 1px)}.edge-bottom .shoulder-handle.end{right:calc(var(--preview-shoulder) + 1px);bottom:2px}.edge-left .shoulder-handle,.edge-right .shoulder-handle{width:18px;height:3px;top:calc(var(--preview-shoulder) + 1px)}.edge-left .shoulder-handle.start{left:2px}.edge-left .shoulder-handle.end{bottom:calc(var(--preview-shoulder) + 1px);top:auto;left:2px}.edge-right .shoulder-handle.start{right:2px}.edge-right .shoulder-handle.end{right:2px;top:auto;bottom:calc(var(--preview-shoulder) + 1px)}.background-wash{position:absolute;inset:2px;border-radius:inherit;background:rgba(167,139,250,.14);box-shadow:inset 0 0 0 1px rgba(196,181,253,.72),0 0 16px rgba(167,139,250,.22)}.spectrum-focus{position:absolute;z-index:1;top:50%;right:5px;width:23px;height:21px;border:1px solid #60a5fa;border-radius:6px;background:rgba(96,165,250,.1);box-shadow:0 0 10px rgba(96,165,250,.55);transform:translateY(-50%)}.preview-expanded .spectrum-focus{top:14px;right:22px;width:47px;height:31px;border-radius:8px}
   @media (hover:hover) and (pointer:fine){.cover:hover{filter:brightness(1.08)}}
-  @media (prefers-reduced-motion:reduce){.surface-anchor{transition:none!important}.island-surface,.expanded-layer,.control-row button{transition-duration:120ms!important}.island-surface{transition-property:opacity,box-shadow!important}.expanded-layer{transform:none!important}.studio-preview-highlight .corner,.studio-preview-highlight::after,.studio-preview-highlight .length-handle,.studio-preview-highlight .shoulder-handle,.studio-preview-highlight .background-wash,.studio-preview-highlight .spectrum-focus{animation:none!important;opacity:.78}}
+  @media (prefers-reduced-motion:reduce){.surface-anchor{transition:none!important}.island-surface,.expanded-layer,.control-row button{transition-duration:120ms!important}.island-surface,.island-shadow{transition-property:opacity,box-shadow!important}.expanded-layer{transform:none!important}.studio-preview-highlight .corner,.studio-preview-highlight::after,.studio-preview-highlight .length-handle,.studio-preview-highlight .shoulder-handle,.studio-preview-highlight .background-wash,.studio-preview-highlight .spectrum-focus{animation:none!important;opacity:.78}}
 
   .expanded-shell{display:block;width:var(--page-width);height:var(--page-height);zoom:var(--content-scale,1);transform-origin:top left}
+  .feature-extension{position:absolute;z-index:3;overflow:hidden}
   .music-pane{width:100%;height:100%}
 
 
@@ -1126,6 +1239,9 @@
   .attached-style.edge-left .composed .page-body .music-pane,.attached-style.edge-right .composed .page-body .music-pane{padding-top:20px;padding-bottom:14px}
   .floating-style .island-surface.editing-surface:active{transform:none}
   /* Respond to the music pane's usable width, including attached shoulders. */
+  .system-netease .leading-controls :global(.smtc-modes){flex-direction:column;gap:0}
+  .system-netease .leading-controls :global(.smtc-modes button){height:22px}
+  .system-netease .leading-controls :global(.smtc-modes svg){width:20px;height:20px}
   .music-pane{container-type:inline-size;container-name:island-music}
   @container island-music (max-width:500px){
     .control-row{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);column-gap:12px}
@@ -1133,6 +1249,7 @@
     .transport-controls{justify-self:center;justify-content:center;min-width:0;gap:8px}
     .control-row :global(.utility-controls button),.control-row .control-mark,
     .control-row :global(.like-wrap),.control-row :global(.mode-control-wrap){width:40px;height:40px}
+    .system-netease .leading-controls :global(.smtc-modes button){height:20px}
     .transport-controls button{width:48px;height:48px}
     .control-row :global(svg){width:30px;height:30px}
     .control-row :global(.play-pause-icon),.transport-controls .play :global(svg){width:42px;height:42px}
@@ -1143,6 +1260,8 @@
     .control-row :global(.utility-controls button),.control-row .control-mark,
     .control-row :global(.like-wrap),.control-row :global(.mode-control-wrap){width:32px;height:32px}
     .transport-controls{gap:4px}
+    .system-netease .leading-controls :global(.smtc-modes button){height:16px}
+    .system-netease .leading-controls :global(.smtc-modes svg){width:16px;height:16px}
     .transport-controls button{width:36px;height:36px}
     .control-row :global(svg){width:26px;height:26px}
     .control-row :global(.play-pause-icon),.transport-controls .play :global(svg){width:34px;height:34px}

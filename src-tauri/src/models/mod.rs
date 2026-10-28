@@ -8,10 +8,10 @@ mod cache;
 mod media;
 mod settings;
 
-pub use audio::{AudioDeviceInfo, SystemAudioState};
+pub use audio::{AppAudioSession, AudioDeviceInfo, SystemAudioState};
 pub use cache::{CacheMetadata, CacheStats};
 pub use media::{
-    IdleSnapshot, MediaCapabilities, MediaSessionInfo, MediaState, MonitorInfo, NeteaseSong,
+    IdleSnapshot, MediaCapabilities, MediaFeature, NeteaseFeatures, MediaSessionInfo, MediaState, MonitorInfo, NeteaseSong,
     ResolvedCover, WeatherForecastDay, WeatherLocationCandidate, WeatherSnapshot,
 };
-pub use settings::{AppPreferences, AppSettings, NeteaseProgressMode, WeatherLocation};
+pub use settings::{AppPreferences, AppSettings, NeteaseConnectionMode, NeteaseProgressMode, WeatherLocation};

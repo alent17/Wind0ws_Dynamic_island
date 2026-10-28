@@ -4,6 +4,22 @@
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaFeature {
+    pub source: String,
+    pub readable: bool,
+    pub controllable: bool,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NeteaseFeatures {
+    pub progress: MediaFeature,
+    pub like: MediaFeature,
+    pub mode: MediaFeature,
+}
+
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MediaCapabilities {
@@ -103,6 +119,8 @@ pub struct MediaState {
     /// Last real NetEase CDP availability result; None means not checked yet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub netease_progress_available: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub netease_features: Option<NeteaseFeatures>,
     /// 最后更新时间戳（毫秒）
     pub last_updated_timestamp: u64,
     /// 媒体来源标识（如 netease, spotify 等）
@@ -110,7 +128,9 @@ pub struct MediaState {
     /// 媒体来源显示名称
     pub source_display: String,
     pub capabilities: MediaCapabilities,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shuffle_active: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repeat_mode: Option<String>,
     /// Ordering domain for snapshots emitted by the single native media actor.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -143,6 +163,7 @@ impl Default for MediaState {
             duration_ms: 0,
             progress_known: true,
             netease_progress_available: None,
+            netease_features: None,
             last_updated_timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()

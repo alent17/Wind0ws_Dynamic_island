@@ -61,6 +61,7 @@ pub enum CdpError {
     InvalidResponse,
     UnsafeWebSocketEndpoint,
     NoInitializedPage,
+    PlayerNotReady,
     AmbiguousPage,
     UnsupportedCurrentMode,
     UnsupportedTrack,
@@ -81,6 +82,7 @@ impl std::fmt::Display for CdpError {
             Self::InvalidResponse => f.write_str("本机 CDP 响应无效或超出大小限制"),
             Self::UnsafeWebSocketEndpoint => f.write_str("CDP 返回了非本机 WebSocket 地址"),
             Self::NoInitializedPage => f.write_str("未找到已初始化的网易云播放页面"),
+            Self::PlayerNotReady => f.write_str("网易云播放器正在加载，功能暂不可用"),
             Self::AmbiguousPage => f.write_str("发现多个已初始化的网易云播放页面"),
             Self::UnsupportedCurrentMode => f.write_str("当前网易云播放模式不支持切换"),
             Self::UnsupportedTrack => f.write_str("网易云当前歌曲不是可控制的普通音频"),
@@ -101,6 +103,7 @@ impl CdpError {
         match self {
             Self::TrackChanged => "identity_mismatch",
             Self::NoInitializedPage => "no_initialized_page",
+            Self::PlayerNotReady => "player_not_ready",
             Self::AmbiguousPage => "ambiguous_page",
             Self::TimedOut => "timeout",
             Self::Io(_) => "io",
@@ -122,6 +125,13 @@ impl std::error::Error for CdpError {
             Self::WebSocket(error) => Some(error),
             _ => None,
         }
+    }
+}
+
+impl CdpError {
+    pub(crate) fn connection_lost(&self) -> bool {
+        matches!(self, Self::Io(_) | Self::InvalidResponse | Self::UnsafeWebSocketEndpoint
+            | Self::NoInitializedPage | Self::TimedOut | Self::Protocol | Self::WebSocket(_))
     }
 }
 
@@ -167,6 +177,12 @@ impl Default for LocalCdpClient {
 }
 
 impl LocalCdpClient {
+    /// Setup readiness is independent of the current track or playback mode.
+    pub(crate) fn connection_ready_until(self, deadline: Instant) -> Result<(), CdpError> {
+        self.initialized_page_using(deadline.min(Instant::now() + OPERATION_TIMEOUT), CLOUD_MUSIC_READY_EXPRESSION, "ready")?;
+        Ok(())
+    }
+
     pub(crate) fn player_identity(self) -> Result<Value, CdpError> {
         let (_, value) = self.initialized_page_using(Instant::now() + OPERATION_TIMEOUT, CLOUD_MUSIC_IDENTITY_EXPRESSION, "ready")?;
         Ok(value)
@@ -182,7 +198,7 @@ impl LocalCdpClient {
         }
         let deadline = Instant::now() + OPERATION_TIMEOUT;
         let (mut connection, value) =
-            self.initialized_page_using(deadline, CLOUD_MUSIC_LIKE_READ_EXPRESSION, "ready")?;
+            self.initialized_feature_using(deadline, CLOUD_MUSIC_LIKE_READ_EXPRESSION, "ready")?;
         validate_like_identity(&value, title, artist)?;
         if let Some((track_id, play_id, liked)) = expected {
             if value.get("trackId").and_then(Value::as_str) != Some(track_id)
@@ -227,8 +243,16 @@ impl LocalCdpClient {
     /// Reads the current ordinary mode from exactly one initialized NetEase page.
     pub fn playback_mode(self) -> Result<Option<PlaybackMode>, CdpError> {
         let deadline = Instant::now() + OPERATION_TIMEOUT;
-        let (_, value) =
-            self.initialized_page_using(deadline, CLOUD_MUSIC_READ_EXPRESSION, "mode")?;
+        let (_, value) = match self.initialized_page_using(deadline, CLOUD_MUSIC_READ_EXPRESSION, "mode") {
+            Ok(page) => page,
+            Err(CdpError::NoInitializedPage) => {
+                // A ready player can temporarily lack mode state while loading.
+                // This is not evidence that its connection was lost.
+                self.connection_ready_until(deadline)?;
+                return Ok(None);
+            }
+            Err(error) => return Err(error),
+        };
         let mode = value
             .get("mode")
             .and_then(Value::as_str)
@@ -244,7 +268,7 @@ impl LocalCdpClient {
     ) -> Result<VerifiedModeAction, CdpError> {
         let deadline = Instant::now() + OPERATION_TIMEOUT;
         let (mut connection, current_value) =
-            self.initialized_page_using(deadline, CLOUD_MUSIC_READ_EXPRESSION, "mode")?;
+            self.initialized_feature_using(deadline, CLOUD_MUSIC_READ_EXPRESSION, "mode")?;
         let current = current_value
             .get("mode")
             .and_then(Value::as_str)
@@ -344,8 +368,12 @@ impl LocalCdpClient {
         expected_title: &str,
         expected_artist: &str,
     ) -> Result<NeteaseProgress, CdpError> {
-        let (_, value) = self.initialized_page_using(Instant::now() + PROGRESS_READ_TIMEOUT, CLOUD_MUSIC_PROGRESS_EXPRESSION, "ready")?;
-        parse_bound_netease_progress(&value, expected_title, expected_artist)
+        let deadline = Instant::now() + PROGRESS_READ_TIMEOUT;
+        let (_, value) = self.initialized_feature_using(deadline, CLOUD_MUSIC_PROGRESS_EXPRESSION, "ready")?;
+        match parse_bound_netease_progress(&value, expected_title, expected_artist) {
+            Err(CdpError::InvalidResponse) => Err(CdpError::PlayerNotReady),
+            other => other,
+        }
     }
 
     /// Read-only identity used by explicit setup to match a Windows session.
@@ -357,6 +385,20 @@ impl LocalCdpClient {
         let (_, value) =
             self.initialized_page_using(deadline, CLOUD_MUSIC_PROGRESS_EXPRESSION, "ready")?;
         parse_netease_progress(&value)
+    }
+
+    fn initialized_feature_using(self, deadline: Instant, expression: &str, ready_key: &str) -> Result<(CdpConnection, Value), CdpError> {
+        match self.initialized_page_using(deadline, expression, ready_key) {
+            Err(CdpError::NoInitializedPage) => {
+                // Track data, like state or a mode can be unready while the
+                // player itself is still connected. Probe that independently.
+                match self.connection_ready_until(Instant::now() + PROGRESS_READ_TIMEOUT) {
+                    Ok(()) => Err(CdpError::PlayerNotReady),
+                    Err(error) => Err(error),
+                }
+            }
+            result => result,
+        }
     }
 
     fn initialized_page_using(
@@ -727,6 +769,11 @@ const CLOUD_MUSIC_CAPTURE_TOOL: &str = r#"function captureTool(withProgress = fa
   }
 }"#;
 
+const CLOUD_MUSIC_READY_EXPRESSION: &str = r#"(() => {
+  const { tool } = (__CAPTURE_TOOL__)();
+  return { ready: !!tool };
+})()"#;
+
 const CLOUD_MUSIC_IDENTITY_EXPRESSION: &str = r#"(() => {
   const { tool } = (__CAPTURE_TOOL__)();
   const p = tool && tool.getStore().playing;
@@ -771,7 +818,8 @@ const CLOUD_MUSIC_LIKE_SET_EXPRESSION: &str = r#"(async () => {
 
 const CLOUD_MUSIC_READ_EXPRESSION: &str = r#"(() => {
   const { tool } = (__CAPTURE_TOOL__)();
-  const playing = tool.getStore().playing;
+  const state = tool && tool.getStore();
+  const playing = state && state.playing;
   return playing && typeof playing.playingMode === 'string' ? { mode: playing.playingMode } : {};
 })()"#;
 
@@ -998,6 +1046,15 @@ impl CdpConnection {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn readiness_respects_an_expired_setup_deadline_without_connecting() {
+        let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let client = super::LocalCdpClient::new(listener.local_addr().unwrap().port()).unwrap();
+        assert!(matches!(client.connection_ready_until(std::time::Instant::now() - std::time::Duration::from_secs(1)), Err(super::CdpError::TimedOut)));
+        assert_eq!(listener.accept().unwrap_err().kind(), std::io::ErrorKind::WouldBlock);
+    }
+
+    #[test]
     fn favorite_identity_accepts_smtc_primary_artist_but_rejects_other_tracks() {
         let state = serde_json::json!({"title":"you know 2(Phonk)","artist":"Trispect, Kyrex","primaryArtist":"Trispect"});
         assert!(super::validate_like_identity(&state, "you know 2(Phonk)", "Trispect").is_ok());
@@ -1017,6 +1074,93 @@ mod tests {
     }
     use super::*;
     use std::{net::TcpListener, thread};
+
+    fn fake_player(values: Vec<Value>) -> (u16, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind((LOOPBACK, 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            for step in 0..values.len() * 3 {
+                let deadline = Instant::now() + Duration::from_secs(2);
+                let mut peer = loop {
+                    match listener.accept() {
+                        Ok((peer, _)) => break peer,
+                        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => thread::sleep(Duration::from_millis(2)),
+                        _ => return,
+                    }
+                };
+                peer.set_nonblocking(false).unwrap();
+                peer.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+                peer.set_write_timeout(Some(Duration::from_secs(1))).unwrap();
+                if step % 3 == 2 {
+                    let mut socket = tungstenite::accept(peer).unwrap();
+                    let request: Value = serde_json::from_str(socket.read().unwrap().to_text().unwrap()).unwrap();
+                    let value = &values[step / 3];
+                    socket.send(Message::Text(json!({"id":request["id"],"result":{"result":{"type":"object","value":value}}}).to_string().into())).unwrap();
+                } else {
+                    let mut reader = BufReader::new(&mut peer);
+                    loop { let mut line = String::new(); if reader.read_line(&mut line).unwrap() == 0 || line == "\r\n" { break; } }
+                    let body = if step % 3 == 0 {
+                        json!({"Browser":"Chrome/test", "Protocol-Version":"1.3", "webSocketDebuggerUrl":format!("ws://127.0.0.1:{port}/devtools/browser/test")})
+                    } else {
+                        json!([{"type":"page", "url":"orpheus://orpheus/pub/app.html", "webSocketDebuggerUrl":format!("ws://127.0.0.1:{port}/devtools/page/test")}])
+                    }.to_string();
+                    write!(peer, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
+                }
+            }
+        });
+        (port, server)
+    }
+
+    #[test]
+    fn missing_mode_on_a_ready_player_does_not_report_a_lost_connection() {
+        let (port, server) = fake_player(vec![json!({}), json!({"ready": true})]);
+        let result = LocalCdpClient::new(port).unwrap().playback_mode();
+        server.join().unwrap();
+        assert!(matches!(result, Ok(None)), "{result:?}");
+    }
+
+    #[test]
+    fn track_loading_and_changed_identity_do_not_signal_connection_loss() {
+        let (port, server) = fake_player(vec![json!({}), json!({"ready": true})]);
+        let loading = LocalCdpClient::new(port).unwrap().read_progress("Song", "Artist");
+        server.join().unwrap();
+        assert!(matches!(&loading, Err(CdpError::PlayerNotReady)));
+        assert!(!loading.unwrap_err().connection_lost());
+
+        let (port, server) = fake_player(vec![json!({}), json!({"ready": true})]);
+        let like_loading = LocalCdpClient::new(port).unwrap().song_like("Song", "Artist", None);
+        server.join().unwrap();
+        assert!(matches!(&like_loading, Err(CdpError::PlayerNotReady)));
+        assert!(!like_loading.unwrap_err().connection_lost());
+
+        let (port, server) = fake_player(vec![json!({}), json!({"ready": true})]);
+        let mode_loading = LocalCdpClient::new(port).unwrap().set_playback_mode(PlaybackMode::Shuffle);
+        server.join().unwrap();
+        assert!(matches!(&mode_loading, Err(CdpError::PlayerNotReady)));
+        assert!(!mode_loading.unwrap_err().connection_lost());
+
+        let (port, server) = fake_player(vec![json!({"ready":true,"title":"Previous", "artist":"Artist"})]);
+        let changed = LocalCdpClient::new(port).unwrap().read_progress("Song", "Artist");
+        server.join().unwrap();
+        assert!(matches!(&changed, Err(CdpError::TrackChanged)));
+        assert!(!changed.unwrap_err().connection_lost());
+
+        let (port, server) = fake_player(vec![json!({"ready":true,"title":"Song", "artist":"Artist", "positionMs":0, "durationMs":0})]);
+        let incomplete = LocalCdpClient::new(port).unwrap().read_progress("Song", "Artist");
+        server.join().unwrap();
+        assert!(matches!(&incomplete, Err(CdpError::PlayerNotReady)));
+        assert!(!incomplete.unwrap_err().connection_lost());
+
+        let (port, server) = fake_player(vec![json!({}), json!({})]);
+        let disconnected = LocalCdpClient::new(port).unwrap().read_progress("Song", "Artist");
+        server.join().unwrap();
+        assert!(matches!(&disconnected, Err(CdpError::NoInitializedPage)));
+        assert!(disconnected.unwrap_err().connection_lost());
+
+        let connection_error = CdpError::Io(std::io::Error::from(std::io::ErrorKind::ConnectionRefused));
+        assert!(connection_error.connection_lost());
+    }
 
     fn read_test_response(
         parts: Vec<Vec<u8>>,

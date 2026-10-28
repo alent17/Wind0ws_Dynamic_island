@@ -1,0 +1,107 @@
+import { test, expect } from "@playwright/test";
+
+test.use({viewport:{width:1600,height:900},reducedMotion:"no-preference"});
+test("world clock views cities without changing the configured time zone", async ({page}) => {
+  await page.clock.setFixedTime(new Date("2026-07-01T12:34:56Z"));
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(() => {
+    const f = window as any;
+    f.settingsOverrides = {islandStyle:"edge",islandEdge:"top",enableAnimations:true,language:"en",clockTimeZone:"Asia/Shanghai",wheelVolumeControl:true,islandWidgets:{left:[],right:["clock"]},islandWidgetsEnabled:true};
+    f.worldSettingsWrites = [];
+    const invoke = f.__TAURI_INTERNALS__.invoke;
+    f.__TAURI_INTERNALS__.invoke = (command:string,args:any,options:any) => {
+      if (command === "update_settings") f.worldSettingsWrites.push(args);
+      return invoke(command,args,options);
+    };
+    f.mountApp();
+  });
+  await expect(page.locator(".fixed-host")).toBeVisible();
+  await page.evaluate(() => (window as any).expand());
+  const clock = page.locator('[data-widget-kind="clock"] .info-panel');
+  await expect(clock).toBeVisible();
+  const volumeWrites = await page.evaluate(() => (window as any).volumeWrites.length);
+  await clock.hover(); await page.mouse.wheel(0,120);
+  const world = page.locator(".world-clock-extension");
+  await expect(world).toBeVisible();
+  const selected = world.locator('[data-clock-side="selected"]');
+  const reference = world.locator('[data-clock-side="reference"]');
+  await expect(selected.locator(".clock-city strong")).toHaveText("Beijing");
+  await expect(selected.locator(".clock-digits")).toHaveText("20:34:56");
+  const list = world.locator(".city-list");
+  expect(await page.evaluate(() => (window as any).volumeWrites.length)).toBe(volumeWrites);
+  expect(await world.locator(".city-chip").count()).toBeGreaterThan(40);
+  const tokyo = world.locator('[data-city="Asia/Tokyo"]');
+  await tokyo.click();
+  await expect(tokyo).toHaveAttribute("aria-pressed","true");
+  await expect(tokyo).toHaveCSS("background-color","rgb(25, 58, 142)");
+  await expect(world.locator('[data-city="Asia/Shanghai"]')).toHaveCSS("background-color","rgb(255, 255, 255)");
+  await expect(selected.locator(".clock-city strong")).toHaveText("Tokyo");
+  await expect(selected.locator(".clock-digits")).toHaveText("21:34:56");
+  await expect(reference.locator(".clock-city strong")).toHaveText("Beijing");
+  await expect(reference.locator(".clock-digits")).toHaveText("20:34:56");
+  const newYork = world.locator('[data-city="America/New_York"]');
+  await newYork.click();
+  await expect(selected.locator(".clock-city strong")).toHaveText("New York");
+  await expect(selected.locator(".clock-digits")).toHaveText("08:34:56");
+  await expect(selected.locator(".clock-city span")).toHaveText("GMT-4");
+  for (const side of [selected, reference]) {
+    const digits = side.locator(".clock-digits");
+    const box = await digits.boundingBox();
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.mouse.down(); await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2 - 16, {steps:4}); await page.mouse.up();
+  }
+  await expect(selected.locator(".clock-digits")).toHaveText("09:06:56");
+  await expect(reference.locator(".clock-digits")).toHaveText("21:06:56");
+  await reference.locator(".clock-digits").hover();
+  await page.mouse.wheel(0,120);
+  await expect(selected.locator(".clock-digits")).toHaveText("09:01:56");
+  await expect(reference.locator(".clock-digits")).toHaveText("21:01:56");
+  expect(await page.evaluate(() => (window as any).volumeWrites.length)).toBe(volumeWrites);
+  await world.locator(".reset-time").click();
+  await expect(selected.locator(".clock-digits")).toHaveText("08:34:56");
+  await expect(reference.locator(".clock-digits")).toHaveText("20:34:56");
+  await list.click({position:{x:5,y:5}});
+  await expect(world).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as any).worldSettingsWrites.length)).toBe(0);
+  const upper = world.locator(".clock-display");
+  const upperBox = await upper.boundingBox();
+  await page.mouse.click(upperBox!.x + upperBox!.width / 2, upperBox!.y + 5);
+  await expect(world).toHaveCount(0);
+  await expect(clock.locator(".timezone-label")).toContainText("Beijing");
+  await clock.hover(); await page.mouse.wheel(0,120);
+  await expect(world).toBeVisible();
+  await expect(selected.locator(".clock-city strong")).toHaveText("New York");
+  await expect(reference.locator(".clock-city strong")).toHaveText("Beijing");
+  await expect(selected.locator(".clock-digits")).toHaveText("08:34:56");
+  await page.evaluate(() => (window as any).destroy());
+  await page.evaluate(() => (window as any).mountApp());
+  await expect(page.locator(".fixed-host")).toBeVisible();
+  await page.evaluate(() => (window as any).expand());
+  await expect(clock).toBeVisible();
+  await clock.hover(); await page.mouse.wheel(0,120);
+  await expect(world).toBeVisible();
+  await expect(selected.locator(".clock-city strong")).toHaveText("New York");
+  await expect(reference.locator(".clock-city strong")).toHaveText("Beijing");
+  await page.evaluate(() => (window as any).destroy());
+});
+
+for (const language of ["zh-CN", "ja"]) test(`world clock city list fits in ${language}`, async ({page}) => {
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(language => {
+    const f = window as any;
+    f.settingsOverrides = {islandStyle:"edge",islandEdge:"top",enableAnimations:true,language,clockTimeZone:"Asia/Shanghai",islandWidgets:{left:[],right:["clock"]},islandWidgetsEnabled:true};
+    f.mountApp();
+  }, language);
+  await expect(page.locator(".fixed-host")).toBeVisible();
+  await page.evaluate(() => (window as any).expand());
+  const panel = page.locator('[data-widget-kind="clock"] .info-panel');
+  await expect(panel).toBeVisible();
+  await panel.hover();
+  await page.mouse.wheel(0,120);
+  const list = page.locator(".world-clock-extension .city-list");
+  await expect(list).toBeVisible();
+  await expect(list.locator(".city-chip").last()).toBeAttached();
+  await page.evaluate(() => (window as any).destroy());
+});

@@ -14,6 +14,7 @@ pub mod image;
 pub(crate) mod image_budget;
 pub mod media;
 pub mod netease_cdp;
+pub(crate) mod netease;
 pub mod settings;
 mod system_audio;
 
@@ -22,4 +23,5 @@ pub use idle::{get_idle_snapshot, get_weather_snapshot, search_weather_locations
 pub use settings::{get_auto_start, read_settings_file, set_auto_start, write_settings_file};
 pub use system_audio::{
     get_system_audio_state, list_audio_output_devices, set_default_audio_output, set_system_volume,
+    list_app_audio_sessions, set_app_audio_volume,
 };

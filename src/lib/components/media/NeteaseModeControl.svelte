@@ -3,10 +3,12 @@
   import { locale, translate, type TranslationKey } from "$lib/i18n";
   import type { MediaState } from "$lib/api/types";
 
-  let { mode, disabled = false, error = "", onCycle } = $props<{
+  let { mode, disabled = false, error = "", compact = false, label, onCycle } = $props<{
     mode: NonNullable<MediaState["neteasePlaybackMode"]>;
     disabled?: boolean;
+    compact?: boolean;
     error?: string;
+    label?: string;
     onCycle?: () => void;
   }>();
 
@@ -24,11 +26,11 @@
 <span class="mode-control-wrap">
   <button
     type="button"
-    class="mode-control"
-    aria-label={t("cycleNeteaseMode", { mode: t(modeKey(mode)) })}
+    class="mode-control" class:compact
+    aria-label={label ?? t("cycleNeteaseMode", { mode: t(modeKey(mode)) })}
     aria-describedby={error ? "netease-mode-error" : undefined}
     aria-busy={disabled}
-    title={t("cycleNeteaseMode", { mode: t(modeKey(mode)) })}
+    title={label ?? t("cycleNeteaseMode", { mode: t(modeKey(mode)) })}
     {disabled}
     onclick={(event) => { event.stopPropagation(); onCycle?.(); }}
   >
@@ -41,6 +43,8 @@
 </span>
 
 <style>
+  .mode-control.compact{width:28px;height:28px}
+  .mode-control.compact :global(svg){width:16px;height:16px}
   .mode-control-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;flex:none}
   .mode-control{position:relative;isolation:isolate;width:48px;height:48px;display:grid;place-items:center;padding:0;border:0;border-radius:9px;color:rgba(255,255,255,.72);background:transparent;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}
   .mode-control::before{content:"";position:absolute;inset:-2.5px;z-index:-1;border-radius:inherit;background:rgba(255,255,255,.1);opacity:0;pointer-events:none;transition:opacity 150ms ease}

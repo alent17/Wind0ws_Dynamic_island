@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { IdleSnapshot, WeatherLocationCandidate, WeatherSnapshot } from "./types";
+import type { IdleSnapshot, WeatherLocation, WeatherLocationCandidate, WeatherSnapshot } from "./types";
 
 let snapshot: { key: string; at: number; value: IdleSnapshot } | undefined;
 let pending: { key: string; request: Promise<IdleSnapshot> } | undefined;
@@ -39,5 +39,6 @@ export const idleApi = {
     return request;
   },
   getWeatherSnapshot,
+  getWeatherForLocation: (location: WeatherLocation) => invoke<WeatherSnapshot>("get_weather_for_location", { location }),
   searchLocations: (query: string, language = "zh") => invoke<WeatherLocationCandidate[]>("search_weather_locations", { query, language }),
 };

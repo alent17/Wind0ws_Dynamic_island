@@ -1,4 +1,4 @@
-export const WIDGET_KINDS = ["timer", "weather", "clock", "volume", "system"] as const;
+export const WIDGET_KINDS = ["timer", "weather", "clock", "calendar", "volume", "system"] as const;
 export type IslandWidgetKind = typeof WIDGET_KINDS[number];
 export type WidgetSide = "left" | "right";
 export type IslandWidgets = Record<WidgetSide, IslandWidgetKind[]>;

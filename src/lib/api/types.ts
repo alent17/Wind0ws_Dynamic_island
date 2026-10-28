@@ -1,4 +1,6 @@
 import { normalizeWidgets, type IslandWidgets } from "$lib/widgetLayout";
+
+export type AppAudioSession = { processId: number; deviceId: string; name: string; icon?: string | null; volumePercent: number; muted: boolean; systemSounds: boolean };
 export type IslandStyle = "floating" | "edge";
 export type IslandEdge = "top" | "right" | "bottom" | "left";
 export type SpectrumMode = "realtime" | "random";
@@ -9,6 +11,7 @@ export interface AppSettings {
   islandWidgets: IslandWidgets;
   islandWidgetsEnabled: boolean;
   neteaseProgressMode: NeteaseProgressMode;
+  neteaseConnectionMode: "standard" | "enhanced";
   neteaseAutoConnect: boolean;
   neteaseExecutablePath: string | null;
   islandStyle: IslandStyle;
@@ -110,6 +113,8 @@ export interface WeatherLocationCandidate extends WeatherLocation { country: str
 
 export type AppPreferences = AppSettings;
 
+export interface MediaFeature { source: "smtc" | "cdp" | "estimate" | "unavailable"; readable: boolean; controllable: boolean; }
+
 export interface MediaCapabilities {
   previous: boolean;
   playPause: boolean;
@@ -135,6 +140,7 @@ export interface MediaState {
   durationMs: number;
   progressKnown?: boolean;
   neteaseProgressAvailable?: boolean;
+  neteaseFeatures?: { progress: MediaFeature; like: MediaFeature; mode: MediaFeature };
   lastUpdatedTimestamp: number;
   source: string;
   sourceDisplay: string;
@@ -201,6 +207,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   islandWidgets: { left: [], right: [] },
   islandWidgetsEnabled: true,
   neteaseProgressMode: "real",
+  neteaseConnectionMode: "enhanced",
   neteaseAutoConnect: false,
   neteaseExecutablePath: null,
   islandStyle: "floating",
@@ -288,6 +295,7 @@ export function normalizeAppSettings(value: Partial<AppSettings>): AppSettings {
   const legacyCompactLength = Number(legacy.compactLength ?? 80);
   const legacyExpandedRadius = Number(legacy.expandedCornerRadius ?? 45);
   const merged = { ...DEFAULT_SETTINGS, ...value } as AppSettings;
+  if (merged.neteaseConnectionMode !== "standard" && merged.neteaseConnectionMode !== "enhanced") merged.neteaseConnectionMode = DEFAULT_SETTINGS.neteaseConnectionMode;
   merged.islandWidgets = normalizeWidgets(value.islandWidgets);
   merged.playerSourceOverrides = Object.fromEntries(Object.entries(value.playerSourceOverrides ?? {}).filter(([id, source]) => id.trim().length > 0 && id.length <= 1024 && source === "netease"));
   merged.volumeProtectionLimit = Math.min(100, Math.max(40, Number.isFinite(Number(value.volumeProtectionLimit)) ? Math.round(Number(value.volumeProtectionLimit)) : 80));

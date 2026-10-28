@@ -66,6 +66,7 @@
 
   <input
     type="range"
+    style={`--range-progress:${max > min ? Math.max(0, Math.min(100, (value - min) / (max - min) * 100)) : 0}%`}
     {min}
     {max}
     {step}
@@ -131,12 +132,35 @@
   }
 
   input[type="range"] {
+    appearance: none;
+    -webkit-appearance: none;
     width: 100%;
+    height: 24px;
     margin: 0;
-    accent-color: var(--studio-range-accent, #15161a);
+    background: transparent;
     cursor: pointer;
-    color-scheme: light;
   }
+
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(to right, #fff var(--range-progress), rgba(255,255,255,.19) var(--range-progress));
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -5px;
+    border: 0;
+    border-radius: 50%;
+    background: #fff;
+  }
+
+  input[type="range"]::-moz-range-track { height: 6px; border-radius: 999px; background: rgba(255,255,255,.19); }
+  input[type="range"]::-moz-range-progress { height: 6px; border-radius: 999px; background: #fff; }
+  input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; }
 
   input[type="range"]:focus-visible {
     outline: 2px solid var(--studio-accent, #3158c8);

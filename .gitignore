@@ -43,3 +43,6 @@ src-tauri/gen
 
 # Native UI lives in the separate Wind0ws_Dynamic_island-native repository.
 /native/
+
+# Local documentation (keep on disk, exclude from Git).
+/docs/

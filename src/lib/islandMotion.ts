@@ -79,6 +79,12 @@ export function widgetLayoutMotion(expanding: boolean, instant = false) {
   return islandShapeMotion(expanding ? "compact" : "expanded", expanding ? "expanded" : "compact", instant);
 }
 
+// Editing uses the same curve in both directions so cards and the island
+// reverse together when a widget is added or removed.
+export function widgetEditMotion(instant = false) {
+  return islandShapeMotion("compact", "expanded", instant);
+}
+
 // Keep both layouts attached to the same edge while their shared elements move.
 export function anchoredLayoutOffset(
   surface: { width: number; height: number },

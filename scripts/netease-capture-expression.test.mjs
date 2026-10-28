@@ -39,3 +39,25 @@ test('an uninitialized page remains unavailable and transient modules are remove
   assert.equal(fx.queue.length, 1);
   assert.deepEqual(Object.keys(fx.runtime.m), []);
 });
+
+test('connection readiness does not depend on a loaded track or playback mode', () => {
+  const ready = rust.match(/const CLOUD_MUSIC_READY_EXPRESSION: &str = r#"([\s\S]*?)"#;/)[1].replaceAll('__CAPTURE_TOOL__', capture);
+  for (const initialized of [true, false]) {
+    const fx = fixture(1423, initialized);
+    const result = vm.runInNewContext(ready, { webpackJsonp: fx.queue });
+    assert.equal(result.ready, initialized);
+    assert.equal(fx.runtime.s, 1423);
+    assert.equal(fx.queue.length, 1);
+  }
+});
+
+test('mode reads tolerate an uninitialized player or temporarily absent mode state', () => {
+  const expression = rust.match(/const CLOUD_MUSIC_READ_EXPRESSION: &str = r#"([\s\S]*?)"#;/)[1].replaceAll('__CAPTURE_TOOL__', capture);
+  for (const initialized of [true, false]) {
+    const fx = fixture(1423, initialized);
+    assert.equal(Object.keys(vm.runInNewContext(expression, { webpackJsonp: fx.queue })).length, 0);
+  }
+  const fx = fixture(1423);
+  fx.tool.getStore = () => ({ playing: { playingMode: 'playOne' } });
+  assert.equal(vm.runInNewContext(expression, { webpackJsonp: fx.queue }).mode, 'playOne');
+});

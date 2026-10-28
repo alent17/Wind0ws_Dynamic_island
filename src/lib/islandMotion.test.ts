@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anchoredLayoutOffset, cubicBezierEasing, islandMorphEasing, islandShapeMotion, widgetLayoutMotion } from "./islandMotion";
+import { anchoredLayoutOffset, cubicBezierEasing, islandMorphEasing, islandShapeMotion, widgetEditMotion, widgetLayoutMotion } from "./islandMotion";
 
 describe("island motion", () => {
   it("shares island expansion and collapse timing with widget layout changes", () => {
@@ -7,6 +7,10 @@ describe("island motion", () => {
     expect(widgetLayoutMotion(false)).toEqual(islandShapeMotion("expanded","compact"));
     expect(widgetLayoutMotion(true,true).duration).toBe(0);
     expect(widgetLayoutMotion(false,true).duration).toBe(0);
+  });
+  it("uses one island curve for both directions in the editor", () => {
+    expect(widgetEditMotion()).toEqual(islandShapeMotion("compact", "expanded"));
+    expect(widgetEditMotion(true).duration).toBe(0);
   });
   it("keeps target layouts on their attachment edge as surface dimensions change", () => {
     const surface = { width: 420, height: 180 };

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, type ComponentType } from "svelte";
+  import SolidIcon from "$lib/components/media/SolidIcon.svelte";
   import { locale, translate } from "$lib/i18n";
   const t = (key: "featureTools") => translate(key, {}, $locale);
   let { items, toolbar = false, activeId = "", scrollPosition = 0, onScroll, onSelect } = $props<{
@@ -56,7 +57,7 @@
   {#each items as item}
     <button class="function-icon" class:active={activeId === item.id} aria-pressed={activeId === item.id} type="button" aria-label={item.label} title={item.label}
       onclick={(event) => { event.stopPropagation(); if (!dragged || event.detail === 0) onSelect(item.id); }}>
-      <span class="function-glyph"><item.icon size={16} strokeWidth={1.8} /></span>
+      <span class="function-glyph"><SolidIcon kind={item.id} size={16} /></span>
     </button>
   {/each}
 </div>

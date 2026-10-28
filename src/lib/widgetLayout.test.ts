@@ -1,8 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { normalizeWidgets, placeWidget, widgetExtraWidth, widgetPanelWidth, widgetPanelOrder, widgetsFromPanelOrder, moveLayoutPanel } from "./widgetLayout";
-import { navigationGeometry, navigationHostFor, islandLayoutScaleForWorkArea, physicalHostSizeFor, placementFor, fitIslandViewport } from "./islandGeometry";
+import { featureExtensionGeometry, volumeExtensionGeometry, navigationGeometry, navigationHostFor, islandLayoutScaleForWorkArea, physicalHostSizeFor, placementFor, fitIslandViewport } from "./islandGeometry";
 
 describe("widget layout", () => {
+  it("sizes the volume extension for the visible page, including page controls and edge insets", () => {
+    expect(volumeExtensionGeometry(4, false).height).toBe(430);
+    expect(volumeExtensionGeometry(1, true).height).toBe(267);
+    expect(volumeExtensionGeometry(5, true).height).toBeLessThan(featureExtensionGeometry().height);
+    expect(volumeExtensionGeometry(4, false, 45, 12).height).toBe(454);
+  });
+  it("fits a vertical feature extension in a high-DPI work area even without widgets", () => {
+    const scale = islandLayoutScaleForWorkArea(1366, 768, 2, "edge", "top", 600, 0);
+    const host = navigationHostFor("edge", "top", 80, scale, 600, 0);
+    expect(host.height * 2).toBeLessThanOrEqual(768);
+    expect(host.height).toBeGreaterThanOrEqual(featureExtensionGeometry().height * scale);
+  });
   it("repartitions side panels when music itself moves",()=>{
     const order=widgetPanelOrder({left:["clock"],right:["system"]});
     expect(widgetsFromPanelOrder(moveLayoutPanel(order,"music",2))).toEqual({left:["clock","system"],right:[]});
@@ -51,6 +63,7 @@ describe("widget layout", () => {
     expect(normalizeWidgets(undefined)).toEqual({left: [], right: []});
     expect(normalizeWidgets({left: ["unknown", "timer", "timer"], right: ["volume", "clock"]})).toEqual({left: ["timer"], right: ["volume"]});
     expect(normalizeWidgets({left: "clock", right: ["weather"]})).toEqual({left: [], right: ["weather"]});
+    expect(normalizeWidgets({left: ["calendar"], right: ["clock"]})).toEqual({left: ["calendar"], right: ["clock"]});
   });
   it("allows two on one side, reorders them and moves across music without duplicates", () => {
     let layout = placeWidget({left: [], right: []}, "timer", "left");

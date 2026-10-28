@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, normalizeAppSettings } from "./types";
 
 describe("normalizeAppSettings", () => {
+  it("defaults to CDP but preserves an explicit standard connection", () => {
+    expect(normalizeAppSettings({}).neteaseConnectionMode).toBe("enhanced");
+    expect(normalizeAppSettings({ neteaseAutoConnect: true }).neteaseConnectionMode).toBe("enhanced");
+    expect(normalizeAppSettings({ neteaseExecutablePath: "C:\\Music\\cloudmusic.exe" }).neteaseConnectionMode).toBe("enhanced");
+    expect(normalizeAppSettings({ neteaseConnectionMode: "standard", neteaseAutoConnect: true }).neteaseConnectionMode).toBe("standard");
+    expect(normalizeAppSettings({ neteaseAutoConnect: false, playerSourceOverrides: { player: "netease" } }).neteaseConnectionMode).toBe("enhanced");
+  });
   it("defaults and independently normalizes expanded lengths", () => {
     expect(normalizeAppSettings({}).floatingExpandedLength).toBe(600);
     expect(normalizeAppSettings({}).edgeExpandedLength).toBe(600);

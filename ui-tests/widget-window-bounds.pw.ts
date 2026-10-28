@@ -1,6 +1,37 @@
 import { test, expect } from "@playwright/test";
 
-test.use({viewport:{width:960,height:540}});
+test.use({viewport:{width:960,height:540},reducedMotion:"no-preference"});
+
+for (const style of ["edge", "floating"]) test(`${style} reserves native space before adding editor cards from compact`, async ({page}) => {
+  await page.setViewportSize({width:1600,height:900});
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(style => {
+    const f = window as any;
+    f.settingsOverrides = {islandStyle:style,islandEdge:"top",enableAnimations:true,reduceAnimations:false,islandWidgets:{left:[],right:[]}};
+    f.boundsRequests = [];
+    const invoke = f.__TAURI_INTERNALS__.invoke;
+    f.__TAURI_INTERNALS__.invoke = (command:any,args:any,options:any) => {
+      if (command === "animate_window_bounds") f.boundsRequests.push(args);
+      return invoke(command,args,options);
+    };
+    f.mountApp();
+  }, style);
+  await expect.poll(() => page.evaluate(() => (window as any).boundsRequests.length)).toBeGreaterThan(0);
+  await page.evaluate(() => (window as any).expand());
+  await page.locator(".island-surface").focus();
+  await page.keyboard.press("F2");
+  await expect(page.locator(".editor-bar")).toBeVisible();
+  await page.waitForTimeout(700);
+  const before = await page.evaluate(() => (window as any).boundsRequests.length);
+  for (const kind of ["timer", "clock"]) {
+    await page.locator(".catalog-item").filter({has:page.locator(`.app-icon.${kind}`)}).click();
+    await expect(page.locator(`[data-widget-kind="${kind}"]`)).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => (window as any).boundsRequests.length)).toBe(before);
+  }
+  await page.evaluate(() => (window as any).destroy());
+});
 
 test("a delayed native resize cannot clip the first animated editor frames", async ({page}) => {
   await page.goto("/ui-tests/lifecycle-fixture.html");
@@ -30,6 +61,117 @@ test("a delayed native resize cannot clip the first animated editor frames", asy
     expect(rect.right).toBeLessThanOrEqual(601);
     expect(rect.bottom).toBeLessThanOrEqual(251);
   }
+  await page.evaluate(() => (window as any).destroy());
+});
+
+for (const count of [1, 2]) test(`desktop confirms ${count} added widget(s) without a second native bounds animation`, async ({page}) => {
+  page.on("pageerror", error => console.error("Browser error:", error.message));
+  await page.setViewportSize({width:1600,height:900});
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(() => {
+    const f = window as any;
+    f.settingsOverrides = {islandStyle:"edge",islandEdge:"top",enableAnimations:true,reduceAnimations:false,showCustomFunctionPanel:true,islandWidgets:{left:[],right:[]}};
+    f.boundsRequests = [];
+    const invoke = f.__TAURI_INTERNALS__.invoke;
+    f.__TAURI_INTERNALS__.invoke = (command:any,args:any,options:any) => {
+      if (command === "animate_window_bounds") f.boundsRequests.push(args);
+      return invoke(command,args,options);
+    };
+    f.mountApp();
+  });
+  await expect.poll(() => page.evaluate(() => (window as any).boundsRequests.length)).toBeGreaterThan(0);
+  await page.evaluate(() => (window as any).expand());
+  const before = await page.evaluate(() => (window as any).boundsRequests.length);
+  await page.locator(".layout-toggle").click();
+  await expect(page.locator(".editor-bar")).toBeVisible();
+  for (const kind of ["timer", "clock"].slice(0, count)) {
+    await page.locator(".catalog-item").filter({has:page.locator(`.app-icon.${kind}`)}).click();
+    await expect(page.locator(`[data-widget-kind="${kind}"]`)).toBeVisible();
+    await page.waitForTimeout(500);
+  }
+  const beforeConfirm = await page.evaluate(() => (window as any).boundsRequests.length);
+  const capture = page.evaluate(async (count) => {
+    const frames: {time:number;boxes:{x:number;y:number;width:number;height:number}[]}[] = [];
+    for (let i=0;i<80;i++) {
+      const time = await new Promise<number>(resolve => requestAnimationFrame(resolve));
+      const selectors = [".island-surface", ".music-pane", ...["timer", "clock"].slice(0,count).map(kind=>`[data-widget-kind="${kind}"] .widget-content`)];
+      const boxes = selectors.map(selector => {
+        const rect = document.querySelector(selector)!.getBoundingClientRect();
+        return {x:rect.x,y:rect.y,width:rect.width,height:rect.height};
+      });
+      frames.push({time,boxes});
+    }
+    return frames;
+  }, count);
+  await page.locator(".edit-actions .done").click();
+  const frames = await capture;
+  for (let i=1;i<frames.length;i++) {
+    const allowance = 8 + 1.4 * (frames[i].time - frames[i-1].time);
+    for (let box=0;box<frames[i].boxes.length;box++) {
+      for (const key of ["x","y","width","height"] as const) expect(Math.abs(frames[i].boxes[box][key] - frames[i-1].boxes[box][key]), `box ${box} ${key}: ${JSON.stringify(frames)}`).toBeLessThan(allowance);
+    }
+  }
+  await expect(page.locator(".editor-bar")).toHaveCount(0);
+  await expect(page.locator(".widget-card")).toHaveCount(count);
+  const requests = await page.evaluate(start => (window as any).boundsRequests.slice(start), before);
+  expect(requests.every((request:{animate:boolean}) => !request.animate)).toBe(true);
+  expect(await page.evaluate(start => (window as any).boundsRequests.slice(start), beforeConfirm)).toHaveLength(0);
+  await page.evaluate(() => (window as any).destroy());
+});
+
+for (const scenario of [
+  {name:"one to music", widgets:{left:[],right:["timer"]}, remove:["timer"], remaining:0},
+  {name:"two to one", widgets:{left:["clock"],right:["timer"]}, remove:["timer"], remaining:1},
+  {name:"two to music", widgets:{left:["clock"],right:["timer"]}, remove:["clock","timer"], remaining:0},
+]) test(`desktop ${scenario.name} confirms without a jump`, async ({page}) => {
+  await page.setViewportSize({width:1600,height:900});
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(widgets => {
+    const f = window as any;
+    f.settingsOverrides = {islandStyle:"edge",islandEdge:"top",enableAnimations:true,reduceAnimations:false,showCustomFunctionPanel:true,islandWidgets:widgets,islandWidgetsEnabled:true};
+    f.boundsRequests = [];
+    const invoke = f.__TAURI_INTERNALS__.invoke;
+    f.__TAURI_INTERNALS__.invoke = (command:any,args:any,options:any) => {
+      if (command === "animate_window_bounds") f.boundsRequests.push(args);
+      return invoke(command,args,options);
+    };
+    f.mountApp();
+  }, scenario.widgets);
+  await expect.poll(() => page.evaluate(() => (window as any).boundsRequests.length)).toBeGreaterThan(0);
+  await page.evaluate(() => (window as any).expand());
+  await page.locator(".island-surface").focus();
+  await page.keyboard.press("F2");
+  await expect(page.locator(".editor-bar")).toBeVisible();
+  for (const kind of scenario.remove) {
+    await page.locator(`[data-widget-kind="${kind}"] .remove`).click();
+    await expect(page.locator(`[data-widget-kind="${kind}"]`)).toHaveCount(0);
+    await page.waitForTimeout(450);
+  }
+  const before = await page.evaluate(() => (window as any).boundsRequests.length);
+  const capture = page.evaluate(async () => {
+    const frames: {time:number;x:number;y:number;width:number;height:number}[] = [];
+    for (let i=0;i<90;i++) {
+      const time = await new Promise<number>(resolve => requestAnimationFrame(resolve));
+      const rect = document.querySelector(".music-pane")!.getBoundingClientRect();
+      frames.push({time,x:rect.x,y:rect.y,width:rect.width,height:rect.height});
+    }
+    return frames;
+  });
+  await page.locator(".edit-actions .done").click();
+  const frames = await capture;
+  for (let i=1;i<frames.length;i++) {
+    const allowance = 8 + 1.4 * (frames[i].time - frames[i-1].time);
+    for (const key of ["x","y","width","height"] as const) expect(Math.abs(frames[i][key] - frames[i-1][key]), `${scenario.name} ${key}: ${JSON.stringify(frames)}`).toBeLessThan(allowance);
+  }
+  await expect(page.locator(".editor-bar")).toHaveCount(0);
+  await expect(page.locator(".widget-card")).toHaveCount(scenario.remaining);
+  const requests = await page.evaluate(start => (window as any).boundsRequests.slice(start), before);
+  expect(requests).toHaveLength(0);
+  await page.evaluate(() => (window as any).collapse());
+  await expect.poll(() => page.evaluate(() => (window as any).boundsRequests.length)).toBeGreaterThan(before);
+  expect(await page.evaluate(() => (window as any).boundsRequests.at(-1).animate)).toBe(false);
   await page.evaluate(() => (window as any).destroy());
 });
 

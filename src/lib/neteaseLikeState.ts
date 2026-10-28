@@ -9,6 +9,7 @@ function createEntry(title: string, artist: string) {
   let value: NeteaseLikeState | null = null;
   let pending: Promise<void> | null = null;
   let retryAt = 0;
+  let revision = 0;
   let busy = false;
   let attempts = 0;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -17,6 +18,17 @@ function createEntry(title: string, artist: string) {
   const errorMessage = (error: unknown) => typeof error === "string" ? error : error && typeof error === "object" && "message" in error ? String(error.message) : "";
   const entry = {
     subscribe: store.subscribe,
+    suspend() {
+      revision++;
+      clearTimeout(retryTimer);
+      retryTimer = undefined;
+      value = null;
+      pending = null;
+      busy = false;
+      attempts = 0;
+      retryAt = 0;
+      publish();
+    },
     acceptConfirmed(result: NeteaseLikeState) {
       if (!value || value.trackId !== result.trackId || pending || busy) return;
       value = { ...value, liked: result.liked };
@@ -24,12 +36,15 @@ function createEntry(title: string, artist: string) {
     },
     load() {
       if (value || pending || busy || Date.now() < retryAt) return pending ?? Promise.resolve();
+      const started = revision;
       publish(false, "", true);
       pending = mediaApi.neteaseSongLike(title, artist).then(result => {
+        if (started !== revision) return;
         value = result;
         attempts = 0;
         publish();
       }).catch((error: unknown) => {
+        if (started !== revision) return;
         publish(true, errorMessage(error));
         // Only retry an unsuccessful initial read, at most twice. Reopening
         // the panel neither starts another read nor resets this retry budget.
@@ -41,13 +56,14 @@ function createEntry(title: string, artist: string) {
         } else {
           retryAt = Number.POSITIVE_INFINITY;
         }
-      }).finally(() => { pending = null; });
+      }).finally(() => { if (started === revision) pending = null; });
       return pending;
     },
     async toggle() {
       if (busy) return;
       clearTimeout(retryTimer);
       retryTimer = undefined;
+      const started = revision;
       busy = true;
       publish();
       let failed = false;
@@ -56,9 +72,12 @@ function createEntry(title: string, artist: string) {
         // A cached playId may expire even when SMTC still reports the same
         // title. Refresh only on an explicit click, never on panel reopening.
         await pending;
+        if (started !== revision) return;
         const current = await mediaApi.neteaseSongLike(title, artist);
+        if (started !== revision) return;
         value = current;
         const result = await mediaApi.neteaseSongLike(title, artist, current, !current.liked);
+        if (started !== revision) return;
         value = result;
         acceptNeteaseLikeState(result);
         if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
@@ -68,8 +87,7 @@ function createEntry(title: string, artist: string) {
         failed = true;
         failure = errorMessage(error);
       } finally {
-        busy = false;
-        publish(failed, failure);
+        if (started === revision) { busy = false; publish(failed, failure); }
       }
     },
   };

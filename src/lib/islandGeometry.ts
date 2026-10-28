@@ -319,6 +319,19 @@ export function hiddenPlacementFor(
 
 export type IslandPage = "music" | "timer" | "volume" | "clock" | "weather" | "system";
 
+export function featureExtensionGeometry(radius = 45): IslandGeometry {
+  return { width: 700, height: 620, radius: clampExpandedRadius(radius) };
+}
+
+export function worldClockExtensionGeometry(radius = 45): IslandGeometry {
+  return { width: 1000, height: 620, radius: clampExpandedRadius(radius) };
+}
+
+export function volumeExtensionGeometry(rows: number, hasPages: boolean, radius = 45, blockInset = 0): IslandGeometry {
+  const count = Math.min(5, Math.max(1, Math.floor(Number.isFinite(rows) ? rows : 0)));
+  return { width: 480, height: 154 + count * 69 + (hasPages ? 44 : 0) + Math.max(0, blockInset) * 2, radius: clampExpandedRadius(radius) };
+}
+
 export function navigationGeometry(page: IslandPage, toolCount: number, radius = 45,
   style: IslandStyle = "floating", edge: IslandEdge = "top", shoulder = 32, expandedLength = 600, widgetCount = 0, editing = false): IslandGeometry {
   const inset = style === "edge" ? clampShoulderRadius(shoulder) : 0;
@@ -358,8 +371,8 @@ export function navigationHostFor(style: IslandStyle, edge: IslandEdge, compactL
   // layouts reserve the gap in host height.
   const horizontalGap = style === "floating" && isVerticalEdge(edge) ? ISLAND_GAP : 0;
   return {
-    width: Math.max(Math.ceil((isVerticalEdge(edge) ? 28 : clampCompactLength(compactLength)) + horizontalGap * scale), Math.ceil(Math.max(base.width + widgetExtraWidth(widgetCount, expandedLength) + (style === "edge" && !isVerticalEdge(edge) && widgetCount > 0 ? 128 : 0) + horizontalGap, 448 + ISLAND_GAP) * safeScale)),
-    height: Math.max(Math.ceil((isVerticalEdge(edge) ? clampCompactLength(compactLength) : 28) + ISLAND_GAP * scale), Math.ceil(Math.max(base.height, 440 + ISLAND_GAP + ISLAND_OVERSHOOT, style === "edge" && isVerticalEdge(edge) ? 249.1 + 128 + EDITOR_HEIGHT + EDITOR_TOP_SPACE + ISLAND_OVERSHOOT : 0) * safeScale)),
+    width: Math.max(Math.ceil((isVerticalEdge(edge) ? 28 : clampCompactLength(compactLength)) + horizontalGap * scale), Math.ceil(Math.max(base.width + widgetExtraWidth(widgetCount, expandedLength) + (style === "edge" && !isVerticalEdge(edge) && widgetCount > 0 ? 128 : 0) + horizontalGap, 1000 + ISLAND_GAP) * safeScale)) + (isVerticalEdge(edge) ? 0 : 24),
+    height: Math.max(Math.ceil((isVerticalEdge(edge) ? clampCompactLength(compactLength) : 28) + ISLAND_GAP * scale), Math.ceil(Math.max(base.height, 620 + ISLAND_GAP + ISLAND_OVERSHOOT, style === "edge" && isVerticalEdge(edge) ? 249.1 + 128 + EDITOR_HEIGHT + EDITOR_TOP_SPACE + ISLAND_OVERSHOOT : 0) * normalizedContentScale(scale))),
   };
 }
 

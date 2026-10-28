@@ -16,8 +16,8 @@
     busy = true;
     error = "";
     try {
-      if (kind === "shuffle") await mediaApi.toggleShuffle();
-      else await mediaApi.cycleRepeat();
+      if (kind === "shuffle") await mediaApi.toggleShuffle(media);
+      else await mediaApi.cycleRepeat(media);
     } catch {
       if (!disposed) error = t("mediaModeFailed");
     } finally {

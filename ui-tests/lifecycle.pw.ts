@@ -3,12 +3,13 @@ import { expect, test } from "@playwright/test";
 test("NetEase Settings configure ordinary launch entries without starting or restarting the player", async ({page}) => {
   await page.goto("/ui-tests/lifecycle-fixture.html");
   await page.waitForFunction(() => (window as any).ready);
-  await page.evaluate(() => { (window as any).settingsOverrides = {language:'zh-CN'}; (window as any).mountStudio(); });
+  await page.evaluate(() => { (window as any).settingsOverrides = {language:'zh-CN',neteaseConnectionMode:'enhanced'}; (window as any).mountStudio(); });
   const configure = page.getByRole('button',{name:'配置普通启动入口',exact:true});
+  await page.locator(".netease-details summary").click();
   await expect(configure).toBeEnabled();
   await configure.click();
   await expect(page.locator('.netease-progress-section .message[role="status"]')).toContainText('已配置 16 个普通启动入口');
-  expect(await page.evaluate(() => (window as any).neteaseSetupCalls)).toEqual([{restart:false,bind:true,configureOnly:true}]);
+  expect(await page.evaluate(() => (window as any).neteaseSetupCalls)).toEqual([{restart:false,bind:true,configureOnly:true,repairStartMenu:true}]);
 });
 
 test("NetEase idle play uses the native configured player-open path before SMTC playback", async ({page}) => {
@@ -70,7 +71,7 @@ test("NetEase playback mode is read once per connection rather than per song", a
   await page.goto("/ui-tests/lifecycle-fixture.html");
   await page.waitForFunction(() => (window as any).ready);
   await page.evaluate(() => (window as any).mountApp());
-  const state = {title:'First',artist:'Artist',source:'netease',isPlaying:true,positionMs:0,durationMs:180000,nativeEpoch:'mode-epoch',nativeRevision:1,nativeTrackGeneration:1};
+  const state = {neteaseFeatures:{mode:{source:"cdp",readable:true,controllable:true},like:{source:"cdp",readable:true,controllable:true},progress:{source:"cdp",readable:true,controllable:true}},sourceDisplay:"cloudmusic.exe",title:'First',artist:'Artist',source:'netease',isPlaying:true,positionMs:0,durationMs:180000,nativeEpoch:'mode-epoch',nativeRevision:1,nativeTrackGeneration:1};
   await page.evaluate(payload => (window as any).media(payload),state);
   await expect.poll(() => page.evaluate(() => (window as any).calls.filter((c:string) => c === 'get_netease_playback_mode').length)).toBe(1);
   await page.evaluate(payload => (window as any).media({...payload,title:'Second',nativeRevision:2,nativeTrackGeneration:2}),state);
@@ -82,7 +83,7 @@ test("NetEase heart in the expanded island recovers from an initial read failure
   await page.goto("/ui-tests/lifecycle-fixture.html");
   await page.waitForFunction(() => (window as any).ready);
   await page.evaluate(() => { (window as any).likeReadFailures = 1; (window as any).mountApp(); });
-  await page.evaluate(() => (window as any).media({title:'Like Song',artist:'Artist',source:'netease',isPlaying:true,positionMs:0,durationMs:180000,nativeEpoch:'heart-epoch',nativeRevision:1,nativeTrackGeneration:1}));
+  await page.evaluate(() => (window as any).media({neteaseFeatures:{mode:{source:"cdp",readable:true,controllable:true},like:{source:"cdp",readable:true,controllable:true},progress:{source:"cdp",readable:true,controllable:true}},sourceDisplay:"cloudmusic.exe",title:'Like Song',artist:'Artist',source:'netease',isPlaying:true,positionMs:0,durationMs:180000,nativeEpoch:'heart-epoch',nativeRevision:1,nativeTrackGeneration:1}));
   await page.evaluate(() => (window as any).expand());
   const heart = page.locator('.like-control');
   await expect(heart).toBeVisible();
@@ -110,7 +111,8 @@ test("NetEase heart reports the actual error after bounded retries", async ({pag
   await expect.poll(() => page.evaluate(() => (window as any).calls.filter((c:string) => c === 'netease_song_like').length)).toBe(3);
   await expect(page.locator('.like-control')).toHaveAttribute('title', /player starting/);
   await expect(page.locator('.like-error')).toHaveCount(0);
-  await expect(page.locator('.like-control')).toBeEnabled();
+  await expect(page.locator('.like-control')).toBeDisabled();
+  await expect(page.locator('.like-control')).not.toHaveAttribute('aria-pressed');
 });
 
 test("VolumePanel submits the pointerup coordinate as its final write", async ({page}) => {
@@ -1163,6 +1165,8 @@ test("App completes a hidden countdown at its absolute deadline exactly once", a
   await expect.poll(() => page.evaluate(() => (window as any).timerStateDispatches.length)).toBe(timerStateBaseline+2);
   await page.evaluate(() => (window as any).captureMode(false));
   await expect(page.locator(".timer-complete-card")).toBeVisible();
+  await expect(page.locator(".timer-complete-time")).toHaveText("00:00");
+  await expect(page.locator(".timer-complete-dismiss")).toBeVisible();
   expect(await page.evaluate(() => (window as any).completionCardAdds())).toBe(1);
   await page.clock.runFor(10_000);
   expect(await page.evaluate(() => (window as any).timerStateDispatches.length)).toBe(timerStateBaseline+2);

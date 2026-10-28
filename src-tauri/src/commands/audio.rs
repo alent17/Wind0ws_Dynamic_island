@@ -1,5 +1,5 @@
 use crate::error::{AppError, AppResult};
-use crate::models::{AudioDeviceInfo, SystemAudioState};
+use crate::models::{AppAudioSession, AudioDeviceInfo, SystemAudioState};
 use crate::services;
 
 #[tauri::command]
@@ -28,4 +28,16 @@ pub async fn set_default_audio_output(device_id: String) -> AppResult<()> {
     super::native_task::run_native(move || services::set_default_audio_output(&device_id))
         .await
         .map_err(|error| AppError::business(3010, format!("切换音频设备后台任务失败：{error}")))?
+}
+
+#[tauri::command]
+pub async fn list_app_audio_sessions() -> AppResult<Vec<AppAudioSession>> {
+    super::native_task::run_native(services::list_app_audio_sessions).await
+        .map_err(|error| AppError::business(3010, format!("读取应用音量后台任务失败：{error}")))?
+}
+
+#[tauri::command]
+pub async fn set_app_audio_volume(device_id: String, process_id: u32, system_sounds: bool, volume_percent: Option<u8>, muted: bool) -> AppResult<()> {
+    super::native_task::run_native(move || services::set_app_audio_volume(&device_id, process_id, system_sounds, volume_percent, muted)).await
+        .map_err(|error| AppError::business(3010, format!("设置应用音量后台任务失败：{error}")))?
 }

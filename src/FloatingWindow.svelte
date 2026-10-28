@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { clearNeteaseModes } from "$lib/neteaseModeState";
   import { onMount, onDestroy } from "svelte";
   import { loadImage } from "$lib/imageLoad";
   import { isHighResolutionSmtcCover } from "$lib/smtcArtworkQuality";
@@ -26,6 +27,7 @@
     type CaptureSnapshot,
   } from "$lib/captureMode";
   import MediaProgress from "$lib/components/media/MediaProgress.svelte";
+  import NeteaseConnectedModeControl from "$lib/components/media/NeteaseConnectedModeControl.svelte";
   import SmtcModeControls from "$lib/components/media/SmtcModeControls.svelte";
   import NeteaseLikeControl from "$lib/components/media/NeteaseLikeControl.svelte";
   import { clampSeekPosition, mediaTrackKey, projectedPosition, reconcileReportedPosition } from "$lib/mediaClock";
@@ -917,6 +919,7 @@
         return;
       }
 
+      if (mediaState.neteaseFeatures?.mode.source === "cdp" && payload.neteaseFeatures?.mode.source !== "cdp") clearNeteaseModes();
       // 检查是否是空状态（播放器关闭或无媒体）
       const isEmptyState =
         !payload.title ||
@@ -1014,6 +1017,8 @@
         mediaState = {
           ...mediaState,
           isPlaying,
+          nativeEpoch: incomingStamp?.nativeEpoch ?? mediaState.nativeEpoch,
+          nativeRevision: incomingStamp?.nativeRevision ?? mediaState.nativeRevision,
           nativeTrackGeneration: Number.isSafeInteger(payload.nativeTrackGeneration) ? payload.nativeTrackGeneration : mediaState.nativeTrackGeneration,
           ...mergeProgressAnchorFields(mediaState, payload),
           positionMs: receivedAt < pendingSeekUntil ? previousPosition : authoritative
@@ -1032,6 +1037,10 @@
               ? Number(payload.lastUpdatedTimestamp)
               : receivedAt,
           capabilities: payload.capabilities,
+          neteaseFeatures: payload.neteaseFeatures,
+          shuffleActive: payload.shuffleActive,
+          repeatMode: payload.repeatMode,
+          sourceDisplay: payload.sourceDisplay ?? mediaState.sourceDisplay,
         };
         lastReportedPosition = Number(payload.positionMs) || 0;
 
@@ -1819,7 +1828,7 @@
     {#if mediaState.source === "netease"}
       {#key `${mediaState.nativeEpoch}:${mediaState.nativeTrackGeneration}:${mediaState.title}:${mediaState.artist}`}
         <div class="floating-like-control">
-          <NeteaseLikeControl title={mediaState.title} artist={mediaState.artist} cacheKey={`${mediaState.nativeEpoch}:${mediaState.nativeTrackGeneration}`} live={Boolean(mediaState.title)} compact />
+          <NeteaseLikeControl title={mediaState.title} artist={mediaState.artist} cacheKey={`${mediaState.nativeEpoch}:${mediaState.nativeTrackGeneration}`} available={mediaState.neteaseFeatures?.like.controllable === true} live={Boolean(mediaState.title)} compact />
         </div>
       {/key}
     {/if}
@@ -1831,6 +1840,7 @@
         position={displayedPosition}
         duration={mediaState.durationMs}
         progressKnown={mediaState.progressKnown !== false}
+        estimated={mediaState.neteaseFeatures?.progress.source === "estimate"}
         seekable={Boolean(mediaState.capabilities?.seek)}
         {seekError}
         onSeek={seekTo}
@@ -1840,7 +1850,9 @@
 
   <!-- 控制按钮遮罩层 -->
   <div class="controls-overlay" class:visible={showControls}>
-    {#if mediaState.source !== "netease" && (mediaState.capabilities?.shuffle || mediaState.capabilities?.repeat)}
+    {#if mediaState.neteaseFeatures?.mode.source === "cdp"}
+      <div class="floating-modes">{#key `${mediaState.nativeEpoch}:${mediaState.sourceDisplay}`}<NeteaseConnectedModeControl media={mediaState} compact/>{/key}</div>
+    {:else if mediaState.capabilities?.shuffle || mediaState.capabilities?.repeat}
       <div class="floating-modes">{#key mediaState.source}<SmtcModeControls media={mediaState} compact/>{/key}</div>
     {/if}
     <div class="controls">

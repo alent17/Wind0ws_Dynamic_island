@@ -29,7 +29,7 @@ fixture.neteaseSetupCalls = [];
 fixture.openApplicationCalls = [];
 fixture.reopenedMedia = undefined;
 let likeComponent: ReturnType<typeof mount> | undefined;
-fixture.mountLike = () => { likeComponent = mount(NeteaseLikeControl, { target: document.body, props: { title: "Like Song", artist: "Artist" } }); };
+fixture.mountLike = () => { likeComponent = mount(NeteaseLikeControl, { target: document.body, props: { title: "Like Song", artist: "Artist", available: true } }); };
 fixture.unmountLike = async () => { if (likeComponent) await unmount(likeComponent); likeComponent = undefined; };
 fixture.deferCoverArtwork = false;
 fixture.pendingCoverArtwork = [];
@@ -164,7 +164,10 @@ Object.defineProperty(HTMLMediaElement.prototype, "paused", {
 const animate = Element.prototype.animate;
 Element.prototype.animate = function(...args) {
   const animation = animate.apply(this, args);
-  const row = {firstOpacity:(args[0] as Keyframe[])[0].opacity,cancelled:0};
+  if (!this.classList.contains("fixed-host")) return animation;
+  const frames = args[0];
+  const opacity = Array.isArray(frames) ? frames[0]?.opacity : frames?.opacity;
+  const row = {firstOpacity:Array.isArray(opacity) ? opacity[0] : opacity,cancelled:0};
   fixture.animations.push(row);
   const cancel = animation.cancel.bind(animation);
   animation.cancel = () => { row.cancelled++; cancel(); };
@@ -175,15 +178,35 @@ mockConvertFileSrc("windows");
 mockIPC((command, args) => {
   fixture.calls.push(command);
   if (command === "setup_netease_connection") {
-    fixture.neteaseSetupCalls.push(args);
+    const { progress, ...request } = args as any;
+    fixture.neteaseSetupCalls.push(request);
+    if (fixture.neteaseDeferSetup) {
+      fixture.neteaseProgress = progress;
+      let index = 0;
+      fixture.neteaseSendStage = (stage: string) => fixture.__TAURI_INTERNALS__.runCallback(progress.id, { index: index++, message: stage });
+      return new Promise(resolve => { fixture.resolveNeteaseSetup = (result: unknown) => {
+        fixture.__TAURI_INTERNALS__.runCallback(progress.id, { index, end: true });
+        resolve(result);
+      }; });
+    }
+    if (progress) fixture.__TAURI_INTERNALS__.runCallback(progress.id, { index: 0, end: true });
+    if (fixture.neteaseSetupError) return Promise.reject(fixture.neteaseSetupError);
+    if (fixture.neteaseSetupResult) return fixture.neteaseSetupResult;
     return {connected:false,configured:true,executablePath:"C:\\NetEase\\cloudmusic.exe",shortcutPath:"",boundSessionId:null,bindingFailed:false,launchEntries:16};
+  }
+  if (fixture.neteaseRefreshFails && fixture.neteaseSetupCalls.length > 0 && ["get_settings", "get_media_info_cmd", "list_media_sessions"].includes(command)) {
+    return Promise.reject("temporary refresh failure");
   }
   if (command === "open_application") {
     fixture.openApplicationCalls.push(args);
     if (fixture.reopenedMedia) fixture.mediaInfoSnapshot = fixture.reopenedMedia;
     return null;
   }
-  if (command === "get_netease_playback_mode") return "repeat_list";
+  if (command === "get_netease_playback_mode") {
+    if (fixture.modeReadFailures > 0) { fixture.modeReadFailures--; return Promise.reject("mode temporarily unavailable"); }
+    if (fixture.modeUnknown) return null;
+    return "repeat_list";
+  }
   if (command === "netease_song_like") {
     if (typeof args?.liked !== "boolean" && fixture.likeReadFailures > 0) {
       fixture.likeReadFailures--;
@@ -195,6 +218,10 @@ mockIPC((command, args) => {
       fixture.likeState = { ...fixture.likeState, liked: args.liked };
     }
     return { ...fixture.likeState };
+  }
+  if (command === "update_settings" && typeof (args as any)?.patch?.neteaseAutoConnect === "boolean") {
+    fixture.settingsOverrides.neteaseAutoConnect = (args as any).patch.neteaseAutoConnect;
+    return null;
   }
   if (command === "get_settings") {
     const snapshot = {...DEFAULT_SETTINGS,showSpectrum:false,idleContentEnabled:false,...fixture.settingsOverrides};

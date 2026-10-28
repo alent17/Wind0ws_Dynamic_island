@@ -32,6 +32,10 @@
     if (config.shoulder !== undefined) shoulder = config.shoulder;
     if (config.source !== undefined) media.source = config.source;
     if (config.neteasePlaybackMode !== undefined) media.neteasePlaybackMode = config.neteasePlaybackMode;
+    if (config.neteaseFeatures !== undefined) media.neteaseFeatures = config.neteaseFeatures;
+    if (config.progressKnown !== undefined) media.progressKnown = config.progressKnown;
+    if (config.shuffleActive !== undefined) media.shuffleActive = config.shuffleActive;
+    if (config.repeatMode !== undefined) media.repeatMode = config.repeatMode;
     if (config.capabilities !== undefined) media.capabilities = {...media.capabilities,...config.capabilities};
     if (config.widgetsEnabled !== undefined) widgetsEnabled = config.widgetsEnabled;
     if (config.widgets !== undefined) widgets = normalizeWidgets(config.widgets);

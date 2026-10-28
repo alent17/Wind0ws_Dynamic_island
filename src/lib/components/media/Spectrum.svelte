@@ -89,20 +89,19 @@
         visibleBars[index] = smoothSpectrumValue(visibleBars[index], target, frameMs, index);
       }
       const value = visibleBars[index];
-      // Quarter-pixel steps keep motion smooth without invalidating the native
-      // transparent surface for changes too small to see.
+      // Use the same quarter-pixel motion resolution in compact and expanded views.
       heights[index] = Math.round((MIN_HEIGHT + value * (maxHeight - MIN_HEIGHT)) * 4) / 4;
       changed ||= heights[index] !== paintedHeights[index];
     }
     if (!changed) return;
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    const gradient = ctx.createLinearGradient(0, canvasHeight, 0, 0);
+    gradient.addColorStop(0, barColors[0] ?? "#888888");
+    gradient.addColorStop(1, barColors[1] ?? "#ffffff");
     for (let index = 0; index < NUM_BARS; index += 1) {
       const height = heights[index];
       const x = index * (barWidth + barGap);
       const y = (canvasHeight - height) / 2;
-      const gradient = ctx.createLinearGradient(0, y + height, 0, y);
-      gradient.addColorStop(0, barColors[0] ?? "#888888");
-      gradient.addColorStop(1, barColors[1] ?? "#ffffff");
       ctx.beginPath();
       ctx.fillStyle = gradient;
       ctx.roundRect(x, y, barWidth, height, cornerRadius);

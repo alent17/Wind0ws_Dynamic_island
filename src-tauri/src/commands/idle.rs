@@ -1,5 +1,5 @@
 use crate::error::AppResult;
-use crate::models::{IdleSnapshot, WeatherLocationCandidate, WeatherSnapshot};
+use crate::models::{IdleSnapshot, WeatherLocation, WeatherLocationCandidate, WeatherSnapshot};
 use tauri::AppHandle;
 
 #[tauri::command]
@@ -23,4 +23,9 @@ pub async fn search_weather_locations(
     language: String,
 ) -> AppResult<Vec<WeatherLocationCandidate>> {
     crate::services::search_weather_locations(&query, &language).await
+}
+
+#[tauri::command]
+pub async fn get_weather_for_location(location: WeatherLocation) -> AppResult<WeatherSnapshot> {
+    crate::services::idle::get_weather_for_location(&location).await
 }

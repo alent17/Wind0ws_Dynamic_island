@@ -59,6 +59,14 @@ pub enum NeteaseProgressMode {
     Estimate,
 }
 
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NeteaseConnectionMode {
+    Standard,
+    #[default]
+    Enhanced,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct IslandWidgets {
@@ -72,7 +80,7 @@ impl IslandWidgets {
         for items in [&mut self.left, &mut self.right] {
             items.retain(|kind| {
                 seen.len() < 2
-                    && matches!(kind.as_str(), "timer" | "weather" | "clock" | "volume" | "system")
+                    && matches!(kind.as_str(), "timer" | "weather" | "clock" | "calendar" | "volume" | "system")
                     && seen.insert(kind.clone())
             });
         }
@@ -88,6 +96,7 @@ pub struct AppPreferences {
     pub island_widgets: IslandWidgets,
     pub island_widgets_enabled: bool,
     pub netease_progress_mode: NeteaseProgressMode,
+    pub netease_connection_mode: NeteaseConnectionMode,
     pub netease_auto_connect: bool,
     pub netease_executable_path: Option<String>,
     pub island_style: String,
@@ -174,6 +183,7 @@ impl Default for AppPreferences {
             island_widgets: IslandWidgets::default(),
             island_widgets_enabled: true,
             netease_progress_mode: NeteaseProgressMode::Real,
+            netease_connection_mode: NeteaseConnectionMode::Enhanced,
             netease_auto_connect: false,
             netease_executable_path: None,
             island_style: "floating".to_string(),
@@ -278,6 +288,18 @@ mod tests {
         let restored: AppPreferences = serde_json::from_str(&encoded).unwrap();
         assert_eq!(loaded.island_widgets, restored.island_widgets);
         assert!(!restored.island_widgets_enabled);
+    }
+
+    #[test]
+    fn calendar_widget_survives_normalization_and_serialization() {
+        let mut loaded: AppPreferences = serde_json::from_str(
+            r#"{"islandWidgets":{"left":["calendar"],"right":["clock"]}}"#,
+        ).unwrap();
+        loaded.island_widgets.normalize();
+        let encoded = serde_json::to_string(&loaded).unwrap();
+        let restored: AppPreferences = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(restored.island_widgets.left, vec!["calendar"]);
+        assert_eq!(restored.island_widgets.right, vec!["clock"]);
     }
 
     #[test]

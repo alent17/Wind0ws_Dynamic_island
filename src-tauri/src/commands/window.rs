@@ -1987,6 +1987,7 @@ pub fn set_floating_window_resizable(app: AppHandle, resizable: bool) -> AppResu
 pub async fn open_application(app: AppHandle, name: String) -> AppResult<()> {
     if name == "NeteaseCloudMusic" {
         super::netease_setup::open_netease_player(app).await.map_err(AppError::media)?;
+        return Ok(());
     }
     super::native_task::run_background(move || open_application_window(name))
         .await

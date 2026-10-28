@@ -14,6 +14,7 @@
     reduceMotion = false,
     onVolume,
     onDevice,
+    onExpand,
   } = $props<{
     compact?: boolean;
     volume?: number;
@@ -24,6 +25,7 @@
     reduceMotion?: boolean;
     onVolume?: (volumePercent: number) => void | Promise<void>;
     onDevice?: (deviceId: string) => void | Promise<void>;
+    onExpand?: () => void;
   }>();
 
   const t = (key: TranslationKey) => translate(key, {}, $locale);
@@ -46,6 +48,34 @@
   let startX = 0;
   let moved = false;
   const rulerValues = Array.from({ length: 21 }, (_, index) => index * 5);
+
+  // The menu must keep its own scrolling; a downward gesture elsewhere on
+  // the card opens its extension before the island's volume wheel sees it.
+  function extensionGesture(node: HTMLElement) {
+    let gesture: { id:number; x:number; y:number } | null = null;
+    const wheel = (event: WheelEvent) => {
+      if ((event.target as HTMLElement).closest(".device-menu")) { event.stopPropagation(); return; }
+      if (deviceMenuOpen) { event.stopPropagation(); return; }
+      if (!onExpand || event.ctrlKey || event.deltaY <= 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      event.preventDefault(); event.stopPropagation(); onExpand();
+    };
+    const down = (event: PointerEvent) => {
+      if (!onExpand || deviceMenuOpen || !event.isPrimary || event.button !== 0 || (event.target as HTMLElement).closest("button,input,[role=slider]")) return;
+      gesture = { id:event.pointerId, x:event.clientX, y:event.clientY };
+      node.setPointerCapture(event.pointerId);
+    };
+    const move = (event: PointerEvent) => {
+      if (!gesture || gesture.id !== event.pointerId) return;
+      const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
+      if (dy > 28 && dy > Math.abs(dx)) { gesture = null; onExpand?.(); }
+      else if (Math.abs(dx) > 28 || dy < -28) gesture = null;
+    };
+    const end = (event: PointerEvent) => { if (gesture?.id === event.pointerId) gesture = null; };
+    node.addEventListener("wheel", wheel, {passive:false});
+    node.addEventListener("pointerdown", down); node.addEventListener("pointermove", move);
+    node.addEventListener("pointerup", end); node.addEventListener("pointercancel", end);
+    return { destroy() { node.removeEventListener("wheel", wheel); node.removeEventListener("pointerdown", down); node.removeEventListener("pointermove", move); node.removeEventListener("pointerup", end); node.removeEventListener("pointercancel", end); } };
+  }
 
   function chooseVolume(value: number) {
     draftVolume = Math.max(0, Math.min(100, Math.round(value)));
@@ -84,6 +114,7 @@
   }
 
   function rulerKeydown(event: KeyboardEvent) {
+    if (event.shiftKey && event.key === "ArrowDown" && onExpand) { event.preventDefault(); event.stopPropagation(); onExpand(); return; }
     const changes: Record<string, number> = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1, PageDown: -10, PageUp: 10 };
     if (event.key in changes || event.key === "Home" || event.key === "End") {
       event.preventDefault();
@@ -105,16 +136,16 @@
 
 </script>
 
-<div class="panel-volume" class:compact class:reduce-motion={reduceMotion}>
+<div class="panel-volume" class:compact class:reduce-motion={reduceMotion} data-stop-toggle use:extensionGesture>
   <div class="volume-heading">
-    <span class="volume-label">{draftVolume === 0 ? t("muted") : t("volume")}</span>
+    <div class="volume-title"><span class="volume-label">{draftVolume === 0 ? t("muted") : t("volume")}</span></div>
     <div class="volume-readout">
-      <strong><RollingNumber value={String(draftVolume)} {reduceMotion} /><small>%</small></strong>
+      <strong><RollingNumber value={String(draftVolume)} {reduceMotion} /></strong>
     </div>
   </div>
   <div class="volume-ruler" class:dragging bind:this={rulerElement}
     role="slider" tabindex="0" aria-label={t("volume")}
-    aria-valuemin={0} aria-valuemax={100} aria-valuenow={draftVolume} aria-valuetext={`${draftVolume}%`}
+    aria-valuemin={0} aria-valuemax={100} aria-valuenow={draftVolume} aria-valuetext={`${draftVolume}%`} aria-keyshortcuts={onExpand ? "Shift+ArrowDown" : undefined}
     onpointerdown={startDrag} onpointermove={moveDrag} onpointerup={endDrag}
     onpointercancel={endDrag} onlostpointercapture={endDrag} onkeydown={rulerKeydown}>
     <div class="volume-track" aria-hidden="true">
@@ -173,12 +204,13 @@
 <style>
   .panel-volume{position:relative;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;gap:11px;color:#eaf4ff;user-select:none;font-family:var(--app-font, system-ui)}
   .volume-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;min-width:0}
+  .volume-title{display:flex;align-items:baseline;gap:8px;min-width:0}
   .volume-ruler{position:relative;flex:0 0 72px;height:72px;overflow:visible;touch-action:none;cursor:pointer}
   .volume-ruler.dragging{cursor:grabbing}
   .volume-track{position:absolute;inset:8px 0;overflow:hidden;border-radius:8px;background:transparent}
-  .volume-fill{position:absolute;top:8px;bottom:8px;left:0;max-width:100%;border-radius:2px;background:#4269f5;transition:width 100ms linear}
+  .volume-fill{position:absolute;top:8px;bottom:8px;left:0;max-width:100%;border-radius:2px;background:#193a8e;transition:width 100ms linear}
   .volume-mark{position:absolute;top:0;bottom:0;display:flex;width:3px;align-items:center;justify-content:center;transform:translateX(-50%);pointer-events:none}
-  .volume-tick{display:block;width:3px;height:52px;border-radius:1px;background:#456df4;transition:opacity 120ms ease,transform 120ms ease}
+  .volume-tick{display:block;width:3px;height:52px;border-radius:1px;background:#fff;transition:opacity 120ms ease,transform 120ms ease}
   .volume-mark.passed .volume-tick{opacity:0;transform:scaleY(.8)}
   .volume-ruler:focus-visible{outline:2px solid #91caff;outline-offset:4px;border-radius:5px}
   .volume-footer{display:flex;align-items:center;gap:12px;min-width:0}
@@ -201,7 +233,6 @@
   .device-menu::-webkit-scrollbar{width:4px}.device-menu::-webkit-scrollbar-thumb{border-radius:999px;background:rgba(255,255,255,.2)}
   .volume-label{color:rgba(222,231,248,.68);font:500 16px/1 var(--app-font, system-ui);white-space:nowrap}
   .volume-readout strong{display:flex;align-items:baseline;color:#eaf4ff;font:700 32px/.9 var(--app-font, system-ui);letter-spacing:-.035em;font-variant-numeric:tabular-nums}
-  .volume-readout strong small{margin-left:2px;font-size:14px;color:rgba(138,190,245,.68)}
   @keyframes device-menu-in{from{opacity:.45;transform:translateY(-4px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
   @keyframes device-spin{to{transform:rotate(360deg)}}
   @media (prefers-reduced-motion:reduce){.volume-track,.device-trigger{transition:none}.device-trigger :global(.device-chevron){transition:none}.device-menu,.device-trigger :global(.device-spinner){animation:none}}

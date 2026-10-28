@@ -1,9 +1,28 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import type { MediaSessionInfo, MediaState, NeteaseSong, ResolvedCover } from "./types";
+
+const commandBasis = (media?: MediaState) => media ? {
+  nativeEpoch: media.nativeEpoch ?? "", nativeTrackGeneration: media.nativeTrackGeneration ?? 0, sourceDisplay: media.sourceDisplay,
+} : undefined;
+
+export type NeteaseSetupStage = "waiting" | "detecting" | "configuring" | "waitingPlayer" | "binding" | "saving";
+export interface NeteaseConnection {
+  connected: boolean; configured: boolean; executablePath: string; shortcutPath: string;
+  boundSessionId: string | null; bindingFailed: boolean; launchEntries: number; restartRequired?: boolean; pendingStartMenuEntries?: number;
+}
 
 export const mediaApi = {
   neteaseSongLike: (title: string, artist: string, expected?: NeteaseLikeState, liked?: boolean) => invoke<NeteaseLikeState>("netease_song_like", { title, artist, trackId: expected?.trackId, playId: expected?.playId, liked }),
-  setupNeteaseConnection: (restart = false, bind = false, configureOnly = false) => invoke<{ connected: boolean; configured: boolean; executablePath: string; shortcutPath: string; boundSessionId: string | null; bindingFailed: boolean; launchEntries: number }>("setup_netease_connection", { restart, bind: restart || bind, configureOnly }),
+  async setupNeteaseConnection(restart = false, bind = false, configureOnly = false, onProgress?: (stage: NeteaseSetupStage) => void, repairStartMenu = false): Promise<NeteaseConnection> {
+    const progress = onProgress ? new Channel<NeteaseSetupStage>(onProgress) : undefined;
+    try {
+      return await invoke<NeteaseConnection>("setup_netease_connection", { restart, bind: restart || bind, configureOnly, progress, ...(repairStartMenu ? { repairStartMenu: true } : {}) });
+    } finally {
+      // Rust closes the channel on completion. Ignore any progress still in
+      // flight so it cannot overwrite the final result in the UI.
+      if (progress) progress.onmessage = () => {};
+    }
+  },
   async getMediaInfo(): Promise<MediaState> {
     return invoke<MediaState>("get_media_info_cmd");
   },
@@ -23,10 +42,10 @@ export const mediaApi = {
     expectedTitle: basis.title,
     expectedArtist: basis.artist,
   }),
-  toggleShuffle: () => invoke<void>("toggle_shuffle"),
-  cycleRepeat: () => invoke<void>("cycle_repeat"),
+  toggleShuffle: (media?: MediaState) => invoke<void>("toggle_shuffle", { expected: commandBasis(media) }),
+  cycleRepeat: (media?: MediaState) => invoke<void>("cycle_repeat", { expected: commandBasis(media) }),
   getNeteasePlaybackMode: () => invoke<NeteasePlaybackMode | null>("get_netease_playback_mode"),
-  cycleNeteasePlaybackMode: () => invoke<NeteasePlaybackMode>("cycle_netease_playback_mode"),
+  cycleNeteasePlaybackMode: (media?: MediaState) => invoke<NeteasePlaybackMode>("cycle_netease_playback_mode", { expected: commandBasis(media) }),
 
   async getNeteaseSongInfo(songName: string, artist: string): Promise<NeteaseSong | null> {
     return invoke<NeteaseSong | null>("get_netease_song_info_cmd", { songName, artist });

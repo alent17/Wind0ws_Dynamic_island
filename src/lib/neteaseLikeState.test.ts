@@ -7,6 +7,20 @@ const read = vi.mocked(mediaApi.neteaseSongLike);
 const song = { trackId: "1", playId: "play-1", title: "Song", artist: "Artist", liked: false };
 beforeEach(() => { vi.clearAllMocks(); });
 
+it("drops an in-flight like read after disconnection and rereads after reconnection", async () => {
+  let finish!: (value: typeof song) => void;
+  read.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const state = neteaseLikeState("disconnect:1", "Song", "Artist");
+  const pending = state.load();
+  state.suspend();
+  finish({ ...song, liked: true });
+  await pending;
+  expect(get(state).value).toBeNull();
+  read.mockResolvedValueOnce(song);
+  await state.load();
+  expect(get(state).value?.liked).toBe(false);
+});
+
 it("reuses confirmed state and coalesces reads across remounted consumers", async () => {
   read.mockResolvedValue(song);
   const first = neteaseLikeState("epoch:1", "Song", "Artist");

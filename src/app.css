@@ -73,4 +73,63 @@ img {
     background: rgba(255,255,255,.1) !important;
     box-shadow: 0 0 0 1px rgba(255,255,255,.1) !important;
   }
+
+  /* The collapsed timer is a status capsule; hovering it must not make the
+     whole island look like a selected button. */
+  .island-frame button.compact-timer:not(.cover):not([data-layout-edit-control]):hover:not(:disabled) {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
 }
+
+.island-frame button.compact-timer:not(.cover):not([data-layout-edit-control]):focus-visible:not(:disabled) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Calendar dates have persistent states that must survive the shared button
+   hover and focus rules, including in the desktop WebView. */
+.island-frame .calendar-extension button.day.today:not(.cover):not([data-layout-edit-control]) {
+  background: #193a8e !important;
+  border-radius: 9px;
+  color: #fff;
+}
+
+.island-frame .calendar-extension button.day.selected:not(.today):not(.cover):not([data-layout-edit-control]) {
+  background: #193a8e !important;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.44) !important;
+  color: #fff;
+}
+
+/* Preserve city highlights over the shared island button styles. */
+.island-frame .world-clock-extension button.city-chip.major:not(.cover):not([data-layout-edit-control]) {
+  background: #fff !important;
+  color: #000;
+  box-shadow: none !important;
+}
+.island-frame .world-clock-extension button.city-chip.selected:not(.cover):not([data-layout-edit-control]) {
+  background: #193a8e !important;
+  color: #fff;
+  box-shadow: none !important;
+}
+
+.island-frame .widget-layout.editing button:not(.cover):hover:not(:disabled),
+.island-frame .widget-layout.editing button:not(.cover):focus-visible:not(:disabled) {
+  background: rgba(255,255,255,.1) !important;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.1) !important;
+}
+
+.island-frame .widget-layout.editing button.remove,
+.island-frame .widget-layout.editing .edit-actions button.cancel {
+  background: #ff453a !important;
+  color: #fff !important;
+  box-shadow: 0 3px 10px rgba(255,69,58,.3) !important;
+}
+
+.island-frame .widget-layout.editing button.remove:hover:not(:disabled),
+.island-frame .widget-layout.editing .edit-actions button.cancel:hover:not(:disabled) {
+  background: #ff5b52 !important;
+  box-shadow: 0 4px 12px rgba(255,69,58,.42) !important;
+}
+

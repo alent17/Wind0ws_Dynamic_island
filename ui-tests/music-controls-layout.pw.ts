@@ -9,7 +9,9 @@ for (const source of ["netease", "spotify"]) test(`short music panes keep ${sour
       for (const shoulder of [18, 64]) {
         await page.evaluate(config => (window as any).configureIsland({
           ...config,mode:"expanded",style:"edge",offset:225,
-          neteasePlaybackMode:"shuffle",capabilities:{shuffle:true,repeat:true},
+          neteasePlaybackMode:"shuffle",neteaseFeatures:config.source === "netease" ? {
+            progress:{source:"cdp",readable:true,controllable:true},like:{source:"cdp",readable:true,controllable:true},mode:{source:"cdp",readable:true,controllable:true},
+          } : undefined,capabilities:{shuffle:true,repeat:true},
           widgets:{left:["weather"],right:["volume"]},scale:.625,
         }),{source,expandedLength,edge,shoulder});
         const row=page.locator(".control-row");

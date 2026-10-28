@@ -92,13 +92,21 @@ pub async fn request_artwork(
 /// 获取当前播放的媒体信息
 #[tauri::command]
 pub async fn netease_song_like(
+    app: AppHandle,
     title: String,
     artist: String,
     track_id: Option<String>,
     play_id: Option<String>,
     liked: Option<bool>,
 ) -> AppResult<serde_json::Value> {
-    super::native_task::run_background(move || {
+    require_enhanced(&app)?;
+    let basis = app.state::<AppState>().media_actor().map_err(AppError::media)?.snapshot().await.map_err(AppError::media)?;
+    if basis.source != "netease" || basis.title != title || basis.artist != artist { return Err(AppError::media("媒体曲目已变化")); }
+    let worker_app = app.clone();
+    let worker_basis = basis.clone();
+    let result = super::native_task::run_background(move || {
+        require_enhanced(&worker_app)?;
+        validate_netease_target(&worker_app, &worker_basis)?;
         let expected = match (&track_id, &play_id, liked) {
             (Some(track), Some(play), Some(liked)) => Some((track.as_str(), play.as_str(), liked)),
             (None, None, None) => None,
@@ -106,10 +114,14 @@ pub async fn netease_song_like(
         };
         crate::services::netease_cdp::LocalCdpClient::default()
             .song_like(&title, &artist, expected)
-            .map_err(|e| AppError::media(e.to_string()))
+            .map_err(|e| cdp_error(&worker_app, e))
     })
     .await
-    .map_err(|error| AppError::media(format!("网易云喜欢操作任务失败：{error}")))?
+    .map_err(|error| AppError::media(format!("网易云喜欢操作任务失败：{error}")))?;
+    if result.is_ok() { app.state::<AppState>().set_netease_cdp_available(true); }
+    require_same_basis(&app, &basis).await?;
+    require_enhanced(&app)?;
+    result
 }
 
 #[tauri::command]
@@ -124,37 +136,58 @@ pub async fn get_media_info_cmd(app: AppHandle) -> AppResult<MediaState> {
 /// Cycle a NetEase playback mode through the bounded local CDP adapter.
 /// All socket work runs on Tauri's blocking pool, never the UI thread.
 #[tauri::command]
-pub async fn cycle_netease_playback_mode() -> AppResult<String> {
-    super::native_task::run_background(|| {
+pub async fn cycle_netease_playback_mode(app: AppHandle, expected: Option<MediaCommandBasis>) -> AppResult<String> {
+    require_enhanced(&app)?;
+    let basis = app.state::<AppState>().media_actor().map_err(AppError::media)?.snapshot().await.map_err(AppError::media)?;
+    if basis.source != "netease" { return Err(AppError::media("当前媒体不是网易云")); }
+    validate_command_basis(&basis, expected.as_ref())?;
+    let worker_basis = basis.clone();
+    let worker_app = app.clone();
+    let result = super::native_task::run_background(move || {
+        require_enhanced(&worker_app)?;
         use crate::services::netease_cdp::{mode_key, next_mode, LocalCdpClient};
+        validate_netease_target(&worker_app, &worker_basis)?;
 
         let client = LocalCdpClient::default();
+        let before = client.read_progress(&worker_basis.title, &worker_basis.artist).map_err(|e| cdp_error(&worker_app, e))?;
         let current = client
             .playback_mode()
-            .map_err(|error| AppError::media(error.to_string()))?
+            .map_err(|error| cdp_error(&worker_app, error))?
             .ok_or_else(|| AppError::media("网易云当前播放模式无法识别"))?;
         let requested = next_mode(current);
         let action = client
             .set_playback_mode(requested)
-            .map_err(|error| AppError::media(error.to_string()))?;
+            .map_err(|error| cdp_error(&worker_app, error))?;
+        let after = client.read_progress(&worker_basis.title, &worker_basis.artist).map_err(|e| cdp_error(&worker_app, e))?;
+        if before.track_id != after.track_id || before.play_id != after.play_id { return Err(AppError::media("操作期间网易云播放实例已变化")); }
         Ok(mode_key(action.observed).to_string())
     })
     .await
-    .map_err(|error| AppError::media(format!("网易云播放模式任务失败：{error}")))?
+    .map_err(|error| AppError::media(format!("网易云播放模式任务失败：{error}")))?;
+    if result.is_ok() { app.state::<AppState>().set_netease_cdp_available(true); }
+    require_same_basis(&app, &basis).await?;
+    require_enhanced(&app)?;
+    result
 }
 
 #[tauri::command]
-pub async fn get_netease_playback_mode() -> AppResult<Option<String>> {
-    super::native_task::run_background(|| {
+pub async fn get_netease_playback_mode(app: AppHandle) -> AppResult<Option<String>> {
+    require_enhanced(&app)?;
+    let worker_app = app.clone();
+    let result = super::native_task::run_background(move || {
+        require_enhanced(&worker_app)?;
         use crate::services::netease_cdp::{mode_key, LocalCdpClient};
 
         LocalCdpClient::default()
             .playback_mode()
             .map(|mode| mode.map(mode_key).map(str::to_string))
-            .map_err(|error| AppError::media(error.to_string()))
+            .map_err(|error| cdp_error(&worker_app, error))
     })
     .await
-    .map_err(|error| AppError::media(format!("读取网易云播放模式任务失败：{error}")))?
+    .map_err(|error| AppError::media(format!("读取网易云播放模式任务失败：{error}")))?;
+    require_enhanced(&app)?;
+    if result.is_ok() { app.state::<AppState>().set_netease_cdp_available(true); }
+    result
 }
 
 #[tauri::command]
@@ -227,6 +260,9 @@ pub async fn seek_media(
         .media_actor()
         .map_err(AppError::media)?;
     let before = actor.snapshot().await.map_err(AppError::media)?;
+    if before.source == "netease" && !before.capabilities.seek {
+        return Err(AppError::media("当前连接不支持调整网易云进度"));
+    }
     let netease_basis = if before.source == "netease" {
         let (Some(epoch), Some(title), Some(artist), Some(track_generation)) = (
             expected_native_epoch,
@@ -234,10 +270,10 @@ pub async fn seek_media(
             expected_artist,
             expected_track_generation,
         ) else {
-            return Err(AppError::media("网易云 seek 缺少当前媒体快照身份"));
+            return Err(AppError::media("进度调整缺少当前媒体快照身份"));
         };
         if epoch.len() > 128 || title.len() > 1024 || artist.len() > 1024 {
-            return Err(AppError::media("网易云 seek 媒体快照身份无效"));
+            return Err(AppError::media("进度调整媒体快照身份无效"));
         }
         crate::state::run_if_netease_seek_basis(
             &before,
@@ -252,6 +288,7 @@ pub async fn seek_media(
     } else {
         None
     };
+    let expected_session = before.source_display.clone();
     let worker_app = app.clone();
     let expected_title_for_cdp = netease_basis
         .as_ref()
@@ -265,6 +302,7 @@ pub async fn seek_media(
             position_ms,
             &expected_title_for_cdp,
             &expected_artist_for_cdp,
+            &expected_session,
         )
     })
     .await
@@ -287,30 +325,40 @@ pub async fn seek_media(
             .await
             .map_err(AppError::media)?;
     }
+    if before.source == "netease" { require_same_basis(&app, &before).await?; }
+    actor.wake_for_transport_change();
     Ok(progress)
 }
 
 #[tauri::command]
-pub async fn toggle_shuffle(app: AppHandle) -> AppResult<()> {
+pub async fn toggle_shuffle(app: AppHandle, expected: Option<MediaCommandBasis>) -> AppResult<()> {
+    let basis = app.state::<AppState>().media_actor().map_err(AppError::media)?.snapshot().await.map_err(AppError::media)?;
+    validate_command_basis(&basis, expected.as_ref())?;
+    let expected = basis.clone();
     let worker_app = app.clone();
-    super::native_task::run_transport(move || crate::services::media::toggle_shuffle(&worker_app))
+    super::native_task::run_transport(move || crate::services::media::toggle_shuffle(&worker_app, &expected))
         .await
         .map_err(|error| AppError::media(format!("shuffle 后台任务失败：{error}")))??;
     if let Ok(actor) = app.state::<AppState>().media_actor() {
         actor.wake_for_transport_change();
     }
+    require_same_basis(&app, &basis).await?;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn cycle_repeat(app: AppHandle) -> AppResult<()> {
+pub async fn cycle_repeat(app: AppHandle, expected: Option<MediaCommandBasis>) -> AppResult<()> {
+    let basis = app.state::<AppState>().media_actor().map_err(AppError::media)?.snapshot().await.map_err(AppError::media)?;
+    validate_command_basis(&basis, expected.as_ref())?;
+    let expected = basis.clone();
     let worker_app = app.clone();
-    super::native_task::run_transport(move || crate::services::media::cycle_repeat(&worker_app))
+    super::native_task::run_transport(move || crate::services::media::cycle_repeat(&worker_app, &expected))
         .await
         .map_err(|error| AppError::media(format!("repeat 后台任务失败：{error}")))??;
     if let Ok(actor) = app.state::<AppState>().media_actor() {
         actor.wake_for_transport_change();
     }
+    require_same_basis(&app, &basis).await?;
     Ok(())
 }
 
@@ -340,4 +388,76 @@ pub async fn pixelate_cover(image_path: String, pixel_size: u32) -> AppResult<St
     })
     .await
     .map_err(|error| AppError::business(3010, format!("像素化后台任务失败：{error}")))?
+}
+
+fn require_enhanced(app: &AppHandle) -> AppResult<()> {
+    if !app.state::<AppState>().netease_enhanced() { return Err(AppError::media("网易云增强连接未启用")); }
+    Ok(())
+}
+
+fn validate_netease_target(app: &AppHandle, before: &MediaState) -> AppResult<()> {
+    let current = crate::services::media::get_media_info(app)?;
+    if current.source != "netease" || current.source_display != before.source_display
+        || current.title != before.title || current.artist != before.artist {
+        return Err(AppError::media("网易云媒体会话或曲目已变化"));
+    }
+    Ok(())
+}
+
+async fn require_same_basis(app: &AppHandle, before: &MediaState) -> AppResult<()> {
+    let current = app.state::<AppState>().media_actor().map_err(AppError::media)?.snapshot().await.map_err(AppError::media)?;
+    if before.native_epoch != current.native_epoch || before.native_track_generation != current.native_track_generation
+        || before.source_display != current.source_display || before.title != current.title || before.artist != current.artist {
+        return Err(AppError::media("媒体会话或曲目已变化，操作结果已丢弃"));
+    }
+    Ok(())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaCommandBasis {
+    native_epoch: String,
+    native_track_generation: u64,
+    source_display: String,
+}
+
+fn validate_command_basis(current: &MediaState, expected: Option<&MediaCommandBasis>) -> AppResult<()> {
+    if let Some(expected) = expected {
+        if current.native_epoch != expected.native_epoch || current.native_track_generation != expected.native_track_generation
+            || current.source_display != expected.source_display { return Err(AppError::media("媒体会话或曲目已变化")); }
+    } else if current.source == "netease" || current.source == "apple" {
+        return Err(AppError::media("播放器操作缺少当前媒体快照身份"));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod netease_routing_tests {
+    use super::*;
+    #[test]
+    fn apple_requests_require_the_current_snapshot_identity() {
+        let state = MediaState { source: "apple".into(), source_display: "apple-session".into(), native_epoch: "epoch".into(), native_track_generation: 4, ..Default::default() };
+        assert!(validate_command_basis(&state, None).is_err());
+        let basis = MediaCommandBasis { native_epoch: "epoch".into(), native_track_generation: 4, source_display: "apple-session".into() };
+        assert!(validate_command_basis(&state, Some(&basis)).is_ok());
+        let changed = MediaState { native_track_generation: 5, ..state };
+        assert!(validate_command_basis(&changed, Some(&basis)).is_err());
+    }
+    #[test]
+    fn mode_requests_reject_missing_or_replaced_snapshot_identity() {
+        let state = MediaState { source: "netease".into(), source_display: "player-a".into(), native_epoch: "epoch".into(), native_track_generation: 3, ..Default::default() };
+        assert!(validate_command_basis(&state, None).is_err());
+        let mut basis = MediaCommandBasis { native_epoch: "epoch".into(), native_track_generation: 3, source_display: "player-a".into() };
+        assert!(validate_command_basis(&state, Some(&basis)).is_ok());
+        basis.native_track_generation = 2;
+        assert!(validate_command_basis(&state, Some(&basis)).is_err());
+        basis.native_track_generation = 3;
+        basis.source_display = "player-b".into();
+        assert!(validate_command_basis(&state, Some(&basis)).is_err());
+    }
+}
+
+fn cdp_error(app: &AppHandle, error: crate::services::netease_cdp::CdpError) -> AppError {
+    if error.connection_lost() { app.state::<AppState>().set_netease_cdp_available(false); }
+    AppError::media(error.to_string())
 }

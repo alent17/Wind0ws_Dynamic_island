@@ -1,6 +1,6 @@
 use crate::models::MediaState;
 use crate::models::NeteaseProgressMode;
-use crate::services::netease_cdp::NeteaseProgress;
+use crate::services::netease_cdp::{CdpError, NeteaseProgress};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::time::Duration;
 
@@ -30,7 +30,7 @@ pub(crate) enum MediaActorMessage {
         expected_track_generation: u64,
         expected_seek_generation: u64,
         started_native_revision: u64,
-        result: Result<NeteaseProgress, String>,
+        result: Result<NeteaseProgress, CdpError>,
     },
     NeteaseProgressModeChanged,
     PlayerIdentityChanged,
@@ -62,6 +62,7 @@ impl NativeSnapshotCache {
     pub(crate) fn publish(&mut self, mut snapshot: MediaState) -> Result<MediaState, String> {
         let identity_changed = self.snapshot.as_ref().is_none_or(|current| {
             current.source != snapshot.source
+                || current.source_display != snapshot.source_display
                 || current.title != snapshot.title
                 || current.artist != snapshot.artist
         });
@@ -96,6 +97,7 @@ impl NativeSnapshotCache {
         play_id: &str,
         position_ms: u64,
         duration_ms: u64,
+        mode: NeteaseProgressMode,
     ) -> Result<MediaState, String> {
         if expected_epoch != self.epoch
             || track_id.is_empty()
@@ -120,6 +122,7 @@ impl NativeSnapshotCache {
         snapshot.duration_ms = duration_ms;
         snapshot.progress_known = true;
         snapshot.netease_progress_available = Some(true);
+        crate::services::netease::route(&mut snapshot, true, true, mode);
         snapshot.last_updated_timestamp = now_epoch_ms();
         self.publish(snapshot)
     }
@@ -157,6 +160,7 @@ impl NativeSnapshotCache {
         snapshot.duration_ms = progress.duration_ms;
         snapshot.progress_known = true;
         snapshot.netease_progress_available = Some(true);
+        crate::services::netease::route(&mut snapshot, true, true, NeteaseProgressMode::Real);
         snapshot.last_updated_timestamp = now_epoch_ms();
         self.publish(snapshot)
     }
@@ -686,10 +690,11 @@ mod tests {
         let generation = cache.current().unwrap().native_track_generation;
         let snapshot = cache
             .publish_verified_netease_seek(
-                "epoch-1", "Song", "Artist", generation, "track-1", "play-1", 42_000, 180_000,
+                "epoch-1", "Song", "Artist", generation, "track-1", "play-1", 42_000, 180_000, NeteaseProgressMode::Estimate,
             )
             .unwrap();
         assert_eq!(snapshot.position_ms, 42_000);
+        assert_eq!(snapshot.netease_features.as_ref().unwrap().progress.source, "estimate");
         assert_eq!(snapshot.native_revision, 2);
         assert!(cache
             .publish_verified_netease_seek(
@@ -700,7 +705,8 @@ mod tests {
                 "track-1",
                 "play-1",
                 50_000,
-                180_000
+                180_000,
+                NeteaseProgressMode::Real,
             )
             .is_err());
         assert!(cache
@@ -712,7 +718,8 @@ mod tests {
                 "track-1",
                 "play-1",
                 50_000,
-                180_000
+                180_000,
+                NeteaseProgressMode::Real,
             )
             .is_err());
         assert_eq!(cache.current().unwrap().position_ms, 42_000);

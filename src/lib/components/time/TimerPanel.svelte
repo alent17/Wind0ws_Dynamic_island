@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { Check, X } from "lucide-svelte";
+  import { Timer, X } from "lucide-svelte";
   import RollingNumber from "$lib/components/time/RollingNumber.svelte";
-  import PlayPauseIcon from "$lib/components/media/PlayPauseIcon.svelte";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
 
@@ -49,9 +48,8 @@
   });
   let activeIndex = $derived(Math.max(0, rulerValues.findIndex((value) => value === centerMinutes)));
   let previewMs = $derived(active ? remainingMs : selectedMinutes * 60_000);
-  let elapsedMs = $derived(Math.max(0, durationMs - remainingMs));
-  let progress = $derived(durationMs > 0 ? Math.min(1, Math.max(0, remainingMs / durationMs)) : 0);
   let mainLabel = $derived(status === "running" ? t("pauseTimer") : status === "paused" ? t("resumeTimer") : t("startTimer"));
+  let activeActionLabel = $derived(status === "running" ? t("timerPauseAction") : t("timerResumeAction"));
 
   function chooseMinutes(minutes: number) {
     if (active) return;
@@ -124,15 +122,31 @@
 <div class="timer-panel" class:compact class:active={active} class:complete={finished}>
   {#if finished}
     <div class="timer-complete-card" role="status" aria-live="assertive">
-      <span class="timer-complete-mark"><Check size={17} strokeWidth={2.4} /></span>
-      <div class="timer-complete-copy">
-        <strong>{t("timerComplete")}</strong>
-        <span>{t("timerCompleteHint")}</span>
+      <div class="timer-complete-heading">
+        <span class="timer-complete-label"><Timer size={20} strokeWidth={2} /><strong>{t("timerComplete")}</strong></span>
+        <button type="button" class="timer-complete-dismiss" aria-label={t("dismissNotice")} onclick={(event) => { event.stopPropagation(); onFinishedDismiss?.(); }}><X size={20} strokeWidth={2} /></button>
       </div>
-      <button type="button" class="timer-complete-dismiss" aria-label={t("dismissNotice")} onclick={(event) => { event.stopPropagation(); onFinishedDismiss?.(); }}>
-        <X size={14} strokeWidth={2} />
+      <div class="timer-complete-time">00:00</div>
+      <div class="timer-complete-bottom"><span>{t("timerCompleteHint")}</span><span class="timer-complete-accent" aria-hidden="true"></span></div>
+    </div>
+  {:else}
+  {#if active}
+  <div class="timer-active-layout" class:paused={status === "paused"}>
+    <div class="timer-active-controls">
+      <button class="timer-main-button" type="button" aria-label={mainLabel} onclick={(event) => { event.stopPropagation(); handleMainAction(); }}>
+        <span>{activeActionLabel}</span>
+      </button>
+      <button class="timer-reset" type="button" aria-label={t("cancelTimer")} onclick={(event) => { event.stopPropagation(); onReset?.(); }}>
+        <span>{t("timerStopAction")}</span>
       </button>
     </div>
+    <div class="timer-active-info">
+      <div class="timer-readout" aria-live="polite">
+        <strong><RollingNumber value={formatCountdown(remainingMs)} {reduceMotion} /></strong>
+        <small>{status === "paused" ? t("timerPaused") : t("timerRunning")}</small>
+      </div>
+    </div>
+  </div>
   {:else}
   {#if !active}
     <div
@@ -160,7 +174,6 @@
             class:prior={minutes < centerMinutes}
             class:selected={minutes === centerMinutes}
             type="button"
-            disabled={active}
             aria-label={`${minutes} ${t("minutesShort")}`}
             onclick={(event) => { event.stopPropagation(); chooseMinutes(minutes); }}
           >
@@ -173,47 +186,15 @@
       <span class="ruler-fade right" aria-hidden="true"></span>
     </div>
   {/if}
-
-  {#if active}
-  <div class="timer-active-layout" class:paused={status === "paused"}>
-    <div class="timer-active-controls">
-      <button class="timer-main-button" type="button" aria-label={mainLabel} onclick={(event) => { event.stopPropagation(); handleMainAction(); }}>
-        <PlayPauseIcon playing={status === "running"} size={20} {reduceMotion} />
-      </button>
-      <button class="timer-reset" type="button" aria-label={t("cancelTimer")} onclick={(event) => { event.stopPropagation(); onReset?.(); }}>
-        <X size={18} strokeWidth={2.2} />
-      </button>
-    </div>
-    <div class="timer-active-info">
-      <div class="timer-readout" aria-live="polite">
-        <strong><RollingNumber value={formatCountdown(remainingMs)} {reduceMotion} /></strong>
-        <small>{status === "paused" ? t("timerPaused") : t("timerRunning")}</small>
-      </div>
-      <div class="timer-detail-line">
-        <span>{t("timerElapsed", { elapsed: formatCountdown(elapsedMs), duration: formatCountdown(durationMs) })}</span>
-        <span>{Math.round((1 - progress) * 100)}%</span>
-      </div>
-      <div class="timer-detail-track" role="progressbar" aria-label={t("timerElapsed", { elapsed: formatCountdown(elapsedMs), duration: formatCountdown(durationMs) })} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round((1 - progress) * 100)}>
-        <span class:paused={status === "paused"} style={`width:${(1 - progress) * 100}%`}></span>
-      </div>
-    </div>
-  </div>
-  {:else}
   <div class="timer-footer">
-    <div class="timer-actions" class:timer-active={active}>
+    <div class="timer-actions">
       <button class="timer-main-button" type="button" aria-label={mainLabel} onclick={(event) => { event.stopPropagation(); handleMainAction(); }}>
-      {#if active}<PlayPauseIcon playing={status === "running"} size={20} {reduceMotion} />{:else}<span>{mainLabel}</span>{/if}
+        <span>{mainLabel}</span>
       </button>
-      {#if active}
-        <button class="timer-reset" type="button" aria-label={t("cancelTimer")} onclick={(event) => { event.stopPropagation(); onReset?.(); }}>
-          <X size={19} strokeWidth={2.2} />
-        </button>
-      {/if}
     </div>
-
     <div class="timer-readout" aria-live="polite">
       <strong><RollingNumber value={formatCountdown(previewMs)} {reduceMotion} /></strong>
-      <small>{active ? (status === "paused" ? t("timerPaused") : t("timerRunning")) : t("timerReady")}</small>
+      <small>{t("timerReady")}</small>
     </div>
   </div>
   {/if}
@@ -238,27 +219,26 @@
 
   .timer-panel.active { justify-content: center; }
   .timer-active-layout { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; }
-  .timer-active-controls { display: flex; flex: none; align-items: center; gap: 2px; }
+  .timer-active-controls { display: flex; flex: none; align-items: center; gap: 6px; }
   .timer-active-info { display: flex; flex: 1; flex-direction: column; justify-content: center; min-width: 0; gap: 5px; }
   .timer-active-info .timer-readout { align-items: flex-end; }
   .timer-active-info .timer-readout strong { padding: 0; font-size: clamp(34px, 7.5cqw, 54px); line-height: .92; }
   .timer-active-info .timer-readout small { margin-top: 4px; font-size: 11px; }
-  .timer-detail-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; color: rgba(216,228,245,.62); font: 500 10px/1.1 var(--app-font); font-variant-numeric: tabular-nums; }
-  .timer-detail-line span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .timer-detail-line span:last-child { flex: none; color: rgba(216,228,245,.8); }
-  .timer-detail-track { height: 3px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.14); }
-  .timer-detail-track span { display: block; height: 100%; border-radius: inherit; background: #73b8ff; transition: width 300ms linear, background-color 180ms ease; }
-  .timer-detail-track span.paused { background: #96a8bc; }
   .timer-panel.complete{justify-content:center}
-  .timer-complete-card{position:relative;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:9px;width:100%;min-height:70px;padding:10px 11px;border:1px solid rgba(255,255,255,.085);border-radius:13px;background:linear-gradient(110deg,rgba(255,255,255,.045),rgba(255,255,255,.015));box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
-  .timer-complete-mark{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;color:#8ac6ff;background:rgba(67,155,255,.14);box-shadow:inset 0 0 0 1px rgba(92,174,255,.17)}
-  .timer-complete-copy{display:flex;min-width:0;flex-direction:column;gap:5px}
-  .timer-complete-copy strong{overflow:hidden;color:#f4f7fb;font-size:13px;font-weight:700;line-height:1.1;text-overflow:ellipsis;white-space:nowrap}
-  .timer-complete-copy span{display:-webkit-box;overflow:hidden;color:rgba(229,235,245,.52);font-size:10px;line-height:1.2;text-overflow:ellipsis;white-space:normal;line-clamp:2;-webkit-box-orient:vertical;-webkit-line-clamp:2}
-  .timer-complete-dismiss{display:grid;place-items:center;width:27px;height:27px;padding:0;border:1px solid transparent;border-radius:50%;color:rgba(241,246,255,.78);background:transparent;cursor:pointer;transition:color 140ms ease,background 140ms ease,border-color 140ms ease}
-  .timer-complete-dismiss:hover{color:#fff;border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.1)}
-  .timer-complete-dismiss:focus-visible{color:#fff;border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.1)}
+  .timer-complete-card{display:flex;flex-direction:column;justify-content:center;gap:12px;width:100%;min-width:0;padding:2px 0}
+  .timer-complete-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+  .timer-complete-label{display:flex;align-items:center;gap:8px;min-width:0;color:#fff}
+  .timer-complete-label :global(svg){flex:none;color:#193a8e}
+  .timer-complete-label strong{overflow:hidden;font-size:17px;line-height:1.2;text-overflow:ellipsis;white-space:nowrap}
+  .timer-complete-time{color:#f4f7fb;font-size:clamp(38px,12cqw,64px);font-weight:700;line-height:.95;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+  .timer-complete-bottom{display:flex;align-items:center;justify-content:space-between;gap:12px;color:rgba(229,235,245,.6);font-size:14px}
+  .timer-complete-accent{width:34px;height:4px;flex:none;border-radius:4px;background:#193a8e}
+  .timer-complete-dismiss{display:grid;place-items:center;flex:none;width:38px;height:38px;padding:0;border:0;border-radius:12px;color:#ff6b6b;background:transparent;cursor:pointer;transition:color 140ms ease,background 140ms ease}
+  .timer-complete-dismiss:hover,.timer-complete-dismiss:focus-visible{color:#ff8585;background:rgba(255,107,107,.14)}
   .timer-complete-dismiss:active{transform:scale(.96)}
+
+  .timer-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 0; margin-top: 5px; }
+  .timer-actions { display: flex; align-items: center; gap: 5px; min-width: 0; }
 
   .timer-ruler {
     position: relative;
@@ -304,21 +284,19 @@
   }
 
   .ruler-track button:disabled { cursor: default; }
-  .tick-label { height: 15px; color: rgba(110, 178, 255, .78); font: 500 8px/1 var(--app-font); }
+  .tick-label { height: 15px; color: #fff; font: 500 8px/1 var(--app-font); }
   .ruler-track button:not(.major) .tick-label { opacity: 0; }
-  .tick { display: block; width: 3px; height: 24px; border-radius: 999px; background: rgba(130, 153, 185, .3); transform:scaleY(.667); transform-origin:center bottom; transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease; }
-  .ruler-track button.major .tick { transform:scaleY(.852); background: rgba(105, 170, 255, .7); }
-  .ruler-track button.prior .tick { background: #eaf4ff; }
-  .ruler-track button.prior .tick-label { color: #b9ddff; }
-  .ruler-track button.selected .tick { transform:scaleY(1); background: #eaf4ff; box-shadow: 0 0 9px rgba(234, 244, 255, .65); }
-  .ruler-track button.selected .tick-label { color: #b9ddff; }
+  .tick { display: block; width: 3px; height: 24px; border-radius: 999px; background: #fff; transform:scaleY(.667); transform-origin:center bottom; transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease; }
+  .ruler-track button.major .tick { transform:scaleY(.852); background: #fff; }
+  .ruler-track button.prior .tick { background: #193a8e; }
+  .ruler-track button.prior .tick-label { color: #193a8e; }
+  .ruler-track button.selected .tick { transform:scaleY(1); background: #193a8e; box-shadow: 0 0 9px rgba(25, 58, 142, .65); }
+  .ruler-track button.selected .tick-label { color: #193a8e; }
 
   .ruler-fade { position: absolute; top: 0; bottom: 0; z-index: 2; width: 42px; pointer-events: none; }
   .ruler-fade.left { left: 0; background: linear-gradient(90deg, rgba(0,0,0,.96), transparent); }
   .ruler-fade.right { right: 0; background: linear-gradient(270deg, rgba(0,0,0,.96), transparent); }
 
-  .timer-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 0; margin-top: 5px; }
-  .timer-actions { display: flex; align-items: center; gap: 5px; min-width: 0; }
   .timer-main-button {
     display: inline-flex;
     align-items: center;
@@ -327,8 +305,8 @@
     height: 28px;
     border: 0;
     border-radius: 12px;
-    color: #91caff;
-    background: rgba(65, 145, 235, .14);
+    color: #193a8e;
+    background: rgba(25, 58, 142, .14);
     font: 700 11px/1 var(--app-font);
     letter-spacing: .01em;
     text-transform: none;
@@ -338,14 +316,15 @@
   }
 
   .timer-main-button { padding: 0 10px; font-size: 10px; }
-  .timer-main-button:hover { color: #d2eaff; background: rgba(65, 145, 235, .22); }
+  .timer-main-button:hover { color: #193a8e; background: rgba(25, 58, 142, .22); }
   .timer-main-button:active { transform: scale(.95); }
-  .timer-active-controls .timer-main-button { flex: none; width: 44px; height: 44px; padding: 0; border-radius: 12px; color: rgba(255,255,255,.9); background: transparent; box-shadow: none; }
+  .timer-active-controls .timer-main-button { flex: none; width: auto; min-width: 78px; height: 44px; padding: 0 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; color: rgba(255,255,255,.9); background: rgba(255,255,255,.055); box-shadow: none; font-size: 20px; font-weight: 700; line-height: 20px; letter-spacing: .04em; }
 
   .timer-readout { display: flex; flex: 1; flex-direction: column; align-items: flex-end; min-width: 0; line-height: 1; }
   .timer-readout strong { display: block; box-sizing: border-box; width: 100%; max-width: 100%; padding-right: 6px; color: #eaf4ff; font: 700 clamp(20px, 6vw, 24px)/.9 var(--app-font); letter-spacing: -.035em; text-align: right; white-space: nowrap; }
   .timer-readout small { margin-top: 3px; color: rgba(138, 190, 245, .58); font: 500 8px/1 var(--app-font); letter-spacing: .04em; }
   .timer-reset { flex: none; display: grid; place-items: center; width: 30px; height: 38px; padding: 0; border: 0; border-radius: 10px; color: #ff6b6b; background: transparent; cursor: pointer; transition: color 150ms ease, background 150ms ease, transform 150ms cubic-bezier(.23,1,.32,1); }
+  .timer-active-controls .timer-reset { width: auto; min-width: 76px; height: 44px; padding: 0 12px; border: 1px solid rgba(255,107,107,.2); border-radius: 12px; color: #ff7777; background: rgba(255,107,107,.055); font: 700 20px/20px var(--app-font); letter-spacing: .04em; }
   .timer-reset:active { transform: scale(.95); }
 
   @media (hover: hover) and (pointer: fine) {
@@ -368,5 +347,8 @@
   .compact .ruler-track{left:50%;transform:translateX(calc(-5px - var(--active-index) * 10px))}
   .compact .timer-actions{justify-content:center;gap:8px}
   .compact .timer-main-button{min-width:0;font-size:11px;padding:8px 10px}
-  .compact .timer-complete-card{display:flex;flex-wrap:wrap;padding:8px;gap:6px}
+  .compact .timer-complete-card{gap:7px}
+  .compact .timer-complete-label strong{font-size:14px}
+  .compact .timer-complete-time{font-size:36px}
+  .compact .timer-complete-bottom{font-size:12px}
 </style>

@@ -1,9 +1,8 @@
-param([ValidateSet('Check', 'Connect', 'Restore')][string]$Action = 'Check')
+param([ValidateSet('Check', 'Connect', 'Restore', 'OpenStandard', 'OpenEnhanced')][string]$Action = 'Check', [switch]$RepairCommonStartMenu)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $players = @(Get-CimInstance Win32_Process -Filter "name='cloudmusic.exe'")
 $candidates = @($players | ForEach-Object { $_.ExecutablePath })
-$candidates += $env:ISLE_NETEASE_PATH
 function Add-ConnectionArguments([string]$Arguments) {
     $Arguments = $Arguments -replace '(^|\s)--remote-debugging-port(?:=|\s+)\d+(?=\s|$)', ' '
     $Arguments = $Arguments -replace '(^|\s)--remote-debugging-address(?:=|\s+)\S+', ' '
@@ -38,6 +37,8 @@ $desktop = [Environment]::GetFolderPath('Desktop')
 $userFolders = @($desktop, [Environment]::GetFolderPath('StartMenu'), [Environment]::GetFolderPath('Startup'), (Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar'))
 $repairLinks = @()
 $personalCopies = @{}
+$protectedStartMenu = @()
+$commonStartMenu = [Environment]::GetFolderPath('CommonStartMenu')
 $commonToPersonal = @{}
 foreach ($pair in @(@('CommonDesktopDirectory','Desktop'), @('CommonStartMenu','StartMenu'), @('CommonStartup','Startup'))) {
     $common = [Environment]::GetFolderPath($pair[0])
@@ -47,7 +48,9 @@ foreach ($pair in @(@('CommonDesktopDirectory','Desktop'), @('CommonStartMenu','
 foreach ($folder in @($userFolders + @([Environment]::GetFolderPath('CommonStartMenu'), [Environment]::GetFolderPath('CommonDesktopDirectory'), [Environment]::GetFolderPath('CommonStartup'))) | Select-Object -Unique) {
     if ($folder -and (Test-Path -LiteralPath $folder)) {
         foreach ($link in Get-ChildItem -LiteralPath $folder -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue) {
-            $target = $shell.CreateShortcut($link.FullName).TargetPath
+            # A broken/unreadable shortcut belonging to any app must not abort
+            # NetEase discovery for the whole desktop or Start menu.
+            try { $target = $shell.CreateShortcut($link.FullName).TargetPath } catch { continue }
             if ([IO.Path]::GetFileName($target) -ieq 'cloudmusic.exe') {
                 $candidates += $target
                 $repairLinks += $link.FullName
@@ -59,12 +62,22 @@ foreach ($folder in @($userFolders + @([Environment]::GetFolderPath('CommonStart
         }
     }
 }
+# Prefer the current registration and ordinary shortcuts over a saved path that
+# may still point to a leftover installation after a client update.
+$candidates += $env:ISLE_NETEASE_PATH
 foreach ($root in @(${env:ProgramFiles}, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA)) {
     if ($root) { $candidates += (Join-Path $root 'NetEase\CloudMusic\cloudmusic.exe') }
 }
 $executablePaths = @($candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) -and [IO.Path]::GetFileName($_) -ieq 'cloudmusic.exe' } | Select-Object -Unique)
 $exe = $executablePaths | Select-Object -First 1
 if (!$exe) { throw 'NETEASE_NOT_FOUND' }
+if ($Action -eq 'OpenStandard') {
+    # Discovery above is read-only. Launch the executable directly so a legacy
+    # protocol handler or shortcut cannot silently add CDP arguments.
+    Start-Process -FilePath $exe -WorkingDirectory (Split-Path -LiteralPath $exe) -WindowStyle Hidden
+    @{ executablePath = $exe; shortcutPath = ''; configured = $false; launchEntries = 0; running = $true; restarted = $false } | ConvertTo-Json -Compress
+    return
+}
 $launchEntries = 0
 # Repair only existing NetEase Run values; do not enable autostart for users
 # who disabled it. File/protocol overrides are scoped to this Windows user.
@@ -111,21 +124,28 @@ if ($Action -ne 'Check') {
     # normal launch entry is available. Ordinary launchers remain the default.
     if ((Test-Path -LiteralPath $shortcutPath) -or ($repairLinks.Count -eq 0 -and $launchEntries -eq 0)) {
         $shortcut = $shell.CreateShortcut($shortcutPath)
-        $shortcut.TargetPath = $exe
-        $shortcut.Arguments = Add-ConnectionArguments ''
-        $shortcut.WorkingDirectory = Split-Path -LiteralPath $exe
-        $shortcut.IconLocation = "$exe,0"
-        $shortcut.Save()
+        $arguments = Add-ConnectionArguments $shortcut.Arguments
+        $directory = Split-Path -LiteralPath $exe
+        if ($shortcut.TargetPath -ine $exe -or $shortcut.Arguments -cne $arguments -or $shortcut.WorkingDirectory -ine $directory -or $shortcut.IconLocation -ine "$exe,0") {
+            $shortcut.TargetPath = $exe
+            $shortcut.Arguments = $arguments
+            $shortcut.WorkingDirectory = $directory
+            $shortcut.IconLocation = "$exe,0"
+            $shortcut.Save()
+        }
     }
     foreach ($linkPath in ($repairLinks | Select-Object -Unique)) {
         try {
             $existing = $shell.CreateShortcut($linkPath)
             if ($executablePaths -contains $existing.TargetPath) {
-                $existing.Arguments = Add-ConnectionArguments $existing.Arguments
-                $existing.Save()
+                $arguments = Add-ConnectionArguments $existing.Arguments
+                if ($existing.Arguments -cne $arguments) { $existing.Arguments = $arguments; $existing.Save() }
                 $launchEntries++
             }
         } catch {
+            if ($commonStartMenu -and $linkPath.StartsWith($commonStartMenu.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
+                $protectedStartMenu += $linkPath
+            }
             # Public desktop/Start menu links often need administrator rights.
             # Keep the same ordinary name in this user's corresponding folder.
             if (!$personalCopies.ContainsKey($linkPath)) { continue }
@@ -136,15 +156,59 @@ if ($Action -ne 'Check') {
                 if (!(Test-Path -LiteralPath $personalPath)) { Copy-Item -LiteralPath $linkPath -Destination $personalPath }
                 $personalLink = $shell.CreateShortcut($personalPath)
                 if ($executablePaths -contains $personalLink.TargetPath) {
-                    $personalLink.Arguments = Add-ConnectionArguments $personalLink.Arguments
-                    $personalLink.Save()
+                    $arguments = Add-ConnectionArguments $personalLink.Arguments
+                    if ($personalLink.Arguments -cne $arguments) { $personalLink.Arguments = $arguments; $personalLink.Save() }
                     $launchEntries++
                 }
             } catch { Write-Verbose "Could not configure personal shortcut for: $linkPath" }
         }
     }
 }
-$hasConnectionArguments = @($players | Where-Object { $_.ExecutablePath -ieq $exe -and $_.CommandLine -match '(^|\s)--remote-debugging-port=9223(\s|$)' }).Count -gt 0
+# Elevation is allowed only by an explicit UI action. Background Restore keeps
+# repairing per-user overrides without opening UAC prompts on every update.
+if ($RepairCommonStartMenu -and $Action -notin @('Check', 'OpenStandard') -and $protectedStartMenu.Count -gt 0) {
+    $repairScript = {
+        $ErrorActionPreference = 'Stop'
+        $failed = $false
+        $shell = New-Object -ComObject WScript.Shell
+        $root = [Environment]::GetFolderPath('CommonStartMenu')
+        $backupRoot = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) ('Isle\NetEaseShortcutBackup\' + [guid]::NewGuid().ToString('N'))
+        foreach ($file in Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue) {
+            try {
+                $shortcut = $shell.CreateShortcut($file.FullName)
+                if ([IO.Path]::GetFileName($shortcut.TargetPath) -ine 'cloudmusic.exe' -or !(Test-Path -LiteralPath $shortcut.TargetPath -PathType Leaf)) { continue }
+                $arguments = $shortcut.Arguments -replace '(^|\s)--remote-debugging-port(?:=|\s+)\d+(?=\s|$)', ' '
+                $arguments = $arguments -replace '(^|\s)--remote-debugging-address(?:=|\s+)\S+', ' '
+                $arguments = ($arguments.Trim() + ' --remote-debugging-port=9223 --remote-debugging-address=127.0.0.1').Trim()
+                if ($shortcut.Arguments -cne $arguments) {
+                    $backup = Join-Path $backupRoot $file.FullName.Substring($root.Length).TrimStart('\')
+                    $null = New-Item -ItemType Directory -Path (Split-Path -LiteralPath $backup) -Force
+                    Copy-Item -LiteralPath $file.FullName -Destination $backup
+                    $shortcut.Arguments = $arguments
+                    $shortcut.Save()
+                }
+            } catch { $failed = $true }
+        }
+        if ($failed) { exit 1 }
+    }
+    try {
+        # Pass fixed code directly to the elevated process, never execute an
+        # administrator script from a user-writable temporary file.
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($repairScript.ToString()))
+        $null = Start-Process -FilePath powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList '-NoProfile', '-NonInteractive', '-EncodedCommand', $encoded -Wait -PassThru
+    } catch { Write-Verbose 'Common Start menu repair was declined or unavailable' }
+}
+$pendingStartMenu = @($protectedStartMenu | Select-Object -Unique | Where-Object {
+    try {
+        $saved = $shell.CreateShortcut($_)
+        $saved.Arguments -cne (Add-ConnectionArguments $saved.Arguments)
+    } catch { $true }
+})
+$hasConnectionArguments = @($players | Where-Object {
+    $_.ExecutablePath -ieq $exe -and
+    $_.CommandLine -notmatch '(^|\s)--type(?:=|\s+)' -and
+    $_.CommandLine -match '(^|\s)--remote-debugging-port(?:=|\s+)9223(\s|$)'
+}).Count -gt 0
 # Automatic restore never interrupts playback. A temporary CDP outage (or a
 # player still starting) is not evidence that the process needs restarting.
 $restartRequired = $Action -eq 'Connect' -and $players.Count -gt 0 -and !$hasConnectionArguments -and $env:ISLE_NETEASE_CONNECTED -ne '1'
@@ -152,10 +216,17 @@ if ($restartRequired) {
     foreach ($player in $players) {
         if ($player.ExecutablePath -ieq $exe) { Stop-Process -Id $player.ProcessId -Force -ErrorAction SilentlyContinue }
     }
-    $remaining = @(Get-CimInstance Win32_Process -Filter "name='cloudmusic.exe'" | Where-Object { $_.ExecutablePath -ieq $exe })
-    if ($remaining.Count) { throw 'NETEASE_RESTART_FAILED' }
+    # Termination is asynchronous; allow child processes and the singleton
+    # owner to exit before launching the replacement instance.
+    $exitDeadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        $remaining = @(Get-CimInstance Win32_Process -Filter "name='cloudmusic.exe'" | Where-Object { $_.ExecutablePath -ieq $exe })
+        if (!$remaining.Count) { break }
+        if ([DateTime]::UtcNow -ge $exitDeadline) { throw 'NETEASE_RESTART_FAILED' }
+        Start-Sleep -Milliseconds 100
+    } while ($true)
 }
-if ($Action -eq 'Connect' -and ($players.Count -eq 0 -or $restartRequired)) {
+if ($Action -eq 'OpenEnhanced' -or ($Action -eq 'Connect' -and ($players.Count -eq 0 -or $restartRequired))) {
     Start-Process -FilePath $exe -ArgumentList '--remote-debugging-port=9223', '--remote-debugging-address=127.0.0.1' -WorkingDirectory (Split-Path -LiteralPath $exe) -WindowStyle Hidden
 }
 $configured = $launchEntries -gt 0
@@ -163,4 +234,5 @@ if (Test-Path -LiteralPath $shortcutPath) {
     $savedLink = $shell.CreateShortcut($shortcutPath)
     $configured = $configured -or ($savedLink.TargetPath -ieq $exe -and $savedLink.Arguments -match '(^|\s)--remote-debugging-port=9223(\s|$)')
 }
-@{ executablePath = $exe; shortcutPath = $(if ($launchEntries -eq 0 -and (Test-Path -LiteralPath $shortcutPath)) { $shortcutPath } else { '' }); configured = $configured; launchEntries = $launchEntries; running = ($players.Count -gt 0 -or $Action -eq 'Connect'); restarted = $restartRequired } | ConvertTo-Json -Compress
+$watchPaths = @(@($exe) + $repairLinks + @($personalCopies.Values) + @($shortcutPath) + $userFolders + @($commonToPersonal.Keys) | Where-Object { $_ } | Select-Object -Unique | Select-Object -First 512)
+@{ executablePath = $exe; shortcutPath = $(if ($launchEntries -eq 0 -and (Test-Path -LiteralPath $shortcutPath)) { $shortcutPath } else { '' }); configured = $configured; launchEntries = $launchEntries; pendingStartMenuEntries = $pendingStartMenu.Count; running = ($players.Count -gt 0 -or $Action -in @('Connect', 'OpenEnhanced')); restarted = $restartRequired; restartRequired = ($players.Count -gt 0 -and !$restartRequired -and !$hasConnectionArguments -and $env:ISLE_NETEASE_CONNECTED -ne '1'); watchPaths = $watchPaths } | ConvertTo-Json -Compress

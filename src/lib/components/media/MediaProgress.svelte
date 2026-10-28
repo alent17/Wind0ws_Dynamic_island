@@ -2,7 +2,7 @@
   import { formatTime } from "$lib/mediaClock";
   import { locale, translate } from "$lib/i18n";
 
-  let { position = 0, duration = 0, light = false, showTimes = true, seekable = false, seekBusy = false, progressKnown = true, seekError = "", onSeek } = $props<{
+  let { position = 0, duration = 0, light = false, showTimes = true, seekable = false, seekBusy = false, progressKnown = true, estimated = false, seekError = "", onSeek } = $props<{
     position?: number;
     duration?: number;
     light?: boolean;
@@ -10,6 +10,7 @@
     seekable?: boolean;
     seekBusy?: boolean;
     progressKnown?: boolean;
+    estimated?: boolean;
     seekError?: string;
     onSeek?: (positionMs: number) => void | Promise<void>;
   }>();
@@ -35,8 +36,8 @@
   function cancel() { dragging = false; }
 </script>
 
-<div class:light class:with-times={showTimes} class="progress-block" aria-label={translate("playbackProgress",{percent:Math.round(ratio*100)},$locale)}>
-  {#if showTimes}<span class="time elapsed">{timelineKnown ? formatTime(displayedPosition) : "--:--"}</span>{/if}
+<div title={estimated ? translate("neteaseProgressEstimate", {}, $locale) : undefined} class:light class:with-times={showTimes} class="progress-block" aria-label={translate("playbackProgress",{percent:Math.round(ratio*100)},$locale)}>
+  {#if showTimes}<span class="time elapsed">{timelineKnown ? `${estimated ? "≈ " : ""}${formatTime(displayedPosition)}` : "--:--"}</span>{/if}
   <div class="track-controls">
     <div class="track"><span style={`width:${ratio * 100}%`}></span>{#if seekable && timelineKnown}<input type="range" min="0" max={duration} step="1000" value={displayedPosition} aria-label={translate("seekProgress",{},$locale)} onclick={(event)=>event.stopPropagation()} onpointerdown={(event)=>event.stopPropagation()} onpointercancel={cancel} onblur={cancel} oninput={preview} onchange={commit}/>{/if}</div>
   </div>

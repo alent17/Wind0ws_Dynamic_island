@@ -6,7 +6,7 @@
   import { neteaseLikeState, acceptNeteaseLikeState } from "$lib/neteaseLikeState";
   import { locale, translate } from "$lib/i18n";
 
-  let { title, artist, cacheKey = "", live = true, compact = false } = $props<{ title: string; artist: string; cacheKey?: string; live?: boolean; compact?: boolean }>();
+  let { title, artist, cacheKey = "", live = true, compact = false, available = false } = $props<{ title: string; artist: string; cacheKey?: string; live?: boolean; compact?: boolean; available?: boolean }>();
   const entry = $derived(neteaseLikeState(cacheKey, title, artist));
   const likeState = $derived($entry.value);
   const busy = $derived($entry.busy);
@@ -21,19 +21,20 @@
     void listen<NeteaseLikeState>("netease-like-changed", event => acceptNeteaseLikeState(event.payload)).then(stop => {
       if (disposed) stop(); else unlisten = stop;
     }).catch(() => {});
-    void entry.load();
+
     return () => { disposed = true; unlisten?.(); };
   });
+  $effect(() => { if (!live) return; if (available) void entry.load(); else entry.suspend(); });
 </script>
 
 <span class="like-wrap">
-  <button type="button" class="like-control" class:compact class:liked={likeState?.liked === true}
-    aria-label={likeState?.liked ? t("unlikeSong") : t("likeSong")}
-    aria-pressed={likeState?.liked === true} aria-busy={busy}
-    title={failed ? failureText : !likeState ? t("likeSongUnavailable") : likeState.liked ? t("unlikeSong") : t("likeSong")}
-    disabled={!live || busy}
-    onclick={(event) => { event.stopPropagation(); if (live) void entry.toggle(); }}>
-    <Heart size={compact ? 20 : 36} strokeWidth={2} fill={likeState?.liked ? "currentColor" : "none"} />
+  <button type="button" class="like-control" class:compact class:liked={available && likeState?.liked === true}
+    aria-label={!available || !likeState ? t("likeSongUnavailable") : likeState.liked ? t("unlikeSong") : t("likeSong")}
+    aria-pressed={available && likeState ? likeState.liked : undefined} aria-busy={busy}
+    title={!available ? t("likeSongUnavailable") : failed ? failureText : !likeState ? t("likeSongUnavailable") : likeState.liked ? t("unlikeSong") : t("likeSong")}
+    disabled={!live || !available || !likeState || busy}
+    onclick={(event) => { event.stopPropagation(); if (live && available && likeState) void entry.toggle(); }}>
+    <Heart size={compact ? 20 : 36} strokeWidth={2} fill={available && likeState?.liked ? "currentColor" : "none"} />
   </button>
 </span>
 

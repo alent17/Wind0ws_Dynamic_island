@@ -1,5 +1,0 @@
-{
-  "valid": false,
-  "passed": false,
-  "error": "WebView2 browser missing; application UI is not ready for memory acceptance"
-}

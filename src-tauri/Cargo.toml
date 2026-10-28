@@ -17,6 +17,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+# Keep asynchronous WebView2 responses from posting to destroyed windows.
+[patch.crates-io]
+wry = { path = "vendor/wry" }
+
 [features]
 default = []
 # Manual production builds must enable this feature so Tauri embeds `frontendDist`

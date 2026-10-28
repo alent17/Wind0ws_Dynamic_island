@@ -1,0 +1,20 @@
+[package]
+name = "wry-dispatch-regression"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[features]
+tracing = []
+
+[dependencies]
+once_cell = "=1.21.4"
+windows = { version = "=0.61.3", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[lib]
+path = "lib.rs"

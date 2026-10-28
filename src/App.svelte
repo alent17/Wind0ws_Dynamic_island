@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { clearNeteaseModes } from "$lib/neteaseModeState";
   import { createArtworkOwner } from "$lib/artworkOwner";
   import { artworkValue, nativeStampDecision, readNativeMediaStamp, type NativeMediaStamp } from "$lib/mediaArtwork";
   import { onMount, onDestroy, untrack } from "svelte";
@@ -213,6 +214,8 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   let seekBusy = $state(false);
   let progressKnown = $state(true);
   let neteaseProgressAvailable = $state<boolean | undefined>(undefined);
+  let neteaseFeatures = $state<MediaState["neteaseFeatures"]>();
+  let mediaSourceDisplay = $state("");
   let activeSeekRequests = 0;
   let latestNativeSeekSnapshot: { epoch: string; trackGeneration: number; title: string; artist: string; positionMs: number; durationMs: number } | undefined;
   let appNativeStampedMode = false;
@@ -226,12 +229,13 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     durationMs,
     lastUpdatedTimestamp: mediaSnapshotAt,
     source: currentSource,
-    sourceDisplay: playerNames[currentSource as keyof typeof playerNames] || "多媒体",
+    sourceDisplay: mediaSourceDisplay,
     capabilities: mediaCapabilities,
     shuffleActive,
     repeatMode,
     progressKnown,
     neteaseProgressAvailable,
+    neteaseFeatures,
     nativeTrackGeneration: appNativeTrackGeneration,
     neteasePlaybackMode,
     ...(appNativeStamp ?? {}),
@@ -593,7 +597,22 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   let layoutPreview = $state<IslandWidgets | null>(null);
   let layoutEditing = $state(false);
   const shownWidgets = $derived(layoutPreview ?? ($appSettings.islandWidgetsEnabled ? normalizeWidgets($appSettings.islandWidgets) : {left:[],right:[]}));
-  const hostWidgetCount = $derived(layoutEditing ? 2 : Math.max(shownWidgets.left.length + shownWidgets.right.length, normalizeWidgets($appSettings.islandWidgets).left.length + normalizeWidgets($appSettings.islandWidgets).right.length));
+  // Reserve the editor's full capacity before a card starts animating. Growing
+  // the native WebView at the same time as the first card shifts its anchor.
+  const requestedHostWidgetCount = $derived(Math.max(layoutEditing ? 2 : 0, shownWidgets.left.length + shownWidgets.right.length, normalizeWidgets($appSettings.islandWidgets).left.length + normalizeWidgets($appSettings.islandWidgets).right.length));
+  let retainedHostWidgetCount = $state(0);
+  const hostWidgetCount = $derived(Math.max(requestedHostWidgetCount, retainedHostWidgetCount));
+  $effect(() => {
+    const requested = requestedHostWidgetCount;
+    if (expanded || layoutEditing) {
+      if (requested > untrack(() => retainedHostWidgetCount)) retainedHostWidgetCount = requested;
+      return;
+    }
+    // Keep the host steady until the island has finished collapsing; changing
+    // native bounds during editor confirmation can move the visible content.
+    const timer = setTimeout(() => { retainedHostWidgetCount = requested; }, ISLAND_MOTION.collapseDuration + 50);
+    return () => clearTimeout(timer);
+  });
   const weatherWidgetVisible = $derived(expanded && activeIslandPage === "music" && [...shownWidgets.left, ...shownWidgets.right].includes("weather"));
   const volumeWidgetVisible = $derived(expanded && activeIslandPage === "music" && [...shownWidgets.left, ...shownWidgets.right].includes("volume"));
   async function saveWidgets(layout: IslandWidgets) {
@@ -939,18 +958,22 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   let placementTransitionRevision = 0;
   let suppressPlacementEffect = false;
   let panelInteracting = $state(false);
-  let currentHost = $derived(hostFor(
-    renderedIslandStyle,
-    renderedIslandEdge,
-    compactLengthFor(renderedIslandStyle, $appSettings),
-    expandedScale,
-    expandedLengthFor(renderedIslandStyle, $appSettings),
-    hostWidgetCount,
-  ));
+  // Both styles share an envelope so a style change cannot resize or shift
+  // the native window while the surface is morphing inside it.
+  function sharedStyleHost(edge: IslandEdge, scale: number, count: number) {
+    const floating = hostFor("floating", edge, compactLengthFor("floating", $appSettings), scale, expandedLengthFor("floating", $appSettings), count);
+    const attached = hostFor("edge", edge, compactLengthFor("edge", $appSettings), scale, expandedLengthFor("edge", $appSettings), count);
+    return { width: Math.max(floating.width, attached.width), height: Math.max(floating.height, attached.height) };
+  }
+  let currentHost = $derived(sharedStyleHost(renderedIslandEdge, expandedScale, hostWidgetCount));
 
   let viewportWidth = $state(window.innerWidth);
   let viewportHeight = $state(window.innerHeight);
   const renderedViewport = $derived(fitIslandViewport(currentHost, expandedScale, {width:viewportWidth,height:viewportHeight}));
+  // The native window uses integer physical pixels; rounding at non-integer
+  // DPI can leave the WebView a fraction of a logical pixel below its host.
+  // Only a real size shortage should suppress motion while placement catches up.
+  const viewportClipped = $derived(viewportWidth < currentHost.width - 2 || viewportHeight < currentHost.height - 2);
   onMount(() => {
     const resize = () => { viewportWidth = window.innerWidth; viewportHeight = window.innerHeight; };
     resize();
@@ -958,7 +981,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     return () => window.removeEventListener("resize", resize);
   });
   $effect(() => {
-    if (!windowReady || (viewportWidth >= currentHost.width - 2 && viewportHeight >= currentHost.height - 2)) return;
+    if (!windowReady || !viewportClipped) return;
     // Wait for normal native resize animation first; recover a stuck/superseded request once.
     const timer = setTimeout(scheduleResumeRecovery, 600);
     return () => clearTimeout(timer);
@@ -1000,6 +1023,8 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   let windowPlacementRevision = 0;
   let lastAppliedBounds = "";
   let lastPlacementInput = "";
+  let previousLayoutEditingForPlacement = false;
+  let previousHostWidgetCountForPlacement = 0;
   let placementMonitors: MonitorInfo[] = [];
   let placementMonitorsRefreshedAt = 0;
 
@@ -1022,6 +1047,10 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
       positionPercent,
       hidden,
       compactLength: compactLengthFor(style, $appSettings),
+      floatingCompactLength: compactLengthFor("floating", $appSettings),
+      edgeCompactLength: compactLengthFor("edge", $appSettings),
+      floatingExpandedLength: expandedLengthFor("floating", $appSettings),
+      edgeExpandedLength: expandedLengthFor("edge", $appSettings),
       expandedRadius: expandedRadiusFor(style, $appSettings),
       expandedLength: expandedLengthFor(style, $appSettings),
       hostWidgetCount,
@@ -1046,12 +1075,13 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     const safeIndex = Math.min(Math.max(0, monitorIndex), allMonitors.length - 1);
     const monitor = allMonitors[safeIndex];
     const dpr = monitor.scaleFactor || window.devicePixelRatio || 1;
-    expandedScale = islandLayoutScaleForWorkArea(monitor.workWidth, monitor.workHeight, dpr,
-      style, edge, expandedLengthFor(style, $appSettings), hostWidgetCount);
+    expandedScale = Math.min(...(["floating", "edge"] as const).map(candidate =>
+      islandLayoutScaleForWorkArea(monitor.workWidth, monitor.workHeight, dpr,
+        candidate, edge, expandedLengthFor(candidate, $appSettings), hostWidgetCount)));
     // Monitor work area and native window bounds are physical pixels. The
     // IslandSurface, host and interaction region remain CSS-logical pixels.
     const compactLength = compactLengthFor(style, $appSettings);
-    const host = hostFor(style, edge, compactLength, expandedScale, expandedLengthFor(style, $appSettings), hostWidgetCount);
+    const host = sharedStyleHost(edge, expandedScale, hostWidgetCount);
     const physicalHost = physicalHostSizeFor(host, dpr);
     const baseShown = placementFor(
       { x: monitor.workX, y: monitor.workY, width: monitor.workWidth, height: monitor.workHeight },
@@ -1180,7 +1210,13 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     const style = renderedIslandStyle;
     const edge = renderedIslandEdge;
     const hidden = isHidden;
-    if (ready && !suppressPlacementEffect) void applyWindowPlacement(style, edge, monitorIndex, position, hidden);
+    const editingNow = layoutEditing;
+    const editTransition = editingNow !== previousLayoutEditingForPlacement;
+    const count = hostWidgetCount;
+    const editingHostChange = (editingNow || !expanded) && count !== previousHostWidgetCountForPlacement;
+    previousLayoutEditingForPlacement = editingNow;
+    previousHostWidgetCountForPlacement = count;
+    if (ready && !suppressPlacementEffect) void applyWindowPlacement(style, edge, monitorIndex, position, hidden, !editTransition && !editingHostChange);
   });
 
   $effect(() => {
@@ -1293,7 +1329,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
       neteaseModeError = "";
       neteaseModeBusy = true;
       try {
-        const confirmedMode = await mediaApi.cycleNeteasePlaybackMode();
+        const confirmedMode = await mediaApi.cycleNeteasePlaybackMode(islandMedia);
         if (!lifetime.disposed && currentSource === "netease") {
           // Playback mode is a player-wide setting, so a verified result remains
           // authoritative if the track changed while the command was in flight.
@@ -1890,6 +1926,9 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
           repeatMode = undefined;
           progressKnown = true;
           neteaseProgressAvailable = undefined;
+          clearNeteaseModes();
+          neteaseFeatures = undefined;
+          mediaSourceDisplay = "";
           neteasePlaybackMode = undefined;
           neteaseModeError = "";
           lastNeteaseModeProbeKey = null;
@@ -1912,11 +1951,14 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
           hasMediaSession = Boolean(data.source);
           transitionIsland({ type: "media-session", active: hasMediaSession });
         currentSource = data.source || "";
+        mediaSourceDisplay = data.sourceDisplay || "";
+        if (neteaseFeatures?.mode.source === "cdp" && data.neteaseFeatures?.mode.source !== "cdp") clearNeteaseModes();
+        neteaseFeatures = data.neteaseFeatures;
         progressKnown = data.progressKnown !== false;
         neteaseProgressAvailable = currentSource === "netease" && typeof data.neteaseProgressAvailable === "boolean"
           ? data.neteaseProgressAvailable
           : undefined;
-        if (currentSource !== "netease") {
+        if (currentSource !== "netease" || data.neteaseFeatures?.mode.source !== "cdp") {
           neteasePlaybackMode = undefined;
           neteaseModeError = "";
           lastNeteaseModeProbeKey = null;
@@ -1953,17 +1995,6 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
           lastSongKey = currentSongKey;
           metadataImage?.abort(); metadataImage = undefined;
           metadataRecovery = { pending: false, nextAttempt: 0, attempts: 0 };
-        }
-
-        const neteaseConnectionKey = data.nativeEpoch || "netease-session";
-        if (currentSource === "netease" && lastNeteaseModeProbeKey !== neteaseConnectionKey) {
-          lastNeteaseModeProbeKey = neteaseConnectionKey;
-          const probeRevision = ++neteaseModeRevision;
-          void mediaApi.getNeteasePlaybackMode().then((mode) => {
-            if (!lifetime.disposed && neteaseModeRevision === probeRevision && lastNeteaseModeProbeKey === neteaseConnectionKey && currentSource === "netease") {
-              neteasePlaybackMode = mode ?? undefined;
-            }
-          }).catch((error) => logger.debug("网易云播放模式当前不可读取", error));
         }
 
         const titleChanged = trackTitle !== data.title;
@@ -2214,7 +2245,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     showSpectrum={$appSettings.showSpectrum}
     spectrumMode={$appSettings.spectrumMode}
     enableAnimations={$appSettings.enableAnimations}
-    reduceAnimations={$appSettings.reduceAnimations || renderedViewport.scale < expandedScale - 0.0001}
+    reduceAnimations={$appSettings.reduceAnimations || viewportClipped}
     {spectrumTopColor}
     {spectrumBottomColor}
     showTime={false}

@@ -2,6 +2,34 @@ import { test, expect } from "@playwright/test";
 
 test.use({ reducedMotion: "no-preference" });
 
+for (const widgets of [false, true]) {
+  test(`style transitions animate content in both directions ${widgets ? "with multiple widgets" : "without widgets"}`, async ({ page }) => {
+    await page.goto("/ui-tests/island-fixture.html");
+    await page.evaluate((widgets) => (window as any).configureIsland({
+      mode: "expanded", edge: "top", style: "floating",
+      widgets: widgets ? { left: ["timer"], right: ["clock"] } : { left: [], right: [] },
+    }), widgets);
+    await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true");
+    for (const style of ["edge", "floating"]) {
+      const samples = await page.evaluate(async (style) => {
+        const shell = document.querySelector<HTMLElement>(".expanded-shell")!;
+        const inset = () => parseFloat(shell.style.getPropertyValue("--shoulder-content-inset"));
+        const values = [inset()];
+        (window as any).configureIsland({ style });
+        for (let frame = 0; frame < 35; frame++) {
+          await new Promise(requestAnimationFrame);
+          values.push(inset());
+        }
+        return values;
+      }, style);
+      const start = samples[0], end = samples.at(-1)!;
+      expect(Math.abs(end - start)).toBeGreaterThan(5);
+      expect(samples.some(value => value > Math.min(start, end) + 1 && value < Math.max(start, end) - 1)).toBe(true);
+      await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true");
+    }
+  });
+}
+
 for (const edge of ["top", "right", "bottom", "left"]) {
   test(`spectrum moves with artwork on expansion and collapse at ${edge}`, async ({ page }) => {
     await page.goto("/ui-tests/island-fixture.html");
