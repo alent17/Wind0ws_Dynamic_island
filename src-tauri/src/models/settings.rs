@@ -113,6 +113,7 @@ pub struct AppPreferences {
     pub edge_compact_length: u16,
     pub language: String,
     pub font_id: String,
+    pub notifications_enabled: bool,
     pub capture_hide_on_screenshot: bool,
     pub capture_hide_on_recording: bool,
     #[serde(alias = "autoHide")]
@@ -201,6 +202,7 @@ impl Default for AppPreferences {
             edge_compact_length: 80,
             language: "system".to_string(),
             font_id: "misans".to_string(),
+            notifications_enabled: false,
             capture_hide_on_screenshot: true,
             capture_hide_on_recording: true,
             capture_hide_on_fullscreen: true,
@@ -320,6 +322,7 @@ mod tests {
         assert_eq!(loaded.netease_progress_mode, NeteaseProgressMode::Real);
         assert_eq!(loaded.floating_expanded_corner_radius, 45);
         assert_eq!(loaded.edge_expanded_corner_radius, 45);
+        assert!(!loaded.notifications_enabled);
         assert!(loaded.capture_hide_on_screenshot);
         assert!(loaded.capture_hide_on_recording);
         assert!(loaded.capture_hide_on_fullscreen);

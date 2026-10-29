@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { invoke } from "@tauri-apps/api/core";
   import { onMount, untrack } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { spring } from "svelte/motion";
@@ -21,10 +22,28 @@
   import { applyAppFont } from "$lib/font";
   import { locale, resolveLocale, setLocale, translate, type TranslationKey } from "$lib/i18n";
   import { DEFAULT_SETTINGS, normalizeAppSettings, type AppLanguage, type AppPreferences, type MediaSessionInfo, type MediaState, type MonitorInfo, type WeatherForecastDay, type WeatherLocationCandidate, type WeatherSnapshot } from "$lib/api/types";
-  import type { IslandTool } from "$lib/featureRail";
+  import { enabledBuiltinTools } from "$lib/featureRail";
   import { formatClock } from "$lib/countdown";
   import { CLOCK_TIME_ZONES, clockTimeZoneOption } from "$lib/timeZones";
   let previewNow = $state(Date.now());
+  let notificationStatus=$state("pending");
+  let notificationBusy=$state(false);
+  async function refreshNotificationStatus(){
+    if(!nativeRuntime)return;
+    try{notificationStatus=await invoke<string>("notification_status")}catch{notificationStatus="unavailable"}
+  }
+  async function toggleNotifications(){
+    if(notificationBusy||!nativeRuntime)return;
+    notificationBusy=true;
+    try{
+      if(settings.notificationsEnabled){updatePreference({notificationsEnabled:false});await persist()}
+      else{
+        notificationStatus=await invoke<string>("request_notification_access");
+        if(notificationStatus==="allowed"){await invoke("start_notification_listener");updatePreference({notificationsEnabled:true});await persist()}
+      }
+    }catch{notificationStatus="unavailable";updatePreference({notificationsEnabled:false});void invoke("stop_notification_listener")}finally{notificationBusy=false}
+  }
+
 
   type Scenario="playing"|"paused"|"no-art"|"long-title";
   type PreviewTarget="shape"|"compactLength"|"shoulder"|"radius"|"spectrum"|null;
@@ -145,15 +164,7 @@
   });
   // Keep the island at the current preview scale while the surrounding stage changes width.
   const previewScaleFloor=.79;
-  let previewTools=$derived.by<IslandTool[]>(()=>[
-    ...(settings.showSettingsTool?["settings"]:[]),
-    ...(settings.showFloatingTool?["floating"]:[]),
-    ...(settings.showVolumeTool?["volume"]:[]),
-    ...(settings.showTimerTool?["timer"]:[]),
-    ...(settings.showHideTool?["hide"]:[]),
-    ...(settings.showClockTool?["clock"]:[]),
-    ...(settings.showWeatherTool?["weather"]:[]),
-  ] as IslandTool[]);
+  let previewTools=$derived(enabledBuiltinTools(settings));
   let compactLengthKey: "edgeCompactLength" | "floatingCompactLength" = $derived(appearanceDraft.islandStyle==="edge"?"edgeCompactLength":"floatingCompactLength");
   let expandedRadiusKey: "edgeExpandedCornerRadius" | "floatingExpandedCornerRadius" = $derived(appearanceDraft.islandStyle==="edge"?"edgeExpandedCornerRadius":"floatingExpandedCornerRadius");
   let previewCompactLength=$derived(appearanceDraft[compactLengthKey]);
@@ -239,6 +250,9 @@
     let sessionObserver:IntersectionObserver|undefined;
     let closePromise:Promise<()=>void>|undefined;
     if(nativeRuntime){
+      void refreshNotificationStatus();
+      const notificationStatusTimer=setInterval(()=>void refreshNotificationStatus(),10000);
+      deferredTimers.push(notificationStatusTimer);
       const appWindow=getCurrentWindow();
       closePromise=appWindow.onCloseRequested(async(event)=>{
         event.preventDefault();
@@ -577,6 +591,7 @@
             </div>
           {/if}
         </div>
+        <div class="setting-grid single"><button type="button" class="setting-choice" class:active={settings.notificationsEnabled} aria-pressed={settings.notificationsEnabled} disabled={!nativeRuntime||notificationBusy} onclick={toggleNotifications}><span class="choice-mark" aria-hidden="true">{settings.notificationsEnabled?"✓":""}</span><span class="choice-copy"><strong>{t("windowsNotifications")}</strong><small>{t("windowsNotificationsHint")} {t(notificationStatus==="allowed"?"notificationsAllowed":notificationStatus==="denied"?"notificationsDenied":notificationStatus==="unavailable"?"notificationsUnavailable":"notificationsPending")}</small></span></button></div>
         <div class="setting-grid"><button type="button" class="setting-choice" class:active={settings.alwaysOnTop} aria-pressed={settings.alwaysOnTop} disabled={!nativeRuntime} onclick={()=>setAlwaysOnTop(!settings.alwaysOnTop)}><span class="choice-mark" aria-hidden="true">{settings.alwaysOnTop?"✓":""}</span><span class="choice-copy"><strong>{t("alwaysOnTop")}</strong><small>{t("alwaysOnTopHint")}</small></span></button><button type="button" class="setting-choice" class:active={settings.autoStart} aria-pressed={settings.autoStart} disabled={!nativeRuntime} onclick={()=>setAutoStart(!settings.autoStart)}><span class="choice-mark" aria-hidden="true">{settings.autoStart?"✓":""}</span><span class="choice-copy"><strong>{t("autoStart")}</strong><small>{t("autoStartHint")}</small></span></button></div>
         <div class="select-row"><span><Monitor size={17}/>{t("monitor")}</span><StudioSelect label={t("monitor")} value={String(settings.monitorIndex)} disabled={!nativeRuntime} options={monitors.length?monitors.map((monitor)=>({value:String(monitor.index),label:monitor.name})):[{value:String(settings.monitorIndex),label:t("primaryMonitor") }]} onSelect={(value)=>updatePreference({monitorIndex:Number(value)})}/></div>
       </section>
@@ -586,12 +601,13 @@
         <button type="button" class="setting-choice" class:active={settings.captureHideOnFullscreen} aria-pressed={settings.captureHideOnFullscreen} disabled={!nativeRuntime} onclick={()=>updatePreference({captureHideOnFullscreen:!settings.captureHideOnFullscreen})}><span class="choice-mark" aria-hidden="true">{settings.captureHideOnFullscreen?"✓":""}</span><span class="choice-copy"><strong>{t("hideFullscreen")}</strong><small>{t("hideFullscreenHint")}</small></span></button>
         <div class="setting-choice unavailable" aria-disabled="true"><span class="choice-mark" aria-hidden="true">—</span><span class="choice-copy"><strong>{t("hideShare")}</strong><small>{t("screenShareUnavailable")}</small></span></div>
       </div></section>
-      <section class="tools-section"><h2>{t("tools")}</h2><div class="tool-list"><button disabled={!nativeRuntime} onclick={()=>windowApi.openFloatingWindow()}><ExternalLink size={17}/>{t("openFloating")}</button><button disabled={!nativeRuntime} onclick={()=>windowApi.resetFloatingWindow()}><RotateCcw size={17}/>{t("resetFloating")}</button><button disabled={!nativeRuntime} onclick={clearCache}><Trash2 size={17}/>{t("clearCache")}</button></div>{#if cacheMessage}<p class="message">{cacheMessage}</p>{/if}</section>
+      <section class="tools-section"><h2>{t("tools")}</h2><div class="tool-list"><button disabled={!nativeRuntime} onclick={()=>windowApi.openFloatingWindow()}><ExternalLink size={17}/>{t("openFloating")}</button><button disabled={!nativeRuntime} onclick={()=>windowApi.resetFloatingWindow()}><RotateCcw size={17}/>{t("resetFloating")}</button><button disabled={!nativeRuntime} onclick={clearCache}><Trash2 size={17}/>{t("clearCache")}</button></div>{#if cacheMessage}<p class="message">{cacheMessage}</p>{/if}<p class="font-notice">MiSans © Xiaomi Inc.</p></section>
     </aside>
   </div>
 </main>
 
 <style>
+  .font-notice { margin: 16px 0 0; color: rgba(255,255,255,.55); font-size: 11px; }
   .player-identity{display:flex;align-items:center;gap:12px;margin-bottom:10px}
   .player-identity .hint{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .player-identity button{flex-shrink:0;padding:8px 12px;border:1px solid #ffffff20;border-radius:10px;background:#ffffff08;color:inherit;cursor:pointer}

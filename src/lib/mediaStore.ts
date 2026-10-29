@@ -215,6 +215,9 @@ export function connectMedia(onReady?: () => void): () => void {
     generation++;
     connectionReady = false;
     connectionState = undefined;
+    // Do not retain a potentially large live artwork data URI when the last
+    // Studio consumer goes away. A future connection starts from demo data.
+    media.set(DEMO_MEDIA);
     connectionArtworkCleared = false;
     connectionTrackKey = undefined;
     nativeStamp = undefined;

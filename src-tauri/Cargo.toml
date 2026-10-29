@@ -48,6 +48,8 @@ image = "0.25"
 
 # Windows API 绑定 - 用于访问 Windows 原生功能
 windows052 = { package = "windows", version = "0.52", features = [
+    "UI_Notifications_Management",
+    "ApplicationModel",
     "Media_Control",        # 全局系统媒体控制（GSMTC）- 获取音乐播放信息
     "Media_Capture",        # Windows AppCapture - 查询系统视频捕获状态
     "Storage_Streams",      # 存储流 - 读取专辑封面图片数据

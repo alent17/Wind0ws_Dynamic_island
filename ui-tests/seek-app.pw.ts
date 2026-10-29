@@ -10,6 +10,11 @@ const track = {
   lastUpdatedTimestamp: Date.now(),
   source: "netease",
   sourceDisplay: "网易云音乐",
+  neteaseFeatures: {
+    progress: { source: "cdp", readable: true, controllable: true },
+    like: { source: "cdp", readable: true, controllable: true },
+    mode: { source: "cdp", readable: true, controllable: true },
+  },
   capabilities: { previous: true, playPause: true, next: true, seek: true, shuffle: false, repeat: false },
   nativeEpoch: "seek-app-fixture",
   nativeRevision: 1,
@@ -141,7 +146,7 @@ test("the full App cycles the verified NetEase mode and shows failures without o
 
   await page.evaluate(() => { (window as any).rejectModeCycle = true; });
   await repeatOne.click();
-  await expect(page.getByRole("alert")).toContainText("fixture mode verification failed");
+  await expect(page.getByRole("alert")).toContainText("网易云播放模式切换失败");
   await expect(page.getByRole("button", { name: "切换网易云播放模式（当前：单曲循环）" })).toBeVisible();
   expect(await page.evaluate(() => (window as any).modeCycles.length)).toBe(2);
   await page.evaluate(() => (window as any).destroy());

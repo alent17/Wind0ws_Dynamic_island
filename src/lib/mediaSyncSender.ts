@@ -1,4 +1,4 @@
-import { artworkValue, withoutArtwork } from "./mediaArtwork";
+import { withoutArtwork } from "./mediaArtwork";
 import { isTransportDiagnosticsEnabled, recordTransportCounter, runTransportEvent } from "./transportDiagnostics";
 import type { MediaState } from "$lib/api/types";
 
@@ -53,6 +53,13 @@ export function createMediaSyncSender({
   let disposed = false;
 
   function payloadFor(snapshot: MediaSyncSnapshot): MediaSyncPayload {
+    if (snapshot.appOverlay) {
+      // Stamped receivers use the session-scoped overlay and discard the
+      // top-level cover. Keep the overlay cover for recovery after a rejected
+      // out-of-order event, while avoiding two copies in every IPC payload.
+      const { albumArt: _topLevelArtwork, ...payload } = snapshot;
+      return payload;
+    }
     if (acknowledged?.track === trackKey(snapshot) && acknowledged.artwork === snapshot.albumArt) {
       return withoutArtwork({ ...snapshot }) as MediaSyncPayload;
     }
@@ -84,7 +91,7 @@ export function createMediaSyncSender({
     if (candidate.generation === generation) {
       acknowledged = {
         track: trackKey(candidate.snapshot),
-        artwork: artworkValue(candidate.snapshot as unknown as Record<string, unknown>) ?? "",
+        artwork: candidate.snapshot.albumArt,
       };
       retryCount = 0;
     }

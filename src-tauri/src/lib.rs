@@ -62,6 +62,7 @@ mod commands;
 mod error;
 mod event_bus;
 mod models;
+mod notifications;
 mod services;
 mod state;
 mod utils;
@@ -2124,6 +2125,10 @@ pub fn run() {
             commands::choose_sort_directory,
             commands::sort_dropped_files,
             // 设置相关命令
+            notifications::notification_status,
+            notifications::request_notification_access,
+            notifications::start_notification_listener,
+            notifications::stop_notification_listener,
             commands::get_preferences,
             commands::save_preferences,
             commands::get_settings,

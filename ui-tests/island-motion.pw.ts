@@ -237,7 +237,7 @@ test("an unfinished hover can expand without snapping the compact artwork", asyn
   await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true", { timeout: 650 });
 });
 
-test("pointer hover grows gently and can return without a position jump", async ({ page }) => {
+test("pointer hover preserves compact dimensions and returns without a position jump", async ({ page }) => {
   await page.goto("/ui-tests/island-fixture.html");
   await expect(page.locator(".stage")).toHaveAttribute("data-settled", "true");
   await page.evaluate(() => {
@@ -268,8 +268,7 @@ test("pointer hover grows gently and can return without a position jump", async 
   });
   await page.locator(".island-surface").hover();
   const sample = await page.evaluate(() => (window as any).hoverSample);
-  expect(sample.width).toBeGreaterThan(sample.startWidth);
-  expect(sample.width - sample.startWidth).toBeLessThan(5.5);
+  expect(sample.width).toBeCloseTo(sample.startWidth, 1);
   expect(Math.abs(sample.jumpX)).toBeLessThan(.5);
   expect(Math.abs(sample.jumpY)).toBeLessThan(.5);
   await page.mouse.move(0, 0);
@@ -363,7 +362,9 @@ test("neutral control fills preserve existing island button proportions", async 
   expect(initial.tool.height).toBeCloseTo(28, 0);
   expect(initial.tool.background).toBe("rgba(255, 255, 255, 0.1)");
 
-  await page.locator(".feature-menu button").nth(0).click({force:true});
+  // File sorting has a deliberately larger back control; use the timer page
+  // to verify the shared navigation control.
+  await page.locator(".feature-menu").getByRole("button", { name: "Timer", exact: true }).click({force:true});
   const back = page.locator(".navigation-page .page-back");
   await expect(back).toBeVisible();
   const backStyle = await back.evaluate((button) => ({

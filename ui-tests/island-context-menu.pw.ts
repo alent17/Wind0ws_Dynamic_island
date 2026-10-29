@@ -9,7 +9,7 @@ test("context menu supports keyboard navigation, dismissal and settings", async 
   const items = page.getByRole("menuitem");
   await expect(items.first()).toBeFocused();
   await page.keyboard.press("ArrowDown");
-  await expect(items.last()).toBeFocused();
+  await expect(items.nth(1)).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator(".stage")).toHaveAttribute("data-settings-opened","1");
   await expect(page.getByRole("menu")).toHaveCount(0);

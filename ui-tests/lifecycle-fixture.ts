@@ -2,6 +2,7 @@ import { mount, unmount, tick } from "svelte";
 import { mockConvertFileSrc, mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { DEFAULT_SETTINGS } from "../src/lib/api/types";
 import { settingsStore } from "../src/lib/settingsStore";
+import { media } from "../src/lib/mediaStore";
 import { get } from "svelte/store";
 import { emit } from "@tauri-apps/api/event";
 import { islandState, transitionIsland } from "../src/lib/islandStore";
@@ -21,6 +22,7 @@ import { isTransportDiagnosticsEnabled, runTimedTransportCommand } from "../src/
 import { LatestValueWriteQueue } from "../src/lib/latestValueWriteQueue";
 const fixture = window as any;
 fixture.calls = [];
+fixture.currentPreviewMedia = () => get(media);
 fixture.likeState = { trackId: "123", playId: "123_play", title: "Like Song", artist: "Artist", liked: false };
 fixture.likeActions = [];
 fixture.likeWriteFail = false;
@@ -261,7 +263,10 @@ mockIPC((command, args) => {
   }
   if (command === "get_netease_song_info_cmd") return fixture.disableSongMetadataRecovery ? null : {mvUrl:"https://fixture.invalid/video.mp4",duration:180_000};
   if (command === "get_cached_media") return null;
-  if (command === "download_and_cache") return "C:\\fixture\\video.mp4";
+  if (command === "download_and_cache") {
+    if (fixture.failNeteaseMvDownload && args?.url === "https://fixture.invalid/video.mp4") return Promise.reject(new Error("download failed"));
+    return "C:\\fixture\\video.mp4";
+  }
 }, {shouldMockEvents:true});
 const tauriInvoke = window.__TAURI_INTERNALS__!.invoke;
 window.__TAURI_INTERNALS__!.invoke = async (command, args, options) => {
@@ -381,6 +386,7 @@ fixture.settingsChanged = (name: string) => emit(Events.SETTINGS_CHANGED,name);
 fixture.settingsUpdated = (snapshot: unknown) => emit(Events.SETTINGS_UPDATED,snapshot);
 fixture.settingsCommitted = (revision: number) => emit("settings-committed",{revision});
 fixture.hdCoverChanged = (enabled: boolean) => emit(Events.HD_COVER_CHANGED,{enableHDCover:enabled});
+fixture.resizeFloating = () => emit("tauri://resize", {width: window.innerWidth, height: window.innerHeight});
 fixture.resolveSettingsRead = (index: number, snapshot?: unknown) => fixture.pendingSettingsReads[index]?.(snapshot);
 fixture.useTwoMonitors = () => {
   fixture.monitorList = [

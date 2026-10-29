@@ -51,6 +51,42 @@ describe("media sync sender", () => {
     sender.dispose();
   });
 
+  it("keeps stamped artwork in the overlay without a duplicate top-level copy", async () => {
+    const sent: MediaSyncPayload[] = [];
+    const sender = createMediaSyncSender({ dispatch: payload => { sent.push(payload); } });
+    const stamped = (art: string, generation = 1): MediaSyncSnapshot => snapshot("Track", art, {
+      nativeEpoch: "epoch", nativeRevision: 1, nativeTrackGeneration: generation, artworkResolved: true,
+      appOverlay: { nativeEpoch: "epoch", nativeRevision: 1, trackKey: "player|track|artist", title: "Track", artist: "Artist", albumArt: art, artworkResolved: true, positionMs: 100, lastUpdatedTimestamp: 10 },
+    });
+    sender.resetForConsumer("floating");
+    sender.offer(stamped("cover")); await flush();
+    sender.offer(stamped("cover")); await flush();
+    sender.offer(stamped("cover", 2)); await flush();
+    sender.offer(stamped("", 2)); await flush();
+    expect(sent.every(payload => !Object.hasOwn(payload, "albumArt"))).toBe(true);
+    expect(sent.map(payload => Object.hasOwn(payload.appOverlay!, "albumArt") ? payload.appOverlay!.albumArt : "<omitted>"))
+      .toEqual(["cover", "cover", "cover", ""]);
+    sender.dispose();
+  });
+
+  it("retries stamped artwork after an emission failure", async () => {
+    const sent: MediaSyncPayload[] = [];
+    const sender = createMediaSyncSender({
+      retryBaseDelayMs: 60_000,
+      dispatch: payload => { sent.push(payload); return sent.length === 1 ? Promise.reject(new Error("failed")) : undefined; },
+    });
+    const stamped = snapshot("Track", "cover", {
+      nativeEpoch: "epoch", nativeRevision: 1, nativeTrackGeneration: 1,
+      appOverlay: { nativeEpoch: "epoch", nativeRevision: 1, trackKey: "player|track|artist", title: "Track", artist: "Artist", albumArt: "cover", artworkResolved: false, positionMs: 100, lastUpdatedTimestamp: 10 },
+    });
+    sender.resetForConsumer("floating");
+    sender.offer(stamped); await flush();
+    sender.offer(stamped); await flush();
+    expect(sent).toHaveLength(2);
+    expect(sent.map(payload => payload.appOverlay?.albumArt)).toEqual(["cover", "cover"]);
+    sender.dispose();
+  });
+
   it("keeps artwork unacknowledged after failure and retries it with the next same-track sync", async () => {
     let rejectFirst!: (error: Error) => void;
     const first = new Promise<void>((_resolve, reject) => { rejectFirst = reject; });

@@ -51,14 +51,14 @@ components:
     width: "80–300px"
     height: "28px"
   island-hover:
-    width: "90px"
-    height: "30px"
+    width: "80–300px (same as compact)"
+    height: "28px"
   island-expanded:
     backgroundColor: "{colors.island-black}"
     textColor: "{colors.island-white}"
     rounded: "{rounded.island-expanded}"
-    width: "330px"
-    height: "137px"
+    width: "600px (480–900px configurable)"
+    height: "210px before additional panels or toolbar"
   studio-panel:
     backgroundColor: "{colors.studio-surface}"
     textColor: "{colors.studio-ink}"
@@ -70,15 +70,15 @@ components:
 
 ## Overview
 
-The production player surfaces use the project's original visual language. The main island is a very small black pill that grows into a 330 × 137 media controller at the reference scale. The separate floating player is a cover-first square stage with a compact black information strip and hover-revealed controls. Isle Studio uses the island's dark shell and bright active controls around a white inspection stage. It must not be replaced by the legacy settings page.
+The production player surfaces use the project's original visual language. The main island is a very small black pill that grows into a configurable media controller. The separate floating player is a cover-first stage with a compact black information strip and hover-revealed controls. Isle Studio uses a white inspection stage. It must not be replaced by the legacy settings page.
 
 ## Typography
 
-MiSans is the only shipped typeface across Studio, the island, the floating player, the timer, and pixel-art mode. Regular, Medium, and Bold weights carry hierarchy. Legacy font preferences are read for compatibility but render as MiSans. Studio labels and metadata stay legible at compact desktop sizes.
+MiSans is the default typeface across Studio, the island, the floating player, the timer, and pixel-art mode. The bundled Xiaomi web font ranges load on demand at Regular, Medium, and Bold weights; characters outside those ranges fall back to installed system fonts. Legacy font preferences are read for compatibility but use this default. Studio labels and metadata stay legible at compact desktop sizes.
 
 ## Dynamic Island
 
-- Compact: 80–300 × 28 px; Hover adds 10 px up to 300 px; Expanded: 330 × 137 px at the reference scale.
+- Compact: 80–300 × 28 logical px. The base expanded geometry is 600 × 210 logical px; its length is configurable from 480 to 900 px, and additional panels and the toolbar change the occupied area. The geometry module is authoritative for edge and animation states.
 - Compact content uses a 20 px cover and six-bar Canvas spectrum.
 - Expanded music content uses a 46 px cover, title and artist beside a six-bar spectrum, a full-width elapsed/progress/remaining row, then a seven-position action row: playlist, favorite, previous, play/pause, next, shuffle, and floating player. The shell carries a restrained navy tint along its lower edge.
 - Width, height, opacity, and content changes use the original Svelte spring and drop/flip motion.

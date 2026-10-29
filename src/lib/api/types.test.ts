@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, normalizeAppSettings } from "./types";
 
 describe("normalizeAppSettings", () => {
+  it("defaults notification access off and preserves an explicit choice", () => {
+    expect(normalizeAppSettings({}).notificationsEnabled).toBe(false);
+    expect(normalizeAppSettings({ notificationsEnabled: true }).notificationsEnabled).toBe(true);
+  });
   it("defaults to CDP but preserves an explicit standard connection", () => {
     expect(normalizeAppSettings({}).neteaseConnectionMode).toBe("enhanced");
     expect(normalizeAppSettings({ neteaseAutoConnect: true }).neteaseConnectionMode).toBe("enhanced");

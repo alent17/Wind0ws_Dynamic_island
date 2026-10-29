@@ -3,7 +3,7 @@
   import { createArtworkOwner } from "$lib/artworkOwner";
   import { artworkValue, nativeStampDecision, readNativeMediaStamp, type NativeMediaStamp } from "$lib/mediaArtwork";
   import { onMount, onDestroy, untrack } from "svelte";
-  import { convertFileSrc } from "@tauri-apps/api/core";
+  import { convertFileSrc, invoke } from "@tauri-apps/api/core";
   import { emit, listen } from "@tauri-apps/api/event";
   import { eventManager, onMediaUpdate } from "./utils/eventManager";
   import { Events } from "./utils/eventConstants";
@@ -64,7 +64,7 @@ import { createMediaSyncSender, type MediaSyncSnapshot } from "$lib/mediaSyncSen
   } from "$lib/islandGeometry";
   import type { AppSettings, AudioDeviceInfo, MediaState, MonitorInfo, SystemAudioState, WeatherSnapshot } from "$lib/api/types";
   import { DEFAULT_SETTINGS } from "$lib/api/types";
-  import type { IslandTool } from "$lib/featureRail";
+  import { enabledBuiltinTools } from "$lib/featureRail";
   import { applyAppFont } from "$lib/font";
   import { locale, setLocale, translate, type TranslationKey } from "$lib/i18n";
   import {
@@ -594,6 +594,52 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
 
   // ===== 应用设置 =====
   const appSettings = settingsStore;
+  type WindowsNotification = { id: number; app: string; title: string; body: string };
+  let notificationCurrent = $state<WindowsNotification | null>(null);
+  let notificationQueue: WindowsNotification[] = [];
+  let notificationTimer: ReturnType<typeof setTimeout> | undefined;
+  let notificationExpanded = false;
+  function clearNotifications() {
+    clearTimeout(notificationTimer); notificationQueue = []; notificationCurrent = null;
+    if (notificationExpanded && !$appSettings.keepIslandExpanded && !$islandState.hovering) transitionIsland({type:"collapse"});
+    notificationExpanded = false;
+  }
+  function showNextNotification() {
+    notificationCurrent = notificationQueue.shift() ?? null;
+    if (!notificationCurrent) { clearNotifications(); return; }
+    if (!$islandState.expanded) { notificationExpanded = true; transitionIsland({type:"expand"}); }
+    notificationTimer = setTimeout(showNextNotification, 5000);
+  }
+  onMount(() => {
+    if (!(window as any).__TAURI_INTERNALS__) return;
+    let disposed = false; let revision = 0; let enabled = false;
+    const seen = new Set<number>();
+    let unlisten: (() => void) | undefined;
+    const ready = listen<WindowsNotification>("windows-notification", ({payload}) => {
+      if (!enabled || disposed || seen.has(payload.id)) return;
+      seen.add(payload.id); if (seen.size > 512) seen.delete(seen.values().next().value!);
+      if (notificationQueue.length >= 50) notificationQueue.shift();
+      notificationQueue.push(payload); if (!notificationCurrent) showNextNotification();
+    }).then(fn => { if (disposed) fn(); else unlisten = fn; });
+    const unsubscribe = appSettings.subscribe(value => {
+      if (value.notificationsEnabled === enabled) return;
+      enabled = value.notificationsEnabled; const current = ++revision;
+      if (!enabled) { seen.clear(); clearNotifications(); void invoke("stop_notification_listener"); return; }
+      void ready.then(async () => {
+        if (disposed || current !== revision) return;
+        try { await invoke("start_notification_listener"); }
+        catch { if (!disposed && current === revision) await settingsApi.updateSettings({notificationsEnabled:false}); }
+      });
+    });
+    const timer = setInterval(() => {
+      if (!enabled) return;
+      void invoke<string>("notification_status").then(status => {
+        if (!disposed && enabled && status !== "allowed") { clearNotifications(); void invoke("stop_notification_listener"); void settingsApi.updateSettings({notificationsEnabled:false}); }
+      }).catch(() => { if (!disposed && enabled) { clearNotifications(); void invoke("stop_notification_listener"); void settingsApi.updateSettings({notificationsEnabled:false}); } });
+    }, 10000);
+    return () => { disposed = true; ++revision; unsubscribe(); clearInterval(timer); unlisten?.(); clearNotifications(); void invoke("stop_notification_listener"); };
+  });
+
   let layoutPreview = $state<IslandWidgets | null>(null);
   let layoutEditing = $state(false);
   const shownWidgets = $derived(layoutPreview ?? ($appSettings.islandWidgetsEnabled ? normalizeWidgets($appSettings.islandWidgets) : {left:[],right:[]}));
@@ -620,17 +666,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     appSettings.update(settings => ({...settings, islandWidgets: normalizeWidgets(layout),islandWidgetsEnabled:true}));
   }
 
-  let enabledFeatureTools = $derived.by<IslandTool[]>(() => {
-    const tools: IslandTool[] = [];
-    if ($appSettings.showSettingsTool) tools.push("settings");
-    if ($appSettings.showFloatingTool) tools.push("floating");
-    if ($appSettings.showVolumeTool) tools.push("volume");
-    if ($appSettings.showTimerTool) tools.push("timer");
-    if ($appSettings.showHideTool) tools.push("hide");
-    if ($appSettings.showClockTool) tools.push("clock");
-    if ($appSettings.showWeatherTool) tools.push("weather");
-    return tools;
-  });
+  let enabledFeatureTools = $derived(enabledBuiltinTools($appSettings));
   function toggleIsland() {
     transitionIsland({ type: "toggle" });
   }
@@ -1222,7 +1258,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   $effect(() => {
     const panelActive = panelInteracting;
     const pointerInside = hovering;
-    const shouldAutoClose = expanded && !$appSettings.keepIslandExpanded && !pointerInside && !panelActive && !timerFinished;
+    const shouldAutoClose = expanded && !$appSettings.keepIslandExpanded && !pointerInside && !panelActive && !timerFinished && !notificationCurrent;
     if (!shouldAutoClose) return;
 
     const timeout = setTimeout(() => {
@@ -1231,7 +1267,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
         transitionIsland({ type: "hover-enter" });
         return;
       }
-      if (expanded && !hovering && !pointerStillInside && !panelInteracting && !timerFinished) {
+      if (expanded && !hovering && !pointerStillInside && !panelInteracting && !timerFinished && !notificationCurrent) {
         transitionIsland({ type: "collapse" });
         showMonitorMenu = false;
       }
@@ -2306,12 +2342,22 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     onTimerAdjust={handleTimerAdjust}
     onTimerReset={handleTimerReset}
   />
+  {#if notificationCurrent && $islandMode === "expanded" && pageVisible && !isHidden}
+    <div class="notification-overlay" role="status" aria-live="polite">
+      <strong>{notificationCurrent.app}</strong>
+      {#if notificationCurrent.title}<span>{notificationCurrent.title}</span>{/if}
+      {#if notificationCurrent.body}<small>{notificationCurrent.body}</small>{/if}
+    </div>
+  {/if}
 </div>
 
 
 <style>
   :global(*) { box-sizing: border-box; }
   :global(html, body, #app) { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; -webkit-font-smoothing: antialiased; }
+  .notification-overlay { position: absolute; z-index: 20; top: 12px; width: min(80%, 480px); min-height: 96px; padding: 12px 18px; border-radius: 20px; background: #151515; color: white; display: flex; flex-direction: column; gap: 5px; pointer-events: none; overflow: hidden; }
+  .notification-overlay strong, .notification-overlay span, .notification-overlay small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .notification-overlay small { color: #ccc; }
   .fixed-host { display: flex; align-items: flex-start; justify-content: center; box-sizing: border-box; background: transparent; pointer-events: none; }
   .fixed-host :global(.island-surface) { pointer-events: auto; }
 </style>

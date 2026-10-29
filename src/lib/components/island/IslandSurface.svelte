@@ -32,7 +32,7 @@
   import VolumePanel from "$lib/components/volume/VolumePanel.svelte";
   import AppVolumeMixer from "$lib/components/volume/AppVolumeMixer.svelte";
   import WeatherIcon from "$lib/components/media/WeatherIcon.svelte";
-  import type { IslandTool } from "$lib/featureRail";
+  import { BUILTIN_TOOLS, type IslandTool } from "$lib/featureRail";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
   import { ISLAND_MOTION, widgetEditMotion, widgetLayoutMotion, islandMorphEasing, islandSettleEasing, islandShapeMotion, anchoredLayoutOffset } from "$lib/islandMotion";
   import type { AudioDeviceInfo, MediaState, SpectrumMode, SystemAudioState, WeatherForecastDay } from "$lib/api/types";
@@ -434,11 +434,9 @@
   });
   $effect(() => { onLayoutPreview?.(currentLayout, editing); });
   const panelVisible = $derived(!editing && showCustomFunctionPanel);
-  const toolOrder: IslandTool[] = ["files", "timer", "volume", "floating", "settings", "hide", "clock", "weather", "system"];
   const toolIcons = { files: FolderOpen, timer: Timer, volume: Volume2, floating: GalleryHorizontalEnd, settings: Settings, hide: EyeOff, clock: Clock, weather: CloudSun, system: Activity };
-  const toolLabels: Record<IslandTool, TranslationKey> = { files: "fileSort", timer: "timer", volume: "volume", floating: "floatingTool", settings: "settingsTool", hide: "hideTool", clock: "clock", weather: "weather", system: "systemMonitor" };
-  const shortLabels: Record<IslandTool, TranslationKey> = {files:"fileSort",timer:"timer",volume:"menuVolume",floating:"menuFloating",settings:"menuSettings",hide:"menuHide",clock:"clock",weather:"weather",system:"systemMonitor"};
-  const menuItems = $derived(toolOrder.filter(tool => (tool === "system" || tool === "files") || enabledTools.includes(tool)).map(tool => ({ id: tool, label: t(toolLabels[tool]), shortLabel: t(shortLabels[tool]), icon: toolIcons[tool] })));
+  const toolLabels = Object.fromEntries(BUILTIN_TOOLS.map(tool => [tool.id, tool.label])) as Record<IslandTool, TranslationKey>;
+  const menuItems = $derived(BUILTIN_TOOLS.filter(tool => !tool.preference || enabledTools.includes(tool.id)).map(tool => ({ id: tool.id, label: t(tool.label), shortLabel: t(tool.shortLabel), icon: toolIcons[tool.id] })));
   const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius, expandedLength, stackPreparing ? 0 : widgetCount, editing));
   const expandedGeometry = $derived({
     ...scaleIslandGeometry(expandedBaseGeometry, expandedScale),

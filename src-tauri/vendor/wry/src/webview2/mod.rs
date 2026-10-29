@@ -298,7 +298,9 @@ impl InnerWebView {
     let additional_browser_args = pl_attrs.additional_browser_args.unwrap_or_else(|| {
       // remove "mini menu" - See https://github.com/tauri-apps/wry/issues/535
       // and "smart screen" - See https://github.com/tauri-apps/tauri/issues/1345
-      let default_args = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection";
+      // The app's local windows share an origin. Allow Chromium to reuse a
+      // renderer instead of reserving one for each auxiliary window.
+      let default_args = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --process-per-site";
       let mut arguments = String::from(default_args);
 
       if attributes.autoplay {

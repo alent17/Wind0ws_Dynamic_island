@@ -27,6 +27,7 @@ export interface AppSettings {
   edgeCompactLength: number;
   language: AppLanguage;
   fontId: FontId;
+  notificationsEnabled: boolean;
   captureHideOnScreenshot: boolean;
   captureHideOnRecording: boolean;
   captureHideOnFullscreen: boolean;
@@ -225,6 +226,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   edgeCompactLength: 80,
   language: "system",
   fontId: "misans",
+  notificationsEnabled: false,
   captureHideOnScreenshot: true,
   captureHideOnRecording: true,
   captureHideOnFullscreen: true,

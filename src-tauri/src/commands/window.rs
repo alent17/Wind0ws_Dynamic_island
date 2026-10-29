@@ -16,6 +16,41 @@ const FLOATING_WINDOW_TRANSITION_MS: u64 = 260;
 const FLOATING_WINDOW_TRANSITION_OFFSET_PX: i32 = 32;
 static FLOATING_WINDOW_MOTION_REVISION: AtomicU64 = AtomicU64::new(0);
 
+// Keep saved physical bounds usable when a display disappears or its work area changes.
+fn clamp_floating_origin(x: i32, y: i32, width: u32, height: u32, work: (i32, i32, i32, i32)) -> (i32, i32) {
+    let (left, top, right, bottom) = work;
+    let max_x = (i64::from(right) - i64::from(width)).max(i64::from(left));
+    let max_y = (i64::from(bottom) - i64::from(height)).max(i64::from(top));
+    (i64::from(x).clamp(i64::from(left), max_x) as i32,
+     i64::from(y).clamp(i64::from(top), max_y) as i32)
+}
+
+fn visible_floating_origin(x: i32, y: i32, width: u32, height: u32) -> (i32, i32) {
+    use windows052::Win32::Foundation::POINT;
+    use windows052::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+    let center = POINT {
+        x: (i64::from(x) + i64::from(width) / 2).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+        y: (i64::from(y) + i64::from(height) / 2).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+    };
+    let monitor = unsafe { MonitorFromPoint(center, MONITOR_DEFAULTTONEAREST) };
+    let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+    if !unsafe { GetMonitorInfoW(monitor, &mut info) }.as_bool() { return (x, y); }
+    let work = info.rcWork;
+    clamp_floating_origin(x, y, width, height, (work.left, work.top, work.right, work.bottom))
+}
+
+#[cfg(test)]
+mod floating_restore_tests {
+    use super::clamp_floating_origin;
+
+    #[test]
+    fn restores_inside_work_area_and_keeps_valid_negative_monitor_coordinates() {
+        assert_eq!(clamp_floating_origin(-1600, 80, 260, 360, (-1920, 0, 0, 1040)), (-1600, 80));
+        assert_eq!(clamp_floating_origin(2200, 1200, 260, 360, (0, 0, 1920, 1040)), (1660, 680));
+        assert_eq!(clamp_floating_origin(-300, -40, 3000, 2000, (0, 0, 1920, 1040)), (0, 0));
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct InteractionCornerRadii {
@@ -1525,8 +1560,10 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
 
     if created {
         if let (Some(x), Some(y), Some(w), Some(h)) = saved_position {
+            let (w, h) = (w.max(200), h.max(200));
+            let (x, y) = visible_floating_origin(x, y, w, h);
             window
-                .set_size(tauri::PhysicalSize::new(w.max(200), h.max(200)))
+                .set_size(tauri::PhysicalSize::new(w, h))
                 .map_err(|e| AppError::window(e.to_string()))?;
             window
                 .set_position(tauri::PhysicalPosition::new(x, y))
@@ -1549,12 +1586,17 @@ pub async fn open_floating_window(app: AppHandle) -> AppResult<()> {
             return Ok(());
         }
 
-        let target = window
+        let mut target = window
             .outer_position()
             .map_err(|e| AppError::window(e.to_string()))?;
         let size = window
             .outer_size()
             .map_err(|e| AppError::window(e.to_string()))?;
+        let (x, y) = visible_floating_origin(target.x, target.y, size.width, size.height);
+        if (x, y) != (target.x, target.y) {
+            target = tauri::PhysicalPosition::new(x, y);
+            window.set_position(target).map_err(|e| AppError::window(e.to_string()))?;
+        }
         let (offset_x, offset_y) =
             floating_window_transition_offset(&window, target.x, target.y, size.width, size.height);
         let start_x = target.x.saturating_add(offset_x);

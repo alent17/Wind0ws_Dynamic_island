@@ -259,9 +259,8 @@ test("App ignores a delayed manual hide after re-expansion and still applies a n
   await expect.poll(() => page.evaluate(() => (window as any).calls.filter((call:string) => call === "animate_window_bounds").length)).toBeGreaterThan(0);
   await page.evaluate(() => (window as any).expand());
   await expect.poll(() => page.evaluate(() => (window as any).islandSnapshot().expanded)).toBe(true);
-  await expect(page.locator(".feature-menu button")).toHaveCount(7);
-
-  const hideButton = page.locator(".feature-menu button").nth(4);
+  const hideButton = page.locator(".feature-menu").getByRole("button", {name:/Hide for 10 sec|隐藏 10 秒/});
+  await expect(hideButton).toBeVisible();
   const baselineBoundsCalls = await page.evaluate(() => (window as any).calls.filter((call:string) => call === "animate_window_bounds").length);
   await hideButton.click({force:true});
   await expect.poll(() => page.evaluate(() => (window as any).islandSnapshot().expanded)).toBe(false);
@@ -452,7 +451,19 @@ test("FloatingWindow gates MV playback and progress work while capture-hidden", 
   await page.evaluate(() => (window as any).destroy());
   await page.evaluate(() => (window as any).resolvePendingVideoPlay());
   await expect.poll(() => page.evaluate(() => (window as any).lastVideoIsPaused())).toBe(true);
+  expect(await page.evaluate(() => (window as any).lastVideo.hasAttribute("src"))).toBe(false);
   expect(errors).toEqual([]);
+});
+
+test("FloatingWindow falls back when the NetEase MV cannot be cached", async ({page}) => {
+  await page.route("https://itunes.apple.com/search**", route => route.fulfill({json:{results:[{previewUrl:"https://example.test/preview.mp4"}]}}));
+  await page.route("http://asset.localhost/**", route => route.abort());
+  await page.goto("/ui-tests/lifecycle-fixture.html", {waitUntil:"domcontentloaded"});
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(() => { (window as any).failNeteaseMvDownload = true; (window as any).mountFloating(); });
+  await page.evaluate(() => (window as any).media({title:"Fallback test",artist:"Fixture",albumArt:"data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=",isPlaying:true,positionMs:0,durationMs:180000,lastUpdatedTimestamp:Date.now(),source:"netease"}));
+  await expect(page.locator(".mv-player")).toHaveCount(1);
+  await page.evaluate(() => (window as any).destroy());
 });
 
 test("FloatingWindow pauses circular artwork motion while capture-hidden", async ({page}) => {
@@ -480,6 +491,60 @@ test("FloatingWindow pauses circular artwork motion while capture-hidden", async
   await expect(page.locator(".player.circular-album .album-wrapper")).toHaveCSS("animation-play-state", "paused");
   await page.evaluate(() => (window as any).captureMode(false));
   await expect(page.locator(".player.circular-album.playing .album-wrapper")).toHaveCSS("animation-play-state", "running");
+  await page.evaluate(() => (window as any).destroy());
+});
+
+test("FloatingWindow sizes artwork backing pixels to the window and repaints on resize", async ({page}) => {
+  await page.setViewportSize({width:240,height:300});
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  const cover = await page.evaluate(() => {
+    (window as any).mountFloating({enableHdCover:false,enableMvPlayback:false});
+    const canvas=document.createElement("canvas"); canvas.width=canvas.height=1200;
+    const ctx=canvas.getContext("2d")!; ctx.fillStyle="rgb(20, 60, 200)"; ctx.fillRect(0,0,1200,1200);
+    return canvas.toDataURL();
+  });
+  await expect.poll(() => page.evaluate(() => (window as any).floatingReadyMessages.length)).toBe(1);
+  await page.evaluate(albumArt => (window as any).media({title:"Large cover",artist:"Fixture",source:"fixture-player",isPlaying:false,positionMs:0,durationMs:180000,lastUpdatedTimestamp:Date.now(),albumArt}), cover);
+  const canvas=page.locator("canvas.album-art-new");
+  await expect.poll(() => canvas.evaluate(el => (el as HTMLCanvasElement).width)).toBeGreaterThan(0);
+  const before = await canvas.evaluate(el => ({backing:(el as HTMLCanvasElement).width, visible:el.clientWidth, dpr:window.devicePixelRatio}));
+  expect(before.backing).toBeLessThan(1200);
+  expect(before.backing).toBeLessThanOrEqual(Math.ceil(before.visible * before.dpr) + 2);
+  await page.setViewportSize({width:500,height:560});
+  await page.evaluate(() => (window as any).resizeFloating());
+  await expect.poll(() => canvas.evaluate(el => (el as HTMLCanvasElement).width)).toBeGreaterThan(before.backing);
+  await expect(page.locator(".bg-solid")).toHaveCSS("background-color","rgb(20, 60, 200)");
+  await page.setViewportSize({width:240,height:300});
+  await page.evaluate(() => (window as any).resizeFloating());
+  await expect.poll(() => canvas.evaluate(el => (el as HTMLCanvasElement).width)).toBe(before.backing);
+  await expect(page.locator(".compact-cover-image")).toHaveCount(0);
+  await canvas.evaluate(el => { (window as any).oldCoverCanvas = el; });
+  await page.setViewportSize({width:200,height:200});
+  await page.evaluate(() => (window as any).resizeFloating());
+  await expect(page.locator(".compact-cover-image")).toBeVisible();
+  await expect(page.locator(".compact-cover-image")).toHaveAttribute("src", cover);
+  await expect(page.locator("canvas.album-art-new")).toHaveCount(0);
+  expect(await page.evaluate(() => ({ width: (window as any).oldCoverCanvas.width, height: (window as any).oldCoverCanvas.height }))).toEqual({ width: 0, height: 0 });
+  await page.evaluate(() => {
+    const OriginalImage = window.Image;
+    (window as any).restoreImage = () => { window.Image = OriginalImage; };
+    window.Image = function () {
+      const image = new OriginalImage();
+      let handler: typeof image.onload = null;
+      image.addEventListener("load", event => setTimeout(() => handler?.call(image, event), 750));
+      Object.defineProperty(image, "onload", { get: () => handler, set: value => { handler = value; } });
+      return image;
+    } as typeof Image;
+  });
+  await page.setViewportSize({width:240,height:300});
+  await page.evaluate(() => (window as any).resizeFloating());
+  await expect(page.locator(".compact-cover-fallback")).toBeVisible();
+  await expect(page.locator(".compact-cover-image")).toHaveCount(0);
+  await expect(page.locator("canvas.album-art-new")).toBeVisible();
+  await expect.poll(() => page.locator("canvas.album-art-new").evaluate((el: HTMLCanvasElement) => el.width)).toBeGreaterThan(0);
+  await expect.poll(() => page.locator("canvas.album-art-new").evaluate((el: HTMLCanvasElement) => Array.from(el.getContext("2d")!.getImageData(Math.floor(el.width / 2), Math.floor(el.height / 2), 1, 1).data))).toEqual([20, 60, 200, 255]);
+  await page.evaluate(() => (window as any).restoreImage());
   await page.evaluate(() => (window as any).destroy());
 });
 
@@ -805,14 +870,25 @@ test("Floating fences App overlays by session, basis, and increasing sequence wi
   await page.evaluate(payload => (window as any).mediaSync(payload), relay("app-session-a",1));
   await expect(page.locator('input[type="range"]')).toHaveValue("45000");
   await expect.poll(() => page.evaluate(() => (window as any).__ISLE_MEDIA_TRACE__.some((row:any) => row.outcome === "applied-app-overlay"))).toBe(true);
-  await expect(page.locator(".compact-cover-image")).toHaveAttribute("src",covers.hd);
+  await expect.poll(() => page.locator("canvas.album-art-new").evaluate((canvas: HTMLCanvasElement) => {
+    const pixel = canvas.getContext("2d")!.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data;
+    return [...pixel];
+  })).toEqual([0, 0, 255, 255]);
   const acceptedCoverChars = covers.hd.length;
+  const progressOnly = relay("app-session-a", 2, 2, covers.hd, 46_000);
+  const { albumArt: _omitted, ...overlayWithoutArtwork } = progressOnly.appOverlay;
+  await page.evaluate(payload => (window as any).mediaSync(payload), { ...progressOnly, appOverlay: overlayWithoutArtwork });
+  await expect(page.locator('input[type="range"]')).toHaveValue("46000");
+  await expect.poll(() => page.locator("canvas.album-art-new").evaluate((canvas: HTMLCanvasElement) => {
+    const pixel = canvas.getContext("2d")!.getImageData(Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data;
+    return [...pixel];
+  })).toEqual([0, 0, 255, 255]);
 
   await page.evaluate(payload => (window as any).media(payload), native);
   await expect.poll(() => page.evaluate(() => (window as any).__ISLE_MEDIA_TRACE__.at(-1).displayCoverChars)).toBe(acceptedCoverChars);
   await page.evaluate(payload => (window as any).mediaSync(payload), relay("app-session-a",1,2,"stale-overlay",1_000));
   await expect.poll(() => page.evaluate(() => (window as any).__ISLE_MEDIA_TRACE__.some((row:any) => row.outcome === "rejected-app-overlay-old-sequence"))).toBe(true);
-  await expect(page.locator('input[type="range"]')).toHaveValue("45000");
+  await expect(page.locator('input[type="range"]')).toHaveValue("46000");
 
   await page.evaluate(() => (window as any).mediaSessionStart("app-session-b"));
   await expect.poll(() => page.evaluate(() => (window as any).floatingReadyMessages.some((m:any) => m.appSessionId === "app-session-b"))).toBe(true);
@@ -890,6 +966,17 @@ test("Studio preview clock refreshes on wall-minute boundaries and cancels on un
   expect(await page.evaluate(() => (window as any).liveTimeoutDelays())).toEqual([]);
   await page.clock.runFor(60_000);
   expect(await page.evaluate(() => (window as any).firedTimeouts())).toBe(firedAtUnmount);
+});
+
+test("Studio releases the live artwork snapshot on unmount", async ({page}) => {
+  await page.goto("/ui-tests/lifecycle-fixture.html");
+  await page.waitForFunction(() => (window as any).ready);
+  await page.evaluate(() => { (window as any).deferNextMediaInfo(); (window as any).mountStudio(); });
+  await page.waitForFunction(() => (window as any).pendingMediaInfo.length === 1);
+  await page.evaluate(payload => (window as any).media(payload), mediaFixtureState({title:"Artwork retention",albumArt:"data:image/png;base64,retained-fixture"}));
+  await expect.poll(() => page.evaluate(() => (window as any).currentPreviewMedia().title)).toBe("Artwork retention");
+  await page.evaluate(() => (window as any).destroy());
+  expect(await page.evaluate(() => (window as any).currentPreviewMedia().albumArt)).not.toContain("retained-fixture");
 });
 
 test("Studio uses one listener-first media snapshot and keeps its demo preview until live data arrives", async ({page}) => {

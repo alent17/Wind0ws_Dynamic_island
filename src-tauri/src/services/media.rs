@@ -1324,12 +1324,8 @@ async fn get_netease_mv_url_internal(mv_id: u64) -> AppResult<Option<String>> {
 
     // 尝试从 brs 数组获取 URL
     if let Some(data) = json.get("data") {
-        if let Some(brs) = data.get("brs").and_then(|v| v.as_array()) {
-            for br in brs {
-                if let Some(url) = br.get("url").and_then(|v| v.as_str()) {
-                    return Ok(Some(url.to_string()));
-                }
-            }
+        if let Some(url) = data.get("brs").and_then(select_mv_url) {
+            return Ok(Some(url.to_string()));
         }
         // 备用：直接从 data.url 获取
         if let Some(url) = data.get("url").and_then(|v| v.as_str()) {
@@ -1338,6 +1334,37 @@ async fn get_netease_mv_url_internal(mv_id: u64) -> AppResult<Option<String>> {
     }
 
     Ok(None)
+}
+
+// NetEase returns a resolution-keyed object; older responses may use an array.
+// Prefer the clearest stream up to 480p, and keep higher resolutions available
+// when the server has no smaller stream.
+fn select_mv_url(brs: &Value) -> Option<&str> {
+    if let Some(streams) = brs.as_object() {
+        return streams.iter().filter_map(|(resolution, value)| {
+            let height = resolution.parse::<u32>().ok()?;
+            let url = value.as_str().filter(|url| !url.is_empty())?;
+            Some((height, url))
+        }).min_by_key(|(height, _)| {
+            if *height <= 480 { (0, 480 - *height) } else { (1, *height) }
+        }).map(|(_, url)| url);
+    }
+    brs.as_array()?.iter().find_map(|entry| entry.get("url")?.as_str().filter(|url| !url.is_empty()))
+}
+
+#[cfg(test)]
+mod mv_stream_tests {
+    use super::select_mv_url;
+    use serde_json::json;
+
+    #[test]
+    fn chooses_small_stream_and_handles_legacy_or_missing_data() {
+        assert_eq!(select_mv_url(&json!({"1080":"high", "240":"low", "480":"medium"})), Some("medium"));
+        assert_eq!(select_mv_url(&json!({"1080":"high", "720":"hd"})), Some("hd"));
+        assert_eq!(select_mv_url(&json!({"480":"", "240":"low"})), Some("low"));
+        assert_eq!(select_mv_url(&json!([{"url":"legacy"}])), Some("legacy"));
+        assert_eq!(select_mv_url(&json!({"bad":"invalid"})), None);
+    }
 }
 
 fn require_control_session<T>(session: Option<T>) -> AppResult<T> {

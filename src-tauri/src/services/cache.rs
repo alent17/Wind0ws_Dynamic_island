@@ -22,6 +22,28 @@ const MAX_IMAGE_CACHE_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_VIDEO_CACHE_BYTES: u64 = 384 * 1024 * 1024;
 const METADATA_FLUSH_INTERVAL_SECS: u64 = 2;
 
+// NetEase VOD signs the same media path with rotating wsSecret and
+// wsTime values. Retain every other query parameter as part of the identity.
+fn cache_key(url: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let canonical = reqwest::Url::parse(url).ok().and_then(|mut parsed| {
+        let host = parsed.host_str()?;
+        if host != "vod.126.net" && !host.ends_with(".vod.126.net") { return None; }
+        let pairs: Vec<(String, String)> = parsed.query_pairs()
+            .map(|(key, value)| (key.into_owned(), value.into_owned())).collect();
+        if !pairs.iter().any(|(key, _)| key == "wsSecret") || !pairs.iter().any(|(key, _)| key == "wsTime") { return None; }
+        parsed.set_query(None);
+        let retained: Vec<_> = pairs.into_iter().filter(|(key, _)| key != "wsSecret" && key != "wsTime").collect();
+        if !retained.is_empty() { parsed.query_pairs_mut().extend_pairs(retained); }
+        Some(parsed.to_string())
+    });
+    let mut hasher = DefaultHasher::new();
+    canonical.as_deref().unwrap_or(url).hash(&mut hasher);
+    format!("{:x}", hasher.finish())
+}
+
 fn now_seconds() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -281,13 +303,7 @@ pub fn get_cache_stats() -> AppResult<CacheStats> {
 ///
 /// 如果文件已缓存，返回本地路径；否则返回 None
 pub fn get_cached_media(url: &str) -> AppResult<Option<String>> {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    // 计算 URL 哈希作为缓存键
-    let mut hasher = DefaultHasher::new();
-    url.hash(&mut hasher);
-    let key = format!("{:x}", hasher.finish());
+    let key = cache_key(url);
 
     let cache_dir = CACHE_DIR
         .lock()
@@ -451,19 +467,13 @@ fn save_cache_file(
     content_type: &str,
     replace_existing: bool,
 ) -> AppResult<String> {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
     let cache_dir = CACHE_DIR
         .lock()
         .map_err(|_| AppError::lock("无法锁定缓存目录"))?
         .clone()
         .ok_or_else(|| AppError::cache("缓存系统未初始化"))?;
 
-    // 生成缓存键和文件名
-    let mut hasher = DefaultHasher::new();
-    url.hash(&mut hasher);
-    let key = format!("{:x}", hasher.finish());
+    let key = cache_key(url);
 
     // 根据内容类型确定扩展名
     let extension = match content_type {
@@ -529,6 +539,17 @@ fn save_cache_file(
 #[cfg(test)]
 mod budget_tests {
     use super::*;
+
+    #[test]
+    fn netease_vod_cache_ignores_only_rotating_signature() {
+        let a = "https://x.vod.126.net/video.mp4?quality=480&wsSecret=one&wsTime=1";
+        let b = "https://x.vod.126.net/video.mp4?quality=480&wsSecret=two&wsTime=2";
+        assert_eq!(cache_key(a), cache_key(b));
+        assert_ne!(cache_key(a), cache_key("https://x.vod.126.net/video.mp4?quality=720&wsSecret=one&wsTime=1"));
+        assert_ne!(cache_key(a), cache_key("https://other.test/video.mp4?quality=480&wsSecret=one&wsTime=1"));
+        assert_ne!(cache_key("https://x.vod.126.net/video.mp4?wsSecret=one"), cache_key("https://x.vod.126.net/video.mp4?wsSecret=two"));
+    }
+
     #[test]
     fn public_cache_lookup_migrates_an_oversized_existing_image() {
         use std::time::{SystemTime, UNIX_EPOCH};

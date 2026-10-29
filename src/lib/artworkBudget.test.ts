@@ -7,6 +7,10 @@ describe("artwork byte and raster budgets", () => {
       expect(artworkCanvasSize(4096,2048,640,dpr)).toEqual({width:edge,height:edge/2});
     }
     expect(artworkCanvasSize(108,108,640,2)).toEqual({width:108,height:108});
+    // A 1200px cover shown at 250 logical px and 2x DPI uses 500² backing
+    // pixels rather than 1200²; enlarging restores available source detail.
+    expect(artworkCanvasSize(1200,1200,250,2)).toEqual({width:500,height:500});
+    expect(artworkCanvasSize(1200,1200,600,2)).toEqual({width:1200,height:1200});
   });
   it("keeps compliant normal rasters unchanged and caps unbounded sources independently of DPR", () => {
     expect(boundedArtworkCanvasSize(1200,1200)).toEqual({width:1200,height:1200});

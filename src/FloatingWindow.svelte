@@ -7,7 +7,7 @@
   import { appOverlayDecision, artworkValue, mergeProgressAnchorFields, nativeStampDecision, readNativeMediaStamp, snapshotDecision, withoutArtwork, type ArtworkSnapshotToken, type NativeMediaStamp } from "$lib/mediaArtwork";
   import { createCanvasArtworkRenderer, type CanvasArtworkRequest } from "$lib/canvasArtwork";
   import { createArtworkOwner } from "$lib/artworkOwner";
-  import { ArtworkResultCache, artworkCacheKey, artworkCanvasSize, boundedArtworkCanvasSize } from "$lib/artworkBudget";
+  import { ArtworkResultCache, artworkCacheKey, artworkCanvasSize } from "$lib/artworkBudget";
   import { createSeekHandler, createSeekRequestGate, formatSeekError, seekSnapshotAllowsRollback } from "$lib/seekRequest";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -120,6 +120,7 @@
   let isCompactCover = $derived(
     windowSize.width <= 200.5 && windowSize.height <= 200.5,
   );
+  let retainCompactCover = $state(false);
   let clockNow = $state(Date.now());
   let pageVisible = $state(true);
   let visualWorkVisible = $derived(pageVisible && !isCaptureHidden);
@@ -477,7 +478,10 @@
       const song = await mediaApi.getNeteaseSongInfo(title, artist);
       const mvUrl = song?.mvUrl || (song?.mvId && song.mvId > 0
         ? await mediaApi.getNeteaseMvUrl(song.mvId) : null);
-      if (mvUrl) return await cacheMV(mvUrl);
+      if (mvUrl) {
+        const cached = await cacheMV(mvUrl);
+        if (cached) return cached;
+      }
     } catch (error) {
       console.warn("[MV] 网易云匹配失败，尝试 Apple Music:", error);
     }
@@ -502,6 +506,12 @@
       video.currentTime = 0;
       syncMvPlayback(video);
     }
+  }
+
+  // Releasing the source when this element leaves the DOM lets the WebView
+  // discard its decoder and buffered frames after a track or mode change.
+  function releaseVideo(video: HTMLVideoElement) {
+    return { destroy() { video.pause(); video.removeAttribute("src"); video.load(); } };
   }
 
   function syncMvPlayback(video = mvVideo) {
@@ -686,6 +696,11 @@
 
       // Tauri reports physical pixels here, while the 100px layout breakpoint
       // is expressed in CSS pixels. Read the viewport to stay correct on HiDPI.
+      if (isCompactCover && (window.innerWidth > 200.5 || window.innerHeight > 200.5)) {
+        retainCompactCover = true;
+      } else if (window.innerWidth <= 200.5 && window.innerHeight <= 200.5) {
+        retainCompactCover = false;
+      }
       windowSize = { width: window.innerWidth, height: window.innerHeight };
 
       // 防抖保存位置和大小
@@ -784,10 +799,7 @@
           : Number(overlay.positionMs) || 0,
         lastUpdatedTimestamp: Number(overlay.lastUpdatedTimestamp) || Date.now(),
       };
-      receiveSameTrackArtwork({
-        albumArt: typeof overlay.albumArt === "string" ? overlay.albumArt : "",
-        artworkResolved: Boolean(overlay.artworkResolved),
-      });
+      receiveSameTrackArtwork(overlay);
       appliedOverlayBasis = nativeBasisKey(currentNativeStamp);
       traceMedia("island-sync", "applied-app-overlay", payload);
       return true;
@@ -1145,9 +1157,6 @@
       eventListeners.length = 0;
     }
 
-    // 清理临时 Canvas
-    if (tempCanvasCache) tempCanvasCache.width = tempCanvasCache.height = 0;
-    tempCanvasCache = null;
     processedImageCache.clear();
 
     if (savePositionTimeout) clearTimeout(savePositionTimeout);
@@ -1157,7 +1166,6 @@
     isHovered && windowSize.width > 100 && windowSize.height > 100,
   );
 
-  let tempCanvasCache = $state<HTMLCanvasElement | null>(null);
   let eventListeners = $state<(() => void)[]>([]);
 
   // Svelte actions bind the renderer to the actual DOM node and destroy it
@@ -1166,20 +1174,52 @@
     const renderer = createCanvasArtworkRenderer(canvas, {
       process: (url, signal) => processImageBackend(url, true, signal),
       paint: (target, image) => {
-        renderCachedImage(target, image, false);
+        const ctx = target.getContext("2d");
+        if (!ctx) return;
+        const raster = artworkCanvasSize(image.width, image.height, Math.max(target.clientWidth, target.clientHeight, 1), window.devicePixelRatio || 1);
+        target.width = raster.width;
+        target.height = raster.height;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(image, 0, 0, target.width, target.height);
         if (!disposed && target.classList.contains("album-art-new")) {
           albumFill = artworkFillFromImage(target) ?? albumFill;
+          retainCompactCover = false;
         }
       },
       onError: (error) => console.error("[Canvas] 图片加载失败:", error),
     });
+    let currentRequest = request;
+    let lastSize = `${canvas.clientWidth}:${canvas.clientHeight}:${window.devicePixelRatio}`;
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleResize = () => {
+      const nextSize = `${canvas.clientWidth}:${canvas.clientHeight}:${window.devicePixelRatio}`;
+      if (nextSize === lastSize || !canvas.clientWidth || !canvas.clientHeight) return;
+      lastSize = nextSize;
+      if (resizeTimer) clearTimeout(resizeTimer);
+      // Avoid reloading the cover on every intermediate frame of a resize.
+      resizeTimer = setTimeout(() => renderer.update(currentRequest), 150);
+    };
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(scheduleResize);
+    observer?.observe(canvas);
+    window.addEventListener("resize", scheduleResize);
     renderer.update(request);
-    return renderer;
+    return {
+      update(next: CanvasArtworkRequest) {
+        if (resizeTimer) { clearTimeout(resizeTimer); resizeTimer = undefined; }
+        currentRequest = next;
+        renderer.update(next);
+      },
+      destroy() { if (resizeTimer) clearTimeout(resizeTimer); window.removeEventListener("resize", scheduleResize); observer?.disconnect(); renderer.destroy(); },
+    };
   }
 
   // 缓存处理后的图片。浮动窗可能长时间切歌，使用有上限的 LRU，避免
   // 专辑封面 base64 无限留在 WebView 内存中。
   const processedImageCache = new ArtworkResultCache();
+  // Pixel-art output is only used while this effect is enabled. Drop it when
+  // the user disables the effect instead of retaining up to the LRU budget.
+  $effect(() => { if (!enablePixelArt) processedImageCache.clear(); });
   async function processImageBackend(imageUrl: string, enablePixelArt: boolean, signal?: AbortSignal): Promise<string> {
     if (disposed || signal?.aborted) throw new DOMException("Artwork disposed", "AbortError");
     // Only data URLs are immutable by their bytes. File paths may be rewritten.
@@ -1191,291 +1231,6 @@
     if (disposed || signal?.aborted) throw new DOMException("Artwork superseded", "AbortError");
     if (key) processedImageCache.set(key,result);
     return result;
-  }
-
-  // 智能图片质量分析函数
-  function analyzeImageQuality(img: HTMLImageElement): number {
-    // 基于图片尺寸、清晰度和内容复杂度评估质量
-    const width = img.width;
-    const height = img.height;
-
-    // 基础质量评分（0-1）
-    let qualityScore = Math.min(1, width / 500); // 基于宽度评分
-
-    // 如果图片太小，降低评分
-    if (width < 100 || height < 100) {
-      qualityScore *= 0.5;
-    }
-
-    // 如果图片太大但可能是低质量放大，适当调整
-    if (width > 800 && qualityScore > 0.8) {
-      qualityScore = 0.8 + (qualityScore - 0.8) * 0.5;
-    }
-
-    return Math.max(0.1, Math.min(1, qualityScore));
-  }
-
-  // 计算最优像素大小
-  function calculateOptimalPixelSize(
-    img: HTMLImageElement,
-    qualityScore: number,
-  ): number {
-    // 统一使用固定的6px像素大小
-    return 12;
-  }
-
-  // 高级像素化渲染（使用调色板量化 + Floyd-Steinberg 抖动）
-  function renderCachedImage(
-    canvas: HTMLCanvasElement,
-    img: HTMLImageElement,
-    pixelated: boolean,
-  ) {
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Normal artwork retains its bounded source raster, avoiding a second
-    // resample before compositor scaling. Pixel art uses
-    // the visible raster and its existing nearest-neighbor path.
-    const raster = pixelated
-      ? artworkCanvasSize(img.width, img.height, Math.max(canvas.clientWidth, canvas.clientHeight, 1), window.devicePixelRatio || 1)
-      : boundedArtworkCanvasSize(img.width, img.height);
-    canvas.width = raster.width;
-    canvas.height = raster.height;
-
-    if (pixelated) {
-      // 智能像素化算法：根据图片质量和内容决定像素化程度
-      const imgQuality = analyzeImageQuality(img);
-      const pixelSize = calculateOptimalPixelSize(img, imgQuality);
-
-      const scaledWidth = Math.ceil(img.width / pixelSize);
-      const scaledHeight = Math.ceil(img.height / pixelSize);
-
-      // 重用或创建临时 Canvas
-      if (
-        !tempCanvasCache ||
-        tempCanvasCache.width !== scaledWidth ||
-        tempCanvasCache.height !== scaledHeight
-      ) {
-        tempCanvasCache = document.createElement("canvas");
-        tempCanvasCache.width = scaledWidth;
-        tempCanvasCache.height = scaledHeight;
-      }
-
-      const tempCtx = tempCanvasCache.getContext("2d");
-      if (!tempCtx) return;
-
-      // 关闭图像平滑处理
-      tempCtx.imageSmoothingEnabled = false;
-      tempCtx.imageSmoothingQuality = "low";
-
-      // 缩小图片
-      tempCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
-
-      // 尝试获取像素数据（可能会因为跨域而失败）
-      let imageData: ImageData;
-      try {
-        imageData = tempCtx.getImageData(0, 0, scaledWidth, scaledHeight);
-      } catch (e) {
-        // 跨域污染，使用简单像素化方案
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(
-          tempCanvasCache,
-          0,
-          0,
-          scaledWidth,
-          scaledHeight,
-          0,
-          0,
-          canvas.width,
-          canvas.height,
-        );
-        return;
-      }
-
-      const data = imageData.data;
-
-      // 提取全局调色板（使用 NeuQuant 简化版）
-      const palette = extractOptimalPalette(data, 32); // 32 种颜色
-
-      // 应用调色板量化 + Floyd-Steinberg 抖动
-      applyPaletteWithDithering(data, scaledWidth, scaledHeight, palette);
-
-      // 将处理后的数据放回临时 Canvas
-      tempCtx.putImageData(imageData, 0, 0);
-
-      // 清除主 Canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.imageSmoothingEnabled = false;
-
-      // 将处理好的像素画放大绘制回主 Canvas
-      ctx.drawImage(
-        tempCanvasCache,
-        0,
-        0,
-        scaledWidth,
-        scaledHeight,
-        0,
-        0,
-        canvas.width,
-        canvas.height,
-      );
-    } else {
-      // 正常渲染高清图
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    }
-  }
-
-  // 提取最优全局调色板（简化版 NeuQuant 算法）
-  function extractOptimalPalette(
-    data: Uint8ClampedArray,
-    numColors: number,
-  ): Uint8ClampedArray {
-    // 统计颜色出现频率
-    const colorCount = new Map<string, number>();
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const a = data[i + 3];
-      if (a < 128) continue; // 跳过透明像素
-
-      // 量化颜色以减少键数量
-      const qr = Math.round(r / 8) * 8;
-      const qg = Math.round(g / 8) * 8;
-      const qb = Math.round(b / 8) * 8;
-      const key = `${qr},${qg},${qb}`;
-
-      colorCount.set(key, (colorCount.get(key) || 0) + 1);
-    }
-
-    // 按频率排序
-    const sortedColors = Array.from(colorCount.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, numColors * 2); // 取前 2 倍数量用于后续优化
-
-    // 使用简单的 k-means 聚类思想优化调色板
-    const palette = new Uint8ClampedArray(numColors * 4);
-    for (let i = 0; i < numColors; i++) {
-      if (i < sortedColors.length) {
-        const [r, g, b] = sortedColors[i][0].split(",").map(Number);
-        palette[i * 4] = r;
-        palette[i * 4 + 1] = g;
-        palette[i * 4 + 2] = b;
-        palette[i * 4 + 3] = 255;
-      } else {
-        // 填充剩余颜色
-        palette[i * 4] = 0;
-        palette[i * 4 + 1] = 0;
-        palette[i * 4 + 2] = 0;
-        palette[i * 4 + 3] = 255;
-      }
-    }
-
-    return palette;
-  }
-
-  // 应用调色板量化 + Floyd-Steinberg 误差扩散抖动
-  function applyPaletteWithDithering(
-    data: Uint8ClampedArray,
-    width: number,
-    height: number,
-    palette: Uint8ClampedArray,
-  ) {
-    // 创建误差缓冲区
-    const errors = new Float32Array(data.length);
-
-    // 查找最接近的调色板颜色
-    function findClosestColor(
-      r: number,
-      g: number,
-      b: number,
-    ): [number, number, number] {
-      let minDist = Infinity;
-      let closestIdx = 0;
-
-      for (let i = 0; i < palette.length / 4; i++) {
-        const pr = palette[i * 4];
-        const pg = palette[i * 4 + 1];
-        const pb = palette[i * 4 + 2];
-
-        // 使用加权欧几里得距离（考虑人眼对绿色更敏感）
-        const dist = 2 * (r - pr) ** 2 + 4 * (g - pg) ** 2 + 3 * (b - pb) ** 2;
-
-        if (dist < minDist) {
-          minDist = dist;
-          closestIdx = i;
-        }
-      }
-
-      return [
-        palette[closestIdx * 4],
-        palette[closestIdx * 4 + 1],
-        palette[closestIdx * 4 + 2],
-      ];
-    }
-
-    // 逐像素处理
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const i = (y * width + x) * 4;
-
-        // 加上累积的误差
-        const r = Math.max(0, Math.min(255, data[i] + errors[i]));
-        const g = Math.max(0, Math.min(255, data[i + 1] + errors[i + 1]));
-        const b = Math.max(0, Math.min(255, data[i + 2] + errors[i + 2]));
-
-        // 找到最接近的调色板颜色
-        const [qr, qg, qb] = findClosestColor(r, g, b);
-
-        // 更新像素
-        data[i] = qr;
-        data[i + 1] = qg;
-        data[i + 2] = qb;
-        // alpha 通道保持不变
-
-        // 计算量化误差
-        const errR = r - qr;
-        const errG = g - qg;
-        const errB = b - qb;
-
-        // Floyd-Steinberg 误差扩散
-        // 右：7/16
-        if (x + 1 < width) {
-          const ni = (y * width + (x + 1)) * 4;
-          errors[ni] += errR * (7 / 16);
-          errors[ni + 1] += errG * (7 / 16);
-          errors[ni + 2] += errB * (7 / 16);
-        }
-
-        // 左下：3/16
-        if (x > 0 && y + 1 < height) {
-          const ni = ((y + 1) * width + (x - 1)) * 4;
-          errors[ni] += errR * (3 / 16);
-          errors[ni + 1] += errG * (3 / 16);
-          errors[ni + 2] += errB * (3 / 16);
-        }
-
-        // 正下：5/16
-        if (y + 1 < height) {
-          const ni = ((y + 1) * width + x) * 4;
-          errors[ni] += errR * (5 / 16);
-          errors[ni + 1] += errG * (5 / 16);
-          errors[ni + 2] += errB * (5 / 16);
-        }
-
-        // 右下：1/16
-        if (x + 1 < width && y + 1 < height) {
-          const ni = ((y + 1) * width + (x + 1)) * 4;
-          errors[ni] += errR * (1 / 16);
-          errors[ni + 1] += errG * (1 / 16);
-          errors[ni + 2] += errB * (1 / 16);
-        }
-      }
-    }
   }
 
   async function togglePlay(e: MouseEvent) {
@@ -1738,15 +1493,19 @@
       style:height={isCompactCover ? "100%" : `${floatingCircularAlbum ? circularAlbumArtSize : albumArtSize}px`}
     >
       {#if displayCover}
-        <img
-          class="compact-cover-image"
-          src={displayCover}
-          alt=""
-          draggable="false"
-        />
+        {#if isCompactCover || retainCompactCover}
+          <img
+            class="compact-cover-image"
+            class:compact-cover-fallback={retainCompactCover}
+            src={displayCover}
+            alt=""
+            draggable="false"
+          />
+        {/if}
         <!-- MV 视频播放 -->
         {#if isPlayingMV && mvUrl && !floatingCircularAlbum}
           <video
+            use:releaseVideo
             class="mv-player"
             src={mvUrl}
             bind:this={mvVideo}
@@ -1779,22 +1538,24 @@
             onended={(e) => keepMVInPreview(e.currentTarget)}
           ></video>
         {/if}
-        <!-- 旧图（如果有） -->
-        {#if previousCover}
+        {#if !isCompactCover}
+          <!-- 旧图（如果有） -->
+          {#if previousCover}
+            <canvas
+              use:coverCanvas={{ url: previousCover, track: currentTrackKey, pixelated: enablePixelArt }}
+              class="album-art album-art-old"
+              class:slide-out={slideDirection}
+              draggable="false"
+            ></canvas>
+          {/if}
+          <!-- 新图 -->
           <canvas
-            use:coverCanvas={{ url: previousCover, track: currentTrackKey, pixelated: enablePixelArt }}
-            class="album-art album-art-old"
-            class:slide-out={slideDirection}
+            use:coverCanvas={{ url: displayCover, track: currentTrackKey, pixelated: enablePixelArt }}
+            class="album-art album-art-new"
+            class:slide-in={slideDirection}
             draggable="false"
           ></canvas>
         {/if}
-        <!-- 新图 -->
-        <canvas
-          use:coverCanvas={{ url: displayCover, track: currentTrackKey, pixelated: enablePixelArt }}
-          class="album-art album-art-new"
-          class:slide-in={slideDirection}
-          draggable="false"
-        ></canvas>
         {#if halftoneOverlayVisible}
           <div class="halftone-overlay"></div>
         {/if}
@@ -2247,7 +2008,8 @@
     border: 0;
   }
 
-  .player.compact-cover .compact-cover-image {
+  .player.compact-cover .compact-cover-image,
+  .compact-cover-image.compact-cover-fallback {
     position: absolute;
     inset: 0;
     z-index: 4;
