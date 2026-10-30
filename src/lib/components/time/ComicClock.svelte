@@ -15,8 +15,8 @@
 <style>
   .clock-face{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;min-width:0;user-select:none}
   .digits{display:flex;align-items:baseline;gap:1px;color:#fff;font-family:var(--app-font);font-size:52px;font-weight:700;line-height:.98;letter-spacing:-.04em;font-variant-numeric:tabular-nums;white-space:nowrap}
-  .caption{max-width:100%;overflow:hidden;color:rgba(255,255,255,.5);font-size:9px;font-weight:600;line-height:1.2;letter-spacing:.015em;white-space:nowrap}
+  .caption{max-width:100%;overflow:hidden;color:rgba(255,255,255,.5);font-size:12px;font-weight:600;line-height:1.2;letter-spacing:.015em;white-space:nowrap}
   .caption span{display:block;overflow:hidden;text-overflow:ellipsis}
-  .greeting{margin-top:3px;color:rgba(255,255,255,.42);font-size:9px;line-height:1.2}
-  .compact .digits{font-size:31px;letter-spacing:-.06em}.compact .caption{font-size:8px}.compact .greeting{margin-top:3px;font-size:8px}
+  .greeting{margin-top:3px;color:rgba(255,255,255,.42);font-size:12px;line-height:1.2}
+  .compact .digits{font-size:31px;letter-spacing:-.06em}.compact .caption{font-size:12px}.compact .greeting{margin-top:3px;font-size:12px}
 </style>

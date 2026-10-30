@@ -44,12 +44,12 @@
 <style>
   .info-panel{width:100%;min-width:0;color:#f3f6fa;display:flex;flex-direction:column;justify-content:center;gap:12px;font-family:var(--app-font,system-ui)}
   .widget-panel{height:100%}
-  .info-panel[role="button"]:focus-visible{outline:2px solid #91caff;outline-offset:3px;border-radius:8px}
-  .current-weather{display:flex;align-items:center;justify-content:space-between;gap:12px}.current-weather>div{min-width:0;display:flex;align-items:baseline;gap:12px}.current-weather strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.current-weather span{font-size:30px;font-weight:700}
-  .forecast{display:flex;justify-content:space-between;gap:16px}.forecast>div{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:11px}.forecast small,.updated,p{color:rgba(255,255,255,.5);font-size:10px}p{margin:0;line-height:1.5}button{align-self:flex-start;border:0;border-radius:12px;background:transparent;color:#fff;padding:10px;cursor:pointer}button:hover,button:focus-visible{background:rgba(255,255,255,.1)}
+  .info-panel[role="button"]:focus-visible{outline:2px solid #002fa7;outline-offset:3px;border-radius:8px}
+  .current-weather{display:flex;align-items:center;justify-content:space-between;gap:12px}.current-weather>div{min-width:0;display:flex;align-items:baseline;gap:12px}.current-weather strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}.current-weather span{font-size:30px;font-weight:700}
+  .forecast{display:flex;justify-content:space-between;gap:16px}.forecast>div{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:13px}.forecast small,.updated,p{color:rgba(255,255,255,.5);font-size:13px}p{margin:0;line-height:1.5}button{align-self:flex-start;border:0;border-radius:12px;background:transparent;color:#fff;padding:10px;cursor:pointer}button:hover,button:focus-visible{background:rgba(255,255,255,.1)}
   .compact .current-weather{flex-direction:column-reverse;align-items:flex-start;gap:6px}
   .compact .current-weather>div{flex-direction:column;gap:4px}
   .compact .current-weather span{font-size:28px}
-  .compact .forecast{gap:5px}.compact .forecast>div{font-size:9px}
-  .compact{gap:8px}.compact .updated{font-size:8px}
+  .compact .forecast{gap:5px}.compact .forecast>div{font-size:13px}
+  .compact{gap:8px}.compact .updated{font-size:13px}
 </style>

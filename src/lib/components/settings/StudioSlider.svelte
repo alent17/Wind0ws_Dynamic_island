@@ -96,7 +96,7 @@
     gap: 10px;
     min-height: 17px;
     margin: 0;
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .range-label.hidden {
@@ -111,7 +111,7 @@
   }
 
   .label {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--studio-control-ink, #141416);
     line-height: 1.2;
@@ -119,13 +119,13 @@
 
   .title-group small {
     color: var(--studio-control-muted, #7b7b84);
-    font-size: 11px;
+    font-size: 13px;
     line-height: 1.35;
   }
 
   output {
     flex: none;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--studio-control-muted, #66666e);
     font-variant-numeric: tabular-nums;
@@ -163,14 +163,14 @@
   input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; }
 
   input[type="range"]:focus-visible {
-    outline: 2px solid var(--studio-accent, #3158c8);
+    outline: 2px solid var(--studio-accent, #002fa7);
     outline-offset: 4px;
     border-radius: 4px;
   }
 
   .studio-slider.is-highlighted output,
   .studio-slider:focus-within output {
-    color: var(--studio-accent, #3158c8);
+    color: var(--studio-accent, #002fa7);
     font-weight: 700;
   }
 </style>

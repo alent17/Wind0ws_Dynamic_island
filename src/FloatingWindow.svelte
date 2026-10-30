@@ -2248,7 +2248,7 @@
   }
 
   .shared-progress :global(.progress-block.with-times) {
-    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    grid-template-columns: var(--time-width) minmax(0, 1fr) var(--time-width);
     column-gap: 6px;
     align-items: center;
   }

@@ -594,22 +594,74 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
 
   // ===== 应用设置 =====
   const appSettings = settingsStore;
-  type WindowsNotification = { id: number; app: string; title: string; body: string };
+  type WindowsNotification = { id: number; app: string; title: string; body: string; reminder?: boolean };
   let notificationCurrent = $state<WindowsNotification | null>(null);
   let notificationQueue: WindowsNotification[] = [];
   let notificationTimer: ReturnType<typeof setTimeout> | undefined;
   let notificationExpanded = false;
+  let reminderClosing = $state(false);
   function clearNotifications() {
-    clearTimeout(notificationTimer); notificationQueue = []; notificationCurrent = null;
+    clearTimeout(notificationTimer); notificationQueue = []; notificationCurrent = null; reminderClosing = false;
     if (notificationExpanded && !$appSettings.keepIslandExpanded && !$islandState.hovering) transitionIsland({type:"collapse"});
     notificationExpanded = false;
   }
   function showNextNotification() {
+    reminderClosing = false;
     notificationCurrent = notificationQueue.shift() ?? null;
     if (!notificationCurrent) { clearNotifications(); return; }
     if (!$islandState.expanded) { notificationExpanded = true; transitionIsland({type:"expand"}); }
-    notificationTimer = setTimeout(showNextNotification, 5000);
+    if (notificationCurrent.reminder) {
+      const audio = new AudioContext();
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.frequency.value = 880;
+      gain.gain.setValueAtTime(0.15, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 1);
+      oscillator.connect(gain); gain.connect(audio.destination);
+      oscillator.start(); oscillator.stop(audio.currentTime + 1);
+      oscillator.onended = () => void audio.close();
+    } else notificationTimer = setTimeout(showNextNotification, 5000);
   }
+  function dismissReminder() {
+    if (reminderClosing) return;
+    if (!$appSettings.enableAnimations || $appSettings.reduceAnimations || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      showNextNotification();
+      return;
+    }
+    reminderClosing = true;
+  }
+  onMount(() => {
+    const checkTodoReminders = () => {
+      const todos: {id:number;date:number;endDate?:number;text:string;done:boolean;reminder?:{time:string;timeZone:string;daily?:boolean}}[] = JSON.parse(localStorage.getItem("isle-calendar-todos") || "[]");
+      const fired: (number | string)[] = JSON.parse(localStorage.getItem("isle-calendar-reminders-fired") || "[]");
+      const now = Date.now();
+      for (const todo of todos) {
+        if (todo.done || !todo.reminder) continue;
+        const [hour, minute] = todo.reminder.time.split(":").map(Number);
+        const formatter = new Intl.DateTimeFormat("en-US", {timeZone:todo.reminder.timeZone,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"});
+        const todayParts = Object.fromEntries(formatter.formatToParts(now).map(part => [part.type, part.value]));
+        const localToday = Date.UTC(Number(todayParts.year), Number(todayParts.month) - 1, Number(todayParts.day));
+        const day = todo.reminder.daily ? localToday : todo.date;
+        if (day < todo.date || (todo.endDate !== undefined && day > todo.endDate)) continue;
+        const firedKey = todo.reminder.daily ? `${todo.id}:${day}` : todo.id;
+        if (fired.includes(firedKey)) continue;
+        const target = day + (hour * 60 + minute) * 60_000;
+        let instant = target;
+        for (let i = 0; i < 3; i++) {
+          const parts = Object.fromEntries(formatter.formatToParts(instant).map(part => [part.type, part.value]));
+          instant += target - Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute));
+        }
+        if (instant > now || now - instant > 86400000) continue;
+        fired.push(firedKey);
+        notificationQueue.push({id:todo.id,reminder:true,app:"待办提醒",title:todo.text,body:`${todo.reminder.time} · ${todo.reminder.timeZone}`});
+        if (!notificationCurrent) showNextNotification();
+      }
+      localStorage.setItem("isle-calendar-reminders-fired", JSON.stringify(fired));
+    };
+    checkTodoReminders();
+    const timer = setInterval(checkTodoReminders, 15000);
+    return () => clearInterval(timer);
+  });
   onMount(() => {
     if (!(window as any).__TAURI_INTERNALS__) return;
     let disposed = false; let revision = 0; let enabled = false;
@@ -624,7 +676,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     const unsubscribe = appSettings.subscribe(value => {
       if (value.notificationsEnabled === enabled) return;
       enabled = value.notificationsEnabled; const current = ++revision;
-      if (!enabled) { seen.clear(); clearNotifications(); void invoke("stop_notification_listener"); return; }
+      if (!enabled) { seen.clear(); if (!notificationCurrent?.reminder) clearNotifications(); void invoke("stop_notification_listener"); return; }
       void ready.then(async () => {
         if (disposed || current !== revision) return;
         try { await invoke("start_notification_listener"); }
@@ -850,6 +902,8 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   let timerSessionAnnounced = false;
   let timerRemainingMs = $derived(getRemainingMs(countdown, clockNow));
   let timerFinished = $state(false);
+  let timerSound = $state(true);
+  let timerShowCompact = $state(true);
   let timerFinishedTimeout: ReturnType<typeof setTimeout> | null = null;
 
   function clearTimerFinished() {
@@ -888,6 +942,17 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   $effect(() => {
     if (countdown.status !== "running" || timerRemainingMs > 0) return;
     timerFinished = true;
+    if (timerSound) {
+      const audio = new AudioContext();
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.frequency.value = 880;
+      gain.gain.setValueAtTime(0.15, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.8);
+      oscillator.connect(gain); gain.connect(audio.destination);
+      oscillator.start(); oscillator.stop(audio.currentTime + 0.8);
+      oscillator.onended = () => void audio.close();
+    }
     transitionIsland({ type: "expand" });
     if (timerFinishedTimeout !== null) clearTimeout(timerFinishedTimeout);
     timerFinishedTimeout = setTimeout(() => {
@@ -1331,7 +1396,13 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   async function extractSpectrumColors(imgSrc: string, signal: AbortSignal) {
     if (!imgSrc) return;
     try {
-      const colors = await extractSpectrumColorsFromImage(imgSrc, signal);
+      let colors;
+      try {
+        colors = await extractSpectrumColorsFromImage(imgSrc, signal);
+      } catch (error) {
+        if (signal.aborted || !rawCoverUrl || rawCoverUrl === imgSrc) throw error;
+        colors = await extractSpectrumColorsFromImage(rawCoverUrl, signal);
+      }
       const compactSurfaceVisible = $islandMode === "compact" || $islandMode === "hover";
       const hasCompactColorConsumer = compactSurfaceVisible && ($appSettings.showSpectrum || isPlaying);
       const hasExpandedSpectrumConsumer = $islandMode === "expanded" && activeIslandPage === "music" && $appSettings.showSpectrum;
@@ -2039,7 +2110,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
         const newCover = artworkValue(data) ?? (songChanged ? "" : rawCoverUrl);
 
         const coverChanged = songChanged || newCover !== rawCoverUrl;
-        const coverAlreadyHandledForTrack = !songChanged && mainCoverLookupTrackKey === currentSongKey;
+        const coverAlreadyHandledForTrack = !songChanged && hdArtworkResolved && mainCoverLookupTrackKey === currentSongKey;
 
         if (titleChanged || artistChanged || coverChanged) {
           if (titleChanged) {
@@ -2281,7 +2352,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     showSpectrum={$appSettings.showSpectrum}
     spectrumMode={$appSettings.spectrumMode}
     enableAnimations={$appSettings.enableAnimations}
-    reduceAnimations={$appSettings.reduceAnimations || viewportClipped}
+    reduceAnimations={$appSettings.reduceAnimations}
     {spectrumTopColor}
     {spectrumBottomColor}
     showTime={false}
@@ -2295,6 +2366,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     onSeek={handleSeek}
     {seekBusy}
     seekError={seekErrorMessage}
+    floatingWindowOpen={isFloatingWindowOpen}
     onToggleFloating={toggleFloatingWindow}
     onHideForTenSeconds={hideForTenSeconds}
     keepIslandExpanded={$appSettings.keepIslandExpanded}
@@ -2305,9 +2377,9 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     }}
     onSettingsToggle={showSettingsWindow}
     enabledTools={enabledFeatureTools}
-    showCustomFunctionPanel={$appSettings.showCustomFunctionPanel}
     visible={pageVisible && !isHidden}
     onPageChange={(page) => transitionIsland({ type: "select-page", page })}
+    weatherLocation={$appSettings.weatherLocation}
     weatherCity={$appSettings.weatherLocation?.name ?? ""}
     weatherUpdatedAt={weatherSnapshot.weatherUpdatedAt}
     {weatherLoading}
@@ -2333,6 +2405,10 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     timerDurationMs={countdown.durationMs}
     timerLabel={countdown.label}
     {timerFinished}
+    {timerSound}
+    {timerShowCompact}
+    onTimerSoundChange={(value) => timerSound = value}
+    onTimerShowCompactChange={(value) => timerShowCompact = value}
     onTimerFinishedDismiss={clearTimerFinished}
     clockText={currentTime}
     clockTimeZone={$appSettings.clockTimeZone}
@@ -2343,11 +2419,17 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     onTimerReset={handleTimerReset}
   />
   {#if notificationCurrent && $islandMode === "expanded" && pageVisible && !isHidden}
-    <div class="notification-overlay" role="status" aria-live="polite">
-      <strong>{notificationCurrent.app}</strong>
-      {#if notificationCurrent.title}<span>{notificationCurrent.title}</span>{/if}
-      {#if notificationCurrent.body}<small>{notificationCurrent.body}</small>{/if}
-    </div>
+    {#if notificationCurrent.reminder}
+      <button class="notification-overlay reminder-notification" class:closing={reminderClosing} type="button" aria-label="关闭待办提醒" onclick={dismissReminder} onanimationend={() => { if (reminderClosing) showNextNotification(); }}>
+        <strong>{notificationCurrent.app}</strong><span>{notificationCurrent.title}</span><small>{notificationCurrent.body} · 点击关闭</small>
+      </button>
+    {:else}
+      <div class="notification-overlay" role="status" aria-live="polite">
+        <strong>{notificationCurrent.app}</strong>
+        {#if notificationCurrent.title}<span>{notificationCurrent.title}</span>{/if}
+        {#if notificationCurrent.body}<small>{notificationCurrent.body}</small>{/if}
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -2358,6 +2440,12 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
   .notification-overlay { position: absolute; z-index: 20; top: 12px; width: min(80%, 480px); min-height: 96px; padding: 12px 18px; border-radius: 20px; background: #151515; color: white; display: flex; flex-direction: column; gap: 5px; pointer-events: none; overflow: hidden; }
   .notification-overlay strong, .notification-overlay span, .notification-overlay small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .notification-overlay small { color: #ccc; }
+  .reminder-notification { pointer-events: auto; border: 0; background: #002fa7; color: #fff; text-align: left; font: 500 18px var(--app-font, system-ui); cursor: pointer; }
+  .reminder-notification.closing { animation: reminder-dismiss 280ms cubic-bezier(.23,1,.32,1) forwards; pointer-events: none; }
+  @keyframes reminder-dismiss { to { transform: scaleX(0); opacity: 0; } }
+  .reminder-notification strong { font-size: 20px; }
+  .reminder-notification span { font-size: 24px; font-weight: 700; }
+  .reminder-notification small { color: #fff; font-size: 16px; }
   .fixed-host { display: flex; align-items: flex-start; justify-content: center; box-sizing: border-box; background: transparent; pointer-events: none; }
   .fixed-host :global(.island-surface) { pointer-events: auto; }
 </style>

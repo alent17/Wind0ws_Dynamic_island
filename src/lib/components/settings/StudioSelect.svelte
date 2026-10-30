@@ -95,7 +95,7 @@
   .studio-select{position:relative;min-width:0;font-family:var(--app-font)}
   .select-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;height:30px;padding:0 9px;border:1px solid rgba(255,255,255,.19);border-radius:10px;color:#fff;background:rgba(255,255,255,.06);font:500 12px/1 var(--app-font);text-align:left;cursor:pointer}
   .select-trigger:hover:not(:disabled),.open .select-trigger{border-color:rgba(255,255,255,.35);background:rgba(255,255,255,.10)}
-  .select-trigger:focus-visible{outline:2px solid var(--studio-accent,#84a8ff);outline-offset:2px}
+  .select-trigger:focus-visible{outline:2px solid var(--studio-accent,#002fa7);outline-offset:2px}
   .select-trigger:disabled{opacity:.45;cursor:not-allowed}
   .select-trigger span,.select-menu button span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .select-trigger :global(svg){flex:none;transition:transform 150ms ease}

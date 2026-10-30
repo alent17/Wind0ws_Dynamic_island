@@ -36,7 +36,7 @@
   function cancel() { dragging = false; }
 </script>
 
-<div title={estimated ? translate("neteaseProgressEstimate", {}, $locale) : undefined} class:light class:with-times={showTimes} class="progress-block" aria-label={translate("playbackProgress",{percent:Math.round(ratio*100)},$locale)}>
+<div title={estimated ? translate("neteaseProgressEstimate", {}, $locale) : undefined} class:light class:with-times={showTimes} class="progress-block" style={`--time-width:${Math.max(5, formatTime(duration).length + 1 + (estimated ? 2 : 0))}ch`} aria-label={translate("playbackProgress",{percent:Math.round(ratio*100)},$locale)}>
   {#if showTimes}<span class="time elapsed">{timelineKnown ? `${estimated ? "≈ " : ""}${formatTime(displayedPosition)}` : "--:--"}</span>{/if}
   <div class="track-controls">
     <div class="track"><span style={`width:${ratio * 100}%`}></span>{#if seekable && timelineKnown}<input type="range" min="0" max={duration} step="1000" value={displayedPosition} aria-label={translate("seekProgress",{},$locale)} onclick={(event)=>event.stopPropagation()} onpointerdown={(event)=>event.stopPropagation()} onpointercancel={cancel} onblur={cancel} oninput={preview} onchange={commit}/>{/if}</div>
@@ -46,9 +46,10 @@
 </div>
 
 <style>
-  .progress-block { width: 100%; color: rgba(255,255,255,.55); font-variant-numeric: tabular-nums; }
-  .progress-block.with-times { display: grid; grid-template-columns: max-content minmax(0,1fr) max-content; align-items: center; column-gap: 10px; }
-  .time { display:inline-flex; align-items:center; height:1em; font-size:11px; font-weight:600; line-height:1; white-space:nowrap; }
+  .progress-block { width: 100%; color: #fff; font-variant-numeric: tabular-nums; }
+  .progress-block.with-times { display: grid; grid-template-columns: var(--time-width) minmax(0,1fr) var(--time-width); align-items: center; column-gap: 10px; }
+  .time { display:inline-flex; align-items:center; height:1em; font-size:13px; font-weight:600; line-height:1; white-space:nowrap; }
+  .remaining { justify-content: flex-end; }
   .track-controls{display:flex;align-items:center;min-width:0;gap:6px}
   .track { position:relative;flex:1;min-width:0;height: 6px; border-radius: 999px; background: rgba(255,255,255,.19); }
   .track span { display:block; height:100%; border-radius:inherit; background:#fff; }
@@ -57,6 +58,6 @@
   .light { color:rgba(17,17,19,.5); }
   .light .track { background:rgba(17,17,19,.12); }
   .light .track span { background:#111113; }
-  .seek-error { grid-column: 1 / -1; margin: 5px 0 0; color: #ffb4ab; font-size: 11px; line-height: 1.3; overflow-wrap: anywhere; }
+  .seek-error { grid-column: 1 / -1; margin: 5px 0 0; color: #ffb4ab; font-size: 13px; line-height: 1.3; overflow-wrap: anywhere; }
   .light .seek-error { color: #b3261e; }
 </style>

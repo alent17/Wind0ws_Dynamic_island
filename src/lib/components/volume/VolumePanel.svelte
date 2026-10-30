@@ -47,7 +47,7 @@
   let pointerId: number | null = null;
   let startX = 0;
   let moved = false;
-  const rulerValues = Array.from({ length: 21 }, (_, index) => index * 5);
+  const rulerValues = Array.from({ length: 41 }, (_, index) => index * 2.5);
 
   // The menu must keep its own scrolling; a downward gesture elsewhere on
   // the card opens its extension before the island's volume wheel sees it.
@@ -208,17 +208,17 @@
   .volume-ruler{position:relative;flex:0 0 72px;height:72px;overflow:visible;touch-action:none;cursor:pointer}
   .volume-ruler.dragging{cursor:grabbing}
   .volume-track{position:absolute;inset:8px 0;overflow:hidden;border-radius:8px;background:transparent}
-  .volume-fill{position:absolute;top:8px;bottom:8px;left:0;max-width:100%;border-radius:2px;background:#193a8e;transition:width 100ms linear}
+  .volume-fill{position:absolute;top:8px;bottom:8px;left:0;max-width:100%;border-radius:0;background:#91caff;transition:width 100ms linear}
   .volume-mark{position:absolute;top:0;bottom:0;display:flex;width:3px;align-items:center;justify-content:center;transform:translateX(-50%);pointer-events:none}
-  .volume-tick{display:block;width:3px;height:52px;border-radius:1px;background:#fff;transition:opacity 120ms ease,transform 120ms ease}
-  .volume-mark.passed .volume-tick{opacity:0;transform:scaleY(.8)}
-  .volume-ruler:focus-visible{outline:2px solid #91caff;outline-offset:4px;border-radius:5px}
+  .volume-tick{display:block;width:3px;height:52px;border-radius:1px;background:#888;transition:opacity 120ms ease,transform 120ms ease}
+  .volume-mark.passed .volume-tick{opacity:0}
+  .volume-ruler:focus-visible{outline:2px solid #002fa7;outline-offset:4px;border-radius:5px}
   .volume-footer{display:flex;align-items:center;gap:12px;min-width:0}
   .volume-readout{display:flex;flex-direction:column;align-items:flex-end;flex:none;min-width:54px;gap:3px}
   .device-row{position:relative;z-index:3;flex:1;display:grid;grid-template-columns:minmax(0,1fr);align-items:center;gap:9px;min-width:0}
   .device-trigger{min-width:0;width:100%;height:38px;display:grid;grid-template-columns:minmax(0,1fr) 18px;align-items:center;gap:8px;padding:0 10px 0 12px;overflow:hidden;border:1px solid rgba(255,255,255,.14);border-radius:9px;color:rgba(255,255,255,.88);background:rgba(255,255,255,.055);font:600 14px/1 var(--app-font, system-ui);text-align:left;cursor:pointer;transition:border-color 140ms ease,background 140ms ease}
   .device-trigger>span,.device-menu button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .device-trigger:hover:not(:disabled),.device-trigger.open{border-color:rgba(105,170,255,.32);background:rgba(255,255,255,.1)}
+  .device-trigger:hover:not(:disabled),.device-trigger.open{border-color:rgba(0,47,167,.32);background:rgba(255,255,255,.1)}
   .device-trigger:disabled{opacity:.48;cursor:default}
   .device-trigger:focus-visible,.device-menu button:focus-visible{outline:2px solid rgba(255,255,255,.9);outline-offset:2px}
   .device-trigger :global(svg){justify-self:end;flex:none;width:16px;height:16px;color:rgba(255,255,255,.58)}
@@ -228,7 +228,7 @@
   .device-menu{position:absolute;bottom:44px;right:0;z-index:8;width:100%;max-height:180px;padding:6px;overflow-x:hidden;overflow-y:auto;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:#171719;box-shadow:0 10px 24px rgba(0,0,0,.5);animation:device-menu-in 150ms cubic-bezier(.23,1,.32,1)}
   .device-menu button{width:100%;min-height:36px;display:grid;grid-template-columns:minmax(0,1fr) 18px;align-items:center;gap:8px;padding:6px 10px;border:0;border-radius:7px;color:rgba(255,255,255,.74);background:transparent;font:600 14px/1.2 var(--app-font, system-ui);text-align:left;cursor:pointer}
   .device-menu button:hover,.device-menu button:focus-visible{color:#fff;background:rgba(255,255,255,.08)}
-  .device-menu button.active{color:#fff;background:rgba(65,145,235,.14)}
+  .device-menu button.active{color:#fff;background:rgba(0,47,167,.14)}
   .device-menu button :global(svg){justify-self:end;color:#91caff}
   .device-menu::-webkit-scrollbar{width:4px}.device-menu::-webkit-scrollbar-thumb{border-radius:999px;background:rgba(255,255,255,.2)}
   .volume-label{color:rgba(222,231,248,.68);font:500 16px/1 var(--app-font, system-ui);white-space:nowrap}
@@ -239,6 +239,6 @@
   .panel-volume.compact{gap:8px}
   .panel-volume.compact .volume-readout strong{font-size:28px}
   .panel-volume.compact .device-row{min-width:0;width:100%}
-  .panel-volume.compact .device-trigger{max-width:100%;width:100%;box-sizing:border-box;font-size:12px}
+  .panel-volume.compact .device-trigger{max-width:100%;width:100%;box-sizing:border-box;font-size:14px}
   .panel-volume.compact .device-menu{max-height:180px;overflow-y:auto;min-width:0;width:100%;box-sizing:border-box}
 </style>

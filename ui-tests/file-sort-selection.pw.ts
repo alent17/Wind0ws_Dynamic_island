@@ -8,11 +8,11 @@ test("selected date grouping keeps its blue background in the main island", asyn
   await page.getByRole("button", { name: /文件分类|File sorting|ファイル整理/ }).click();
   const selected = page.getByRole("button", { name: "不按日期" });
   await expect(selected).toHaveAttribute("aria-pressed", "true");
-  await expect(selected).toHaveCSS("background-color", "rgb(25, 58, 142)");
+  await expect(selected).toHaveCSS("background-color", "rgb(0, 47, 167)");
   await expect(selected).toHaveCSS("color", "rgb(255, 255, 255)");
   await selected.hover();
-  await expect(selected).toHaveCSS("background-color", "rgb(25, 58, 142)");
+  await expect(selected).toHaveCSS("background-color", "rgb(0, 47, 167)");
   await page.keyboard.press("Tab");
   await selected.focus();
-  await expect(selected).toHaveCSS("background-color", "rgb(25, 58, 142)");
+  await expect(selected).toHaveCSS("background-color", "rgb(0, 47, 167)");
 });

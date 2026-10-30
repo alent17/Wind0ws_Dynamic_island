@@ -18,6 +18,8 @@ test("seven-day calendar expands into a selectable month with day differences", 
   const extension = page.locator(".calendar-extension");
   await expect(extension).toBeVisible();
   await expect(extension.locator(".day")).toHaveCount(31);
+  await extension.locator(".month-grid").click({position:{x:2,y:2}});
+  await expect(extension).toBeVisible();
   const grid = await extension.locator(".month-grid").boundingBox();
   const lastDay = await extension.locator(".day").last().boundingBox();
   expect(lastDay!.y + lastDay!.height).toBeLessThanOrEqual(grid!.y + grid!.height + 1);
@@ -26,14 +28,15 @@ test("seven-day calendar expands into a selectable month with day differences", 
   await expect(extension.locator(".date-detail strong")).toContainText("2");
   const futureLabel = await extension.locator(".date-detail strong").innerText();
   await expect(extension.locator(".day.selected")).toHaveText("29");
-  await expect(extension.locator('.day[aria-current="date"]')).toHaveCSS("background-color", "rgb(25, 58, 142)");
-  await expect(extension.locator(".day.selected")).toHaveCSS("background-color", "rgb(25, 58, 142)");
+  await expect(extension.locator('.day[aria-current="date"]')).toHaveCSS("background-color", "rgb(0, 47, 167)");
+  await expect(extension.locator(".day.selected")).toHaveCSS("background-color", "rgb(0, 47, 167)");
   await extension.locator(".day").filter({hasText:/^25$/}).click();
   await expect(extension.locator(".date-detail strong")).toContainText("2");
   await expect(extension.locator(".date-detail strong")).not.toHaveText(futureLabel);
   const yearSelect = extension.locator('[data-picker-trigger="year"]'), monthSelect = extension.locator('[data-picker-trigger="month"]');
   const monthBefore = await monthSelect.innerText();
   await expect(yearSelect).toContainText("2026");
+  expect(await yearSelect.locator("span").evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
   await extension.locator(".month-actions button").last().click();
   await expect(monthSelect).not.toHaveText(monthBefore);
   await extension.locator(".day").filter({hasText:/^1$/}).click();
@@ -69,7 +72,7 @@ test("seven-day calendar expands into a selectable month with day differences", 
   await page.mouse.click(backdrop!.x + backdrop!.width / 2, backdrop!.y + backdrop!.height - 24);
   await expect(monthSelect).toHaveAttribute("aria-expanded", "false");
   await expect(extension).toBeVisible();
-  await expect(extension.locator('.day[aria-current="date"]')).toHaveCSS("background-color", "rgb(25, 58, 142)");
+  await expect(extension.locator('.day[aria-current="date"]')).toHaveCSS("background-color", "rgb(0, 47, 167)");
   const expanded = await page.locator(".island-surface").boundingBox();
   expect(expanded!.height).toBeGreaterThan(original!.height);
   await extension.locator("header button").first().click();
@@ -123,16 +126,16 @@ test("desktop styles keep today blue when another date is selected or today is h
   const extension = page.locator(".calendar-extension");
   const today = extension.locator('.day[aria-current="date"]');
   await expect(today).toHaveText("27");
-  await expect(today).toHaveCSS("background-color", "rgb(25, 58, 142)");
+  await expect(today).toHaveCSS("background-color", "rgb(0, 47, 167)");
   const other = extension.locator(".day").filter({hasText:/^29$/});
   await other.click();
   await expect(other).toHaveAttribute("aria-pressed", "true");
-  await expect(today).toHaveCSS("background-color", "rgb(25, 58, 142)");
-  await expect(other).toHaveCSS("background-color", "rgb(25, 58, 142)");
+  await expect(today).toHaveCSS("background-color", "rgb(0, 47, 167)");
+  await expect(other).toHaveCSS("background-color", "rgb(0, 47, 167)");
   await today.hover();
-  await expect(today).toHaveCSS("background-color", "rgb(25, 58, 142)");
+  await expect(today).toHaveCSS("background-color", "rgb(0, 47, 167)");
   await today.focus();
-  await expect(today).toHaveCSS("background-color", "rgb(25, 58, 142)");
+  await expect(today).toHaveCSS("background-color", "rgb(0, 47, 167)");
   await page.evaluate(() => (window as any).destroy());
 });
 
@@ -142,4 +145,53 @@ test("seven-day view crosses the year boundary", async ({page}) => {
   await page.evaluate(() => (window as any).configureIsland({mode:"expanded",offset:225,scale:.65,widgets:{left:[],right:["calendar"]}}));
   await expect(page.locator(".calendar-widget .date-cell strong")).toHaveText(["30","31","1","2","3","4","5"]);
   await expect(page.locator('.calendar-widget [aria-current="date"] strong')).toHaveText("1");
+});
+
+test("todo content extends the calendar without shrinking its grid", async ({page}) => {
+  await page.goto("/ui-tests/island-fixture.html");
+  await page.evaluate(() => (window as any).configureIsland({mode:"expanded",offset:225,scale:.65,widgets:{left:[],right:["calendar"]}}));
+  const calendar = page.locator(".calendar-widget");
+  await calendar.hover(); await page.mouse.wheel(0,120);
+  const extension = page.locator(".calendar-extension");
+  await expect(extension).toBeVisible();
+  await extension.getByRole("button", {name:"提醒", exact:true}).click();
+  await extension.getByRole("button", {name:"选择小时"}).click();
+  await expect(extension.locator(".reminder-menu")).toBeVisible();
+  await extension.locator(".reminder-menu button").first().click();
+  await extension.getByRole("button", {name:"提醒时区"}).click();
+  await expect(extension.locator(".reminder-menu")).toBeVisible();
+  await extension.locator(".reminder-menu button").first().click();
+  await extension.getByRole("button", {name:"每天重复"}).click();
+  await expect(extension.getByRole("button", {name:"每天重复"})).toHaveAttribute("aria-pressed", "true");
+  await extension.getByRole("button", {name:"提醒", exact:true}).click();
+  const grid = extension.locator(".month-grid");
+  const height = await grid.evaluate(node => node.clientHeight);
+  expect(height).toBeGreaterThanOrEqual(336);
+  const before = await extension.evaluate(node => node.clientHeight);
+  for (const text of ["one", "two", "three"]) {
+    await extension.locator(".todos input[type=text], .todos input:not([type])").fill(text);
+    await extension.locator(".todos form button[type=submit]").click();
+  }
+  await expect.poll(() => extension.evaluate(node => node.clientHeight)).toBeGreaterThan(before);
+  await expect.poll(async () => Math.abs(await grid.evaluate(node => node.clientHeight) - height)).toBeLessThanOrEqual(1);
+});
+
+test("drag a date range and add a shared todo", async ({page}) => {
+  await page.clock.setFixedTime(new Date("2026-10-27T12:00:00Z"));
+  await page.goto("/ui-tests/island-fixture.html");
+  await page.evaluate(() => (window as any).configureIsland({mode:"expanded",offset:225,scale:.65,widgets:{left:[],right:["calendar"]}}));
+  const card = page.locator(".calendar-widget");
+  await card.hover(); await page.mouse.wheel(0,120);
+  const extension = page.locator(".calendar-extension");
+  const start = await extension.locator(".day").filter({hasText:/^25$/}).boundingBox();
+  const end = await extension.locator(".day").filter({hasText:/^28$/}).boundingBox();
+  await page.mouse.move(start!.x + start!.width/2, start!.y + start!.height/2);
+  await page.mouse.down();
+  await page.mouse.move(end!.x + end!.width/2, end!.y + end!.height/2, {steps:10});
+  await page.mouse.up();
+  await expect(extension.locator('.day[aria-pressed="true"]')).toHaveCount(4);
+  await extension.locator('.todo-entry input').fill('range todo');
+  await extension.locator('.todo-entry button').click();
+  await extension.locator('.day').filter({hasText:/^26$/}).click();
+  await expect(extension.locator('.todo-complete')).toContainText('range todo');
 });

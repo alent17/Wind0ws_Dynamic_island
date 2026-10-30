@@ -337,9 +337,9 @@ export function navigationGeometry(page: IslandPage, toolCount: number, radius =
   const inset = style === "edge" ? clampShoulderRadius(shoulder) : 0;
   const vertical = isVerticalEdge(edge);
   const toolbar = toolCount > 0 ? 40 : 0;
-  const height = page === "music" ? 249.1 : page === "files" ? 390 : page === "system" ? 280 : page === "weather" ? 240 : 188;
+  const height = page === "music" ? 249.1 : page === "files" ? 390 : page === "system" ? 340 : page === "weather" ? 240 : 188;
   const length = clampExpandedLength(expandedLength);
-  const width = page === "music" ? length : Math.max(page === "files" ? 560 : page === "system" ? 380 : 300, length / 2) + (vertical ? 0 : inset * 2);
+  const width = page === "music" ? length : Math.max(page === "files" ? 560 : page === "system" ? 480 : 300, length / 2) + (vertical ? 0 : inset * 2);
   return { width: width + (page === "music" ? widgetExtraWidth(widgetCount, expandedLength) + (widgetCount > 0 && !vertical ? inset * 2 : 0) : 0), height: height + toolbar + (vertical ? inset * 2 : 0) + (editing ? EDITOR_HEIGHT + EDITOR_TOP_SPACE : 0), radius: clampExpandedRadius(radius) };
 }
 
@@ -371,8 +371,8 @@ export function navigationHostFor(style: IslandStyle, edge: IslandEdge, compactL
   // layouts reserve the gap in host height.
   const horizontalGap = style === "floating" && isVerticalEdge(edge) ? ISLAND_GAP : 0;
   return {
-    width: Math.max(Math.ceil((isVerticalEdge(edge) ? 28 : clampCompactLength(compactLength)) + horizontalGap * scale), Math.ceil(Math.max(base.width + widgetExtraWidth(widgetCount, expandedLength) + (style === "edge" && !isVerticalEdge(edge) && widgetCount > 0 ? 128 : 0) + horizontalGap, 1000 + ISLAND_GAP) * safeScale)) + (isVerticalEdge(edge) ? 0 : 24),
-    height: Math.max(Math.ceil((isVerticalEdge(edge) ? clampCompactLength(compactLength) : 28) + ISLAND_GAP * scale), Math.ceil(Math.max(base.height, 620 + ISLAND_GAP + ISLAND_OVERSHOOT, style === "edge" && isVerticalEdge(edge) ? 249.1 + 128 + EDITOR_HEIGHT + EDITOR_TOP_SPACE + ISLAND_OVERSHOOT : 0) * normalizedContentScale(scale))),
+    width: Math.max(Math.ceil((isVerticalEdge(edge) ? 28 : clampCompactLength(compactLength)) + horizontalGap * scale), Math.ceil(Math.max(base.width + widgetExtraWidth(widgetCount, expandedLength) + (style === "edge" && !isVerticalEdge(edge) && widgetCount > 0 ? 128 : 0) + horizontalGap, 1400 + ISLAND_GAP) * safeScale)) + (isVerticalEdge(edge) ? 0 : 24),
+    height: Math.max(Math.ceil((isVerticalEdge(edge) ? clampCompactLength(compactLength) : 28) + ISLAND_GAP * scale), Math.ceil(Math.max(base.height, 1000 + ISLAND_GAP + ISLAND_OVERSHOOT, style === "edge" && isVerticalEdge(edge) ? 249.1 + 128 + EDITOR_HEIGHT + EDITOR_TOP_SPACE + ISLAND_OVERSHOOT : 0) * normalizedContentScale(scale))),
   };
 }
 

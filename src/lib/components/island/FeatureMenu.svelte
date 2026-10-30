@@ -69,7 +69,7 @@
   .function-glyph{display:grid;place-items:center;width:28px;height:28px;border-radius:12px;background:rgba(255,255,255,.1);transition:background 140ms,transform 140ms}
   .function-icon:hover .function-glyph{background:rgba(255,255,255,.16)}
   .function-icon:active .function-glyph{transform:scale(.95)}
-  .function-icon:focus-visible{outline:none}.function-icon:focus-visible .function-glyph{background:rgba(255,255,255,.16);outline:2px solid #91caff;outline-offset:-2px}
+  .function-icon:focus-visible{outline:none}.function-icon:focus-visible .function-glyph{background:rgba(255,255,255,.16);outline:2px solid #002fa7;outline-offset:-2px}
   @media(prefers-reduced-motion:reduce){.function-glyph{transition:none}}
   .function-icon.active{color:#91caff}.function-icon.active .function-glyph{background:rgba(255,255,255,.16)}.toolbar{gap:4px}.toolbar .function-icon{flex-basis:calc((100% - 16px)/5)}.toolbar .function-glyph{width:100%}
 </style>

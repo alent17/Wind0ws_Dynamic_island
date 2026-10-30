@@ -3,7 +3,7 @@
   import { Cpu, MemoryStick, CircuitBoard, ArrowDown, ArrowUp, Network } from "lucide-svelte";
   import { locale, translate } from "$lib/i18n";
   import { formatBytes, usagePercent, type SystemSnapshot } from "$lib/systemMonitor";
-  let { active = true, snapshot } = $props<{active?: boolean; snapshot?: SystemSnapshot | null}>();
+  let { active = true, snapshot, scale = 1, widget = false } = $props<{active?: boolean; snapshot?: SystemSnapshot | null; scale?: number; widget?: boolean}>();
   let live = $state<SystemSnapshot | null>(null);
   let failed = $state(false);
   const data = $derived(snapshot === undefined ? live : snapshot);
@@ -29,7 +29,7 @@
   });
 </script>
 
-<div class="system-monitor" aria-label={t("systemMonitor")}>
+<div class="system-monitor" class:widget style:--monitor-scale={scale} aria-label={t("systemMonitor")}>
   <div class="system-grid">
     {#each metrics as metric, index}
       <div class="system-metric" class:unavailable={metric.value === null}>
@@ -53,8 +53,10 @@
   .system-monitor{container-type:inline-size;display:flex;flex-direction:column;gap:10px;width:100%;height:100%;min-height:0;color:#f5f5f7;font-family:var(--app-font,system-ui);user-select:none}
   .system-grid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:12px 20px}
   .system-metric{display:flex;flex-direction:column;justify-content:space-between;gap:5px;min-width:0;min-height:0}.metric-label{display:flex;align-items:center;gap:7px;font-size:14px;color:#ffffff8c;white-space:nowrap}.metric-label :global(svg){flex:none}
-  .metric-number{font-size:clamp(28px,9cqw,40px);font-weight:650;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.04em}.metric-number small{font-size:.4em;font-weight:500;color:#ffffff80;margin-left:3px;letter-spacing:0}
-  .metric-detail{font-size:12px;line-height:1.2;color:#ffffff73;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.usage-track{height:3px;background:#ffffff1a;border-radius:4px;overflow:hidden;margin:4px 0}.usage-track span{display:block;height:100%;border-radius:inherit;background:#dedee3}
+  .metric-number{font-size:clamp(28px,9cqw,40px);font-weight:650;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.04em}.metric-number small{font-size:max(12px, .4em);font-weight:500;color:#ffffff80;margin-left:3px;letter-spacing:0}
+  .metric-detail{font-size:14px;line-height:1.2;color:#ffffff73;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.usage-track{height:3px;background:#ffffff1a;border-radius:4px;overflow:hidden;margin:4px 0}.usage-track span{display:block;height:100%;border-radius:inherit;background:#dedee3}
   .network-rate{display:flex;align-items:center;gap:6px;min-width:0;color:#f5f5f7}.network-rate strong{font-size:clamp(14px,4.6cqw,20px);font-weight:600;line-height:1.15;white-space:nowrap;font-variant-numeric:tabular-nums}.network-rate :global(svg){flex:none;color:#9dbbdb}.network-rate.upload{color:#ffffff8c}.network-rate.upload :global(svg){color:#ffffff73}
-  .system-status{display:flex;align-items:center;gap:6px;flex:none;font-size:11px;line-height:14px;color:#ffffff66}.system-status i{width:4px;height:4px;border-radius:50%;background:#666}.system-status i.online{background:#8fb59c}
+  .system-monitor.widget .metric-label{font-size:18px;color:#ffffffa6}.system-monitor.widget .metric-number small{font-size:16px}.system-monitor.widget .metric-detail{font-size:17px;color:#ffffff99}.system-monitor.widget .network-rate strong{font-size:20px}.system-monitor.widget .system-status{font-size:16px;line-height:1.2;color:#ffffff80}
+  .system-monitor:not(.widget){gap:18px}.system-monitor:not(.widget) .system-grid{gap:22px 32px}.system-monitor:not(.widget) .system-metric{justify-content:flex-start;gap:8px}.system-monitor:not(.widget) .metric-label{font-size:max(17px,calc(12px / var(--monitor-scale)));font-weight:500;color:#ffffffa6}.system-monitor:not(.widget) .metric-number{font-size:max(42px,calc(26px / var(--monitor-scale)));font-weight:700}.system-monitor:not(.widget) .metric-number small{font-size:max(17px,calc(12px / var(--monitor-scale)))}.system-monitor:not(.widget) .metric-detail{font-size:max(16px,calc(12px / var(--monitor-scale)));color:#ffffff99}.system-monitor:not(.widget) .usage-track{height:4px;margin-top:auto;margin-bottom:2px}.system-monitor:not(.widget) .network-rate{gap:8px}.system-monitor:not(.widget) .network-rate strong{font-size:max(19px,calc(14px / var(--monitor-scale)))}.system-monitor:not(.widget) .network-rate.upload{color:#ffffffa6}.system-monitor:not(.widget) .system-status{font-size:max(15px,calc(12px / var(--monitor-scale)));line-height:1.3;color:#ffffff80}.system-monitor:not(.widget) .system-status i{width:6px;height:6px}
+  .system-status{display:flex;align-items:center;gap:6px;flex:none;font-size:13px;line-height:14px;color:#ffffff66}.system-status i{width:4px;height:4px;border-radius:50%;background:#666}.system-status i.online{background:#8fb59c}
 </style>

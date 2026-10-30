@@ -1,80 +1,60 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { ArrowLeft, Search, X, RefreshCw } from "lucide-svelte";
+  import { invoke } from "@tauri-apps/api/core";
+  import { ArrowLeft, Search } from "lucide-svelte";
   import { idleApi } from "$lib/api/idle";
-  import type { WeatherLocation, WeatherLocationCandidate, WeatherSnapshot } from "$lib/api/types";
-  import { locale, translate, type TranslationKey } from "$lib/i18n";
+  import type { WeatherLocation, WeatherLocationCandidate } from "$lib/api/types";
   import WeatherIcon from "$lib/components/media/WeatherIcon.svelte";
-
-  let { onBack } = $props<{onBack:()=>void}>();
-  const storageKey = "isle.weather-extension.locations";
-  let locations = $state<WeatherLocation[]>([]);
-  let snapshots = $state<Record<string, WeatherSnapshot>>({});
-  let failed = $state<Record<string, boolean>>({});
+  let { onBack, initialLocation = null } = $props<{onBack:()=>void; initialLocation?: WeatherLocation | null}>();
+  let location = $state<WeatherLocation | null>(null);
+  let data = $state<any>(null);
   let query = $state("");
   let results = $state<WeatherLocationCandidate[]>([]);
-  let searching = $state(false);
-  let searchError = $state(false);
-  let searched = $state(false);
-  let loading = $state<Record<string, boolean>>({});
-  let searchRevision = 0;
-  let mounted = false;
-  const t = (key:TranslationKey) => translate(key, {}, $locale);
-  const key = (location:WeatherLocation) => `${location.latitude},${location.longitude}`;
-  const label = (item:WeatherLocationCandidate) => [...new Set([item.name,item.admin2,item.admin1,item.country].filter(Boolean))].join(" · ");
-  function persist() { try {localStorage.setItem(storageKey,JSON.stringify(locations));} catch { /* Storage can be unavailable in preview. */ } }
-  async function refresh(location:WeatherLocation) {
-    const id=key(location);
-    loading = {...loading,[id]:true}; failed = {...failed,[id]:false};
-    try {const value=await idleApi.getWeatherForLocation(location);if(mounted && locations.some(item=>key(item)===id)) snapshots={...snapshots,[id]:value};}
-    catch {if(mounted && locations.some(item=>key(item)===id)) failed={...failed,[id]:true};}
-    finally {if(mounted) loading={...loading,[id]:false};}
+  let loading = $state(false);
+  let error = $state(false);
+  const label = (item: WeatherLocationCandidate) => [...new Set([item.name,item.admin2,item.admin1,item.country].filter(Boolean))].join(" · ");
+  async function load(place: WeatherLocation) {
+    location=place; loading=true; error=false; data=null;
+    localStorage.setItem("isle.weather-extension.location", JSON.stringify(place));
+    try { data=await invoke("get_weather_details", { location: place }); } catch { error=true; } finally { loading=false; }
   }
-  async function search() {
-    const text=query.trim(), revision=++searchRevision;
-    results=[]; searchError=false; searched=Boolean(text);
-    if (!text) {searching=false;return;}
-    searching=true;
-    try {const found=await idleApi.searchLocations(text,$locale === "zh-CN" ? "zh" : $locale);if(mounted && revision===searchRevision) results=found;}
-    catch {if(mounted && revision===searchRevision) searchError=true;}
-    finally {if(mounted && revision===searchRevision) searching=false;}
+  async function search() { if(query.trim()) results=await idleApi.searchLocations(query.trim(), "zh"); }
+  function select(item: WeatherLocationCandidate) { results=[]; query=""; void load({name:label(item),latitude:item.latitude,longitude:item.longitude}); }
+  function dragScroll(node: HTMLElement) {
+    let startX = 0, startScroll = 0, dragging = false;
+    function down(event: PointerEvent) { if (event.button !== 0) return; dragging = true; startX = event.clientX; startScroll = node.scrollLeft; node.setPointerCapture(event.pointerId); node.classList.add("dragging"); }
+    function move(event: PointerEvent) { if (dragging) node.scrollLeft = startScroll - (event.clientX - startX); }
+    function up() { dragging = false; node.classList.remove("dragging"); }
+    node.addEventListener("pointerdown", down); node.addEventListener("pointermove", move); node.addEventListener("pointerup", up); node.addEventListener("pointercancel", up); node.addEventListener("lostpointercapture", up);
+    return { destroy() { node.removeEventListener("pointerdown", down); node.removeEventListener("pointermove", move); node.removeEventListener("pointerup", up); node.removeEventListener("pointercancel", up); node.removeEventListener("lostpointercapture", up); } };
   }
-  function add(item:WeatherLocationCandidate) {
-    if (locations.length>=3 || locations.some(location=>key(location)===key(item))) return;
-    const location={name:label(item),latitude:item.latitude,longitude:item.longitude};
-    locations=[...locations,location];persist();query="";results=[];searched=false;searchRevision++;void refresh(location);
-  }
-  function remove(location:WeatherLocation) {locations=locations.filter(item=>key(item)!==key(location));persist();}
-  onMount(() => {
-    mounted=true;
-    try {const data=JSON.parse(localStorage.getItem(storageKey) ?? "[]");if(Array.isArray(data)) {const seen=new Set<string>();locations=data.filter((item:WeatherLocation)=>{if(!item || typeof item.name!=="string" || !Number.isFinite(item.latitude) || !Number.isFinite(item.longitude) || Math.abs(item.latitude)>90 || Math.abs(item.longitude)>180 || seen.has(key(item))) return false;seen.add(key(item));return true;}).slice(0,3);}} catch {locations=[];}
-    for(const location of locations) void refresh(location);
-    return () => {mounted=false;searchRevision++;};
-  });
+  const time = (value:string) => value?.slice(11,16) ?? "--";
+  const number = (value:number | null | undefined, unit="") => value == null ? "--" : `${Math.round(value)}${unit}`;
+  const direction = (degrees:number) => ["北","东北","东","东南","南","西南","西","西北"][Math.round(degrees / 45) % 8] + "风";
+  let hourIndex = $derived(data ? Math.max(0, data.hourly.time.findIndex((v:string) => v >= data.current.time.slice(0,13))) : 0);
+  onMount(() => { const saved=localStorage.getItem("isle.weather-extension.location"); const old=localStorage.getItem("isle.weather-extension.locations"); const place=saved ? JSON.parse(saved) : initialLocation ?? (old ? JSON.parse(old)[0] : null); if(place) void load(place); });
 </script>
-<section class="weather-extension" aria-label={t("weatherPlacesTitle")}>
-  <header><button class="icon-button" type="button" aria-label={t("back")} onclick={onBack}><ArrowLeft size={24}/></button><div><span>{t("weather")}</span><strong>{t("weatherPlacesTitle")}</strong></div><span class="count">{locations.length}/3</span></header>
-  <div class="search-area" data-stop-toggle>
-    <div class="search"><Search size={21}/><input aria-label={t("searchCity")} placeholder={t("cityExample")} bind:value={query} onkeydown={(event)=>{event.stopPropagation();if(event.key==="Enter"){event.preventDefault();void search();}}}/><button type="button" onclick={() => void search()} disabled={searching || !query.trim() || locations.length>=3}>{t("searchCity")}</button></div>
-    {#if locations.length>=3}<p class="message">{t("weatherPlacesLimit")}</p>{:else if searching}<p class="message">{t("searching")}</p>{:else if searchError}<p class="message error">{t("weatherFailed")}</p>{:else if searched && !results.length}<p class="message">{t("noCity")}</p>{/if}
-    {#if results.length && locations.length<3}<div class="results" role="group" aria-label={t("searchCity")} onwheel={(event)=>event.stopPropagation()}>{#each results as item}<button type="button" disabled={locations.some(location=>key(location)===key(item))} onclick={()=>add(item)}><strong>{item.name}</strong><span>{label(item)}</span></button>{/each}</div>{/if}
-  </div>
-  <div class="places" data-stop-toggle onwheel={(event)=>event.stopPropagation()} role="group" aria-label={t("weatherPlacesTitle")}>
-    {#if !locations.length}<div class="empty">{t("weatherPlacesEmpty")}</div>{/if}
-    {#each locations as location (key(location))}
-      {@const snapshot = snapshots[key(location)]}
-      <article class="place">
-        <div class="place-top"><strong title={location.name}>{location.name}</strong><div class="actions"><button type="button" class="icon-button refresh" aria-label={t("weatherRefresh")} disabled={loading[key(location)]} onclick={()=>void refresh(location)}><RefreshCw size={18}/></button><button type="button" class="icon-button remove" aria-label={`${t("weatherRemove")} ${location.name}`} onclick={()=>remove(location)}><X size={20}/></button></div></div>
-        {#if loading[key(location)] && !snapshot}<p class="state">{t("weatherLoading")}</p>{:else if failed[key(location)] && !snapshot}<p class="state error">{t("weatherUnavailable")}</p>{:else if snapshot}
-          <div class="conditions"><WeatherIcon code={snapshot.weatherCode} size={36}/><strong>{snapshot.weatherTemperature === null ? "--" : Math.round(snapshot.weatherTemperature)}°</strong><div class="daily">{#each snapshot.weatherForecast.slice(0,3) as day}<span>{day.date.slice(5)} <b>{Math.round(day.temperatureMax)}°</b> / {Math.round(day.temperatureMin)}°</span>{/each}</div></div>
-          {#if failed[key(location)]}<span class="state error">{t("weatherUnavailable")}</span>{/if}
-        {/if}
-      </article>
-    {/each}
+<section class="weather" aria-label="天气详情">
+  <header><button class="back" onclick={onBack} aria-label="返回"><ArrowLeft size={21}/></button><div><span>天气</span><strong>天气详情</strong></div></header>
+  <div class="search-area" data-stop-toggle><div class="search"><Search size={18}/><input placeholder="搜索城市" bind:value={query} onkeydown={(e)=>{e.stopPropagation();if(e.key === "Enter") void search();}}/><button onclick={search}>搜索</button></div>{#if results.length}<div class="results">{#each results as item}<button onclick={()=>select(item)}>{label(item)}</button>{/each}</div>{/if}</div>
+  <div class="content" data-stop-toggle onwheel={(e)=>e.stopPropagation()}>
+    {#if loading}<div class="empty">正在加载天气…</div>{:else if error}<div class="empty">天气加载失败，请重新搜索城市</div>{:else if !data}<div class="empty">搜索城市，查看详细天气</div>{:else}
+      {@const c = data.current}{@const h = data.hourly}{@const d = data.daily}{@const maxTemps = d.temperature_2m_max.slice(0,15)}{@const minTemps = d.temperature_2m_min.slice(0,15)}{@const temps = h.temperature_2m.slice(hourIndex,hourIndex+24)}{@const low = Math.min(...temps)}{@const high = Math.max(...temps)}
+      <div class="dashboard"><div class="overview"><div class="hero"><div><span class="city">{location?.name}</span><div class="temperature">{number(c.temperature_2m)}° <WeatherIcon code={c.weather_code} size={48}/></div><span class="muted">体感 {number(c.apparent_temperature)}° · 今日 {number(d.temperature_2m_max[0])}° / {number(d.temperature_2m_min[0])}°</span></div></div>
+      <div class="metrics primary">{#each [["降水概率",number(h.precipitation_probability[hourIndex],"%")],["湿度",number(c.relative_humidity_2m,"%")],["风速",number(c.wind_speed_10m," km/h")],["紫外线",number(h.uv_index[hourIndex])]] as metric}<div><span>{metric[0]}</span><strong>{metric[1]}</strong></div>{/each}</div>
+      <div class="section-title">空气与风</div><div class="metrics">{#each [["气压",number(c.surface_pressure," hPa")],["能见度",h.visibility[hourIndex] == null ? "--" : `${(h.visibility[hourIndex]/1000).toFixed(1)} km`],["云量",number(c.cloud_cover,"%")],["降雨量",`${c.rain} mm`],["降雪量",`${c.snowfall} cm`],["风向",direction(c.wind_direction_10m)],["阵风",number(c.wind_gusts_10m," km/h")],["日出",time(d.sunrise[0])],["日落",time(d.sunset[0])],["日照时长",`${(d.sunshine_duration[0]/3600).toFixed(1)} 小时`]] as metric}<div><span>{metric[0]}</span><strong>{metric[1]}</strong></div>{/each}</div></div><div class="charts">      <div class="section-title">未来 24 小时</div><div class="hourly-scroll" data-stop-toggle use:dragScroll><div class="hourly-track"><svg class="temperature-line" viewBox="0 0 2400 60" preserveAspectRatio="none" aria-hidden="true"><polyline points={temps.map((value:number, i:number) => `${i*100+50},${50-(value-low)/Math.max(1,high-low)*40}`).join(" ")} fill="none" stroke="#ffad68" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>{#each h.time.slice(hourIndex,hourIndex+24) as date, i}<div class="hour-column"><span>{i === 0 ? "现在" : time(date)}</span><strong>{number(h.temperature_2m[hourIndex+i],"°")}</strong><WeatherIcon code={h.weather_code[hourIndex+i]} size={28}/><small>降水 {number(h.precipitation_probability[hourIndex+i],"%")}</small></div>{/each}</div></div><div class="section-title">未来 15 天</div><div class="daily-scroll" data-stop-toggle use:dragScroll><div class="daily-track"><svg class="daily-lines" viewBox="0 0 1500 120" preserveAspectRatio="none" aria-hidden="true"><polyline points={maxTemps.map((v:number,i:number)=>`${i*100+50},${45-(v-Math.min(...minTemps))/Math.max(1,Math.max(...maxTemps)-Math.min(...minTemps))*30}`).join(" ")} fill="none" stroke="#ff985f" stroke-width="3" vector-effect="non-scaling-stroke"/><polyline points={minTemps.map((v:number,i:number)=>`${i*100+50},${105-(v-Math.min(...minTemps))/Math.max(1,Math.max(...maxTemps)-Math.min(...minTemps))*30}`).join(" ")} fill="none" stroke="#ffc064" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>{#each d.time.slice(0,15) as date, i}<div class="daily-column"><strong>{i === 0 ? "今天" : i === 1 ? "明天" : new Date(date + "T12:00:00").toLocaleDateString("zh-CN",{weekday:"short"})}</strong><span>{date.slice(5).replace("-", "/")}</span><WeatherIcon code={d.weather_code[i]} size={30}/><b>{number(d.temperature_2m_max[i],"°")}</b><b>{number(d.temperature_2m_min[i],"°")}</b><small>降水 {number(d.precipitation_probability_max[i],"%")}</small></div>{/each}</div></div>
+</div></div>
+    {/if}
   </div>
 </section>
 <style>
-  .weather-extension{display:flex;flex-direction:column;box-sizing:border-box;width:100%;height:100%;padding:calc(26px + var(--extension-block-inset,0px)) calc(24px + var(--extension-inline-inset,0px)) calc(24px + var(--extension-block-inset,0px));color:#fff;font-family:var(--app-font,system-ui)}
-  header{display:flex;align-items:center;gap:14px;flex:none;margin-bottom:16px}header div{display:flex;flex:1;flex-direction:column;gap:3px}header div span{font-size:14px;color:#ffffff80}header strong{font-size:24px}.count{color:#ffffff80;font-size:15px}.icon-button{display:grid;place-items:center;flex:none;width:40px;height:40px;border:0;border-radius:12px;background:transparent;color:#fff;cursor:pointer}.remove{color:#ff6b6b}.icon-button:disabled{opacity:.4}.search-area{position:relative;z-index:3;flex:none}.search{display:flex;align-items:center;gap:10px;padding:0 12px;border:1px solid #ffffff38;border-radius:12px;color:#ffffff99}.search input{flex:1;min-width:0;height:44px;border:0;outline:0;background:transparent;color:#fff;font:16px var(--app-font,system-ui)}.search button{border:0;background:transparent;color:#fff;font-size:15px;cursor:pointer}.search button:disabled{opacity:.35;cursor:default}.message{margin:6px 4px;font-size:13px;color:#ffffff99}.error{color:#ffb4ab}.results{position:absolute;top:50px;left:0;right:0;max-height:215px;overflow-y:auto;overscroll-behavior:contain;padding:6px;border:1px solid #ffffff30;border-radius:12px;background:#171719;box-shadow:0 8px 22px #000a}.results button{display:flex;flex-direction:column;gap:3px;width:100%;padding:9px 10px;border:0;border-radius:8px;background:transparent;color:#fff;text-align:left;cursor:pointer}.results button span{color:#ffffff99;font-size:12px}.results button:disabled{opacity:.35;cursor:default}
-  .places{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;margin-top:10px}.empty{margin:auto;text-align:center;color:#ffffff80;font-size:16px}.place{padding:8px 4px 12px;border-bottom:1px solid #ffffff24}.place-top{display:flex;align-items:center;gap:8px}.place-top>strong{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:18px}.actions{display:flex}.conditions{display:flex;align-items:center;gap:12px}.conditions>strong{font-size:36px;line-height:1}.daily{display:flex;flex:1;justify-content:flex-end;gap:12px;color:#ffffff99;font-size:13px;white-space:nowrap}.daily b{color:#fff}.state{margin:5px 0;font-size:13px;color:#ffffff99}@media(max-width:500px){.daily{gap:5px;font-size:11px}}
+.dashboard{display:grid;grid-template-columns:minmax(0, .85fr) minmax(0, 1.15fr);gap:24px;height:100%}.overview,.charts{min-width:0}.content{overflow:hidden !important}.metrics{grid-template-columns:repeat(3,minmax(0,1fr)) !important}.primary{grid-template-columns:repeat(4,minmax(0,1fr)) !important}.metrics div{padding:7px 8px !important}.section-title{margin:12px 0 8px !important}.hero{padding:8px 2px 14px !important}.temperature{font-size:54px !important}.hourly-track{padding:10px 0 !important}.daily-track{padding:10px 0 !important}
+
+.hourly-scroll,.daily-scroll{cursor:grab;user-select:none;touch-action:pan-y}.hourly-scroll.dragging,.daily-scroll.dragging{cursor:grabbing}
+
+.daily-scroll{overflow-x:auto;overscroll-behavior-x:contain;border-radius:18px;background:#ffffff0d;scrollbar-width:none}.daily-scroll::-webkit-scrollbar{display:none}.daily-track{display:flex;position:relative;width:1500px;padding:16px 0}.daily-lines{position:absolute;top:104px;left:0;width:100%;height:120px;pointer-events:none}.daily-column{display:flex;flex:0 0 100px;flex-direction:column;align-items:center;gap:6px;border-right:1px solid #ffffff0d}.daily-column:first-of-type{border-radius:14px;background:#ffffff0a}.daily-column>strong{font-size:16px}.daily-column>span{color:#ffffff80;font-size:14px}.daily-column :global(svg){margin-top:10px}.daily-column>b{font-size:19px;margin-top:15px}.daily-column>b+b{margin-top:37px}.daily-column small{margin-top:12px;color:#91caff;font-size:13px}
+
+.hourly-scroll{overflow-x:auto;overscroll-behavior-x:contain;border-radius:18px;background:#ffffff0d;scrollbar-width:none}.hourly-scroll::-webkit-scrollbar{display:none}.hourly-track{position:relative;display:flex;width:2400px;padding:16px 0 12px}.temperature-line{position:absolute;top:45px;left:0;width:100%;height:60px;pointer-events:none}.hour-column{display:flex;box-sizing:border-box;flex:0 0 100px;flex-direction:column;align-items:center;gap:12px;min-width:0;border-right:1px solid #ffffff0d}.hour-column>span{color:#ffffffa6;font-size:13px}.hour-column strong{margin-top:48px;font-size:22px}.hour-column small{color:#91caff;font-size:14px}
+
+.weather{display:flex;flex-direction:column;box-sizing:border-box;width:100%;height:100%;padding:calc(24px + var(--extension-block-inset,0px)) calc(28px + var(--extension-inline-inset,0px));color:#f3f6fa;font-family:var(--app-font,system-ui)}header{display:flex;align-items:center;gap:12px;margin-bottom:14px}header div{display:flex;flex-direction:column;gap:3px}header span,.muted{color:#ffffff80;font-size:13px}header strong{font-size:21px}.back{display:grid;place-items:center;width:36px;height:36px;border:0;border-radius:12px;background:#ffffff12;color:white;cursor:pointer}.search-area{position:relative;z-index:2}.search{display:flex;align-items:center;gap:9px;padding:0 12px;border:1px solid #ffffff1a;border-radius:14px;background:#ffffff0d;color:#ffffff80}.search input{flex:1;min-width:0;height:40px;border:0;outline:0;background:none;color:white;font:14px var(--app-font,system-ui)}.search button{border:0;border-radius:9px;background:#ffffff14;color:#d9eaff;padding:7px 10px;cursor:pointer}.results{position:absolute;top:46px;left:0;right:0;max-height:200px;overflow:auto;padding:6px;border:1px solid #ffffff20;border-radius:14px;background:#1c1c1e}.results button{display:block;width:100%;padding:10px;border:0;border-radius:8px;background:none;color:white;text-align:left;cursor:pointer}.results button:hover{background:#ffffff14}.content{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px 2px 12px;scrollbar-width:thin;scrollbar-color:#ffffff35 transparent}.empty{padding:40px 0;text-align:center;color:#ffffff80}.hero{padding:16px 2px 20px;border-bottom:1px solid #ffffff24;background:transparent}.city{font-size:20px;font-weight:700}.temperature{display:flex;align-items:center;gap:16px;margin:8px 0;font-size:68px;font-weight:750;line-height:1;letter-spacing:-.04em}.section-title{margin:20px 0 12px;font-size:16px;font-weight:700}.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;padding:8px 0;border-bottom:1px solid #ffffff20}.primary{margin-top:10px}.metrics div{display:flex;flex-direction:column;gap:6px;min-width:0;padding:8px 12px}.metrics div+div{border-left:1px solid #ffffff18}.metrics span,.forecast-item span,.day span{color:#ffffff99;font-size:14px}.metrics strong{font-size:19px;font-weight:700}.forecast{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:5px;padding:12px 0;border-bottom:1px solid #ffffff20;background:transparent}.forecast-item{display:flex;min-width:0;flex-direction:column;align-items:center;gap:6px;padding:4px;font-size:14px}.forecast-item small,.day .rain{color:#91caff;font-size:13px}.days{padding:2px 0;background:transparent}.day{display:grid;grid-template-columns:1fr 40px 1fr auto;align-items:center;gap:8px;padding:10px 4px}.day+.day{border-top:1px solid #ffffff12}.day strong span{color:#ffffff80}details{margin-top:14px}summary{display:inline-block;padding:8px 14px;border-radius:9px;background:#002fa7;color:#fff;font-size:13px;font-weight:600;cursor:pointer}
 </style>

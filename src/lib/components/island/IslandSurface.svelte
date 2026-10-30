@@ -24,11 +24,9 @@
   import CalendarExtension from "$lib/components/time/CalendarExtension.svelte";
   import WorldClockExtension from "$lib/components/time/WorldClockExtension.svelte";
   import WidgetLayout from "$lib/components/island/WidgetLayout.svelte";
-  import FeatureStack from "$lib/components/island/FeatureStack.svelte";
   import WeatherExtension from "$lib/components/island/WeatherExtension.svelte";
   import { normalizeWidgets, type IslandWidgets, type IslandWidgetKind } from "$lib/widgetLayout";
   import InfoPanel from "$lib/components/island/InfoPanel.svelte";
-  import FeatureMenu from "$lib/components/island/FeatureMenu.svelte";
   import VolumePanel from "$lib/components/volume/VolumePanel.svelte";
   import AppVolumeMixer from "$lib/components/volume/AppVolumeMixer.svelte";
   import WeatherIcon from "$lib/components/media/WeatherIcon.svelte";
@@ -119,7 +117,6 @@
     background = "#000",
     border = "1px solid rgba(255,255,255,.1)",
     boxShadow = "none",
-    showCustomFunctionPanel = false,
     spectrumTopColor = "#fff",
     spectrumBottomColor = "#888",
     previewSpectrum,
@@ -139,6 +136,7 @@
     seekBusy = false,
     seekError = "",
     onToggleFloating,
+    floatingWindowOpen = false,
     onHideForTenSeconds,
     keepIslandExpanded = false,
     onToggleKeepIslandExpanded,
@@ -168,6 +166,7 @@
     onPageChange,
     visible = true,
     weatherCity = "",
+    weatherLocation = null,
     weatherUpdatedAt = null,
     weatherLoading = false,
     weatherFailed = false,
@@ -176,6 +175,10 @@
     timerDurationMs = 0,
     timerLabel = "倒计时",
     timerFinished = false,
+    timerSound = true,
+    timerShowCompact = true,
+    onTimerSoundChange,
+    onTimerShowCompactChange,
     clockText = "00:00",
     clockTimeZone = "system",
     enabledTools = ["settings", "floating", "volume", "timer", "hide"],
@@ -214,7 +217,6 @@
     background?: string;
     border?: string;
     boxShadow?: string;
-    showCustomFunctionPanel?: boolean;
     spectrumTopColor?: string;
     spectrumBottomColor?: string;
     previewSpectrum?: number[];
@@ -234,6 +236,7 @@
     seekBusy?: boolean;
     seekError?: string;
     onToggleFloating?: () => void;
+    floatingWindowOpen?: boolean;
     onHideForTenSeconds?: () => void;
     keepIslandExpanded?: boolean;
     onToggleKeepIslandExpanded?: () => void | Promise<void>;
@@ -263,6 +266,7 @@
     onPageChange?: (page: IslandPage) => void;
     visible?: boolean;
     weatherCity?: string;
+    weatherLocation?: import("$lib/api/types").WeatherLocation | null;
     weatherUpdatedAt?: number | null;
     weatherLoading?: boolean;
     weatherFailed?: boolean;
@@ -271,6 +275,10 @@
     timerDurationMs?: number;
     timerLabel?: string;
     timerFinished?: boolean;
+    timerSound?: boolean;
+    timerShowCompact?: boolean;
+    onTimerSoundChange?: (value: boolean) => void;
+    onTimerShowCompactChange?: (value: boolean) => void;
     clockText?: string;
     clockTimeZone?: string;
     enabledTools?: IslandTool[];
@@ -282,7 +290,7 @@
   const timerUrgent = $derived(timerStatus === "running" && timerRemainingMs > 0 && timerRemainingMs <= 10_000);
   const timerProgress = $derived(timerFinished ? 1 : timerDurationMs > 0 ? Math.min(1, Math.max(0, timerRemainingMs / timerDurationMs)) : 0);
   const timerFinishedText = $derived(t("timerComplete"));
-  const effectiveCompactLength = $derived(timerActive ? Math.max(compactLength, 240) : compactLength);
+  const effectiveCompactLength = $derived(compactLength);
   const initial = untrack(() => geometryFor(
     mode,
     expandedRadius,
@@ -291,7 +299,7 @@
     0,
   ));
   const motionOptions = { duration: ISLAND_MOTION.layoutDuration, easing: islandSettleEasing };
-  const volumeHudMarks = Array.from({ length: 21 }, (_, index) => index * 5);
+  const volumeHudMarks = Array.from({ length: 41 }, (_, index) => index * 2.5);
   let previousMotionMode = untrack(() => mode);
   let previousMotionStyle = untrack(() => islandStyle);
   let expandedLayoutMotion = $state(untrack(() => mode === "expanded"));
@@ -328,33 +336,12 @@
   let previousEditing = untrack(() => editing);
   let editLayoutMotion = $state(false);
   let featureExpanded = $state(false);
-  let featureKind = $state<"volume" | "calendar" | "clock" | "weather" | "stack">("volume");
-  let stackPreparing = $state(false);
-  let stackSelection = $state<IslandWidgetKind | undefined>();
-  let stackTimer: ReturnType<typeof setTimeout> | undefined;
-  function closeFeature() { clearTimeout(stackTimer); featureFromStack = false; featureExpanded = false; stackPreparing = false; }
-  function openStack() {
-    if (!interactive || !visible || mode !== "expanded" || editing || featureExpanded || stackPreparing) return;
-    stackSelection = configuredLayout.left[0] ?? configuredLayout.right[0];
-    stackPreparing = true;
-    const delay = enableAnimations && !reduceAnimations && !prefersReducedMotion && widgetCount > 0 ? ISLAND_MOTION.collapseDuration : 0;
-    stackTimer = setTimeout(() => { if (visible && mode === "expanded" && !editing) { featureKind = "stack"; featureExpanded = true; } else stackPreparing = false; }, delay);
-  }
-  onDestroy(() => clearTimeout(stackTimer));
-  function musicStackGesture(node:HTMLElement) {
-    let start:{id:number;x:number;y:number}|null = null;
-    const wheel = (event:WheelEvent) => { if (editing || featureExpanded || stackPreparing || event.ctrlKey || event.deltaY <= 0 || Math.abs(event.deltaX) > Math.abs(event.deltaY) || (event.target as HTMLElement).closest("input,select,textarea,[role=slider]")) return; event.preventDefault(); event.stopPropagation(); openStack(); };
-    const down = (event:PointerEvent) => { if (editing || featureExpanded || stackPreparing || !event.isPrimary || event.button !== 0 || (event.target as HTMLElement).closest("button,input,select,textarea,[role=slider]")) return; start={id:event.pointerId,x:event.clientX,y:event.clientY}; };
-    const move = (event:PointerEvent) => { if (!start || start.id !== event.pointerId) return; const dx=event.clientX-start.x, dy=event.clientY-start.y; if (dy>28 && dy>Math.abs(dx)) {start=null;event.stopPropagation();openStack();} else if (Math.abs(dx)>28 || dy< -28) start=null; };
-    const end = () => {start=null;};
-    node.addEventListener("wheel",wheel,{passive:false});node.addEventListener("pointerdown",down);node.addEventListener("pointermove",move);node.addEventListener("pointerup",end);node.addEventListener("pointercancel",end);
-    return {destroy(){node.removeEventListener("wheel",wheel);node.removeEventListener("pointerdown",down);node.removeEventListener("pointermove",move);node.removeEventListener("pointerup",end);node.removeEventListener("pointercancel",end);}};
-  }
-  let featureFromStack = false;
+  let featureKind = $state<"volume" | "calendar" | "clock" | "weather">("volume");
+  function closeFeature() { featureExpanded = false; }
   let volumeFeatureMetrics = $state({rows:4,total:4});
-  function backFromFeature() { if (featureFromStack) { featureFromStack = false; featureKind = "stack"; } else closeFeature(); }
+  let calendarTodoHeight = $state(0);
+  function backFromFeature() { closeFeature(); }
   function openFeature(kind: "volume" | "calendar" | "clock" | "weather") {
-    featureFromStack = featureExpanded && featureKind === "stack";
     if (kind === "volume") volumeFeatureMetrics = {rows:Math.min(5, volumeFeatureMetrics.total),total:volumeFeatureMetrics.total};
     featureKind = kind; featureExpanded = true;
   }
@@ -362,7 +349,6 @@
     if (volumeFeatureMetrics.rows !== rows || volumeFeatureMetrics.total !== total) volumeFeatureMetrics = {rows,total};
   }
   let previousFeatureExpanded = false;
-  let previousStackPreparing = false;
   const featureOpacity = tweened(0);
   let featureOpacityValue = $state(0);
   const unsubscribeFeatureOpacity = featureOpacity.subscribe(value => featureOpacityValue = value);
@@ -430,14 +416,14 @@
   $effect(() => {
     if (!visible || mode === "hidden") contextMenuOpen = false;
     if ((!visible || mode === "hidden") && editing) { editing = false; untrack(() => editRevision++); }
-    if ((!visible || mode !== "expanded") && (featureExpanded || stackPreparing)) closeFeature();
+    if ((!visible || mode !== "expanded") && featureExpanded) closeFeature();
   });
   $effect(() => { onLayoutPreview?.(currentLayout, editing); });
-  const panelVisible = $derived(!editing && showCustomFunctionPanel);
+  const panelVisible = false;
   const toolIcons = { files: FolderOpen, timer: Timer, volume: Volume2, floating: GalleryHorizontalEnd, settings: Settings, hide: EyeOff, clock: Clock, weather: CloudSun, system: Activity };
   const toolLabels = Object.fromEntries(BUILTIN_TOOLS.map(tool => [tool.id, tool.label])) as Record<IslandTool, TranslationKey>;
   const menuItems = $derived(BUILTIN_TOOLS.filter(tool => !tool.preference || enabledTools.includes(tool.id)).map(tool => ({ id: tool.id, label: t(tool.label), shortLabel: t(tool.shortLabel), icon: toolIcons[tool.id] })));
-  const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius, expandedLength, stackPreparing ? 0 : widgetCount, editing));
+  const expandedBaseGeometry = $derived(navigationGeometry(page, panelVisible ? menuItems.length : 0, expandedRadius, islandStyle, edge, expandedEdgeShoulderRadius, expandedLength, widgetCount, editing));
   const expandedGeometry = $derived({
     ...scaleIslandGeometry(expandedBaseGeometry, expandedScale),
   });
@@ -452,7 +438,7 @@
   const expandedInset = $derived(styleProgress * Math.min(expandedEdgeShoulderRadius, Math.max(expandedGeometry.width, expandedGeometry.height) / 4, Math.min(expandedGeometry.width, expandedGeometry.height) / 2));
   const featureBaseGeometry = $derived(featureKind === "volume"
     ? volumeExtensionGeometry(volumeFeatureMetrics.rows, volumeFeatureMetrics.total > 5, expandedRadius, edge === "left" || edge === "right" ? expandedInset : 0)
-    : featureKind === "stack" ? {...featureExtensionGeometry(expandedRadius), width:expandedLength + 48 + ((edge === "top" || edge === "bottom") ? expandedInset * 2 : 0), height:537 + ((edge === "left" || edge === "right") ? expandedInset * 2 : 0)} : featureKind === "clock" ? worldClockExtensionGeometry(expandedRadius) : featureExtensionGeometry(expandedRadius));
+    : featureKind === "calendar" ? { ...featureExtensionGeometry(expandedRadius), height: featureExtensionGeometry(expandedRadius).height + calendarTodoHeight + 24 } : featureKind === "clock" ? worldClockExtensionGeometry(expandedRadius) : featureKind === "weather" ? { ...featureExtensionGeometry(expandedRadius), width: 1400, height: 740 } : featureExtensionGeometry(expandedRadius));
   const featureGeometry = $derived(scaleIslandGeometry(featureBaseGeometry, expandedScale));
   const featureOffset = $derived(anchoredLayoutOffset(size, featureGeometry, edge));
   const compactLayout = $derived(compactShapeMotion ? size : {
@@ -649,13 +635,12 @@
     const widgetChange = previousWidgetCount !== widgetCount && previousMotionMode === "expanded" && mode === "expanded";
     const editingChanged = previousEditing !== editing && previousMotionMode === "expanded" && mode === "expanded";
     const featureChanged = previousFeatureExpanded !== featureExpanded;
-    const stackChanged = previousStackPreparing !== stackPreparing;
     const styleChanged = previousMotionStyle !== islandStyle;
     if (styleChanged) styleLayoutMotion = !hard;
     if ((styleChanged && mode === "expanded") || editingChanged || (widgetChange && editing)) editLayoutMotion = true;
     else if (mode !== "expanded") editLayoutMotion = false;
     expandedLayoutMotion = previousMotionMode === "expanded" && mode === "expanded";
-    const motion = featureChanged ? widgetLayoutMotion(featureExpanded, hard) : stackChanged ? widgetLayoutMotion(!stackPreparing, hard) : styleChanged && !hard
+    const motion = featureChanged ? widgetLayoutMotion(featureExpanded, hard) : styleChanged && !hard
       ? { duration: ISLAND_MOTION.outwardDuration, easing: islandMorphEasing }
       : editingChanged || (widgetChange && editing)
       ? widgetEditMotion(hard)
@@ -666,13 +651,12 @@
     previousWidgetsEnabled = widgetsEnabled;
     previousEditing = editing;
     previousFeatureExpanded = featureExpanded;
-    previousStackPreparing = stackPreparing;
     previousMotionStyle = islandStyle;
     previousMotionMode = mode;
     const revision = ++transitionRevision;
     shapeSettled = false;
     void Promise.all([
-      widgetReveal.set(stackPreparing ? 0 : editing || widgetsEnabled ? 1 : 0, editing || hard ? {duration:0} : stackPreparing ? widgetLayoutMotion(false, hard) : motion),
+      widgetReveal.set(editing || widgetsEnabled ? 1 : 0, editing || hard ? {duration:0} : motion),
       featureOpacity.set(featureExpanded ? 1 : 0, motion),
       widthMotion.set(target.width, motion),
       heightMotion.set(target.height, motion),
@@ -698,7 +682,7 @@
     else if (!finished && wasTimerFinished && page === "timer") void navigate("music");
     wasTimerFinished = finished;
   });
-  $effect(() => { onPanelActivity?.(contextMenuOpen || editing || featureExpanded || stackPreparing || (mode === "expanded" && page !== "music")); onPageChange?.(page); });
+  $effect(() => { onPanelActivity?.(contextMenuOpen || editing || featureExpanded || (mode === "expanded" && page !== "music")); onPageChange?.(page); });
   let renderedPage = $state<IslandPage>("music");
   let pageExiting = $state(false);
   $effect(() => {
@@ -814,7 +798,7 @@
   function toggleFromSurface(event: MouseEvent | KeyboardEvent) {
     const target = event.target as HTMLElement;
     if (editing || !interactive || target.closest(controlSelector) || (event.detail > 0 && suppressBackgroundClick)) return;
-    if (featureExpanded || stackPreparing) { closeFeature(); return; }
+    if (featureExpanded) { closeFeature(); return; }
     onToggle?.();
   }
 
@@ -967,7 +951,7 @@
 
     {#if visible && mode !== "hidden"}
     <div class="compact-layer edge-inset" bind:this={compactRoot} class:vertical={edge === "left" || edge === "right"} style={`opacity:${compactOpacity};--shoulder-inset:${compactInset}px;width:${compactLayout.width}px;height:${compactLayout.height}px;left:${compactOffset.x}px;top:${compactOffset.y}px`} aria-hidden={mode === "expanded" || expandedOpacity > .5} inert={mode === "expanded"}>
-      {#if timerActive}
+      {#if timerActive && timerShowCompact}
         <button
           class="compact-timer"
           class:paused={timerStatus === "paused"}
@@ -1023,11 +1007,11 @@
     {/if}
           {#snippet stackWidget(kind: IslandWidgetKind)}
             {#if kind === "timer"}
-              <TimerPanel status={timerStatus} remainingMs={timerRemainingMs} durationMs={timerDurationMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
+              <TimerPanel soundEnabled={timerSound} showCompact={timerShowCompact} onSoundChange={onTimerSoundChange} onShowCompactChange={onTimerShowCompactChange} status={timerStatus} remainingMs={timerRemainingMs} durationMs={timerDurationMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
             {:else if kind === "volume"}
               <VolumePanel volume={systemAudio?.volumePercent ?? 0} muted={systemAudio?.muted ?? false} deviceId={systemAudio?.deviceId ?? ""} devices={audioDevices} switchingDevice={audioDeviceSwitching} reduceMotion={reduceAnimations || !enableAnimations} onVolume={onAudioVolume} onDevice={onAudioDevice} onExpand={() => openFeature("volume")} />
             {:else if kind === "system"}
-              <SystemMonitor active={visible && mode === "expanded" && !editing} snapshot={monitorSnapshot} />
+              <SystemMonitor widget active={visible && mode === "expanded" && !editing} snapshot={monitorSnapshot} />
             {:else if kind === "calendar"}
               <CalendarWidget timeZone={clockTimeZone} onExpand={() => openFeature("calendar")} />
             {:else}
@@ -1048,13 +1032,10 @@
       inert={mode !== "expanded" || featureExpanded}
     >
       <div class="expanded-shell" class:composed={widgetCount > 0 || editing} bind:this={pageRoot} class:reduce-page-motion={reduceAnimations || !enableAnimations || prefersReducedMotion} style={`--widget-vertical-inset:${(edge === "left" || edge === "right") && (widgetCount > 0 || editing) ? expandedInset : 0}px;--widget-edge-inset:${(edge === "top" || edge === "bottom") && widgetCount > 0 ? expandedInset : 0}px;--editor-edge-inset:${edge === "top" || edge === "bottom" ? expandedInset : 0}px;--page-width:${expandedContentGeometry.width}px;--page-height:${expandedContentGeometry.height}px;--content-scale:${expandedScale};--shoulder-content-inset:${expandedInset}px`}>
-        {#if panelVisible}
-          <div class="top-tools" transition:slide={{duration:enableAnimations && !reduceAnimations && !prefersReducedMotion ? ISLAND_MOTION.outwardDuration : 0,easing:islandMorphEasing}}><FeatureMenu items={menuItems} toolbar activeId={page} scrollPosition={menuScroll} onScroll={(value) => menuScroll = value} onSelect={selectTool} /></div>
-        {/if}
         <div class="page-body" class:exiting={pageExiting} class:with-toolbar={panelVisible} inert={pageExiting}>
         {#if renderedPage === "music"}
         <WidgetLayout widget={stackWidget} layout={editing ? draftLayout : configuredLayout} enabled={widgetsEnabled} reveal={widgetRevealValue} animate={enableAnimations && !reduceAnimations && !prefersReducedMotion} styleMorphing={styleLayoutMotion} {editing} busy={savingLayout} error={layoutError} musicWidth={expandedLength} onChange={(layout) => draftLayout = layout} onSave={() => void saveLayout()} onCancel={cancelEditing}>
-          <section class="music-pane" use:musicStackGesture>
+          <section class="music-pane">
             <div class="top-row">
             <button class="cover expanded-cover" class:shared-cover-source={movingCover} type="button" aria-label={t("openPlayer")} disabled={idle} onclick={(e) => { e.stopPropagation(); onOpenPlayer?.(); }}>
               {#if (idle ? lastPlayedMedia?.albumArt : media.albumArt)}<CoverArt src={(idle ? lastPlayedMedia?.albumArt : media.albumArt) || ""} />{:else}<Music2 size={30} />{/if}
@@ -1097,9 +1078,9 @@
                 <button type="button" aria-label={t("next")} disabled={idle || media.capabilities?.next === false} onclick={(e) => { e.stopPropagation(); animateSkip(e, 1); onMediaAction?.("next"); }}><SkipForward size={36} fill="currentColor" /></button>
               </div>
               <div class="utility-controls trailing-controls">
-                <button class="layout-toggle" class:layout-active={layoutActive} type="button" aria-label={t(layoutActive ? "disableWidgetLayout" : "enableWidgetLayout")} title={t(layoutActive ? "disableWidgetLayout" : "enableWidgetLayout")} aria-pressed={layoutActive} disabled={togglingWidgets || editing} onclick={(e) => {e.stopPropagation();void toggleWidgets();}}><PanelsTopLeft size={34} strokeWidth={1.8}/></button>
+                <button class="layout-toggle" class:layout-active={layoutActive} type="button" aria-label={t(layoutActive ? "disableWidgetLayout" : "enableWidgetLayout")} title={t(layoutActive ? "disableWidgetLayout" : "enableWidgetLayout")} aria-pressed={layoutActive} disabled={togglingWidgets || editing} onclick={(e) => {e.stopPropagation();void toggleWidgets();}}>{#if layoutActive}<svg width="34" height="34" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M5 2h14a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V5a3 3 0 0 1 3-3Zm-1 6h16v2H4V8Zm6 2v10H8V10h2Z"/></svg>{:else}<PanelsTopLeft size={34} strokeWidth={1.8}/>{/if}</button>
                 {#if widgetToggleError}<span class="layout-toggle-error" role="status">{t("settingsSaveFailed")}</span>{/if}
-                <button type="button" aria-label={t("toggleFloating")} onclick={(e) => { e.stopPropagation(); onToggleFloating?.(); }}><Airplay size={34} strokeWidth={1.8} /></button>
+                <button class="floating-toggle" type="button" aria-label={t("toggleFloating")} aria-pressed={floatingWindowOpen} onclick={(e) => { e.stopPropagation(); onToggleFloating?.(); }}>{#if floatingWindowOpen}<svg width="34" height="34" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-3.3l-3.5-4a1.6 1.6 0 0 0-2.4 0l-3.5 4H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm8 12.5L18 22H6l6-6.5Z"/></svg>{:else}<Airplay size={34} strokeWidth={1.8} />{/if}</button>
               </div>
             </div>
         </section>
@@ -1168,11 +1149,11 @@
                     {/if}
                   </div>
                 {:else if renderedPage === "timer"}
-                  <TimerPanel status={timerStatus} remainingMs={timerRemainingMs} durationMs={timerDurationMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
+                  <TimerPanel soundEnabled={timerSound} showCompact={timerShowCompact} onSoundChange={onTimerSoundChange} onShowCompactChange={onTimerShowCompactChange} status={timerStatus} remainingMs={timerRemainingMs} durationMs={timerDurationMs} finished={timerFinished} reduceMotion={reduceAnimations || !enableAnimations} onFinishedDismiss={onTimerFinishedDismiss} onStart={onTimerStart} onPause={onTimerPause} onResume={onTimerResume} onReset={onTimerReset} />
                 {:else if renderedPage === "volume"}
                   <VolumePanel volume={systemAudio?.volumePercent ?? 0} muted={systemAudio?.muted ?? false} deviceId={systemAudio?.deviceId ?? ""} devices={audioDevices} switchingDevice={audioDeviceSwitching} reduceMotion={reduceAnimations || !enableAnimations} onVolume={onAudioVolume} onDevice={onAudioDevice} onExpand={() => openFeature("volume")} />
                 {:else if renderedPage === "system"}
-                  <SystemMonitor active={visible && mode === "expanded"} snapshot={monitorSnapshot} />
+                  <SystemMonitor scale={expandedScale} active={visible && mode === "expanded"} snapshot={monitorSnapshot} />
                 {:else if renderedPage === "clock" || renderedPage === "weather"}
                   <InfoPanel page={renderedPage} time={clockText} timeZone={clockTimeZone} city={weatherCity} temperature={idleWeatherTemperature} code={idleWeatherCode} forecast={idleWeatherForecast} updatedAt={weatherUpdatedAt} loading={weatherLoading} failed={weatherFailed} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onSettings={onSettingsToggle} onExpandClock={() => openFeature("clock")} onExpandWeather={() => openFeature("weather")} />
                 {/if}
@@ -1187,8 +1168,8 @@
 
     {#if visible && mode === "expanded" && (featureExpanded || featureOpacityValue > 0)}
       <div class="feature-extension" style:opacity={featureOpacityValue} style:width={`${featureGeometry.width}px`} style:height={`${featureGeometry.height}px`} style:left={`${featureOffset.x}px`} style:top={`${featureOffset.y}px`} inert={!featureExpanded}>
-        <div class="feature-extension-content" style={`zoom:${expandedScale};width:${featureBaseGeometry.width}px;height:${featureBaseGeometry.height}px;--extension-inline-inset:${edge === "top" || edge === "bottom" ? expandedInset : 0}px;--extension-block-inset:${edge === "left" || edge === "right" ? expandedInset : 0}px`}>
-          {#if featureKind === "volume"}<AppVolumeMixer onBack={backFromFeature} onMetrics={updateVolumeFeatureMetrics} />{:else if featureKind === "calendar"}<CalendarExtension timeZone={clockTimeZone} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onBack={backFromFeature} />{:else if featureKind === "clock"}<WorldClockExtension timeZone={clockTimeZone} onBack={backFromFeature} />{:else if featureKind === "weather"}<WeatherExtension onBack={backFromFeature} />{:else}<FeatureStack widget={stackWidget} initial={stackSelection} onSelect={(kind) => stackSelection = kind} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onBack={closeFeature} />{/if}
+        <div class="feature-extension-content" style={`zoom:${expandedScale};width:${featureBaseGeometry.width}px;height:${featureBaseGeometry.height}px;--calendar-scale:${expandedScale};--extension-inline-inset:${edge === "top" || edge === "bottom" ? expandedInset : 0}px;--extension-block-inset:${edge === "left" || edge === "right" ? expandedInset : 0}px`}>
+          {#if featureKind === "volume"}<AppVolumeMixer onBack={backFromFeature} onMetrics={updateVolumeFeatureMetrics} />{:else if featureKind === "calendar"}<CalendarExtension onTodoHeight={(height) => calendarTodoHeight = height} timeZone={clockTimeZone} reduceMotion={reduceAnimations || !enableAnimations || prefersReducedMotion} onBack={backFromFeature} />{:else if featureKind === "clock"}<WorldClockExtension timeZone={clockTimeZone} onBack={backFromFeature} />{:else if featureKind === "weather"}<WeatherExtension onBack={backFromFeature} initialLocation={weatherLocation} />{/if}
         </div>
       </div>
     {/if}
@@ -1270,7 +1251,7 @@
   .cover.moving-cover.in-motion{visibility:visible;will-change:transform}
   .cover.shared-cover-source{visibility:hidden}
   .island-frame{position:relative;width:100%;height:100%;flex:none;overflow:visible;box-sizing:border-box}.island-frame.simulate-hidden{overflow:hidden}.surface-anchor{position:absolute;z-index:1}.edge-top .surface-anchor{top:0;left:50%}.edge-right .surface-anchor{top:50%;right:0}.edge-bottom .surface-anchor{bottom:0;left:50%}.edge-left .surface-anchor{top:50%;left:0}
-  .file-drop-feedback{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:#000;color:#91caff;font:600 12px var(--app-font);pointer-events:none;outline:1px solid #91caff;outline-offset:-2px}
+  .file-drop-feedback{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:#000;color:#91caff;font:600 12px var(--app-font);pointer-events:none;outline:1px solid #002fa7;outline-offset:-2px}
   .file-confirm{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;height:100%;font-size:18px;line-height:1.35}
   .file-confirm strong{font-size:21px;color:#fff}.file-confirm p{margin:0;color:rgba(255,255,255,.78)}
   .file-confirm-paths{min-height:0;max-height:65px;overflow:auto;color:#fff;overflow-wrap:anywhere;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.32) transparent}
@@ -1288,7 +1269,7 @@
   .file-date button{flex:1;min-width:0;min-height:44px;border-radius:12px;padding:8px 6px;background:rgba(255,255,255,.07);white-space:nowrap}
   .file-date button.active,.file-date button.active:hover,.file-date button.active:focus-visible{color:#fff;background:hsl(223 70% 33%)}
   .file-sort-panel button:hover,.file-sort-panel button:focus-visible{background:rgba(255,255,255,.16)}
-  .file-sort-panel button:focus-visible,.file-results:focus-visible{outline:2px solid #91caff;outline-offset:2px}
+  .file-sort-panel button:focus-visible,.file-results:focus-visible{outline:2px solid #002fa7;outline-offset:2px}
   .file-progress{flex:none;display:flex;flex-direction:column;gap:7px}
   .file-progress-label{display:flex;justify-content:space-between;color:rgba(255,255,255,.72);font-size:16px;font-variant-numeric:tabular-nums}
   .file-progress-track{height:7px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.19)}
@@ -1308,19 +1289,18 @@
   .shadow-filter{position:absolute;pointer-events:none}
   .island-shadow{position:absolute;inset:0;z-index:0;filter:url(#island-upper-shadow);pointer-events:none;transition:transform 140ms cubic-bezier(.23,1,.32,1)}
   .island-shadow-shape{background:#000}
-  .floating-style .surface-anchor:active .island-shadow.background-press:not(.editing-surface){transform:scale(.97) translateZ(0)}
   .island-surface:focus-visible{outline:none}
   .volume-indicator{position:absolute;z-index:40;top:12px;left:50%;display:flex;align-items:center;width:min(320px,calc(100% - 32px));height:48px;padding:0 12px;box-sizing:border-box;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(14,15,18,.96);transform:translateX(-50%);pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.28)}
   .volume-indicator.compact-mode{inset:0;display:grid;width:100%;height:100%;padding:3px 18px;border:0;border-radius:inherit;background:rgba(0,0,0,.97);transform:none;box-shadow:none}
   .volume-meter{position:relative;width:100%;height:24px;overflow:hidden;border-radius:2px}
-  .volume-meter-fill{position:absolute;top:0;bottom:0;left:0;max-width:100%;background:#193a8e;transition:width 90ms linear,height 90ms linear}
+  .volume-meter-fill{position:absolute;top:0;bottom:0;left:0;max-width:100%;border-radius:0;background:#91caff;transition:width 90ms linear,height 90ms linear}
   .volume-meter i{position:absolute;top:0;bottom:0;display:block;width:3px;transform:translateX(-50%);background:#fff}
-  .volume-meter i::after{position:absolute;top:0;bottom:0;left:0;width:3px;border-radius:1px;background:#fff;content:""}
+  .volume-meter i::after{position:absolute;top:0;bottom:0;left:0;width:3px;border-radius:1px;background:#888;content:""}
   .volume-meter i.passed{opacity:0}
   .volume-indicator.compact-mode .volume-meter{height:100%}
   .volume-indicator.vertical.compact-mode{padding:3px 0}
   .volume-indicator.vertical.compact-mode .volume-meter{width:56px;height:100%}
-  .volume-indicator.vertical.compact-mode .volume-meter-fill{top:auto;right:0;bottom:0;left:0;width:100%;max-height:100%}
+  .volume-indicator.vertical.compact-mode .volume-meter-fill{background:#91caff;top:auto;right:0;bottom:0;left:0;width:100%;max-height:100%}
   .volume-indicator.vertical.compact-mode .volume-meter i{top:auto;right:0;bottom:0;left:50%;width:3px;height:52px;transform:translateX(-50%)}
   .volume-indicator.vertical.compact-mode .volume-meter i::after{top:0;right:0;bottom:0;left:0;width:3px;height:100%}
   .volume-protection-prompt{position:absolute;z-index:41;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;box-sizing:border-box;border-radius:inherit;background:rgba(18,19,22,.96);color:#fff;text-align:center;font:500 13px/1.4 var(--app-font)}
@@ -1328,23 +1308,23 @@
   .volume-protection-prompt button{padding:7px 12px;border:1px solid rgba(255,255,255,.2);border-radius:9px;background:#292b31;color:#fff;font:600 12px/1.2 var(--app-font);cursor:pointer}
   .volume-protection-prompt button:last-child{background:#f2f3f5;color:#111}
 
-  .floating-style .island-surface.background-press:active{transform:scale(.97) translateZ(0)}.compact-layer,.expanded-layer{position:absolute;z-index:1;box-sizing:border-box;pointer-events:none}
+  .compact-layer,.expanded-layer{position:absolute;z-index:1;box-sizing:border-box;pointer-events:none}
   .compact-layer{inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px 0 4px}.compact-layer.edge-inset:not(.vertical){padding-left:calc(4px + var(--shoulder-inset));padding-right:calc(8px + var(--shoulder-inset))}.compact-layer.vertical{flex-direction:column;padding:4px 0 8px}.compact-layer.edge-inset.vertical{padding-top:calc(4px + var(--shoulder-inset));padding-bottom:calc(8px + var(--shoulder-inset))}.compact-layer button,.compact-layer :global(canvas){pointer-events:auto}.time-display{width:100%;text-align:center;color:rgba(255,255,255,.8);font:500 12px/1 var(--app-font);letter-spacing:.05em;font-variant-numeric:tabular-nums;user-select:none}.cover{position:relative;display:grid;place-items:center;flex:none;padding:0;overflow:hidden;color:rgba(255,255,255,.3);background:rgba(255,255,255,.06);border:0;cursor:pointer;user-select:none}.compact-cover{width:20px;height:20px;border-radius:50%;top:-1px}.expanded-cover{width:84px;height:84px;border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.35);outline:1px solid rgba(255,255,255,.1)}.playing-dot{width:3px;height:3px;border-radius:50%}
   .compact-disc{position:relative;display:block;width:100%;height:100%;transform-origin:center}
   .idle-compact-dashboard{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0 7px;color:rgba(255,255,255,.92);user-select:none}.idle-clock{display:flex;align-items:center;height:1em;font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums;letter-spacing:.02em}.idle-weather{display:flex;align-items:center;gap:4px;font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums}.idle-weather strong{display:flex;align-items:center;height:1em;font:inherit}.idle-weather :global(svg){flex:none;color:rgba(255,255,255,.82)}.idle-compact-dashboard.vertical{flex-direction:column;padding:7px 0;gap:10px}.idle-compact-dashboard.vertical .idle-weather{flex-direction:column}
   .debug-overlay{position:absolute;z-index:4;top:4px;left:50%;display:flex;gap:5px;max-width:calc(100% - 12px);padding:2px 6px;border-radius:5px;transform:translateX(-50%);overflow:hidden;color:#4ade80;background:rgba(0,0,0,.75);font:500 8px/1.3 var(--app-font);white-space:nowrap;pointer-events:none}.debug-overlay span{overflow:hidden;text-overflow:ellipsis}
-  .expanded-layer{inset:0;width:100%;height:100%;padding:0;transform-origin:left top;will-change:transform,opacity}.expanded-layer.vertical{transform-origin:center top}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,600px);height:var(--expanded-content-height,210px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:11px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}
+  .expanded-layer{inset:0;width:100%;height:100%;padding:0;transform-origin:left top;will-change:transform,opacity}.expanded-layer.vertical{transform-origin:center top}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,600px);height:var(--expanded-content-height,210px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:13px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}
   .progress-block{width:100%;margin-bottom:10px}
   .control-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;width:100%;height:58px}.cover:active{transform:scale(.94)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
-  .compact-timer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:0;color:#f28b31;background:transparent;cursor:pointer;font-family:var(--app-font);user-select:none}.compact-timer span{min-width:42px;font-size:12px;font-weight:600;line-height:1;letter-spacing:.015em;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}.compact-timer.finished span{min-width:0;font-size:11px}.compact-timer.paused{color:rgba(242,139,49,.62)}.timer-pause{width:7px;height:8px;display:flex;align-items:center;justify-content:center;gap:2px}.timer-pause b{display:block;width:2px;height:7px;border-radius:1px;background:currentColor}.compact-timer.urgent{color:#ff765f}
-  .compact-timer{position:absolute;inset:0;display:block;overflow:hidden;padding:0;border-radius:inherit;color:#f4f7ff;background:transparent;box-shadow:none;cursor:default!important}.compact-timer:hover,.compact-timer:focus-visible{background:transparent!important;box-shadow:none!important;outline:0!important}.compact-timer .timer-summary{position:absolute;inset:0 14px 4px;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}.compact-timer .timer-leading{display:flex;align-items:center;gap:7px;min-width:0;color:rgba(245,248,255,.9)}.compact-timer .timer-leading :global(svg){flex:none;color:#70aaff}.compact-timer .timer-time{min-width:0;overflow:hidden;color:#f5f7fb;font-size:13px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em;text-align:right;text-overflow:ellipsis;white-space:nowrap}.compact-timer .timer-progress-track{position:absolute;right:14px;bottom:5px;left:14px;height:2px;overflow:hidden;border-radius:999px;background:rgba(115,143,183,.2)}.compact-timer .timer-progress-fill{display:block;height:100%;max-width:100%;border-radius:inherit;background:#193a8e;box-shadow:0 0 7px rgba(25,58,142,.68);transition:width 350ms linear,background-color 180ms ease}.compact-timer .timer-progress-fill.paused{background:linear-gradient(90deg,#6d8fb9,#a7c5ed);box-shadow:none}.compact-timer .timer-progress-fill.finished{background:linear-gradient(90deg,#42d99a,#8af0c0)}.compact-timer.paused{color:#f4f7ff}.compact-timer.urgent{box-shadow:inset 1px 0 0 rgba(255,111,102,.58),inset -1px 0 0 rgba(255,111,102,.58),inset 0 0 12px rgba(255,74,60,.09)}.compact-timer.urgent .timer-leading :global(svg){color:#ff8c7c}.compact-timer .timer-pause{flex:none;width:7px;height:8px;gap:2px;color:#a8c5e9}.compact-timer .timer-pause b{width:2px;height:7px;border-radius:1px;background:currentColor}
-  .compact-layer.vertical .compact-timer .timer-summary{inset:14px 4px;flex-direction:column;justify-content:center;gap:10px}.compact-layer.vertical .compact-timer .timer-leading{flex-direction:column;gap:5px}.compact-layer.vertical .compact-timer .timer-time{max-width:100%;font-size:11px;text-align:center}.compact-layer.vertical .compact-timer .timer-progress-track{top:14px;right:auto;bottom:14px;left:5px;width:2px;height:auto}.compact-layer.vertical .timer-progress-fill{width:100%!important;height:var(--timer-progress-height,0%)}
+  .compact-timer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:0;color:#f28b31;background:transparent;cursor:pointer;font-family:var(--app-font);user-select:none}.compact-timer span{min-width:42px;font-size:14px;font-weight:600;line-height:1;letter-spacing:.015em;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}.compact-timer.finished span{min-width:0;font-size:13px}.compact-timer.paused{color:rgba(242,139,49,.62)}.timer-pause{width:7px;height:8px;display:flex;align-items:center;justify-content:center;gap:2px}.timer-pause b{display:block;width:2px;height:7px;border-radius:1px;background:currentColor}.compact-timer.urgent{color:#ff765f}
+  .compact-timer{position:absolute;inset:0;display:block;overflow:hidden;padding:0;border-radius:inherit;color:#f4f7ff;background:transparent;box-shadow:none;cursor:default!important}.compact-timer:hover,.compact-timer:focus-visible{background:transparent!important;box-shadow:none!important;outline:0!important}.compact-timer .timer-summary{position:absolute;inset:0 14px 4px;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}.compact-timer .timer-leading{display:flex;align-items:center;gap:7px;min-width:0;color:rgba(245,248,255,.9)}.compact-timer .timer-leading :global(svg){flex:none;color:#91caff}.compact-timer .timer-time{min-width:0;overflow:hidden;color:#f5f7fb;font-size:13px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em;text-align:right;text-overflow:ellipsis;white-space:nowrap}.compact-timer .timer-progress-track{position:absolute;right:14px;bottom:5px;left:14px;height:2px;overflow:hidden;border-radius:999px;background:rgba(0,47,167,.2)}.compact-timer .timer-progress-fill{display:block;min-width:0;height:100%;max-width:100%;border-radius:inherit;background:#ff9f43;box-shadow:0 0 7px rgba(255,159,67,.68);transition:width 350ms linear,background-color 180ms ease}.compact-timer .timer-progress-fill.paused{background:linear-gradient(90deg,#002fa7,#a7c5ed);box-shadow:none}.compact-timer .timer-progress-fill.finished{background:linear-gradient(90deg,#42d99a,#8af0c0)}.compact-timer.paused{color:#f4f7ff}.compact-timer.urgent{box-shadow:inset 1px 0 0 rgba(255,111,102,.58),inset -1px 0 0 rgba(255,111,102,.58),inset 0 0 12px rgba(255,74,60,.09)}.compact-timer.urgent .timer-leading :global(svg){color:#ff8c7c}.compact-timer .timer-pause{flex:none;width:7px;height:8px;gap:2px;color:#a8c5e9}.compact-timer .timer-pause b{width:2px;height:7px;border-radius:1px;background:currentColor}
+  .compact-layer.vertical .compact-timer .timer-summary{inset:14px 4px;flex-direction:column;justify-content:center;gap:10px}.compact-layer.vertical .compact-timer .timer-leading{flex-direction:column;gap:5px}.compact-layer.vertical .compact-timer .timer-time{max-width:100%;font-size:13px;text-align:center}.compact-layer.vertical .compact-timer .timer-progress-track{top:14px;right:auto;bottom:14px;left:5px;width:2px;height:auto}.compact-layer.vertical .timer-progress-fill{width:100%!important;height:var(--timer-progress-height,0%)}
   .attached-style.edge-top .music-pane,.attached-style.edge-bottom .music-pane{--music-inline-inset:calc(40px + var(--shoulder-content-inset,0px))}
   .music-pane{padding-top:14px;padding-bottom:10px}
   .top-row{gap:16px;margin-bottom:8px}
   @media (hover:hover) and (pointer:fine){}
   @media (prefers-reduced-motion:reduce){}
-  .studio-preview-highlight{position:absolute;z-index:20;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}.studio-preview-highlight::before,.studio-preview-highlight::after{content:"";position:absolute;pointer-events:none}.highlight-shape::after{inset:2px;border:2px solid rgba(167,139,250,.9);border-radius:inherit;box-shadow:0 0 12px rgba(167,139,250,.42),inset 0 0 7px rgba(167,139,250,.18)}.highlight-edge::before{background:#60a5fa;box-shadow:0 0 9px rgba(96,165,250,.8)}.edge-top .highlight-edge::before,.edge-bottom .highlight-edge::before{left:18px;right:18px;height:2px}.edge-top .highlight-edge::before{top:2px}.edge-bottom .highlight-edge::before{bottom:2px}.edge-left .highlight-edge::before,.edge-right .highlight-edge::before{top:18px;bottom:18px;width:2px}.edge-left .highlight-edge::before{left:2px}.edge-right .highlight-edge::before{right:2px}.highlight-position::after{width:8px;height:8px;border:2px solid #fff;border-radius:50%;background:#60a5fa;box-shadow:0 0 0 3px rgba(96,165,250,.2),0 0 10px rgba(96,165,250,.92)}.edge-top .highlight-position::after,.edge-bottom .highlight-position::after{left:calc(var(--preview-position) * 1% - 6px)}.edge-top .highlight-position::after{top:-3px}.edge-bottom .highlight-position::after{bottom:-3px}.edge-left .highlight-position::after,.edge-right .highlight-position::after{top:calc(var(--preview-position) * 1% - 6px)}.edge-left .highlight-position::after{left:-3px}.edge-right .highlight-position::after{right:-3px}.corner{position:absolute;width:calc(var(--preview-radius-tl) + 9px);height:calc(var(--preview-radius-tl) + 9px);max-width:48px;max-height:48px;opacity:.95}.corner.top-left{top:2px;left:2px;width:calc(var(--preview-radius-tl) + 9px);height:calc(var(--preview-radius-tl) + 9px);border:2px solid;border-color:#a78bfa transparent transparent #a78bfa;border-radius:var(--preview-radius-tl) 0 0 0}.corner.top-right{top:2px;right:2px;width:calc(var(--preview-radius-tr) + 9px);height:calc(var(--preview-radius-tr) + 9px);border:2px solid;border-color:#a78bfa #a78bfa transparent transparent;border-radius:0 var(--preview-radius-tr) 0 0}.corner.bottom-left{bottom:2px;left:2px;width:calc(var(--preview-radius-bl) + 9px);height:calc(var(--preview-radius-bl) + 9px);border:2px solid;border-color:transparent transparent #a78bfa #a78bfa;border-radius:0 0 0 var(--preview-radius-bl)}.corner.bottom-right{right:2px;bottom:2px;width:calc(var(--preview-radius-br) + 9px);height:calc(var(--preview-radius-br) + 9px);border:2px solid;border-color:transparent #a78bfa #a78bfa transparent;border-radius:0 0 var(--preview-radius-br) 0}.length-handle{position:absolute;width:3px;height:22px;border-radius:999px;background:#60a5fa;box-shadow:0 0 9px rgba(96,165,250,.8)}.length-handle.start{left:2px;top:50%;transform:translateY(-50%)}.length-handle.end{right:2px;top:50%;transform:translateY(-50%)}.length-vertical .length-handle{width:22px;height:3px;left:50%;transform:translateX(-50%)}.length-vertical .length-handle.start{top:2px}.length-vertical .length-handle.end{top:auto;right:auto;bottom:2px}.shoulder-handle{position:absolute;width:3px;height:18px;border-radius:999px;background:#a78bfa;box-shadow:0 0 8px rgba(167,139,250,.8)}.edge-top .shoulder-handle.start{top:2px;left:calc(var(--preview-shoulder) + 1px)}.edge-top .shoulder-handle.end{top:2px;right:calc(var(--preview-shoulder) + 1px)}.edge-bottom .shoulder-handle.start{bottom:2px;left:calc(var(--preview-shoulder) + 1px)}.edge-bottom .shoulder-handle.end{right:calc(var(--preview-shoulder) + 1px);bottom:2px}.edge-left .shoulder-handle,.edge-right .shoulder-handle{width:18px;height:3px;top:calc(var(--preview-shoulder) + 1px)}.edge-left .shoulder-handle.start{left:2px}.edge-left .shoulder-handle.end{bottom:calc(var(--preview-shoulder) + 1px);top:auto;left:2px}.edge-right .shoulder-handle.start{right:2px}.edge-right .shoulder-handle.end{right:2px;top:auto;bottom:calc(var(--preview-shoulder) + 1px)}.background-wash{position:absolute;inset:2px;border-radius:inherit;background:rgba(167,139,250,.14);box-shadow:inset 0 0 0 1px rgba(196,181,253,.72),0 0 16px rgba(167,139,250,.22)}.spectrum-focus{position:absolute;z-index:1;top:50%;right:5px;width:23px;height:21px;border:1px solid #60a5fa;border-radius:6px;background:rgba(96,165,250,.1);box-shadow:0 0 10px rgba(96,165,250,.55);transform:translateY(-50%)}.preview-expanded .spectrum-focus{top:14px;right:22px;width:47px;height:31px;border-radius:8px}
+  .studio-preview-highlight{position:absolute;z-index:20;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}.studio-preview-highlight::before,.studio-preview-highlight::after{content:"";position:absolute;pointer-events:none}.highlight-shape::after{inset:2px;border:2px solid rgba(167,139,250,.9);border-radius:inherit;box-shadow:0 0 12px rgba(167,139,250,.42),inset 0 0 7px rgba(167,139,250,.18)}.highlight-edge::before{background:#002fa7;box-shadow:0 0 9px rgba(0,47,167,.8)}.edge-top .highlight-edge::before,.edge-bottom .highlight-edge::before{left:18px;right:18px;height:2px}.edge-top .highlight-edge::before{top:2px}.edge-bottom .highlight-edge::before{bottom:2px}.edge-left .highlight-edge::before,.edge-right .highlight-edge::before{top:18px;bottom:18px;width:2px}.edge-left .highlight-edge::before{left:2px}.edge-right .highlight-edge::before{right:2px}.highlight-position::after{width:8px;height:8px;border:2px solid #fff;border-radius:50%;background:#002fa7;box-shadow:0 0 0 3px rgba(0,47,167,.2),0 0 10px rgba(0,47,167,.92)}.edge-top .highlight-position::after,.edge-bottom .highlight-position::after{left:calc(var(--preview-position) * 1% - 6px)}.edge-top .highlight-position::after{top:-3px}.edge-bottom .highlight-position::after{bottom:-3px}.edge-left .highlight-position::after,.edge-right .highlight-position::after{top:calc(var(--preview-position) * 1% - 6px)}.edge-left .highlight-position::after{left:-3px}.edge-right .highlight-position::after{right:-3px}.corner{position:absolute;width:calc(var(--preview-radius-tl) + 9px);height:calc(var(--preview-radius-tl) + 9px);max-width:48px;max-height:48px;opacity:.95}.corner.top-left{top:2px;left:2px;width:calc(var(--preview-radius-tl) + 9px);height:calc(var(--preview-radius-tl) + 9px);border:2px solid;border-color:#a78bfa transparent transparent #a78bfa;border-radius:var(--preview-radius-tl) 0 0 0}.corner.top-right{top:2px;right:2px;width:calc(var(--preview-radius-tr) + 9px);height:calc(var(--preview-radius-tr) + 9px);border:2px solid;border-color:#a78bfa #a78bfa transparent transparent;border-radius:0 var(--preview-radius-tr) 0 0}.corner.bottom-left{bottom:2px;left:2px;width:calc(var(--preview-radius-bl) + 9px);height:calc(var(--preview-radius-bl) + 9px);border:2px solid;border-color:transparent transparent #a78bfa #a78bfa;border-radius:0 0 0 var(--preview-radius-bl)}.corner.bottom-right{right:2px;bottom:2px;width:calc(var(--preview-radius-br) + 9px);height:calc(var(--preview-radius-br) + 9px);border:2px solid;border-color:transparent #a78bfa #a78bfa transparent;border-radius:0 0 var(--preview-radius-br) 0}.length-handle{position:absolute;width:3px;height:22px;border-radius:999px;background:#002fa7;box-shadow:0 0 9px rgba(0,47,167,.8)}.length-handle.start{left:2px;top:50%;transform:translateY(-50%)}.length-handle.end{right:2px;top:50%;transform:translateY(-50%)}.length-vertical .length-handle{width:22px;height:3px;left:50%;transform:translateX(-50%)}.length-vertical .length-handle.start{top:2px}.length-vertical .length-handle.end{top:auto;right:auto;bottom:2px}.shoulder-handle{position:absolute;width:3px;height:18px;border-radius:999px;background:#a78bfa;box-shadow:0 0 8px rgba(167,139,250,.8)}.edge-top .shoulder-handle.start{top:2px;left:calc(var(--preview-shoulder) + 1px)}.edge-top .shoulder-handle.end{top:2px;right:calc(var(--preview-shoulder) + 1px)}.edge-bottom .shoulder-handle.start{bottom:2px;left:calc(var(--preview-shoulder) + 1px)}.edge-bottom .shoulder-handle.end{right:calc(var(--preview-shoulder) + 1px);bottom:2px}.edge-left .shoulder-handle,.edge-right .shoulder-handle{width:18px;height:3px;top:calc(var(--preview-shoulder) + 1px)}.edge-left .shoulder-handle.start{left:2px}.edge-left .shoulder-handle.end{bottom:calc(var(--preview-shoulder) + 1px);top:auto;left:2px}.edge-right .shoulder-handle.start{right:2px}.edge-right .shoulder-handle.end{right:2px;top:auto;bottom:calc(var(--preview-shoulder) + 1px)}.background-wash{position:absolute;inset:2px;border-radius:inherit;background:rgba(167,139,250,.14);box-shadow:inset 0 0 0 1px rgba(196,181,253,.72),0 0 16px rgba(167,139,250,.22)}.spectrum-focus{position:absolute;z-index:1;top:50%;right:5px;width:23px;height:21px;border:1px solid #002fa7;border-radius:6px;background:rgba(0,47,167,.1);box-shadow:0 0 10px rgba(0,47,167,.55);transform:translateY(-50%)}.preview-expanded .spectrum-focus{top:14px;right:22px;width:47px;height:31px;border-radius:8px}
   @media (hover:hover) and (pointer:fine){.cover:hover{filter:brightness(1.08)}}
   @media (prefers-reduced-motion:reduce){.surface-anchor{transition:none!important}.island-surface,.expanded-layer,.control-row button{transition-duration:120ms!important}.island-surface,.island-shadow{transition-property:opacity,box-shadow!important}.expanded-layer{transform:none!important}.studio-preview-highlight .corner,.studio-preview-highlight::after,.studio-preview-highlight .length-handle,.studio-preview-highlight .shoulder-handle,.studio-preview-highlight .background-wash,.studio-preview-highlight .spectrum-focus{animation:none!important;opacity:.78}}
 
@@ -1387,7 +1367,7 @@
   .music-pane .metadata>span{font-size:18px;line-height:1.15}
   .music-pane{padding:20px var(--music-inline-inset,40px) 14px}
   .music-pane :global(.progress-block .time){font-size:20px}
-  .music-pane :global(.progress-block.with-times){grid-template-columns:max-content minmax(0,1fr) max-content;column-gap:12px}
+  .music-pane :global(.progress-block.with-times){grid-template-columns:var(--time-width) minmax(0,1fr) var(--time-width);column-gap:12px}
   .music-pane :global(.progress-block .track){height:10px}
   .music-pane :global(.progress-block .elapsed){justify-content:flex-start}
   .music-pane :global(.progress-block .remaining){justify-content:flex-end}
@@ -1401,7 +1381,7 @@
   .transport-controls button{width:58px;height:58px;border-radius:12px}
   .control-row button{position:relative;isolation:isolate;cursor:pointer;transition:transform 140ms cubic-bezier(.23,1,.32,1),color 140ms ease,background 150ms ease}
   .control-row button::before{content:"";position:absolute;inset:-2.5px;z-index:-1;border-radius:inherit;background:rgba(255,255,255,.1);opacity:0;pointer-events:none;transition:opacity 150ms ease}
-  .control-row button:active:not(:disabled){transform:scale(.92)}
+  .control-row button:active:not(:disabled):not(.layout-toggle):not(.floating-toggle){transform:scale(.92)}
   .control-row button:disabled{opacity:.45;cursor:default;background:transparent}
   .control-row .play{color:#fff}
   .trailing-controls button:last-child{color:rgba(255,255,255,.95)}

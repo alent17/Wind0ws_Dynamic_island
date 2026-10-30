@@ -2178,6 +2178,7 @@ pub fn run() {
             commands::get_system_snapshot,
             commands::get_weather_snapshot,
             commands::get_weather_for_location,
+            commands::get_weather_details,
             commands::search_weather_locations,
             commands::get_netease_song_info_cmd,
             commands::get_netease_playback_mode,

@@ -46,7 +46,7 @@ let { timeZone = "system", reduceMotion = false } = $props<{
   .widget-clock{position:relative;container-type:size;display:flex;flex-direction:column;justify-content:space-between;align-items:stretch;width:100%;height:100%;min-width:0;gap:14px;padding:8px 0;box-sizing:border-box;user-select:none}
   .clock-heading,.clock-calendar{display:flex;align-items:baseline;justify-content:space-between;gap:16px;line-height:1.35}
   .clock-heading{color:#ffffff80;font-size:16px;font-weight:500;letter-spacing:.04em}
-  .timezone-label{max-width:58%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+  .timezone-label{max-width:58%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;padding:4px 8px;border-radius:7px;background:#002fa7;color:#fff;font-size:15px;font-variant-numeric:tabular-nums}
   .widget-time{display:flex;align-items:center;justify-content:center;flex:1;min-height:0;color:#fff;font-family:var(--app-font,system-ui);font-size:max(48px,min(20cqw,calc(100cqh - 80px),144px));font-weight:700;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
   .clock-calendar{font-size:clamp(14px,4.4cqw,20px);font-weight:500;color:#ffffffb3}
   .clock-calendar span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

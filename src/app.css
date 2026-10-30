@@ -88,7 +88,7 @@ img {
 .island-frame .file-confirm button.file-confirm-accept:not(.cover):not([data-layout-edit-control]),
 .island-frame .file-confirm button.file-confirm-accept:not(.cover):not([data-layout-edit-control]):hover:not(:disabled),
 .island-frame .file-confirm button.file-confirm-accept:not(.cover):not([data-layout-edit-control]):focus-visible:not(:disabled) {
-  background: #193a8e !important;
+  background: #002fa7 !important;
   color: #fff;
 }
 
@@ -96,23 +96,27 @@ img {
 .island-frame .file-date button.active:not(.cover):not([data-layout-edit-control]),
 .island-frame .file-date button.active:not(.cover):not([data-layout-edit-control]):hover:not(:disabled),
 .island-frame .file-date button.active:not(.cover):not([data-layout-edit-control]):focus-visible:not(:disabled) {
-  background: #193a8e !important;
+  background: #002fa7 !important;
   color: #fff;
 }
 
 /* Calendar dates have persistent states that must survive the shared button
    hover and focus rules, including in the desktop WebView. */
 .island-frame .calendar-extension button.day.today:not(.cover):not([data-layout-edit-control]) {
-  background: #193a8e !important;
+  background: #002fa7 !important;
   border-radius: 9px;
   color: #fff;
 }
 
 .island-frame .calendar-extension button.day.selected:not(.today):not(.cover):not([data-layout-edit-control]) {
-  background: #193a8e !important;
+  background: #002fa7 !important;
   border-radius: 9px;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.44) !important;
   color: #fff;
+}
+
+ .island-frame .calendar-extension button.day.selected:is(.range-start,.range-middle,.range-end):not(.cover):not([data-layout-edit-control]) {
+  box-shadow: none !important;
 }
 
 /* Preserve city highlights over the shared island button styles. */
@@ -122,7 +126,7 @@ img {
   box-shadow: none !important;
 }
 .island-frame .world-clock-extension button.city-chip.selected:not(.cover):not([data-layout-edit-control]) {
-  background: #193a8e !important;
+  background: #002fa7 !important;
   color: #fff;
   box-shadow: none !important;
 }

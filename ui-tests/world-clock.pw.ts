@@ -34,7 +34,7 @@ test("world clock views cities without changing the configured time zone", async
   const tokyo = world.locator('[data-city="Asia/Tokyo"]');
   await tokyo.click();
   await expect(tokyo).toHaveAttribute("aria-pressed","true");
-  await expect(tokyo).toHaveCSS("background-color","rgb(25, 58, 142)");
+  await expect(tokyo).toHaveCSS("background-color","rgb(0, 47, 167)");
   await expect(world.locator('[data-city="Asia/Shanghai"]')).toHaveCSS("background-color","rgb(255, 255, 255)");
   await expect(selected.locator(".clock-city strong")).toHaveText("Tokyo");
   await expect(selected.locator(".clock-digits")).toHaveText("21:34:56");

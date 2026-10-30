@@ -27,5 +27,5 @@
 </svg>
 
 <style>
-  .colored .sun{fill:#ffc85a}.colored .cloud{fill:#c5d7e8}.colored .rain{fill:#60baff}.colored .snow{fill:#a8ddff}.colored .fog{fill:#91a9bb}.colored .storm{fill:#ffc85a}
+  .colored .sun{fill:#ffc85a}.colored .cloud{fill:#c5d7e8}.colored .rain{fill:#002fa7}.colored .snow{fill:#a8ddff}.colored .fog{fill:#91a9bb}.colored .storm{fill:#ffc85a}
 </style>

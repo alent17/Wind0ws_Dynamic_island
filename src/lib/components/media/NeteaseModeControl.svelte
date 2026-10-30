@@ -53,6 +53,6 @@
   .mode-control:active:not(:disabled){transform:scale(.92)}
   .mode-control:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .mode-control:disabled{opacity:.42;cursor:default}
-  .mode-error{position:absolute;z-index:5;top:calc(100% + 4px);right:0;width:max-content;max-width:min(260px,60vw);padding:5px 8px;border:1px solid rgba(255,180,171,.34);border-radius:7px;background:rgba(32,16,18,.96);color:#ffb4ab;font-size:11px;line-height:1.35;white-space:normal;overflow-wrap:anywhere;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.22)}
+  .mode-error{position:absolute;z-index:5;top:calc(100% + 4px);right:0;width:max-content;max-width:min(260px,60vw);padding:5px 8px;border:1px solid rgba(255,180,171,.34);border-radius:7px;background:rgba(32,16,18,.96);color:#ffb4ab;font-size:13px;line-height:1.35;white-space:normal;overflow-wrap:anywhere;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.22)}
   @media(prefers-reduced-motion:reduce){.mode-control{transition:none}}
 </style>

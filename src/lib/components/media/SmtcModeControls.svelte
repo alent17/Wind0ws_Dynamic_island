@@ -46,5 +46,5 @@
   button:disabled{opacity:.4;cursor:default}
   button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .compact button{width:28px;height:28px}
-  .mode-error{position:absolute;top:100%;left:0;width:max-content;max-width:220px;padding:4px 7px;border-radius:6px;background:#201012;color:#ffb4ab;font-size:11px;z-index:5}
+  .mode-error{position:absolute;top:100%;left:0;width:max-content;max-width:220px;padding:4px 7px;border-radius:6px;background:#201012;color:#ffb4ab;font-size:13px;z-index:5}
 </style>
