@@ -41,6 +41,7 @@
   const heights = new Float32Array(NUM_BARS);
   const paintedHeights = new Float32Array(NUM_BARS).fill(Number.NaN);
   let barColors: string[] = ["#ffffff", "#ffffff"];
+  let barGradient: CanvasGradient | null = null;
 
   const barWidth = $derived(2 * scale);
   const barGap = $derived(1.5 * (1 + (scale - 1) * 0.4));
@@ -64,6 +65,9 @@
     if (!ctx) return;
     // Use the existing two-color palette as a vertical ramp on every bar.
     barColors = createSpectrumPalette(topColor, bottomColor, 2);
+    barGradient = ctx.createLinearGradient(0, canvasHeight, 0, 0);
+    barGradient.addColorStop(0, barColors[0] ?? "#888888");
+    barGradient.addColorStop(1, barColors[1] ?? "#ffffff");
     paintedHeights.fill(Number.NaN);
   }
 
@@ -95,9 +99,7 @@
     }
     if (!changed) return;
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-    const gradient = ctx.createLinearGradient(0, canvasHeight, 0, 0);
-    gradient.addColorStop(0, barColors[0] ?? "#888888");
-    gradient.addColorStop(1, barColors[1] ?? "#ffffff");
+    const gradient = barGradient!;
     for (let index = 0; index < NUM_BARS; index += 1) {
       const height = heights[index];
       const x = index * (barWidth + barGap);
@@ -161,13 +163,13 @@
 
   $effect(() => {
     if (!mounted || values || mode !== "random" || !active || !playing) {
-      randomBars = new Float32Array(NUM_BARS);
+      randomBars.fill(0);
       return;
     }
     if (reduceMotion) {
-      randomBars = Float32Array.from({ length: NUM_BARS }, () => 0.18);
+      randomBars.fill(0.18);
       return () => {
-        randomBars = new Float32Array(NUM_BARS);
+        randomBars.fill(0);
       };
     }
     const retarget = () => {
@@ -184,7 +186,7 @@
     const timer = setInterval(retarget, 125);
     return () => {
       clearInterval(timer);
-      randomBars = new Float32Array(NUM_BARS);
+      randomBars.fill(0);
     };
   });
 
