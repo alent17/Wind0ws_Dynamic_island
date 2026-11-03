@@ -222,8 +222,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   expandedEdgeShoulderRadius: 32,
   floatingExpandedLength: 600,
   edgeExpandedLength: 600,
-  floatingCompactLength: 100,
-  edgeCompactLength: 120,
+  floatingCompactLength: 80,
+  edgeCompactLength: 80,
   language: "system",
   fontId: "misans",
   notificationsEnabled: false,
@@ -309,8 +309,8 @@ export function normalizeAppSettings(value: Partial<AppSettings>): AppSettings {
     const length = Number(value[key] ?? 600);
     merged[key] = Math.min(900, Math.max(480, Number.isFinite(length) ? Math.round(length) : 600));
   }
-  merged.floatingCompactLength = Math.min(300, Math.max(100, Number(value.floatingCompactLength ?? legacyCompactLength)));
-  merged.edgeCompactLength = Math.min(300, Math.max(120, Number(value.edgeCompactLength ?? legacyCompactLength)));
+  merged.floatingCompactLength = Math.min(300, Math.max(80, Number(value.floatingCompactLength ?? legacyCompactLength)));
+  merged.edgeCompactLength = Math.min(300, Math.max(80, Number(value.edgeCompactLength ?? legacyCompactLength)));
   merged.floatingExpandedCornerRadius = Math.min(80, Math.max(0, Number(value.floatingExpandedCornerRadius ?? legacyExpandedRadius)));
   merged.edgeExpandedCornerRadius = Math.min(80, Math.max(0, Number(value.edgeExpandedCornerRadius ?? legacyExpandedRadius)));
   if (merged.neteaseProgressMode !== "real" && merged.neteaseProgressMode !== "estimate") {

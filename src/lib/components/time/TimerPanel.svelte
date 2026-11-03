@@ -1,6 +1,5 @@
 <script lang="ts">
   import { Timer, X, Play, Pause, Volume2, VolumeX } from "lucide-svelte";
-  import PlayPauseIcon from "$lib/components/media/PlayPauseIcon.svelte";
   import RollingNumber from "$lib/components/time/RollingNumber.svelte";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
@@ -50,13 +49,12 @@
   let dragStartX = 0;
   let dragStartMinutes = 20;
   let suppressClick = false;
-  let centerMinutes = $derived(active ? Math.max(1, Math.ceil(durationMs / 60_000)) : selectedMinutes);
+  let centerMinutes = $derived(active ? Math.max(1, Math.ceil(remainingMs / 60_000)) : selectedMinutes);
   let rulerValues = $derived.by(() => {
     const start = Math.max(1, centerMinutes - 15);
     return Array.from({ length: 31 }, (_, index) => start + index);
   });
   let activeIndex = $derived(Math.max(0, rulerValues.findIndex((value) => value === centerMinutes)));
-  let progressIndex = $derived(active ? activeIndex * remainingMs / durationMs : activeIndex);
   let previewMs = $derived(active ? remainingMs : selectedMinutes * 60_000);
   let mainLabel = $derived(status === "running" ? t("pauseTimer") : status === "paused" ? t("resumeTimer") : t("startTimer"));
   let activeActionLabel = $derived(status === "running" ? t("timerPauseAction") : t("timerResumeAction"));
@@ -129,13 +127,31 @@
   }
 </script>
 
-<div class="timer-panel" class:compact class:active={active} class:complete={finished} class:reduce-motion={reduceMotion}>
+<div class="timer-panel" class:compact class:active={active} class:complete={finished}>
   {#if finished}
     <div class="timer-finished-layout" role="status" aria-live="assertive">
       <button type="button" class="timer-finished-dismiss" aria-label={t("dismissNotice")} onclick={(event) => { event.stopPropagation(); onFinishedDismiss?.(); }}><X size={28}/></button>
       <div class="timer-finished-info"><span><Timer size={18}/>{t("timerComplete")}</span><strong>00:00</strong></div>
     </div>
   {:else}
+  {#if active}
+  <div class="timer-active-layout" class:paused={status === "paused"}>
+    <div class="timer-active-controls">
+      <button class="timer-main-button" type="button" aria-label={mainLabel} onclick={(event) => { event.stopPropagation(); handleMainAction(); }}>
+        {#if status === "running"}<Pause size={34} fill="currentColor"/>{:else}<Play size={34} fill="currentColor"/>{/if}
+      </button>
+      <button class="timer-reset" type="button" aria-label={t("cancelTimer")} onclick={(event) => { event.stopPropagation(); onReset?.(); }}>
+        <X size={34}/>
+      </button>
+    </div>
+    <div class="timer-active-info">
+      <div class="timer-readout" aria-live="polite">
+        <strong><RollingNumber value={formatCountdown(remainingMs)} {reduceMotion} /></strong>
+      </div>
+    </div>
+  </div>
+  {:else}
+  {#if !active}
     <div
       bind:this={rulerElement}
       class="timer-ruler"
@@ -157,10 +173,10 @@
       <div class="ruler-track" style={`--active-index:${activeIndex}`}>
         {#each rulerValues as minutes, index}
           <button
-            style={`--tick-color:${index <= progressIndex ? `color-mix(in srgb, #ff9f43 ${activeIndex === 0 ? 100 : 35 + 65 * index / activeIndex}%, black)` : "#777"}`}
+            style={`--tick-color:${index <= activeIndex ? `color-mix(in srgb, #ff9f43 ${activeIndex === 0 ? 100 : 35 + 65 * index / activeIndex}%, black)` : "#777"}`}
             class:major={minutes % 5 === 0}
-            class:prior={index < progressIndex}
-            class:selected={active ? index === Math.floor(progressIndex) : minutes === centerMinutes}
+            class:prior={minutes < centerMinutes}
+            class:selected={minutes === centerMinutes}
             type="button"
             aria-label={`${minutes} ${t("minutesShort")}`}
             onclick={(event) => { event.stopPropagation(); chooseMinutes(minutes); }}
@@ -173,18 +189,20 @@
       <span class="ruler-fade left" aria-hidden="true"></span>
       <span class="ruler-fade right" aria-hidden="true"></span>
     </div>
+  {/if}
   <div class="timer-footer">
     <div class="timer-actions">
       <button class="timer-main-button" type="button" aria-label={mainLabel} onclick={(event) => { event.stopPropagation(); handleMainAction(); }}>
-        <PlayPauseIcon playing={status === "running"} size={34} {reduceMotion} />
+        <Play size={34} fill="currentColor"/>
       </button>
-      {#if active}<button class="timer-option timer-cancel" type="button" aria-label={t("cancelTimer")} onclick={(event) => { event.stopPropagation(); onReset?.(); }}><X size={28}/></button>{:else}<button class="timer-option" class:enabled={soundEnabled} type="button" aria-label="倒计时响铃" aria-pressed={soundEnabled} onclick={(event)=>{event.stopPropagation();onSoundChange?.(!soundEnabled)}}>{#if soundEnabled}<Volume2 size={28} fill="currentColor"/>{:else}<VolumeX size={28}/>{/if}</button>
-      <button class="timer-option" class:enabled={showCompact} type="button" aria-label="缩小时显示倒计时" aria-pressed={showCompact} onclick={(event)=>{event.stopPropagation();onShowCompactChange?.(!showCompact)}}><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="2" y="7" width="24" height="14" rx="7" fill={showCompact ? "currentColor" : "none"} stroke="currentColor" stroke-width="2"/><path d="M9 14h3m4 0h3" stroke={showCompact ? "#171717" : "currentColor"} stroke-width="2" stroke-linecap="round"/></svg></button>{/if}
+      <button class="timer-option" class:enabled={soundEnabled} type="button" aria-label="倒计时响铃" aria-pressed={soundEnabled} onclick={(event)=>{event.stopPropagation();onSoundChange?.(!soundEnabled)}}>{#if soundEnabled}<Volume2 size={28} fill="currentColor"/>{:else}<VolumeX size={28}/>{/if}</button>
+      <button class="timer-option" class:enabled={showCompact} type="button" aria-label="缩小时显示倒计时" aria-pressed={showCompact} onclick={(event)=>{event.stopPropagation();onShowCompactChange?.(!showCompact)}}><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="2" y="7" width="24" height="14" rx="7" fill={showCompact ? "currentColor" : "none"} stroke="currentColor" stroke-width="2"/><path d="M9 14h3m4 0h3" stroke={showCompact ? "#171717" : "currentColor"} stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
     <div class="timer-readout" aria-live="polite">
       <strong><RollingNumber value={formatCountdown(previewMs)} {reduceMotion} /></strong>
     </div>
   </div>
+  {/if}
   {/if}
 
 </div>
@@ -208,7 +226,7 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .timer-panel.active { justify-content: flex-start; }
+  .timer-panel.active { justify-content: center; }
   .timer-active-layout { display: flex; align-items: center; gap: 9px; width: 100%; min-width: 0; }
   .timer-active-controls { display: flex; flex: none; align-items: center; gap: 6px; }
   .timer-active-info { display: flex; flex: 1; flex-direction: column; justify-content: center; min-width: 0; gap: 5px; }
@@ -331,8 +349,6 @@
   @media (prefers-reduced-motion: reduce) {
     .ruler-track, .tick, .timer-main-button, .timer-reset { transition: none; }
   }
-  .timer-actions .timer-main-button, .timer-actions .timer-main-button:hover, .timer-option.enabled { color: #fff; }
-  .timer-cancel { color: #ff7777; }
   .compact{justify-content:center}
   .compact .timer-footer{flex-direction:column-reverse;align-items:stretch;gap:12px}
   .compact .timer-readout{align-items:center;text-align:center}

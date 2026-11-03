@@ -371,7 +371,7 @@ export function navigationHostFor(style: IslandStyle, edge: IslandEdge, compactL
   // layouts reserve the gap in host height.
   const horizontalGap = style === "floating" && isVerticalEdge(edge) ? ISLAND_GAP : 0;
   return {
-    width: Math.max(Math.ceil((isVerticalEdge(edge) ? 28 : clampCompactLength(compactLength)) + horizontalGap * scale), Math.ceil(Math.max(base.width + widgetExtraWidth(widgetCount, expandedLength) + (style === "edge" && !isVerticalEdge(edge) && widgetCount > 0 ? 128 : 0) + horizontalGap, 1000 + ISLAND_GAP) * safeScale)) + (isVerticalEdge(edge) ? 0 : 24),
+    width: Math.max(Math.ceil((isVerticalEdge(edge) ? 28 : clampCompactLength(compactLength)) + horizontalGap * scale), Math.ceil(Math.max(base.width + widgetExtraWidth(widgetCount, expandedLength) + (style === "edge" && !isVerticalEdge(edge) && widgetCount > 0 ? 128 : 0) + horizontalGap, 1400 + ISLAND_GAP) * safeScale)) + (isVerticalEdge(edge) ? 0 : 24),
     height: Math.max(Math.ceil((isVerticalEdge(edge) ? clampCompactLength(compactLength) : 28) + ISLAND_GAP * scale), Math.ceil(Math.max(base.height, 1000 + ISLAND_GAP + ISLAND_OVERSHOOT, style === "edge" && isVerticalEdge(edge) ? 249.1 + 128 + EDITOR_HEIGHT + EDITOR_TOP_SPACE + ISLAND_OVERSHOOT : 0) * normalizedContentScale(scale))),
   };
 }
