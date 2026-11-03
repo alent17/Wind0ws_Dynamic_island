@@ -1372,8 +1372,8 @@
   .music-pane :global(.progress-block .elapsed){justify-content:flex-start}
   .music-pane :global(.progress-block .remaining){justify-content:flex-end}
 
-  .control-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:0;width:100%;height:60px;margin-top:0;transform:translateY(-5px)}
-  .utility-controls,.transport-controls{display:flex;align-items:center;flex:none}
+  .control-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);grid-template-columns:none;align-items:center;justify-items:center;gap:0;width:100%;height:60px;margin-top:0;transform:translateY(-5px)}
+  .utility-controls,.transport-controls{display:contents}
   .utility-controls{gap:22px}
   .leading-controls{justify-self:start}.trailing-controls{justify-self:end}
   .transport-controls{gap:38px}
@@ -1393,8 +1393,8 @@
   .system-netease .leading-controls :global(.smtc-modes button){height:22px}
   .system-netease .leading-controls :global(.smtc-modes svg){width:20px;height:20px}
   .music-pane{container-type:inline-size;container-name:island-music}
-  @container island-music (max-width:500px){
-    .control-row{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);column-gap:12px}
+  @container island-music (max-width:499px){
+    .control-row{column-gap:0}
     .utility-controls{gap:8px}
     .transport-controls{justify-self:center;justify-content:center;min-width:0;gap:8px}
     .control-row :global(.utility-controls button),.control-row .control-mark,
@@ -1405,7 +1405,7 @@
     .control-row :global(.play-pause-icon),.transport-controls .play :global(svg){width:42px;height:42px}
   }
   @container island-music (max-width:330px){
-    .control-row{column-gap:6px}
+    .control-row{column-gap:0}
     .utility-controls{gap:4px}
     .control-row :global(.utility-controls button),.control-row .control-mark,
     .control-row :global(.like-wrap),.control-row :global(.mode-control-wrap){width:32px;height:32px}
