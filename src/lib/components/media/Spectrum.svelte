@@ -36,7 +36,7 @@
   let lastFrameTime = 0;
   let mounted = $state(false);
   let latestBars = new Float32Array(NUM_BARS);
-  let randomBars.fill(0);
+  let randomBars = new Float32Array(NUM_BARS);
   let visibleBars = new Float32Array(NUM_BARS);
   const heights = new Float32Array(NUM_BARS);
   const paintedHeights = new Float32Array(NUM_BARS).fill(Number.NaN);
