@@ -58,6 +58,7 @@ export function cubicBezierEasing(x1: number, y1: number, x2: number, y2: number
 export const islandMorphEasing = cubicBezierEasing(0.25, 0.1, 0.25, 1);
 export const islandHoverEasing = cubicBezierEasing(0.3, 0, 0.2, 1);
 export const islandSettleEasing = cubicBezierEasing(0.23, 1, 0.32, 1);
+export const islandExpandBounceEasing = cubicBezierEasing(0.25, 1.2, 0.45, 1);
 
 export function islandShapeMotion(from: IslandMode, to: IslandMode, instant = false) {
   if (instant) return { duration: 0, easing: islandMorphEasing };

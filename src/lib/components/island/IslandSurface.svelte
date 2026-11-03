@@ -32,7 +32,7 @@
   import WeatherIcon from "$lib/components/media/WeatherIcon.svelte";
   import { BUILTIN_TOOLS, type IslandTool } from "$lib/featureRail";
   import { formatCountdown, type CountdownStatus } from "$lib/countdown";
-  import { ISLAND_MOTION, widgetEditMotion, widgetLayoutMotion, islandMorphEasing, islandSettleEasing, islandShapeMotion, anchoredLayoutOffset } from "$lib/islandMotion";
+  import { ISLAND_MOTION, widgetEditMotion, widgetLayoutMotion, islandMorphEasing, islandSettleEasing, islandExpandBounceEasing, islandShapeMotion, anchoredLayoutOffset } from "$lib/islandMotion";
   import type { AudioDeviceInfo, MediaState, SpectrumMode, SystemAudioState, WeatherForecastDay } from "$lib/api/types";
   import { locale, translate, type TranslationKey } from "$lib/i18n";
   import {
@@ -305,11 +305,15 @@
   let expandedLayoutMotion = $state(untrack(() => mode === "expanded"));
   const widthMotion = tweened(initial.width, motionOptions);
   const heightMotion = tweened(initial.height, motionOptions);
+  const contentWidthMotion = tweened(initial.width, motionOptions);
+  const contentHeightMotion = tweened(initial.height, motionOptions);
   const radiusMotion = tweened(initial.radius, motionOptions);
   const styleMorph = tweened(untrack(() => islandStyle === "edge" ? 1 : 0), motionOptions);
   const hideMorph = spring(untrack(() => simulateHidden && mode === "hidden" ? 1 : 0), { stiffness: 0.18, damping: 0.7, precision: 0.001 });
   let animatedWidth = $state(initial.width);
   let animatedHeight = $state(initial.height);
+  let contentWidth = $state(initial.width);
+  let contentHeight = $state(initial.height);
   let animatedRadius = $state(initial.radius);
   let styleProgress = $state(untrack(() => islandStyle === "edge" ? 1 : 0));
   let hideProgress = $state(untrack(() => simulateHidden && mode === "hidden" ? 1 : 0));
@@ -322,11 +326,14 @@
   let transitionRevision = 0;
   const unsubscribeWidth = widthMotion.subscribe((value) => animatedWidth = value);
   const unsubscribeHeight = heightMotion.subscribe((value) => animatedHeight = value);
+  const unsubscribeContentWidth = contentWidthMotion.subscribe((value) => contentWidth = value);
+  const unsubscribeContentHeight = contentHeightMotion.subscribe((value) => contentHeight = value);
   const unsubscribeRadius = radiusMotion.subscribe((value) => animatedRadius = value);
   const unsubscribeStyle = styleMorph.subscribe((value) => styleProgress = Math.max(0, Math.min(1, value)));
   const unsubscribeHide = hideMorph.subscribe((value) => hideProgress = value);
 
-  const size = $derived({ width: Math.max(1, animatedWidth), height: Math.max(1, animatedHeight), radius: Math.max(0, Math.min(80, animatedRadius)) });
+  // Even dimensions keep the centered shell on one pixel grid while it morphs.
+  const size = $derived({ width: Math.max(2, Math.round(animatedWidth / 2) * 2), height: Math.max(2, Math.round(animatedHeight / 2) * 2), radius: Math.max(0, Math.min(80, animatedRadius)) });
   let page = $state<IslandPage>("music");
   let pageNavigationRevision = 0;
   let wasTimerFinished = $state(false);
@@ -450,7 +457,10 @@
   const expandedContentGeometry = $derived(editLayoutMotion && mode === "expanded"
     ? {width:expandedLayoutGeometry.width / Math.max(.001, expandedScale),height:expandedLayoutGeometry.height / Math.max(.001, expandedScale)}
     : expandedBaseGeometry);
-  const expandedOffset = $derived(anchoredLayoutOffset(size, expandedLayoutGeometry, edge));
+  const expandedOffset = $derived.by(() => {
+    const offset = anchoredLayoutOffset(size, expandedLayoutGeometry, edge);
+    return { x: Math.round(offset.x), y: Math.round(offset.y) };
+  });
 
   // Read the real layout boxes, including CSS zoom, toolbar and shoulder padding.
   // Translation cancels when subtracting the root, so measurements stay stable
@@ -647,6 +657,9 @@
       : widgetToggle || widgetChange
         ? widgetLayoutMotion(widgetToggle ? widgetsEnabled : widgetCount > previousWidgetCount, hard)
         : islandShapeMotion(previousMotionMode, mode, hard);
+    const sizeMotion = mode === "expanded" && previousMotionMode !== "expanded" && !hard
+      ? { ...motion, easing: islandExpandBounceEasing }
+      : motion;
     previousWidgetCount = widgetCount;
     previousWidgetsEnabled = widgetsEnabled;
     previousEditing = editing;
@@ -658,8 +671,10 @@
     void Promise.all([
       widgetReveal.set(editing || widgetsEnabled ? 1 : 0, editing || hard ? {duration:0} : motion),
       featureOpacity.set(featureExpanded ? 1 : 0, motion),
-      widthMotion.set(target.width, motion),
-      heightMotion.set(target.height, motion),
+      widthMotion.set(target.width, sizeMotion),
+      heightMotion.set(target.height, sizeMotion),
+      contentWidthMotion.set(target.width, motion),
+      contentHeightMotion.set(target.height, motion),
       radiusMotion.set(target.radius, motion),
       shoulderMotion.set(mode === "expanded" ? expandedEdgeShoulderRadius * expandedScale : collapsedEdgeShoulderRadius, motion),
       styleMorph.set(islandStyle === "edge" ? 1 : 0, motion),
@@ -704,6 +719,8 @@
     unsubscribeShoulder();
     unsubscribeWidth();
     unsubscribeHeight();
+    unsubscribeContentWidth();
+    unsubscribeContentHeight();
     unsubscribeRadius();
     unsubscribeStyle();
     unsubscribeHide();
@@ -723,7 +740,7 @@
     const horizontalEdge = edge === "top" || edge === "bottom";
     const compact = compactGeometry;
     const expanded = expandedGeometry;
-    const value = horizontalEdge ? size.height : size.width;
+    const value = horizontalEdge ? contentHeight : contentWidth;
     const start = horizontalEdge ? compact.height : compact.width;
     const end = horizontalEdge ? expanded.height : expanded.width;
     return Math.min(1, Math.max(0, (value - start) / (end - start)));
@@ -890,9 +907,9 @@
   >
   <svg class="shadow-filter" aria-hidden="true" width="0" height="0">
     <filter id="island-upper-shadow" x="-50%" y="-100%" width="200%" height="300%" color-interpolation-filters="sRGB">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" result="blur" />
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="blur" />
       <feOffset in="blur" dy="-0.5" result="offset" />
-      <feFlood flood-color="#000" flood-opacity="0.85" result="color" />
+      <feFlood flood-color="#000" flood-opacity="1" result="color" />
       <feComposite in="color" in2="offset" operator="in" />
     </filter>
   </svg>
@@ -1019,7 +1036,7 @@
             {/if}
           {/snippet}
 
-    {#if visible && mode !== "hidden"}
+    {#if visible && (mode === "expanded" || expandedOpacity > 0)}
     <div
       class="expanded-layer" class:vertical={edge === "left" || edge === "right"}
       style:opacity={expandedOpacity * (1 - featureOpacityValue)}
@@ -1027,7 +1044,6 @@
       style:height={`${expandedLayoutGeometry.height}px`}
       style:left={`${expandedOffset.x}px`}
       style:top={`${expandedOffset.y}px`}
-      style:transform={sharedCover && !reduceAnimations && enableAnimations && !prefersReducedMotion ? `translate(${sharedCover.dx}px,${sharedCover.dy}px)` : "none"}
       aria-hidden={mode !== "expanded" || expandedOpacity <= .5}
       inert={mode !== "expanded" || featureExpanded}
     >
@@ -1313,7 +1329,7 @@
   .compact-disc{position:relative;display:block;width:100%;height:100%;transform-origin:center}
   .idle-compact-dashboard{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0 7px;color:rgba(255,255,255,.92);user-select:none}.idle-clock{display:flex;align-items:center;height:1em;font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums;letter-spacing:.02em}.idle-weather{display:flex;align-items:center;gap:4px;font:600 12px/1 var(--app-font);font-variant-numeric:tabular-nums}.idle-weather strong{display:flex;align-items:center;height:1em;font:inherit}.idle-weather :global(svg){flex:none;color:rgba(255,255,255,.82)}.idle-compact-dashboard.vertical{flex-direction:column;padding:7px 0;gap:10px}.idle-compact-dashboard.vertical .idle-weather{flex-direction:column}
   .debug-overlay{position:absolute;z-index:4;top:4px;left:50%;display:flex;gap:5px;max-width:calc(100% - 12px);padding:2px 6px;border-radius:5px;transform:translateX(-50%);overflow:hidden;color:#4ade80;background:rgba(0,0,0,.75);font:500 8px/1.3 var(--app-font);white-space:nowrap;pointer-events:none}.debug-overlay span{overflow:hidden;text-overflow:ellipsis}
-  .expanded-layer{inset:0;width:100%;height:100%;padding:0;transform-origin:left top;will-change:transform,opacity}.expanded-layer.vertical{transform-origin:center top}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,600px);height:var(--expanded-content-height,210px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:13px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}
+  .expanded-layer{inset:0;width:100%;height:100%;padding:0;transform-origin:left top}.expanded-layer.vertical{transform-origin:center top}.expanded-layer[aria-hidden="true"]{pointer-events:none}.expanded-layer[aria-hidden="false"]{pointer-events:auto}.expanded-shell{display:grid;width:100%;height:var(--expanded-content-height,210px);grid-template-columns:var(--music-pane-width,600px)}.music-pane{position:relative;width:var(--music-pane-width,600px);height:var(--expanded-content-height,210px);display:flex;flex-direction:column;justify-content:space-between;padding:14px 32px 10px;box-sizing:border-box}.top-row{display:flex;align-items:center;gap:16px;margin-bottom:8px;min-height:84px}.metadata{min-width:0;flex:1;font-family:var(--app-font);user-select:none}.metadata span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.metadata span{font-size:13px;line-height:1.2;font-weight:500;color:rgba(255,255,255,.68);letter-spacing:.005em}
   .progress-block{width:100%;margin-bottom:10px}
   .control-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;width:100%;height:58px}.cover:active{transform:scale(.94)}button:focus-visible{outline:2px solid #fff;outline-offset:2px}
   .compact-timer{width:100%;height:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:0;color:#f28b31;background:transparent;cursor:pointer;font-family:var(--app-font);user-select:none}.compact-timer span{min-width:42px;font-size:14px;font-weight:600;line-height:1;letter-spacing:.015em;font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}.compact-timer.finished span{min-width:0;font-size:13px}.compact-timer.paused{color:rgba(242,139,49,.62)}.timer-pause{width:7px;height:8px;display:flex;align-items:center;justify-content:center;gap:2px}.timer-pause b{display:block;width:2px;height:7px;border-radius:1px;background:currentColor}.compact-timer.urgent{color:#ff765f}

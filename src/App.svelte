@@ -23,6 +23,10 @@ import { createMediaSyncSender, type MediaSyncSnapshot } from "$lib/mediaSyncSen
   const appMediaSessionId = crypto.randomUUID();
   let activeFloatingInstanceToken: string | undefined;
   const retiredFloatingInstanceTokens = new Set<string>();
+  function retireFloatingInstance(token: string) {
+    retiredFloatingInstanceTokens.add(token);
+    if (retiredFloatingInstanceTokens.size > 32) retiredFloatingInstanceTokens.delete(retiredFloatingInstanceTokens.values().next().value!);
+  }
   let appOverlaySequence = 0;
   const floatingMediaSender = createMediaSyncSender({
     dispatch: (payload) => emit(Events.ISLAND_MEDIA_SYNC, payload),
@@ -292,7 +296,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
     if (!instanceToken || activeFloatingInstanceToken !== instanceToken) return false;
     floatingMediaSender.pauseForConsumer(`${appMediaSessionId}:${instanceToken}`);
     activeFloatingInstanceToken = undefined;
-    if (retire) retiredFloatingInstanceTokens.add(instanceToken);
+    if (retire) retireFloatingInstance(instanceToken);
     return true;
   }
   function normalizedStyle(value: string): IslandStyle {
@@ -322,8 +326,8 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
       expandedEdgeShoulderRadius: clampShoulderRadius(value.expandedEdgeShoulderRadius ?? 32),
       floatingExpandedCornerRadius: clampExpandedRadius(value.floatingExpandedCornerRadius ?? legacyAppearance.expandedCornerRadius ?? 45),
       edgeExpandedCornerRadius: clampExpandedRadius(value.edgeExpandedCornerRadius ?? legacyAppearance.expandedCornerRadius ?? 45),
-      floatingCompactLength: Math.min(300, Math.max(80, Number(value.floatingCompactLength ?? legacyAppearance.compactLength ?? 80))),
-      edgeCompactLength: Math.min(300, Math.max(80, Number(value.edgeCompactLength ?? legacyAppearance.compactLength ?? 80))),
+      floatingCompactLength: Math.min(300, Math.max(100, Number(value.floatingCompactLength ?? legacyAppearance.compactLength ?? 80))),
+      edgeCompactLength: Math.min(300, Math.max(120, Number(value.edgeCompactLength ?? legacyAppearance.compactLength ?? 80))),
       idleRotationSeconds: Math.min(60, Math.max(2, Number(value.idleRotationSeconds ?? 5))),
       idleItems: Array.isArray(value.idleItems) ? value.idleItems : DEFAULT_SETTINGS.idleItems,
       clockTimeZone: typeof value.clockTimeZone === "string" && value.clockTimeZone.trim().length > 0
@@ -1947,7 +1951,7 @@ import { adjustCountdown, completeCountdown, createCountdownState, formatClock, 
           }
           if (retiredFloatingInstanceTokens.has(instanceToken)) return;
           if (activeFloatingInstanceToken && activeFloatingInstanceToken !== instanceToken) {
-            retiredFloatingInstanceTokens.add(activeFloatingInstanceToken);
+            retireFloatingInstance(activeFloatingInstanceToken);
           }
           activeFloatingInstanceToken = instanceToken;
           if (floatingMediaSender.resetForConsumer(`${appMediaSessionId}:${instanceToken}`) && appNativeMediaReady) syncFloatingMediaClock();

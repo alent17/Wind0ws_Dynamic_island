@@ -163,7 +163,7 @@
     {#each visibleOrder as kind,index (kind)}
       {@const music=kind==="music"}
       {@const side=index<visibleOrder.indexOf("music")?"left":"right"}
-      <div role="group" aria-label={t(kind)} onpointerdown={event=>{if(editing && !(event.target as HTMLElement).closest("button"))start(event,kind);}} class:music-slot={music} class:widget-cell={!music} class:side={!music} class:side-left={!music && side==="left"} class:side-right={!music && side==="right"} class:outlined={editing && music} class:revealing={!editing && reveal<1} class:drag-source={moved && drag?.kind===kind} data-panel-id={kind} data-widget-side={music?undefined:side} style:width={`${music?musicWidth:(widgetPanelWidth(musicWidth)+12)*(editing?1:reveal)}px`} style:opacity={music || editing?1:reveal} inert={!music && !editing && (!enabled || reveal<.98)} in:revealCard={{card:!music}} out:revealCard={{card:!music}}>
+      <div role="group" aria-label={t(kind)} onpointerdown={event=>{if(editing && !(event.target as HTMLElement).closest("button"))start(event,kind);}} class:music-slot={music} class:widget-cell={!music} class:side={!music} class:side-left={!music && side==="left"} class:side-right={!music && side==="right"} class:outlined={editing && music} class:revealing={!editing && reveal<1} class:drag-source={moved && drag?.kind===kind} data-panel-id={kind} data-widget-side={music?undefined:side} style:width={`${music?musicWidth:(widgetPanelWidth(musicWidth)+12)*(editing || enabled ? 1 : 0)}px`} style:opacity={music || editing?1:reveal} inert={!music && !editing && (!enabled || reveal<.98)} in:revealCard={{card:!music}} out:revealCard={{card:!music}}>
         {#if music}
           {#if editing}{@render tools(kind,index)}{/if}
           <div class="music-content" inert={editing}>{@render children()}</div>
@@ -222,7 +222,7 @@
   .style-morphing .panels{transition:none}
   .catalog{display:flex;flex:1;justify-content:center;gap:8px;align-items:center}.catalog-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;background:transparent;font-size:14px;color:#bcbcc5;padding:4px;min-width:60px}.app-icon{position:relative;width:52px;height:52px;border-radius:12px;display:grid;place-items:center;background:transparent;border:0;color:#e1e1e7}.app-icon.timer,.app-icon.weather,.app-icon.clock{color:#e1e1e7;background:transparent}.app-icon i{position:absolute;bottom:-3px;right:-3px;border-radius:50%;background:#e9e9ee;color:#080808;display:grid;place-items:center;width:18px;height:18px;border:2px solid #000}.selected .app-icon{background:rgba(255,255,255,.1);color:#fff;box-shadow:none}.selected{color:#fff}.edit-actions{position:static;display:flex;flex:none;gap:14px}.edit-actions button{display:grid;place-items:center;width:52px;height:52px;padding:0;border-radius:12px;background:transparent;border:0}.edit-actions .done{background:transparent;color:#fff}.edit-actions .cancel{background:#ff453a;color:#fff;box-shadow:0 4px 12px rgba(255,69,58,.28)}.hint{position:absolute;bottom:6px;left:20px;right:20px;text-align:center;font-size:14px;color:#aaa;margin:0;pointer-events:none}
   .single-panel .catalog{gap:4px}.single-panel .catalog-item{flex:0 0 52px;width:52px;min-width:0;gap:5px;font-size:14px}.single-panel .app-icon{width:44px;height:44px}.single-panel .edit-actions{gap:8px}.single-panel .edit-actions button{width:44px;height:44px}
-  .widget-content :global(.timer-panel:not(.active) .timer-readout strong),.widget-content :global(.volume-readout strong){font-size:60px}
+  .widget-content :global(.timer-panel .timer-readout strong),.widget-content :global(.volume-readout strong){font-size:60px}
   .widget-content :global(.timer-ruler){height:96px;flex-basis:96px}
   .widget-content :global(.volume-ruler){height:72px;flex-basis:72px}
   .widget-content :global(.ruler-track){height:92px}
@@ -239,6 +239,8 @@
   .widget-content :global(.forecast>div),.widget-content :global(.clock-face .caption){font-size:16px}
   .widget-content :global(.forecast small),.widget-content :global(.updated){font-size:14px}
   .widget-content :global(.timer-footer),.widget-content :global(.volume-footer){margin-top:auto}
+  .widget-content :global(.timer-footer){transform:translateY(6px)}
+  .widget-content :global(.timer-actions){margin-left:28px}
   button:hover:not(:disabled){background:rgba(255,255,255,.1);box-shadow:none;color:#fff}
   .remove:hover:not(:disabled),.remove:focus-visible,.edit-actions .cancel:hover:not(:disabled),.edit-actions .cancel:focus-visible{color:#ff453a}
   .card-tools button:hover:not(:disabled){background:rgba(255,255,255,.1);color:#fff}

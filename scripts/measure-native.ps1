@@ -104,6 +104,16 @@ function Read-Sample {
         machineCpuPercent=(Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'").PercentProcessorTime
         processCount=$rows.Count
         processes=$rows
+        memoryByRole=@($rows | Group-Object role | ForEach-Object {
+            [pscustomobject]@{
+                role=$_.Name
+                processCount=$_.Count
+                privateWorkingSetBytes=($_.Group | Measure-Object privateWorkingSetBytes -Sum).Sum
+                privateBytes=($_.Group | Measure-Object privateBytes -Sum).Sum
+                gpuDedicatedBytes=(@($_.Group | ForEach-Object { $_.gpuMemory } | Measure-Object dedicatedBytes -Sum).Sum)
+                gpuSharedBytes=(@($_.Group | ForEach-Object { $_.gpuMemory } | Measure-Object sharedBytes -Sum).Sum)
+            }
+        })
         totalCpuPercentOfMachine=($rows | Measure-Object cpuPercentOfMachine -Sum).Sum
         totalPrivateWorkingSetBytes=($rows | Measure-Object privateWorkingSetBytes -Sum).Sum
         totalPrivateBytes=($rows | Measure-Object privateBytes -Sum).Sum

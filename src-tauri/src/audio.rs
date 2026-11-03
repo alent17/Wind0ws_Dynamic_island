@@ -74,7 +74,7 @@ impl SpectrumCapture {
         let publisher_generation = generation.clone();
         let publisher_bars = published_bars.clone();
         let publisher_app = app.clone();
-        std::thread::spawn(move || {
+        tauri::async_runtime::spawn(async move {
             let mut previous = None;
             let mut last_emit = Instant::now();
             while publisher_running.load(Ordering::Acquire)
@@ -94,7 +94,7 @@ impl SpectrumCapture {
                         last_emit = Instant::now();
                     }
                 }
-                std::thread::sleep(Duration::from_millis(50));
+                tokio::time::sleep(Duration::from_millis(50)).await;
             }
         });
 
